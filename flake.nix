@@ -15,7 +15,14 @@
           cudaSupport = true;
         };
       };
-      pythonPackages = pkgs.python312Packages;
+      python = pkgs.python312.override {
+        packageOverrides = pythonFinal: pythonPrev: {
+          anyio = pythonPrev.anyio.overridePythonAttrs (_: {
+            doCheck = false;
+          });
+        };
+      };
+      pythonPackages = python.pkgs;
       project = (builtins.fromTOML (builtins.readFile ./pyproject.toml)).project;
       app = pythonPackages.buildPythonApplication {
         pname = project.name;
@@ -28,7 +35,7 @@
           pythonPackages.ddgs
         ];
       };
-      pythonEnv = pkgs.python312.withPackages (packages: [
+      pythonEnv = python.withPackages (packages: [
         packages."llama-cpp-python"
         packages.ddgs
       ]);
