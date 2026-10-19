@@ -11,6 +11,10 @@ from .settings import DEFAULT_SETTINGS_PATH, load_settings, validate_settings
 
 
 def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+    if argv and argv[0] == "tui":
+        argv = ["--tui", *argv[1:]]
     parser = argparse.ArgumentParser(description="Run a staged local LLM prompt harness.")
     local_settings_path = Path.cwd() / "settings.json"
     parser.add_argument(
@@ -22,6 +26,11 @@ def main(argv: list[str] | None = None) -> int:
         "--settings",
         default=str(local_settings_path if local_settings_path.is_file() else DEFAULT_SETTINGS_PATH),
         help="Path to the JSON settings file.",
+    )
+    parser.add_argument(
+        "--tui",
+        action="store_true",
+        help="Open the interactive terminal interface.",
     )
     parser.add_argument(
         "--model-path",
@@ -66,10 +75,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error in settings: {error}", file=sys.stderr)
         return 1
 
+    if args.tui or (not args.prompt and sys.stdin.isatty()):
+        from .tui import SmartHarnessApp
+
+        SmartHarnessApp(settings, initial_prompt=" ".join(args.prompt).strip()).run()
+        return 0
+
     prompt = " ".join(args.prompt).strip()
-    if not prompt and sys.stdin.isatty():
-        prompt = input("Prompt: ").strip()
-    elif not prompt:
+    if not prompt:
         prompt = sys.stdin.read().strip()
     if not prompt:
         parser.error("provide a prompt as an argument or through standard input")

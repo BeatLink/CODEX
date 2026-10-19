@@ -37,6 +37,33 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("[Stage 3/7: Searching and using local files when needed result] Tool evidence", output.getvalue())
         self.assertIn("[Stage 6/7: Critiquing the draft result] Critique", output.getvalue())
 
+    def test_progress_callback_reports_stages_without_writing_to_stdout(self):
+        stage_results = iter(
+            ["Task checklist", "Answer plan", "Reviewed outline", "Draft", "Critique", "Final"]
+        )
+        output = StringIO()
+        progress = []
+
+        with (
+            patch(
+                "smartharness.pipeline.run_stage",
+                side_effect=lambda *args, **kwargs: next(stage_results),
+            ),
+            patch("smartharness.pipeline.run_tool_stage", return_value="Tool evidence"),
+            redirect_stdout(output),
+        ):
+            result = execute_pipeline(
+                "Answer the request",
+                llm=object(),
+                progress_callback=progress.append,
+            )
+
+        self.assertEqual(result, "Final")
+        self.assertEqual(len(progress), 7)
+        self.assertTrue(progress[0].startswith("Stage 1/7:"))
+        self.assertTrue(progress[-1].startswith("Stage 7/7:"))
+        self.assertEqual(output.getvalue(), "")
+
     def test_run_stage_streams_and_reassembles_content(self):
         class StreamingModel:
             def __init__(self):

@@ -35,6 +35,17 @@ class CliTests(unittest.TestCase):
 
                 self.assertIs(execute_pipeline.call_args.kwargs["show_thinking"], expected)
 
+    def test_tui_subcommand_opens_interface_with_initial_prompt(self):
+        with (
+            patch("smartharness.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
+            patch("smartharness.tui.SmartHarnessApp") as app,
+            patch("sys.stdin.isatty", return_value=False),
+        ):
+            self.assertEqual(main(["tui", "draft", "a", "plan"]), 0)
+
+        app.assert_called_once_with(DEFAULT_SETTINGS.copy(), initial_prompt="draft a plan")
+        app.return_value.run.assert_called_once_with()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -86,3 +86,10 @@ python -m smartharness "Explain how to design a local event logging daemon"
 python -m smartharness
 echo "Summarize this design" | python -m smartharness
 ```
+
+In a terminal, launch `smartharness` without a prompt to open the interactive
+Textual interface. You can also launch it explicitly with `smartharness --tui`
+or `smartharness-tui`; the TUI lets you edit runtime settings, follow pipeline
+stage progress, answer clarification questions, and read or copy the final
+Markdown response. Use `--settings path/to/settings.json` to select a settings
+file.

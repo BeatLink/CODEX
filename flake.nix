@@ -34,12 +34,14 @@
           pythonPackages."llama-cpp-python"
           pythonPackages.ddgs
           pythonPackages.mcp
+          pythonPackages.textual
         ];
       };
       pythonEnv = python.withPackages (packages: [
         packages."llama-cpp-python"
         packages.ddgs
         packages.mcp
+        packages.textual
       ]);
     in
     {

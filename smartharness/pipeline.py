@@ -138,6 +138,7 @@ def execute_pipeline(
     mcp_servers: list[dict[str, Any]] | None = None,
     show_thinking: bool = False,
     clarification_callback: Callable[[str], str] | None = None,
+    progress_callback: Callable[[str], None] | None = None,
     llm: Any = None,
 ) -> str:
     if not user_prompt.strip():
@@ -150,7 +151,10 @@ def execute_pipeline(
         enable_test_execution=enable_test_execution,
     )
     if llm is None:
-        print(f"Loading model from {model_path}...")
+        if progress_callback is not None:
+            progress_callback("Loading model")
+        else:
+            print(f"Loading model from {model_path}...")
         llm = create_model(model_path, context_size, gpu_layers)
     token_callback = (
         lambda token: print(token, end="", flush=True) if show_thinking else None
@@ -227,12 +231,18 @@ def execute_pipeline(
             " revision.",
         ),
     ]
-    previous_results: list[tuple[str, str]] = []
-    for index, (label, system_prompt) in enumerate(stages[:2], start=1):
-        if show_thinking:
+
+    def report_stage(label: str) -> None:
+        if progress_callback is not None:
+            progress_callback(label)
+        elif show_thinking:
             print(f"[{label} result] ", end="", flush=True)
         else:
             print(f"[{label}]...")
+
+    previous_results: list[tuple[str, str]] = []
+    for index, (label, system_prompt) in enumerate(stages[:2], start=1):
+        report_stage(label)
         result = run_stage(
             llm,
             system_prompt,
@@ -281,10 +291,7 @@ def execute_pipeline(
         search_result = toolbox.call("web_search", {"query": search_query})
         previous_results.append(("Automatic web search result", search_result))
 
-    if show_thinking:
-        print("[Stage 3/7: Searching and using local files when needed result] ", end="", flush=True)
-    else:
-        print("[Stage 3/7: Searching and using local files when needed]...")
+    report_stage("Stage 3/7: Searching and using local files when needed")
     tool_result = run_tool_stage(
         llm,
         (
@@ -377,10 +384,7 @@ def execute_pipeline(
         },
     }
     for index, (label, system_prompt) in enumerate(stages[2:], start=4):
-        if show_thinking:
-            print(f"[{label} result] ", end="", flush=True)
-        else:
-            print(f"[{label}]...")
+        report_stage(label)
         result = run_stage(
             llm,
             system_prompt,
