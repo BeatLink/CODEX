@@ -15,7 +15,7 @@
           cudaSupport = true;
         };
       };
-      pythonPackages = pkgs.python311Packages;
+      pythonPackages = pkgs.python312Packages;
       project = (builtins.fromTOML (builtins.readFile ./pyproject.toml)).project;
       app = pythonPackages.buildPythonApplication {
         pname = project.name;
@@ -28,7 +28,7 @@
           pythonPackages.ddgs
         ];
       };
-      pythonEnv = pkgs.python311.withPackages (packages: [
+      pythonEnv = pkgs.python312.withPackages (packages: [
         packages."llama-cpp-python"
         packages.ddgs
       ]);
