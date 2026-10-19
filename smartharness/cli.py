@@ -35,7 +35,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--show-thinking",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help="Stream generated text token by token for each pipeline stage.",
     )
     args = parser.parse_args(argv)
@@ -54,6 +55,8 @@ def main(argv: list[str] | None = None) -> int:
             settings[name] = argument
     if args.enable_test_execution:
         settings["enable_test_execution"] = True
+    if args.show_thinking is not None:
+        settings["show_thinking"] = args.show_thinking
     try:
         settings = validate_settings(settings)
     except ValueError as error:
@@ -81,7 +84,7 @@ def main(argv: list[str] | None = None) -> int:
             max_search_results=settings["max_search_results"],
             enable_test_execution=settings["enable_test_execution"],
             mcp_servers=settings["mcp_servers"],
-            show_thinking=args.show_thinking,
+            show_thinking=settings["show_thinking"],
             clarification_callback=(
                 _ask_clarification if sys.stdin.isatty() else None
             ),

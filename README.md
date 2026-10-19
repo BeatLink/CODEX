@@ -16,6 +16,7 @@ Runtime options are read from `settings.json` in the project root:
 	"max_tool_calls": 5,
 	"max_search_results": 5,
 	"enable_test_execution": false,
+	"show_thinking": true,
 	"mcp_servers": []
 }
 ```
@@ -25,8 +26,9 @@ Precedence is defaults, `settings.json`, the `MODEL_PATH` environment variable,
 then explicit command-line options. Supported command-line overrides are
 `--model-path`, `--context-size`, `--gpu-layers`, `--max-tokens`, and
 `--temperature`. `--enable-test-execution` opts in to the test-running tool.
-Pass `--show-thinking` to stream generated text token by token for each
-pipeline stage; stage output is hidden by default.
+Stage output streams by default; set `show_thinking` to `false` in
+`settings.json` or pass `--no-show-thinking` to disable it. Use
+`--show-thinking` to enable it for a single run.
 
 The tool stage can search the web using DDGS and list, read, or write files.
 `filesystem_root` is resolved from the current working directory; file tools

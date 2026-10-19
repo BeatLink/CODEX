@@ -19,6 +19,7 @@ DEFAULT_SETTINGS = {
     "max_tool_calls": 5,
     "max_search_results": 5,
     "enable_test_execution": False,
+    "show_thinking": True,
     "mcp_servers": [],
 }
 
@@ -67,6 +68,8 @@ def validate_settings(values: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("filesystem_root must be a non-empty path string.")
     if not isinstance(values["enable_test_execution"], bool):
         raise ValueError("enable_test_execution must be a boolean.")
+    if not isinstance(values["show_thinking"], bool):
+        raise ValueError("show_thinking must be a boolean.")
     for name in ("max_tool_calls", "max_search_results"):
         if isinstance(values[name], bool) or not isinstance(values[name], int) or not 1 <= values[name] <= 10:
             raise ValueError(f"{name} must be an integer from 1 to 10.")

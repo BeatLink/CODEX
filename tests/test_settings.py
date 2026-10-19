@@ -4,6 +4,15 @@ from smartharness.settings import DEFAULT_SETTINGS, validate_settings
 
 
 class SettingsTests(unittest.TestCase):
+    def test_show_thinking_defaults_to_enabled_and_must_be_boolean(self):
+        self.assertIs(DEFAULT_SETTINGS["show_thinking"], True)
+
+        settings = DEFAULT_SETTINGS.copy()
+        settings["show_thinking"] = "yes"
+
+        with self.assertRaisesRegex(ValueError, "show_thinking"):
+            validate_settings(settings)
+
     def test_test_execution_setting_must_be_boolean(self):
         settings = DEFAULT_SETTINGS.copy()
         settings["enable_test_execution"] = "yes"
