@@ -110,6 +110,8 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(len(stage_calls), 6)
         self.assertIn("Draft response", stage_calls[4][1])
         self.assertIn("Critique: add the missing constraint", stage_calls[5][1])
+        self.assertIn("every distinct requirement", stage_calls[4][0])
+        self.assertIn("appropriate level of detail", stage_calls[5][0])
         self.assertIn("Return only the final", stage_calls[5][0])
 
     def test_clarification_answer_is_passed_to_later_stages(self):
@@ -214,7 +216,7 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("Be concise", stage_calls[3][0])
         self.assertIn("Stage 5 result", stage_calls[5][1])
         self.assertNotIn("Stage 1 result", stage_calls[5][1])
-        self.assertIn("Be concise", stage_calls[5][0])
+        self.assertIn("every distinct request constraint", stage_calls[5][0])
 
 
 if __name__ == "__main__":
