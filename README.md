@@ -25,8 +25,8 @@ Precedence is defaults, `settings.json`, the `MODEL_PATH` environment variable,
 then explicit command-line options. Supported command-line overrides are
 `--model-path`, `--context-size`, `--gpu-layers`, `--max-tokens`, and
 `--temperature`. `--enable-test-execution` opts in to the test-running tool.
-Pass `--show-thinking` to print the generated result of every pipeline stage
-as it completes; stage output is hidden by default.
+Pass `--show-thinking` to stream generated text token by token for each
+pipeline stage; stage output is hidden by default.
 
 The tool stage can search the web using DDGS and list, read, or write files.
 `filesystem_root` is resolved from the current working directory; file tools

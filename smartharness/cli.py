@@ -36,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--show-thinking",
         action="store_true",
-        help="Print each pipeline stage's generated result.",
+        help="Stream generated text token by token for each pipeline stage.",
     )
     args = parser.parse_args(argv)
 

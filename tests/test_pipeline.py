@@ -3,7 +3,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 from unittest.mock import patch
 
-from smartharness.pipeline import execute_pipeline
+from smartharness.pipeline import execute_pipeline, run_stage
 
 
 class PipelineTests(unittest.TestCase):
@@ -13,18 +13,71 @@ class PipelineTests(unittest.TestCase):
         )
         output = StringIO()
 
+        def fake_run_stage(llm, system_prompt, user_input, **kwargs):
+            result = next(stage_results)
+            if kwargs.get("on_token"):
+                kwargs["on_token"](result)
+            return result
+
+        def fake_run_tool_stage(llm, system_prompt, user_input, toolbox, **kwargs):
+            if kwargs.get("on_token"):
+                kwargs["on_token"]("Tool evidence")
+            return "Tool evidence"
+
         with (
-            patch("smartharness.pipeline.run_stage", side_effect=lambda *args, **kwargs: next(stage_results)),
-            patch("smartharness.pipeline.run_tool_stage", return_value="Tool evidence", create=True),
+            patch("smartharness.pipeline.run_stage", side_effect=fake_run_stage),
+            patch("smartharness.pipeline.run_tool_stage", side_effect=fake_run_tool_stage),
             redirect_stdout(output),
         ):
             result = execute_pipeline("Answer the request", llm=object(), show_thinking=True)
 
         self.assertEqual(result, "Final")
-        self.assertIn("[Stage 1/7: Identifying the task and constraints result]", output.getvalue())
+        self.assertIn("[Stage 1/7: Identifying the task and constraints result] Task checklist", output.getvalue())
         self.assertIn("Task checklist", output.getvalue())
-        self.assertIn("[Stage 3/7 result]\nTool evidence", output.getvalue())
-        self.assertIn("[Stage 6/7: Critiquing the draft result]", output.getvalue())
+        self.assertIn("[Stage 3/7: Searching and using local files when needed result] Tool evidence", output.getvalue())
+        self.assertIn("[Stage 6/7: Critiquing the draft result] Critique", output.getvalue())
+
+    def test_run_stage_streams_and_reassembles_content(self):
+        class StreamingModel:
+            def __init__(self):
+                self.request = None
+
+            def create_chat_completion(self, **request):
+                self.request = request
+                return iter(
+                    [
+                        {"choices": [{"delta": {"content": "First "}, "finish_reason": None}]},
+                        {"choices": [{"delta": {"content": "second"}, "finish_reason": "stop"}]},
+                    ]
+                )
+
+        llm = StreamingModel()
+        streamed = []
+
+        result = run_stage(llm, "System", "Input", on_token=streamed.append)
+
+        self.assertEqual(result, "First second")
+        self.assertEqual(streamed, ["First ", "second"])
+        self.assertTrue(llm.request["stream"])
+
+    def test_run_stage_omits_streaming_when_disabled(self):
+        class NonStreamingModel:
+            def __init__(self):
+                self.request = None
+
+            def create_chat_completion(self, **request):
+                self.request = request
+                return {
+                    "choices": [
+                        {"finish_reason": "stop", "message": {"content": "Complete"}}
+                    ]
+                }
+
+        llm = NonStreamingModel()
+        result = run_stage(llm, "System", "Input")
+
+        self.assertEqual(result, "Complete")
+        self.assertNotIn("stream", llm.request)
 
     def test_critique_and_revision_follow_draft(self):
         stage_results = iter(

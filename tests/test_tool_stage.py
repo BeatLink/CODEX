@@ -49,6 +49,74 @@ def tool_call_response(call_id="call-1"):
 
 
 class ToolStageTests(unittest.TestCase):
+    def test_streams_content_and_reassembles_split_tool_call(self):
+        toolbox = FakeToolbox()
+        model = FakeModel(
+            [
+                iter(
+                    [
+                        {
+                            "choices": [
+                                {
+                                    "delta": {
+                                        "tool_calls": [
+                                            {
+                                                "index": 0,
+                                                "id": "call-1",
+                                                "type": "function",
+                                                "function": {
+                                                    "name": "read_file",
+                                                    "arguments": '{"path":',
+                                                },
+                                            }
+                                        ]
+                                    },
+                                    "finish_reason": None,
+                                }
+                            ]
+                        },
+                        {
+                            "choices": [
+                                {
+                                    "delta": {
+                                        "tool_calls": [
+                                            {
+                                                "index": 0,
+                                                "function": {"arguments": ' "notes.txt"}'},
+                                            }
+                                        ]
+                                    },
+                                    "finish_reason": "tool_calls",
+                                }
+                            ]
+                        },
+                    ]
+                ),
+                iter(
+                    [
+                        {"choices": [{"delta": {"content": "Here "}, "finish_reason": None}]},
+                        {"choices": [{"delta": {"content": "it is."}, "finish_reason": "stop"}]},
+                    ]
+                ),
+            ]
+        )
+        streamed = []
+
+        result = run_tool_stage(
+            model,
+            "Use tools when useful.",
+            "Read notes.txt.",
+            toolbox,
+            max_tokens=200,
+            temperature=0.1,
+            max_tool_calls=3,
+            on_token=streamed.append,
+        )
+
+        self.assertEqual(toolbox.calls, [("read_file", {"path": "notes.txt"})])
+        self.assertEqual(streamed, ["Here ", "it is."])
+        self.assertIn("Here it is.", result)
+
     def test_executes_tool_and_returns_results_to_model(self):
         toolbox = FakeToolbox()
         model = FakeModel(

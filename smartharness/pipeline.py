@@ -29,15 +29,40 @@ def run_stage(
     user_input: str,
     max_tokens: int = MAX_TOKENS,
     temperature: float = TEMPERATURE,
+    on_token: Callable[[str], None] | None = None,
 ) -> str:
-    response = llm.create_chat_completion(
-        messages=[
+    request = {
+        "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input},
         ],
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    if on_token is not None:
+        request["stream"] = True
+    response = llm.create_chat_completion(**request)
+    if on_token is not None:
+        content_parts = []
+        finish_reason = None
+        for chunk in response:
+            choices = chunk.get("choices", [])
+            if not choices:
+                continue
+            choice = choices[0]
+            finish_reason = choice.get("finish_reason") or finish_reason
+            content = choice.get("delta", {}).get("content")
+            if isinstance(content, str) and content:
+                content_parts.append(content)
+                on_token(content)
+        response = {
+            "choices": [
+                {
+                    "finish_reason": finish_reason,
+                    "message": {"content": "".join(content_parts)},
+                }
+            ]
+        }
     choices = response.get("choices", [])
     if not choices:
         raise RuntimeError("The model returned no completion choices.")
@@ -101,6 +126,9 @@ def execute_pipeline(
     if llm is None:
         print(f"Loading model from {model_path}...")
         llm = create_model(model_path, context_size, gpu_layers)
+    token_callback = (
+        lambda token: print(token, end="", flush=True) if show_thinking else None
+    )
 
     stages = [
         (
@@ -155,13 +183,17 @@ def execute_pipeline(
     ]
     previous_results: list[tuple[str, str]] = []
     for index, (label, system_prompt) in enumerate(stages[:2], start=1):
-        print(f"[{label}]...")
+        if show_thinking:
+            print(f"[{label} result] ", end="", flush=True)
+        else:
+            print(f"[{label}]...")
         result = run_stage(
             llm,
             system_prompt,
             _stage_context(user_prompt, previous_results),
             max_tokens=max_tokens,
             temperature=temperature,
+            on_token=token_callback if show_thinking else None,
         )
         if index == 1:
             result, question = _extract_clarification(result)
@@ -183,10 +215,13 @@ def execute_pipeline(
                         )
                     )
         if show_thinking:
-            print(f"\n[{label} result]\n{result}")
+            print()
         previous_results.append((f"Stage {index} result", result))
 
-    print("[Stage 3/7: Searching and using local files when needed]...")
+    if show_thinking:
+        print("[Stage 3/7: Searching and using local files when needed result] ", end="", flush=True)
+    else:
+        print("[Stage 3/7: Searching and using local files when needed]...")
     tool_result = run_tool_stage(
         llm,
         (
@@ -207,9 +242,10 @@ def execute_pipeline(
         temperature=temperature,
         max_tool_calls=max_tool_calls,
         mcp_servers=mcp_servers or [],
+        on_token=token_callback if show_thinking else None,
     )
     if show_thinking:
-        print(f"\n[Stage 3/7 result]\n{tool_result}")
+        print()
     previous_results.append(("Stage 3 tool-assisted result", tool_result))
 
     if "web_search" in toolbox.used_tools:
@@ -225,16 +261,20 @@ def execute_pipeline(
             stages[index] = (label, system_prompt + source_check)
 
     for index, (label, system_prompt) in enumerate(stages[2:], start=4):
-        print(f"[{label}]...")
+        if show_thinking:
+            print(f"[{label} result] ", end="", flush=True)
+        else:
+            print(f"[{label}]...")
         result = run_stage(
             llm,
             system_prompt,
             _stage_context(user_prompt, previous_results),
             max_tokens=max_tokens,
             temperature=temperature,
+            on_token=token_callback if show_thinking else None,
         )
         if show_thinking:
-            print(f"\n[{label} result]\n{result}")
+            print()
         previous_results.append((f"Stage {index} result", result))
 
     return previous_results[-1][1]

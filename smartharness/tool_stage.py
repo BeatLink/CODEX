@@ -1,5 +1,6 @@
 import asyncio
 import json
+from collections.abc import Callable
 from typing import Any
 
 from .mcp_tools import MCPToolbox
@@ -17,6 +18,7 @@ def run_tool_stage(
     temperature: float,
     max_tool_calls: int,
     mcp_servers: list[dict[str, Any]] | None = None,
+    on_token: Callable[[str], None] | None = None,
 ) -> str:
     if (
         isinstance(max_tool_calls, bool)
@@ -34,6 +36,7 @@ def run_tool_stage(
             temperature,
             max_tool_calls,
             mcp_servers or [],
+            on_token,
         )
     )
 
@@ -47,6 +50,7 @@ async def _run_tool_stage(
     temperature: float,
     max_tool_calls: int,
     mcp_servers: list[dict[str, Any]],
+    on_token: Callable[[str], None] | None,
 ) -> str:
     async with MCPToolbox(mcp_servers) as mcp_toolbox:
         messages = [
@@ -58,13 +62,67 @@ async def _run_tool_stage(
         tool_output_chars = 0
 
         while True:
-            response = llm.create_chat_completion(
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                tools=[*toolbox.tool_definitions, *mcp_toolbox.tool_definitions],
-                tool_choice="auto" if tool_call_count < max_tool_calls else "none",
-            )
+            request = {
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "tools": [*toolbox.tool_definitions, *mcp_toolbox.tool_definitions],
+                "tool_choice": "auto" if tool_call_count < max_tool_calls else "none",
+            }
+            if on_token is not None:
+                request["stream"] = True
+            response = llm.create_chat_completion(**request)
+            if on_token is not None:
+                content_parts = []
+                tool_calls_by_index: dict[int, dict[str, Any]] = {}
+                finish_reason = None
+                for chunk in response:
+                    chunk_choices = chunk.get("choices", [])
+                    if not chunk_choices:
+                        continue
+                    chunk_choice = chunk_choices[0]
+                    finish_reason = chunk_choice.get("finish_reason") or finish_reason
+                    delta = chunk_choice.get("delta", {})
+                    content = delta.get("content")
+                    if isinstance(content, str) and content:
+                        content_parts.append(content)
+                        on_token(content)
+                    for streamed_call in delta.get("tool_calls", []):
+                        call_index = streamed_call.get("index", 0)
+                        tool_call = tool_calls_by_index.setdefault(
+                            call_index,
+                            {
+                                "id": "",
+                                "type": "function",
+                                "function": {"name": "", "arguments": ""},
+                            },
+                        )
+                        if streamed_call.get("id"):
+                            tool_call["id"] = streamed_call["id"]
+                        if streamed_call.get("type"):
+                            tool_call["type"] = streamed_call["type"]
+                        function_delta = streamed_call.get("function", {})
+                        if function_delta.get("name"):
+                            tool_call["function"]["name"] += function_delta["name"]
+                        if function_delta.get("arguments"):
+                            tool_call["function"]["arguments"] += function_delta["arguments"]
+                assistant_message = {
+                    "role": "assistant",
+                    "content": "".join(content_parts) or None,
+                }
+                if tool_calls_by_index:
+                    assistant_message["tool_calls"] = [
+                        tool_calls_by_index[index]
+                        for index in sorted(tool_calls_by_index)
+                    ]
+                response = {
+                    "choices": [
+                        {
+                            "finish_reason": finish_reason,
+                            "message": assistant_message,
+                        }
+                    ]
+                }
             choices = response.get("choices", [])
             if not choices:
                 raise RuntimeError("The model returned no completion choices.")
