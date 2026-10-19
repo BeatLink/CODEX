@@ -10,7 +10,7 @@ Runtime options are read from `settings.json` in the project root:
 	"model_path": "./models/model.gguf",
 	"context_size": 4096,
 	"gpu_layers": -1,
-	"max_tokens": 1024,
+	"max_tokens": 2048,
 	"temperature": 0.1,
 	"filesystem_root": ".",
 	"max_tool_calls": 5,

@@ -6,7 +6,7 @@ from typing import Any
 
 DEFAULT_MODEL_PATH = "./models/model.gguf"
 CONTEXT_SIZE = 4096
-MAX_TOKENS = 1024
+MAX_TOKENS = 2048
 TEMPERATURE = 0.1
 DEFAULT_SETTINGS_PATH = Path(__file__).resolve().parent.parent / "settings.json"
 DEFAULT_SETTINGS = {
