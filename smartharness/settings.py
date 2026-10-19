@@ -21,9 +21,14 @@ DEFAULT_SETTINGS = {
 
 
 def load_settings(settings_path: str | Path) -> dict[str, Any]:
+    settings_path = Path(settings_path)
     try:
-        with Path(settings_path).open(encoding="utf-8") as settings_file:
+        with settings_path.open(encoding="utf-8") as settings_file:
             settings = json.load(settings_file)
+    except FileNotFoundError:
+        if settings_path.resolve() == DEFAULT_SETTINGS_PATH.resolve():
+            return DEFAULT_SETTINGS.copy()
+        raise
     except json.JSONDecodeError as error:
         raise ValueError(f"Invalid JSON in settings file: {error}") from error
 

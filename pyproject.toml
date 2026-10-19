@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smartharness"
+version = "0.1.0"
+description = "A staged prompt harness for locally run language models"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["llama-cpp-python>=0.3.0", "ddgs>=9.0.0"]
+
+[project.scripts]
+smartharness = "smartharness.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["smartharness*"]
