@@ -3,5 +3,8 @@
   "context_size": 4096,
   "gpu_layers": -1,
   "max_tokens": 1024,
-  "temperature": 0.1
+  "temperature": 0.1,
+  "filesystem_root": ".",
+  "max_tool_calls": 5,
+  "max_search_results": 5
 }

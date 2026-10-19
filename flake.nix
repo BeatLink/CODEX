@@ -55,9 +55,14 @@
               --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
           fi
 
+          if ! python -c "import ddgs" 2>/dev/null; then
+            echo "Installing DDGS web-search dependency..."
+            pip install --no-cache-dir 'ddgs>=9.0.0'
+          fi
+
           echo "===================================================="
           echo "CUDA Llama environment ready!"
-          echo "Run your script with: python harness.py"
+          echo "Run the package with: python -m smartharness"
           echo "===================================================="
         '';
       };

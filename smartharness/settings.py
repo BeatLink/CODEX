@@ -14,6 +14,9 @@ DEFAULT_SETTINGS = {
     "gpu_layers": -1,
     "max_tokens": MAX_TOKENS,
     "temperature": TEMPERATURE,
+    "filesystem_root": ".",
+    "max_tool_calls": 5,
+    "max_search_results": 5,
 }
 
 
@@ -52,5 +55,10 @@ def validate_settings(values: dict[str, Any]) -> dict[str, Any]:
         or values["temperature"] < 0
     ):
         raise ValueError("temperature must be a non-negative number.")
+    if not isinstance(values["filesystem_root"], str) or not values["filesystem_root"].strip():
+        raise ValueError("filesystem_root must be a non-empty path string.")
+    for name in ("max_tool_calls", "max_search_results"):
+        if isinstance(values[name], bool) or not isinstance(values[name], int) or not 1 <= values[name] <= 10:
+            raise ValueError(f"{name} must be an integer from 1 to 10.")
     values["temperature"] = float(values["temperature"])
     return values

@@ -62,6 +62,9 @@ def main(argv: list[str] | None = None) -> int:
             gpu_layers=settings["gpu_layers"],
             max_tokens=settings["max_tokens"],
             temperature=settings["temperature"],
+            filesystem_root=settings["filesystem_root"],
+            max_tool_calls=settings["max_tool_calls"],
+            max_search_results=settings["max_search_results"],
         )
     except (OSError, RuntimeError, ValueError) as error:
         print(f"Error: {error}", file=sys.stderr)
