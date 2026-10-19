@@ -2,11 +2,13 @@ import json
 import unittest
 
 from smartharness.tool_stage import run_tool_stage
+from smartharness.tools import TOOL_DEFINITIONS
 
 
 class FakeToolbox:
     def __init__(self):
         self.calls = []
+        self.tool_definitions = TOOL_DEFINITIONS
 
     def call(self, name, arguments):
         self.calls.append((name, arguments))

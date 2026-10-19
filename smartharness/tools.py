@@ -1,4 +1,6 @@
 import json
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -6,6 +8,7 @@ from typing import Any
 MAX_FILE_BYTES = 100_000
 MAX_TOOL_OUTPUT_CHARS = 12_000
 MAX_DIRECTORY_ENTRIES = 100
+TEST_TIMEOUT_SECONDS = 120
 SENSITIVE_NAMES = {".env", "credentials", "id_rsa", "id_ed25519", "private_key", "secrets"}
 
 TOOL_DEFINITIONS = [
@@ -68,9 +71,27 @@ TOOL_DEFINITIONS = [
     },
 ]
 
+RUN_TESTS_DEFINITION = {
+    "type": "function",
+    "function": {
+        "name": "run_tests",
+        "description": "Run Python unittest discovery under the configured filesystem root after making code changes.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+}
+
 
 class Toolbox:
-    def __init__(self, filesystem_root: str | Path, max_search_results: int = 5):
+    def __init__(
+        self,
+        filesystem_root: str | Path,
+        max_search_results: int = 5,
+        enable_test_execution: bool = False,
+    ):
         self.root = Path(filesystem_root).expanduser().resolve()
         if not self.root.is_dir():
             raise ValueError(f"Filesystem root is not a directory: {self.root}")
@@ -80,7 +101,14 @@ class Toolbox:
             or not 1 <= max_search_results <= 10
         ):
             raise ValueError("max_search_results must be between 1 and 10.")
+        if not isinstance(enable_test_execution, bool):
+            raise ValueError("enable_test_execution must be a boolean.")
         self.max_search_results = max_search_results
+        self.enable_test_execution = enable_test_execution
+        self.used_tools: set[str] = set()
+        self.tool_definitions = [*TOOL_DEFINITIONS]
+        if enable_test_execution:
+            self.tool_definitions.append(RUN_TESTS_DEFINITION)
 
     def call(self, name: str, arguments: Any) -> str:
         if not isinstance(arguments, dict):
@@ -92,6 +120,8 @@ class Toolbox:
             "write_file": self._write_file,
         }
         handler = handlers.get(name)
+        if name == "run_tests" and self.enable_test_execution:
+            handler = self._run_tests
         if handler is None:
             return f"Tool error: unknown tool '{name}'."
         try:
@@ -100,6 +130,8 @@ class Toolbox:
             return f"Tool error: {type(error).__name__}: {error}"[:MAX_TOOL_OUTPUT_CHARS]
         if not isinstance(result, str):
             result = json.dumps(result, ensure_ascii=False)
+        if not result.startswith("Tool error:"):
+            self.used_tools.add(name)
         return result[:MAX_TOOL_OUTPUT_CHARS]
 
     def _web_search(self, arguments: dict[str, Any]) -> str:
@@ -190,6 +222,30 @@ class Toolbox:
         path = self._resolve_path(arguments["path"])
         path.write_text(content, encoding="utf-8")
         return f"Wrote {len(content.encode('utf-8'))} bytes to {arguments['path']}."
+
+    def _run_tests(self, arguments: dict[str, Any]) -> str:
+        self._check_arguments(arguments, set(), set())
+        start_dir = self.root / "tests" if (self.root / "tests").is_dir() else self.root
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "unittest", "discover", "-s", str(start_dir)],
+                cwd=self.root,
+                capture_output=True,
+                text=True,
+                timeout=TEST_TIMEOUT_SECONDS,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as error:
+            output = error.stdout or ""
+            if isinstance(output, bytes):
+                output = output.decode("utf-8", errors="replace")
+            return f"Tests timed out after {TEST_TIMEOUT_SECONDS} seconds.\n{output}"[
+                :MAX_TOOL_OUTPUT_CHARS
+            ]
+
+        output = "\n".join(part for part in (result.stdout, result.stderr) if part)
+        status = "passed" if result.returncode == 0 else f"failed (exit {result.returncode})"
+        return f"Tests {status}.\n{output}"[:MAX_TOOL_OUTPUT_CHARS]
 
     @staticmethod
     def _is_sensitive_path(path: Path) -> bool:

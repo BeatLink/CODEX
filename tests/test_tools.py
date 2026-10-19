@@ -10,6 +10,32 @@ from smartharness.tools import Toolbox
 
 
 class ToolboxTests(unittest.TestCase):
+    def test_run_tests_is_opt_in_and_bounded_to_unittest_discovery(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            tests = root / "tests"
+            tests.mkdir()
+            (tests / "test_sample.py").write_text(
+                "import unittest\n\n"
+                "class SampleTests(unittest.TestCase):\n"
+                "    def test_passes(self):\n"
+                "        self.assertTrue(True)\n",
+                encoding="utf-8",
+            )
+
+            disabled = Toolbox(root)
+            self.assertNotIn(
+                "run_tests",
+                {tool["function"]["name"] for tool in disabled.tool_definitions},
+            )
+            self.assertIn("unknown tool", disabled.call("run_tests", {}))
+
+            enabled = Toolbox(root, enable_test_execution=True)
+            result = enabled.call("run_tests", {})
+
+        self.assertIn("Tests passed", result)
+        self.assertIn("Ran 1 test", result)
+
     def test_limits_must_be_integers(self):
         with self.assertRaisesRegex(ValueError, "max_search_results"):
             Toolbox(".", max_search_results=True)

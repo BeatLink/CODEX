@@ -14,7 +14,8 @@ Runtime options are read from `settings.json` in the project root:
 	"temperature": 0.1,
 	"filesystem_root": ".",
 	"max_tool_calls": 5,
-	"max_search_results": 5
+	"max_search_results": 5,
+	"enable_test_execution": false
 }
 ```
 
@@ -22,12 +23,24 @@ You can use a different settings file with `--settings path/to/settings.json`.
 Precedence is defaults, `settings.json`, the `MODEL_PATH` environment variable,
 then explicit command-line options. Supported command-line overrides are
 `--model-path`, `--context-size`, `--gpu-layers`, `--max-tokens`, and
-`--temperature`.
+`--temperature`. `--enable-test-execution` opts in to the test-running tool.
+Pass `--show-thinking` to print the generated result of every pipeline stage
+as it completes; stage output is hidden by default.
 
 The tool stage can search the web using DDGS and list, read, or write files.
 `filesystem_root` is resolved from the current working directory; file tools
 cannot access paths outside that root. Writes can create or replace files but
 cannot delete them. Tool calls and search results are capped by the settings.
+When web search is used, later stages ground researched claims only in the
+captured titles, URLs, and snippets; pages are not fetched for independent
+verification. The model asks one concise clarification question in interactive
+terminal sessions when it finds a material ambiguity; otherwise it proceeds
+with an explicit assumption.
+
+Test execution is disabled by default. When enabled through
+`enable_test_execution` or `--enable-test-execution`, the model can run Python
+`unittest` discovery under `filesystem_root`. Tests run with a 120-second limit;
+project test code executes locally.
 
 The harness is available as an importable `smartharness` package. Run it with a
 prompt as an argument, enter one interactively, or pipe it through standard

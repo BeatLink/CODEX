@@ -28,6 +28,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--gpu-layers", type=int)
     parser.add_argument("--max-tokens", type=int)
     parser.add_argument("--temperature", type=float)
+    parser.add_argument(
+        "--enable-test-execution",
+        action="store_true",
+        help="Allow the model to run unittest discovery under filesystem_root.",
+    )
+    parser.add_argument(
+        "--show-thinking",
+        action="store_true",
+        help="Print each pipeline stage's generated result.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -42,6 +52,8 @@ def main(argv: list[str] | None = None) -> int:
         argument = getattr(args, name)
         if argument is not None:
             settings[name] = argument
+    if args.enable_test_execution:
+        settings["enable_test_execution"] = True
     try:
         settings = validate_settings(settings)
     except ValueError as error:
@@ -67,6 +79,11 @@ def main(argv: list[str] | None = None) -> int:
             filesystem_root=settings["filesystem_root"],
             max_tool_calls=settings["max_tool_calls"],
             max_search_results=settings["max_search_results"],
+            enable_test_execution=settings["enable_test_execution"],
+            show_thinking=args.show_thinking,
+            clarification_callback=(
+                _ask_clarification if sys.stdin.isatty() else None
+            ),
         )
     except (OSError, RuntimeError, ValueError) as error:
         print(f"Error: {error}", file=sys.stderr)
@@ -75,3 +92,10 @@ def main(argv: list[str] | None = None) -> int:
     print("\n=== FINAL RESULT ===\n")
     print(result)
     return 0
+
+
+def _ask_clarification(question: str) -> str:
+    return input(
+        f"\nClarification needed: {question}\n"
+        "Your answer (press Enter to continue with an assumption): "
+    ).strip()

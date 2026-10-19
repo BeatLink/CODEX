@@ -1,7 +1,7 @@
 import json
 from typing import Any
 
-from .tools import TOOL_DEFINITIONS, Toolbox
+from .tools import Toolbox
 
 MAX_TOOL_HISTORY_CHARS = 8_000
 
@@ -34,7 +34,7 @@ def run_tool_stage(
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
-            tools=TOOL_DEFINITIONS,
+            tools=toolbox.tool_definitions,
             tool_choice="auto" if tool_call_count < max_tool_calls else "none",
         )
         choices = response.get("choices", [])
