@@ -139,6 +139,7 @@ def execute_pipeline(
     show_thinking: bool = False,
     clarification_callback: Callable[[str], str] | None = None,
     progress_callback: Callable[[str], None] | None = None,
+    stage_output_callback: Callable[[str, str], None] | None = None,
     llm: Any = None,
 ) -> str:
     if not user_prompt.strip():
@@ -156,9 +157,18 @@ def execute_pipeline(
         else:
             print(f"Loading model from {model_path}...")
         llm = create_model(model_path, context_size, gpu_layers)
-    token_callback = (
-        lambda token: print(token, end="", flush=True) if show_thinking else None
-    )
+
+    def token_callback_for(label: str) -> Callable[[str], None] | None:
+        if not show_thinking and stage_output_callback is None:
+            return None
+
+        def emit(token: str) -> None:
+            if stage_output_callback is not None:
+                stage_output_callback(label, token)
+            if show_thinking:
+                print(token, end="", flush=True)
+
+        return emit
 
     stages = [
         (
@@ -260,7 +270,7 @@ def execute_pipeline(
             ),
             max_tokens=max_tokens,
             temperature=temperature,
-            on_token=token_callback if show_thinking else None,
+            on_token=token_callback_for(label),
         )
         if index == 1:
             result, question = _extract_clarification(result)
@@ -332,7 +342,7 @@ def execute_pipeline(
         temperature=temperature,
         max_tool_calls=max_tool_calls,
         mcp_servers=mcp_servers or [],
-        on_token=token_callback if show_thinking else None,
+        on_token=token_callback_for("Stage 3/7: Searching and using local files when needed"),
     )
     if show_thinking:
         print()
@@ -391,7 +401,7 @@ def execute_pipeline(
             _stage_context(user_prompt, previous_results, handoffs[index]),
             max_tokens=max_tokens,
             temperature=temperature,
-            on_token=token_callback if show_thinking else None,
+            on_token=token_callback_for(label),
         )
         if show_thinking:
             print()

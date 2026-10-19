@@ -7,7 +7,19 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Checkbox, Footer, Header, Input, Label, Markdown, Static, TextArea
+from textual.widgets import (
+    Button,
+    Checkbox,
+    Footer,
+    Header,
+    Input,
+    Label,
+    Markdown,
+    Static,
+    TabbedContent,
+    TabPane,
+    TextArea,
+)
 
 from .pipeline import execute_pipeline
 from .settings import DEFAULT_SETTINGS_PATH, load_settings, validate_settings
@@ -22,6 +34,7 @@ STAGE_LABELS = (
     "Stage 6/7: Critiquing the draft",
     "Stage 7/7: Revising the response",
 )
+STAGE_TAB_TITLES = ("Task", "Plan", "Tools", "Review", "Draft", "Critique", "Revise")
 
 
 class ClarificationScreen(ModalScreen[str]):
@@ -157,13 +170,16 @@ class SmartHarnessApp(App[None]):
         margin-right: 1;
         min-width: 12;
     }
-    #answer-scroll {
+    #phase-tabs {
         height: 1fr;
         min-height: 7;
         border: tall #34473d;
         background: #141d19;
     }
-    #answer {
+    .stage-output-scroll {
+        height: 1fr;
+    }
+    .stage-output {
         padding: 1 2;
     }
     #clarification-dialog {
@@ -195,6 +211,8 @@ class SmartHarnessApp(App[None]):
         self.initial_prompt = initial_prompt
         self._request_running = False
         self._last_answer = ""
+        self._stage_output_buffers = [""] * len(STAGE_LABELS)
+        self._pending_stage_output = [[] for _ in STAGE_LABELS]
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -237,13 +255,28 @@ class SmartHarnessApp(App[None]):
                     yield Button("Run  Ctrl+Enter", id="run", variant="primary")
                     yield Button("Clear", id="clear")
                     yield Button("Copy answer", id="copy", disabled=True)
-                yield Static("FINAL RESPONSE", classes="eyebrow", id="answer-label")
-                with VerticalScroll(id="answer-scroll"):
-                    yield Markdown("Your response will appear here.", id="answer")
+                yield Static("PHASE OUTPUT", classes="eyebrow", id="answer-label")
+                with TabbedContent(initial="final", id="phase-tabs"):
+                    for index, title in enumerate(STAGE_TAB_TITLES, start=1):
+                        with TabPane(f"{index} {title}", id=f"stage-{index}"):
+                            with VerticalScroll(classes="stage-output-scroll"):
+                                yield Markdown(
+                                    "_Waiting for this phase..._",
+                                    classes="stage-output",
+                                    id=f"stage-output-{index}",
+                                )
+                    with TabPane("Final", id="final"):
+                        with VerticalScroll(classes="stage-output-scroll"):
+                            yield Markdown(
+                                "Your final response will appear here.",
+                                classes="stage-output",
+                                id="final-output",
+                            )
         yield Footer()
 
     def on_mount(self) -> None:
         self.query_one("#prompt", TextArea).focus()
+        self.set_interval(0.15, self._flush_stage_output)
 
     def action_run_prompt(self) -> None:
         self._start_run()
@@ -253,7 +286,7 @@ class SmartHarnessApp(App[None]):
             self._start_run()
         elif event.button.id == "clear":
             self.query_one("#prompt", TextArea).text = ""
-            self.query_one("#answer", Markdown).update("Your response will appear here.")
+            self.query_one("#final-output", Markdown).update("Your final response will appear here.")
             self.query_one("#copy", Button).disabled = True
             self._last_answer = ""
             self._reset_stages()
@@ -279,7 +312,7 @@ class SmartHarnessApp(App[None]):
             return
 
         self._reset_stages()
-        self.query_one("#answer", Markdown).update("_Working on your request..._")
+        self.query_one("#final-output", Markdown).update("_Working on your request..._")
         self.query_one("#copy", Button).disabled = True
         self.query_one("#run", Button).disabled = True
         self.query_one("#status", Static).update("Starting local model...")
@@ -318,8 +351,30 @@ class SmartHarnessApp(App[None]):
     def _reset_stages(self) -> None:
         for index, label in enumerate(STAGE_LABELS, start=1):
             self.query_one(f"#stage-{index}", Static).update(f"WAIT  {label}")
+            self._stage_output_buffers[index - 1] = ""
+            self._pending_stage_output[index - 1].clear()
+            self.query_one(f"#stage-output-{index}", Markdown).update("_Waiting for this phase..._")
+        self.query_one("#phase-tabs", TabbedContent).active = "final"
+
+    def _append_stage_output(self, label: str, token: str) -> None:
+        try:
+            index = STAGE_LABELS.index(label)
+        except ValueError:
+            return
+        self._pending_stage_output[index].append(token)
+
+    def _flush_stage_output(self) -> None:
+        for index, pending in enumerate(self._pending_stage_output):
+            if not pending:
+                continue
+            self._stage_output_buffers[index] += "".join(pending)
+            pending.clear()
+            self.query_one(f"#stage-output-{index + 1}", Markdown).update(
+                self._stage_output_buffers[index]
+            )
 
     def _update_stage(self, label: str) -> None:
+        self._flush_stage_output()
         if label == "Loading model":
             self.query_one("#status", Static).update("Loading local model...")
             return
@@ -331,12 +386,15 @@ class SmartHarnessApp(App[None]):
         for index, stage_label in enumerate(STAGE_LABELS):
             state = "DONE" if index < active else "NOW " if index == active else "WAIT"
             self.query_one(f"#stage-{index + 1}", Static).update(f"{state}  {stage_label}")
+        self.query_one("#phase-tabs", TabbedContent).active = f"stage-{active + 1}"
         self.query_one("#status", Static).update(f"Stage {active + 1} of 7")
 
     def _finish_run(self, result: str) -> None:
+        self._flush_stage_output()
         self._request_running = False
         self._last_answer = result
-        self.query_one("#answer", Markdown).update(result)
+        self.query_one("#final-output", Markdown).update(result)
+        self.query_one("#phase-tabs", TabbedContent).active = "final"
         self.query_one("#copy", Button).disabled = False
         self.query_one("#run", Button).disabled = False
         for index, label in enumerate(STAGE_LABELS, start=1):
@@ -344,8 +402,10 @@ class SmartHarnessApp(App[None]):
         self.query_one("#status", Static).update("Complete")
 
     def _fail_run(self, message: str) -> None:
+        self._flush_stage_output()
         self._request_running = False
-        self.query_one("#answer", Markdown).update(f"**Run failed**\n\n{message}")
+        self.query_one("#final-output", Markdown).update(f"**Run failed**\n\n{message}")
+        self.query_one("#phase-tabs", TabbedContent).active = "final"
         self.query_one("#run", Button).disabled = False
         self.query_one("#status", Static).update("Run failed")
         self.notify(message, title="SmartHarness error", severity="error", timeout=8)
@@ -383,6 +443,9 @@ class SmartHarnessApp(App[None]):
                 show_thinking=False,
                 clarification_callback=self._request_clarification,
                 progress_callback=lambda label: self.call_from_thread(self._update_stage, label),
+                stage_output_callback=lambda label, token: self.call_from_thread(
+                    self._append_stage_output, label, token
+                ),
             )
         except Exception as error:
             self.call_from_thread(self._fail_run, str(error))

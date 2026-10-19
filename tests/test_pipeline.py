@@ -64,6 +64,46 @@ class PipelineTests(unittest.TestCase):
         self.assertTrue(progress[-1].startswith("Stage 7/7:"))
         self.assertEqual(output.getvalue(), "")
 
+    def test_stage_output_callback_streams_tokens_with_stage_labels(self):
+        stage_results = iter(
+            ["Task checklist", "Answer plan", "Reviewed outline", "Draft", "Critique", "Final"]
+        )
+        output = StringIO()
+        streamed = []
+
+        def fake_run_stage(llm, system_prompt, user_input, **kwargs):
+            kwargs["on_token"]("stage-token")
+            return next(stage_results)
+
+        def fake_run_tool_stage(llm, system_prompt, user_input, toolbox, **kwargs):
+            kwargs["on_token"]("tool-token")
+            return "Tool evidence"
+
+        with (
+            patch("smartharness.pipeline.run_stage", side_effect=fake_run_stage),
+            patch("smartharness.pipeline.run_tool_stage", side_effect=fake_run_tool_stage),
+            redirect_stdout(output),
+        ):
+            result = execute_pipeline(
+                "Answer the request",
+                llm=object(),
+                progress_callback=lambda label: None,
+                stage_output_callback=lambda label, token: streamed.append((label, token)),
+            )
+
+        self.assertEqual(result, "Final")
+        self.assertEqual([label for label, _ in streamed], [
+            "Stage 1/7: Identifying the task and constraints",
+            "Stage 2/7: Preparing an answer plan",
+            "Stage 3/7: Searching and using local files when needed",
+            "Stage 4/7: Reviewing the plan and tool evidence",
+            "Stage 5/7: Drafting the response",
+            "Stage 6/7: Critiquing the draft",
+            "Stage 7/7: Revising the response",
+        ])
+        self.assertEqual(streamed[2][1], "tool-token")
+        self.assertEqual(output.getvalue(), "")
+
     def test_run_stage_streams_and_reassembles_content(self):
         class StreamingModel:
             def __init__(self):
