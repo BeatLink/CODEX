@@ -80,6 +80,7 @@ def main(argv: list[str] | None = None) -> int:
             max_tool_calls=settings["max_tool_calls"],
             max_search_results=settings["max_search_results"],
             enable_test_execution=settings["enable_test_execution"],
+            mcp_servers=settings["mcp_servers"],
             show_thinking=args.show_thinking,
             clarification_callback=(
                 _ask_clarification if sys.stdin.isatty() else None

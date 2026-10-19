@@ -15,7 +15,8 @@ Runtime options are read from `settings.json` in the project root:
 	"filesystem_root": ".",
 	"max_tool_calls": 5,
 	"max_search_results": 5,
-	"enable_test_execution": false
+	"enable_test_execution": false,
+	"mcp_servers": []
 }
 ```
 
@@ -41,6 +42,34 @@ Test execution is disabled by default. When enabled through
 `enable_test_execution` or `--enable-test-execution`, the model can run Python
 `unittest` discovery under `filesystem_root`. Tests run with a 120-second limit;
 project test code executes locally.
+
+MCP support currently accepts explicitly configured stdio servers. Each
+enabled server must include an `allowed_tools` list; only those discovered
+tools are exposed to the model. The server command runs locally, so configure
+only servers you trust. Environment values can reference process variables
+with `${NAME}` instead of putting secrets in this file. The process inherits
+basic runtime variables such as `PATH` and `HOME`; other values must be
+configured explicitly:
+
+```json
+{
+	"mcp_servers": [
+		{
+			"name": "docs",
+			"enabled": true,
+			"transport": "stdio",
+			"command": "docs-mcp-server",
+			"args": [],
+			"env": {"DOCS_TOKEN": "${DOCS_TOKEN}"},
+			"allowed_tools": ["search_docs", "fetch_doc"]
+		}
+	]
+}
+```
+
+MCP tools are named `mcp__<server>__<tool>` to avoid collisions with built-in
+tools. Server sessions are opened for the tool stage and closed afterward.
+Only stdio transport is supported; network transports are not yet available.
 
 The harness is available as an importable `smartharness` package. Run it with a
 prompt as an argument, enter one interactively, or pipe it through standard

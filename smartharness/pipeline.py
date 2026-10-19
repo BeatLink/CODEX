@@ -84,6 +84,7 @@ def execute_pipeline(
     max_tool_calls: int = 5,
     max_search_results: int = 5,
     enable_test_execution: bool = False,
+    mcp_servers: list[dict[str, Any]] | None = None,
     show_thinking: bool = False,
     clarification_callback: Callable[[str], str] | None = None,
     llm: Any = None,
@@ -205,6 +206,7 @@ def execute_pipeline(
         max_tokens=max_tokens,
         temperature=temperature,
         max_tool_calls=max_tool_calls,
+        mcp_servers=mcp_servers or [],
     )
     if show_thinking:
         print(f"\n[Stage 3/7 result]\n{tool_result}")

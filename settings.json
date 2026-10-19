@@ -6,5 +6,6 @@
   "temperature": 0.1,
   "filesystem_root": ".",
   "max_tool_calls": 5,
-  "max_search_results": 5
+  "max_search_results": 5,
+  "mcp_servers": []
 }

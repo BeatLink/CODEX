@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,7 @@ DEFAULT_SETTINGS = {
     "max_tool_calls": 5,
     "max_search_results": 5,
     "enable_test_execution": False,
+    "mcp_servers": [],
 }
 
 
@@ -68,5 +70,85 @@ def validate_settings(values: dict[str, Any]) -> dict[str, Any]:
     for name in ("max_tool_calls", "max_search_results"):
         if isinstance(values[name], bool) or not isinstance(values[name], int) or not 1 <= values[name] <= 10:
             raise ValueError(f"{name} must be an integer from 1 to 10.")
+    values["mcp_servers"] = validate_mcp_servers(values["mcp_servers"])
     values["temperature"] = float(values["temperature"])
     return values
+
+
+def validate_mcp_servers(servers: Any) -> list[dict[str, Any]]:
+    if not isinstance(servers, list):
+        raise ValueError("mcp_servers must be a list.")
+
+    validated = []
+    seen_names = set()
+    allowed_fields = {
+        "name",
+        "enabled",
+        "transport",
+        "command",
+        "args",
+        "env",
+        "allowed_tools",
+    }
+    for index, server in enumerate(servers):
+        if not isinstance(server, dict):
+            raise ValueError(f"mcp_servers[{index}] must be an object.")
+        unknown_fields = server.keys() - allowed_fields
+        if unknown_fields:
+            raise ValueError(
+                f"Unknown field(s) in mcp_servers[{index}]: "
+                f"{', '.join(sorted(unknown_fields))}"
+            )
+
+        name = server.get("name")
+        if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", name):
+            raise ValueError(f"mcp_servers[{index}].name must be 1-32 letters, numbers, '_' or '-'.")
+        if name in seen_names:
+            raise ValueError(f"MCP server names must be unique: {name}.")
+        seen_names.add(name)
+
+        enabled = server.get("enabled", True)
+        if not isinstance(enabled, bool):
+            raise ValueError(f"MCP server '{name}' enabled must be a boolean.")
+        transport = server.get("transport", "stdio")
+        if transport != "stdio":
+            raise ValueError(f"MCP server '{name}' uses unsupported transport '{transport}'.")
+
+        command = server.get("command")
+        if not isinstance(command, str) or not command.strip():
+            raise ValueError(f"MCP server '{name}' command must be a non-empty string.")
+        args = server.get("args", [])
+        if not isinstance(args, list) or any(not isinstance(arg, str) for arg in args):
+            raise ValueError(f"MCP server '{name}' args must be a list of strings.")
+
+        allowed_tools = server.get("allowed_tools", [])
+        if (
+            not isinstance(allowed_tools, list)
+            or any(not isinstance(tool, str) or not tool for tool in allowed_tools)
+            or len(allowed_tools) != len(set(allowed_tools))
+        ):
+            raise ValueError(f"MCP server '{name}' allowed_tools must be a unique list of names.")
+        if enabled and not allowed_tools:
+            raise ValueError(f"MCP server '{name}' must allow at least one tool when enabled.")
+
+        env = server.get("env", {})
+        if not isinstance(env, dict):
+            raise ValueError(f"MCP server '{name}' env must be an object of strings.")
+        for key, value in env.items():
+            if not isinstance(key, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+                raise ValueError(f"MCP server '{name}' has an invalid environment variable name.")
+            if not isinstance(value, str):
+                raise ValueError(f"MCP server '{name}' environment values must be strings.")
+
+        validated.append(
+            {
+                "name": name,
+                "enabled": enabled,
+                "transport": transport,
+                "command": command,
+                "args": args,
+                "env": env,
+                "allowed_tools": allowed_tools,
+            }
+        )
+    return validated
