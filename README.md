@@ -3,7 +3,7 @@ A simple coding harness to make locally run LLM models smarter by breaking promp
 
 ## Configuration
 
-Runtime options are read from `settings.json` next to `harness.py`:
+Runtime options are read from `settings.json` in the project root:
 
 ```json
 {
@@ -21,11 +21,12 @@ then explicit command-line options. Supported command-line overrides are
 `--model-path`, `--context-size`, `--gpu-layers`, `--max-tokens`, and
 `--temperature`.
 
-Run with a prompt as an argument, enter one interactively, or pipe it through
-standard input:
+The harness is available as an importable `smartharness` package. Run it with a
+prompt as an argument, enter one interactively, or pipe it through standard
+input:
 
 ```bash
-python main.py "Explain how to design a local event logging daemon"
-python main.py
-echo "Summarize this design" | python main.py
+python -m smartharness "Explain how to design a local event logging daemon"
+python -m smartharness
+echo "Summarize this design" | python -m smartharness
 ```
