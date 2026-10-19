@@ -3,6 +3,9 @@ import os
 import sys
 from pathlib import Path
 
+from rich.console import Console
+from rich.markdown import Markdown
+
 from .pipeline import execute_pipeline
 from .settings import DEFAULT_SETTINGS_PATH, load_settings, validate_settings
 
@@ -94,7 +97,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print("\n=== FINAL RESULT ===\n")
-    print(result)
+    if sys.stdout.isatty():
+        Console().print(Markdown(result))
+    else:
+        print(result)
     return 0
 
 
