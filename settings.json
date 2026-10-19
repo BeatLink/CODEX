@@ -1,0 +1,7 @@
+{
+  "model_path": "./models/model.gguf",
+  "context_size": 4096,
+  "gpu_layers": -1,
+  "max_tokens": 1024,
+  "temperature": 0.1
+}
