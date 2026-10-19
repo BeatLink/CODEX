@@ -32,12 +32,15 @@ Stage output streams by default; set `show_thinking` to `false` in
 `--show-thinking` to enable it for a single run.
 
 The tool stage can search the web using DDGS and list, read, or write files.
+Prompts asking to verify/research facts or configure a technical integration
+automatically run a web search before the model-controlled tool stage.
 `filesystem_root` is resolved from the current working directory; file tools
 cannot access paths outside that root. Writes can create or replace files but
 cannot delete them. Tool calls and search results are capped by the settings.
-When web search is used, later stages ground researched claims only in the
-captured titles, URLs, and snippets; pages are not fetched for independent
-verification. The model asks one concise clarification question in interactive
+Later stages ground researched claims only in captured titles, URLs, and
+snippets; pages are not fetched for independent verification. If search fails
+or returns no useful evidence, the harness instructs the model to say that the
+claims could not be verified. The model asks one concise clarification question in interactive
 terminal sessions when it finds a material ambiguity; otherwise it proceeds
 with an explicit assumption.
 

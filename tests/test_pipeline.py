@@ -147,7 +147,7 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("User clarification:\nPython", stage_calls[1][1])
         self.assertNotIn("CLARIFICATION:", stage_calls[1][1])
 
-    def test_source_checks_run_only_after_web_search(self):
+    def test_source_checks_apply_after_automatic_web_search(self):
         stage_results = iter(
             ["Task checklist", "Answer plan", "Reviewed outline", "Draft", "Critique", "Final"]
         )
@@ -161,14 +161,60 @@ class PipelineTests(unittest.TestCase):
             toolbox.used_tools.add("web_search")
             return "Captured search evidence"
 
+        def fake_search(toolbox, name, arguments):
+            toolbox.used_tools.add(name)
+            return "Captured automatic search"
+
         with (
             patch("smartharness.pipeline.run_stage", side_effect=fake_run_stage),
             patch("smartharness.pipeline.run_tool_stage", side_effect=fake_run_tool_stage),
+            patch("smartharness.pipeline.Toolbox.call", new=fake_search),
         ):
             execute_pipeline("Research this", llm=object())
 
         self.assertIn("captured search", stage_calls[4][0])
         self.assertIn("captured search", stage_calls[5][0])
+
+    def test_technical_setup_searches_and_uses_selective_stage_handoffs(self):
+        stage_results = iter(
+            ["Task checklist", "Answer plan", "Reviewed outline", "Draft", "Critique", "Final"]
+        )
+        stage_calls = []
+        tool_stage_inputs = []
+        searches = []
+
+        def fake_run_stage(llm, system_prompt, user_input, **kwargs):
+            stage_calls.append((system_prompt, user_input))
+            return next(stage_results)
+
+        def fake_search(toolbox, name, arguments):
+            searches.append((name, arguments["query"]))
+            toolbox.used_tools.add(name)
+            return '[{"title":"Trilium MCP docs","url":"https://example.test","snippet":"MCP details"}]'
+
+        def fake_tool_stage(llm, system_prompt, user_input, toolbox, **kwargs):
+            tool_stage_inputs.append(user_input)
+            return "Tool findings"
+
+        with (
+            patch("smartharness.pipeline.run_stage", side_effect=fake_run_stage),
+            patch("smartharness.pipeline.run_tool_stage", side_effect=fake_tool_stage),
+            patch("smartharness.pipeline.Toolbox.call", new=fake_search),
+        ):
+            execute_pipeline("Set up SmartHarness with Trilium's MCP endpoint", llm=object())
+
+        self.assertEqual(len(searches), 1)
+        self.assertEqual(searches[0][0], "web_search")
+        self.assertIn("Trilium's MCP endpoint", searches[0][1])
+        self.assertIn("Automatic web search result", tool_stage_inputs[0])
+        self.assertIn("Stage 2 result", stage_calls[2][1])
+        self.assertIn("Stage 4 result", stage_calls[3][1])
+        self.assertNotIn("Stage 1 result", stage_calls[3][1])
+        self.assertNotIn("Stage 2 result", stage_calls[3][1])
+        self.assertIn("Be concise", stage_calls[3][0])
+        self.assertIn("Stage 5 result", stage_calls[5][1])
+        self.assertNotIn("Stage 1 result", stage_calls[5][1])
+        self.assertIn("Be concise", stage_calls[5][0])
 
 
 if __name__ == "__main__":
