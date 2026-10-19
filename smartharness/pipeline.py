@@ -73,28 +73,45 @@ def execute_pipeline(
 
     stages = [
         (
-            "Stage 1/4: Identifying the task and constraints",
+            "Stage 1/6: Identifying the task and constraints",
             "Extract the requested outcome, explicit constraints, and any"
             " assumptions that need clarification. Return a concise checklist.",
         ),
         (
-            "Stage 2/4: Preparing an answer plan",
+            "Stage 2/6: Preparing an answer plan",
             "Using the original request and task checklist, make a concise"
             " answer plan. Use general knowledge only; flag uncertain or"
             " time-sensitive claims instead of implying external research.",
         ),
         (
-            "Stage 3/4: Reviewing the plan",
+            "Stage 3/6: Reviewing the plan",
             "Check the plan against the original request and constraints."
             " Identify omissions, unsupported claims, or contradictions,"
             " then provide a corrected outline.",
         ),
         (
-            "Stage 4/4: Writing the response",
-            "Answer the original request using the reviewed outline. Follow"
-            " its constraints, address every requested outcome, and state"
-            " material assumptions or uncertainty. Do not claim research"
-            " that was not performed.",
+            "Stage 4/6: Drafting the response",
+            "Draft an answer to the original request using the reviewed"
+            " outline. Follow its constraints, address every requested"
+            " outcome, state material assumptions or uncertainty, and do not"
+            " claim research that was not performed.",
+        ),
+        (
+            "Stage 5/6: Critiquing the draft",
+            "Critique the draft against the original request, constraints,"
+            " and reviewed outline. Identify only specific material"
+            " omissions, unsupported claims, contradictions, or"
+            " instruction-following problems. Do not rewrite the answer;"
+            " return a concise, actionable list of issues, or say that no"
+            " material issues were found.",
+        ),
+        (
+            "Stage 6/6: Revising the response",
+            "Revise the draft using the critique. Fix each valid issue while"
+            " preserving correct, relevant content and following the"
+            " original request and constraints. Do not introduce unsupported"
+            " claims. Return only the final response, without commentary"
+            " about the critique or revision.",
         ),
     ]
     previous_results: list[tuple[str, str]] = []
