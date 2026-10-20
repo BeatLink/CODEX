@@ -1,10 +1,155 @@
 # SmartHarness
 
-A simple coding harness to make locally run LLM models smarter by breaking prompts down and utilizing self prompting
+A harness that makes small, locally run LLMs more capable on tasks they would
+otherwise fumble.
+
+Small models struggle with long, multistep reasoning: they lose track of
+constraints, skip requirements, and invent facts. SmartHarness never asks the
+model to do the whole job at once. It breaks each request into stages, gives the
+model one narrow goal per stage, and passes forward only the results that stage
+needs. Alongside the pipeline, a local SQLite knowledge store keeps what the
+harness has researched, and a background worker uses idle time to research and
+refresh it, so the harness grows more useful the longer it runs.
+
+Models run through `llama-cpp-python` from a local GGUF file. Nothing is sent to
+a hosted model.
+
+## How a request is handled
+
+Every request runs through eight stages. Each stage is a separate model call
+with its own system prompt, and its input is the original request plus only the
+earlier results it needs.
+
+| Stage | Goal | Sees | Tools |
+| --- | --- | --- | --- |
+| 1. Identify | List the requested outcome, constraints, and assumptions; ask one clarification question if something material is ambiguous | Request | none |
+| 2. Research | Gather at most five findings | Stage 1, clarification, stored or searched evidence | `web_search`, `web_fetch`, `list_directory`, `read_file` |
+| 3. Plan | Make an ordered plan covering every requirement, including any tool actions | Stages 1 and 2, evidence | none |
+| 4. Review plan | Check the plan against the request before anything runs; output a corrected outline and the exact tool actions still needed | Stages 1 to 3, evidence | none |
+| 5. Act | Carry out only the reviewed tool actions | Stage 4, evidence | file tools, `run_tests`, MCP tools (no web) |
+| 6. Draft | Write the answer from the reviewed outline and action results | Stages 4 and 5, evidence | none |
+| 7. Critique | Mark each requirement as met, partly met, or missing; list corrections | Stages 4 to 6, evidence | none |
+| 8. Revise | Apply the valid corrections and return only the final answer | Stages 4 to 7, evidence | none |
+
+Design points:
+
+- **Review before action.** The plan is checked before stage 5 runs, so file
+  changes only happen after that check.
+- **Grounded research.** When research ran, later stages may state researched
+  claims only from captured evidence (search titles, URLs, snippets, stored
+  summaries, and summaries of fetched pages) and must cite the URL. If search
+  failed or found nothing useful, the model is told to say the claims could not
+  be verified.
+- **Untrusted input.** Web pages, file contents, and tool output are presented
+  as data, never as instructions, in every stage that sees them.
+- **Context budget.** Each stage's input is trimmed to fit `context_size` minus
+  `max_tokens`, and tool results are cut to the room that is left, so long
+  evidence is shortened rather than overflowing the window. Fetched pages are
+  summarized in chunks, then the chunk summaries are merged.
+- **Graceful failure.** If the critique or revision fails, the draft is returned
+  with a note saying so.
+- **Clarification.** In an interactive session the model may ask one concise
+  question after stage 1; otherwise it proceeds and states its assumption.
+
+Prompts that ask to verify, research, or look something up, or to install,
+configure, or connect a technical integration such as an API, SDK, or MCP
+server, trigger an automatic search before stage 2. The query is the prompt
+with pasted code blocks removed, cut to 200 characters. Fresh stored knowledge
+is used first; the web is searched only when nothing relevant is stored.
+
+## Long-term memory
+
+### Knowledge store
+
+Knowledge lives in a SQLite database at `knowledge_db_path`
+(`~/.local/share/smartharness/knowledge.sqlite3` by default). It holds:
+
+- **Topics**, each with an optional parent topic, a priority, and when it was
+  last researched.
+- **Sources**: URL, title, snippet, summary, the search query, the topic, when
+  it was retrieved, and when it expires (one week by default).
+- **A full-text index** (FTS5) over source titles, snippets, summaries, and URLs.
+- **A graph** of nodes and labelled edges. Topics link to child topics
+  (`contains`) and to their sources (`supported_by`); entity relationships can
+  carry the source that supports them.
+- **A research queue** of pending, running, done, and failed jobs.
+
+Every web search the pipeline runs is stored under a topic named after its
+query. A stored source is reused only while it has not expired and shares at
+least half of the prompt's search terms, ignoring common words. Only snippets
+and summaries are stored, never full pages.
+
+The database is local and not encrypted; choose a private path if other users
+can read your files.
+
+### Background research
+
+While the TUI is open, a background worker researches queued topics whenever no
+prompt is running. For each job it searches the web, summarizes the results
+with the local model (citing each claim's URL), and stores the sources and
+summary. It also re-queues topics whose research is older than
+`background_refresh_interval_hours`.
+
+The worker yields to foreground work: it waits for the shared model lock,
+checks before every step and every generated token whether a prompt has
+started, and if so puts its job back in the queue.
+
+The worker does not invent topics; add them on the Background page. **Queue
+topic** adds one to the queue, and **Research now** starts it at once, even
+while idle research is paused. The worker stops when the TUI exits. One-shot
+CLI runs read and write the knowledge store but do not start the worker.
+
+`background_poll_interval_seconds` and `background_max_tokens` bound its
+resource use, and `background_max_pending_jobs` bounds the backlog. Set
+`background_research_enabled` to `false` to pause it.
+
+## Installation
+
+With Nix (CUDA build of llama.cpp):
+
+```bash
+nix run . -- "your prompt"
+nix develop          # shell with the app and its Python environment
+```
+
+With pip, in a Python 3.10+ environment:
+
+```bash
+pip install -e .
+```
+
+Then put a GGUF model at `./models/model.gguf`, or point `model_path` at one.
+
+## Usage
+
+```bash
+smartharness "Explain how to design a local event logging daemon"
+echo "Summarize this design" | smartharness
+smartharness            # opens the TUI when run in a terminal
+smartharness --tui      # or: smartharness-tui
+python -m smartharness  # same as smartharness
+```
+
+### Terminal interface
+
+The TUI has four pages:
+
+- **Workbench**: write a request and run it with **Ctrl+R** or the Run button,
+  and stop it with the Cancel button. The Output tab shows each stage's streamed
+  output in its own tab and the final Markdown answer, which can be copied.
+  Clarification questions appear as a dialog.
+- **Background**: queue topics, start research now, pause or resume the worker,
+  and watch its output and queue.
+- **Options**: every setting, including model, folder access, tool limits, and
+  background research. Changes can be saved back to the settings file.
+- **Knowledge**: browse topics, stored sources and summaries, and graph
+  relationships with their supporting URLs.
 
 ## Configuration
 
-Runtime options are read from `settings.json` in the project root:
+Settings are read from `settings.json` in the current directory, or from the
+one beside the package if there is none. Use `--settings path/to/file.json` to
+pick another. Unknown keys are rejected.
 
 ```json
 {
@@ -29,86 +174,45 @@ Runtime options are read from `settings.json` in the project root:
 }
 ```
 
-You can use a different settings file with `--settings path/to/settings.json`.
-Precedence is defaults, `settings.json`, the `MODEL_PATH` environment variable,
-then explicit command-line options. Supported command-line overrides are
-`--model-path`, `--context-size`, `--gpu-layers`, `--max-tokens`, and
-`--temperature`. `--enable-test-execution` opts in to the test-running tool.
-Stage output streams by default; set `show_thinking` to `false` in
-`settings.json` or pass `--no-show-thinking` to disable it. Use
-`--show-thinking` to enable it for a single run.
+Precedence, lowest first: built-in defaults, the settings file, the
+`MODEL_PATH` environment variable, then command-line options.
 
-Each request runs through eight stages: identify the task, research, plan,
-review the plan, carry out the reviewed tool actions, draft, critique, and
-revise. The plan is reviewed before any tool action runs, so file changes
-happen only after that check. If the critique or revision fails, the draft is
-returned with a note saying so.
+| Option | Effect |
+| --- | --- |
+| `--model-path`, `--context-size`, `--gpu-layers`, `--max-tokens`, `--temperature` | Override the matching setting |
+| `--allow-file-writes` | Let the model create or replace files |
+| `--enable-test-execution` | Let the model run the project's tests |
+| `--show-thinking` / `--no-show-thinking` | Stream or hide each stage's output |
+| `--settings PATH` | Use another settings file |
+| `--tui` | Open the terminal interface |
 
-The research stage can search the web using DDGS, fetch and summarize pages,
-and list or read files; the action stage can list, read, or write files.
-Prompts that ask to verify, research, or look something up, or to install,
-configure, or connect a technical integration such as an API, SDK, or MCP
-server, automatically run a web search before the research stage. The query is
-built from the prompt with pasted code blocks removed and is cut to 200
-characters.
-`filesystem_root` is resolved from the current working directory; file tools
-cannot access paths outside that root. Paths are relative to the root, and an
-absolute path is accepted only when it points inside it. File access is
-read-only by default: set `allow_file_writes` to `true`, pass
-`--allow-file-writes`, or tick the box on the TUI Options page to let the
-model create or replace files. Writes cannot delete files. Tool calls and search results are capped by the settings.
-Later stages ground researched claims only in captured search titles, URLs,
-snippets, and summaries of pages the research stage fetched. If search fails
-or returns no useful evidence, the harness instructs the model to say that the
-claims could not be verified. Each stage's input is trimmed to fit
-`context_size` minus `max_tokens`, and tool results are cut to the room that
-is left, so long evidence is shortened rather than overflowing the model. The model asks one concise clarification question in interactive
-terminal sessions when it finds a material ambiguity; otherwise it proceeds
-with an explicit assumption.
+`max_tokens` is reserved for the reply in every stage, so it must leave room
+for input within `context_size`.
 
-## Knowledge Store and Background Research
+## Tools and safety
 
-Search results are stored in a local SQLite database at `knowledge_db_path`.
-The database keeps source URLs, titles, snippets, summaries, search queries,
-retrieval timestamps, and expiry times. SQLite FTS5 is used for retrieval;
-topic hierarchy and evidence-linked relationships are stored as graph nodes
-and edges in the same database. Fresh local evidence is used before live search
-for research-intent prompts. Expired or missing evidence falls back to web
-search. A stored source is reused only when it shares at least half of the
-prompt's search terms, ignoring common words. Stored search results contain
-snippets and summaries only.
+| Tool | Stage | Notes |
+| --- | --- | --- |
+| `web_search` | 2 | DuckDuckGo results via DDGS, capped by `max_search_results` |
+| `web_fetch` | 2 | Public HTTP(S) pages only; private and local addresses are refused, including after redirects. The page is summarized for a focus the model supplies |
+| `list_directory`, `read_file` | 2, 5 | Paths must stay under `filesystem_root` |
+| `write_file` | 5 | Only with `allow_file_writes`; creates or replaces files and cannot delete |
+| `run_tests` | 5 | Only with `enable_test_execution`; runs Python `unittest` discovery under the root with a 120-second limit |
 
-When the TUI is open, its Background page can queue research topics and pause or
-resume the idle worker; the worker's intervals and limits are on the Options page. Enter a topic and choose **Research now** to start a queued
-job immediately, even when idle research is paused; **Queue topic** adds work
-without starting it manually. The worker refreshes previously researched topics after
-`background_refresh_interval_hours`, summarizes search snippets with the local
-model, and pauses when a foreground prompt starts. Its model output and queue
-state are visible in the TUI. The worker stops when the TUI exits; one-shot CLI
-runs can read and write the knowledge store but do not start a persistent
-background process. No topics are invented automatically: add a topic in the
-Background page to queue it. Research can perform network searches, and
-research-intent prompts may store their search query and returned evidence in
-the configured database. Disable `background_research_enabled` to pause idle
-research. Poll interval and generation token limit bound background resource
-use; `background_max_pending_jobs` bounds the queued backlog.
+`filesystem_root` is resolved from the current directory. Paths are relative to
+it; an absolute path is accepted only when it points inside it. Files with
+sensitive names such as `.env` or private keys are refused. Each tool stage may
+make at most `max_tool_calls` calls (1 to 10).
 
-The Knowledge page browses topics, stored sources, summaries, and graph
-relationships with their supporting URLs. The database is local and is not
-encrypted; choose a private path if local filesystem access is shared.
+### MCP servers
 
-Test execution is disabled by default. When enabled through
-`enable_test_execution` or `--enable-test-execution`, the model can run Python
-`unittest` discovery under `filesystem_root`. Tests run with a 120-second limit;
-project test code executes locally.
-
-MCP support currently accepts explicitly configured stdio servers. Each
-enabled server must include an `allowed_tools` list; only those discovered
-tools are exposed to the model. The server command runs locally, so configure
-only servers you trust. Environment values can reference process variables
-with `${NAME}` instead of putting secrets in this file. The process inherits
-basic runtime variables such as `PATH` and `HOME`; other values must be
-configured explicitly:
+Explicitly configured stdio MCP servers can provide extra tools to stage 5.
+Each enabled server must list `allowed_tools`; only those are exposed, named
+`mcp__<server>__<tool>`. The server command runs locally, so configure only
+servers you trust. It inherits basic variables such as `PATH` and `HOME`;
+anything else goes in `env`, which can reference process variables as
+`${NAME}` so secrets stay out of the file. Sessions open for the stage and close
+after it. Network transports are not supported.
 
 ```json
 {
@@ -126,27 +230,33 @@ configured explicitly:
 }
 ```
 
-MCP tools are named `mcp__<server>__<tool>` to avoid collisions with built-in
-tools. Server sessions are opened for the tool stage and closed afterward.
-Only stdio transport is supported; network transports are not yet available.
+## Project layout
 
-The harness is available as an importable `smartharness` package. Run it with a
-prompt as an argument, enter one interactively, or pipe it through standard
-input:
+| Path | Contents |
+| --- | --- |
+| `smartharness/pipeline.py` | The eight stages, model loading, and page summarization |
+| `smartharness/tool_stage.py` | The tool-calling loop used by stages 2 and 5 |
+| `smartharness/tools.py` | Built-in tools and their path and URL checks |
+| `smartharness/mcp_tools.py` | MCP stdio client |
+| `smartharness/context_budget.py` | Fitting stage input into the context window |
+| `smartharness/knowledge.py` | SQLite knowledge store, queue, and graph |
+| `smartharness/background.py` | One background research job |
+| `smartharness/settings.py` | Defaults and validation |
+| `smartharness/cli.py`, `smartharness/tui.py` | Command line and Textual interface |
 
-```bash
-python -m smartharness "Explain how to design a local event logging daemon"
-python -m smartharness
-echo "Summarize this design" | python -m smartharness
-```
+Run the tests with `python -m unittest`.
 
-In a terminal, launch `smartharness` without a prompt to open the interactive
-Textual interface. You can also launch it explicitly with `smartharness --tui`
-or `smartharness-tui`; the TUI lets you run a prompt with **Ctrl+R** (or the
-Run button) and cancel it mid-run, follow pipeline stage progress, inspect each
-phase's streamed output in its own tab, answer clarification questions, queue
-background research, browse stored knowledge, and read or copy the final
-Markdown response. All settings (model, folder access, tool limits and
-background research) live on the Options page. Use
-`--settings path/to/settings.json` to select a settings file; TUI changes can
-be saved back to that file.
+## Current limits
+
+- Every request runs all eight stages, however simple it is.
+- The model is loaded afresh for each request and each background job.
+- The topic tree is flat in practice: topics are named after search queries,
+  nothing sets a parent, and nothing yet records entity relationships.
+- The knowledge store holds web evidence only, not facts about the user or
+  past tasks.
+
+See `TODO.md` for planned work.
+
+## License
+
+GPL-3.0; see `LICENSE`.
