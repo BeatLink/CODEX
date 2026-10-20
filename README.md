@@ -525,6 +525,8 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 | `smartharness/gtk_app.py` | GTK 4 interface |
 | `smartharness/stages.py` | Stage labels and task tree lines shared by the interfaces |
 
+See [docs/architecture.md](docs/architecture.md) for how these parts fit together.
+
 Run the tests with `python -m unittest discover -s tests`.
 
 ## Current limits
