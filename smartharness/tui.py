@@ -3,7 +3,7 @@ from datetime import datetime
 from threading import Event
 from threading import Lock
 from pathlib import Path
-from typing import Any, Awaitable
+from typing import Any
 
 from textual import work
 from textual.app import App, ComposeResult
@@ -93,6 +93,18 @@ HALON_LIGHT_THEME = Theme(
 
 class RunCancelled(Exception):
     pass
+
+
+class FollowingScroll(VerticalScroll):
+    following = True
+
+    def watch_virtual_size(self) -> None:
+        if self.following:
+            self.scroll_end(animate=False)
+
+    def watch_scroll_y(self, old_value: float, new_value: float) -> None:
+        super().watch_scroll_y(old_value, new_value)
+        self.following = new_value >= self.max_scroll_y - 1
 
 
 class ClarificationScreen(ModalScreen[str]):
@@ -407,14 +419,14 @@ class SmartHarnessApp(App[None]):
                     with TabbedContent(initial="final", id="phase-tabs"):
                         for index, title in enumerate(STAGE_TAB_TITLES, start=1):
                             with TabPane(f"{index} {title}", id=f"phase-{index}"):
-                                with VerticalScroll(classes="stage-output-scroll"):
+                                with FollowingScroll(classes="stage-output-scroll"):
                                     yield Markdown(
                                         PHASE_WAITING_TEXT,
                                         classes="stage-output",
                                         id=f"stage-output-{index}",
                                     )
                         with TabPane("Final", id="final"):
-                            with VerticalScroll(classes="stage-output-scroll"):
+                            with FollowingScroll(classes="stage-output-scroll"):
                                 yield Markdown(FINAL_WAITING_TEXT, classes="stage-output", id="final-output")
 
     def _compose_background_page(self) -> ComposeResult:
@@ -439,7 +451,7 @@ class SmartHarnessApp(App[None]):
             yield Static("QUEUE", classes="eyebrow")
             yield Static("No research jobs", id="background-queue")
             yield Static("MODEL OUTPUT", classes="eyebrow")
-            with VerticalScroll(id="background-output-scroll"):
+            with FollowingScroll(id="background-output-scroll"):
                 yield Markdown(BACKGROUND_WAITING_TEXT, id="background-output")
 
     def _compose_options_page(self) -> ComposeResult:
@@ -775,16 +787,10 @@ class SmartHarnessApp(App[None]):
         self._flush_background_output()
 
     def _write_markdown(self, output: Markdown, text: str, append: bool) -> None:
-        scroll = output.parent
-        assert isinstance(scroll, VerticalScroll)
-        following = scroll.scroll_y >= scroll.max_scroll_y - 1
-        written = output.append(text) if append else output.update(text)
-        if following:
-            self.run_worker(self._scroll_to_end_after(written, scroll), group="output-scroll")
-
-    async def _scroll_to_end_after(self, written: Awaitable[Any], scroll: VerticalScroll) -> None:
-        await written
-        scroll.scroll_end(animate=False)
+        if append:
+            output.append(text)
+        else:
+            output.update(text)
 
     def _update_stage(self, label: str) -> None:
         self._flush_stage_output()

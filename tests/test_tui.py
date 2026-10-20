@@ -61,6 +61,14 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             self.assertGreater(scroll.max_scroll_y, 0)
             self.assertEqual(scroll.scroll_y, scroll.max_scroll_y)
 
+            scroll.scroll_home(animate=False)
+            await pilot.pause()
+            app._append_stage_output(STAGE_LABELS[0], "\n\nLine read later")
+            app._flush_stage_output()
+            await pilot.pause(0.5)
+
+            self.assertEqual(scroll.scroll_y, 0)
+
     async def test_clear_resets_prompt_and_completed_answer(self):
         app = SmartHarnessApp(DEFAULT_SETTINGS, initial_prompt="Draft a plan")
 
