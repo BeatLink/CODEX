@@ -100,6 +100,72 @@ class ToolboxTests(unittest.TestCase):
         self.assertEqual(persisted[0][0], "local models")
         self.assertEqual(persisted[0][1][0]["snippet"], "Snippet")
 
+    def test_web_fetch_extracts_readable_html_with_page_focus(self):
+        class FakeHeaders:
+            def get_content_type(self):
+                return "text/html"
+
+            def get_content_charset(self):
+                return "utf-8"
+
+        class FakeResponse:
+            headers = FakeHeaders()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def geturl(self):
+                return "https://example.test/article"
+
+            def read(self, limit):
+                return (
+                    b"<html><head><title>Research title</title>"
+                    b"<style>hidden style</style></head><body>"
+                    b"<main><p>Relevant page content.</p>"
+                    b"<script>hidden script</script></main></body></html>"
+                )
+
+        class FakeOpener:
+            def open(self, request, timeout):
+                self.request = request
+                self.timeout = timeout
+                return FakeResponse()
+
+        opener = FakeOpener()
+        with (
+            patch(
+                "smartharness.tools.socket.getaddrinfo",
+                return_value=[(2, 1, 6, "", ("93.184.216.34", 443))],
+            ),
+            patch("smartharness.tools.build_opener", return_value=opener),
+        ):
+            result = Toolbox(".").call(
+                "web_fetch",
+                {"url": "https://example.test/article", "focus": "dates and findings"},
+            )
+
+        page = json.loads(result)
+        self.assertEqual(page["title"], "Research title")
+        self.assertEqual(page["focus"], "dates and findings")
+        self.assertIn("Relevant page content.", page["text"])
+        self.assertNotIn("hidden style", page["text"])
+        self.assertNotIn("hidden script", page["text"])
+        self.assertEqual(opener.timeout, 15)
+
+    def test_web_fetch_rejects_private_hosts(self):
+        with patch(
+            "smartharness.tools.socket.getaddrinfo",
+            return_value=[(2, 1, 6, "", ("127.0.0.1", 443))],
+        ):
+            result = Toolbox(".").call(
+                "web_fetch", {"url": "https://example.test/private"}
+            )
+
+        self.assertIn("public IP addresses", result)
+
 
 if __name__ == "__main__":
     unittest.main()

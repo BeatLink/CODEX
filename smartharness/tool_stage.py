@@ -19,6 +19,9 @@ def run_tool_stage(
     max_tool_calls: int,
     mcp_servers: list[dict[str, Any]] | None = None,
     on_token: Callable[[str], None] | None = None,
+    allowed_tools: set[str] | None = None,
+    page_summarizer: Callable[[str, str, str], str] | None = None,
+    blocked_tools: set[str] | None = None,
 ) -> str:
     if (
         isinstance(max_tool_calls, bool)
@@ -37,6 +40,9 @@ def run_tool_stage(
             max_tool_calls,
             mcp_servers or [],
             on_token,
+            allowed_tools,
+            page_summarizer,
+            blocked_tools,
         )
     )
 
@@ -51,8 +57,23 @@ async def _run_tool_stage(
     max_tool_calls: int,
     mcp_servers: list[dict[str, Any]],
     on_token: Callable[[str], None] | None,
+    allowed_tools: set[str] | None,
+    page_summarizer: Callable[[str, str, str], str] | None,
+    blocked_tools: set[str] | None,
 ) -> str:
     async with MCPToolbox(mcp_servers) as mcp_toolbox:
+        tool_definitions = [
+            definition
+            for definition in toolbox.tool_definitions
+            if (allowed_tools is None or definition["function"]["name"] in allowed_tools)
+            and definition["function"]["name"] not in (blocked_tools or set())
+        ]
+        tool_definitions.extend(
+            definition
+            for definition in mcp_toolbox.tool_definitions
+            if (allowed_tools is None or definition["function"]["name"] in allowed_tools)
+            and definition["function"]["name"] not in (blocked_tools or set())
+        )
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input},
@@ -66,7 +87,7 @@ async def _run_tool_stage(
                 "messages": messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
-                "tools": [*toolbox.tool_definitions, *mcp_toolbox.tool_definitions],
+                "tools": tool_definitions,
                 "tool_choice": "auto" if tool_call_count < max_tool_calls else "none",
             }
             if on_token is not None:
@@ -154,6 +175,11 @@ async def _run_tool_stage(
 
                 if tool_call_count >= max_tool_calls:
                     result = "Tool error: the configured tool-call limit was reached."
+                elif (
+                    (allowed_tools is not None and name not in allowed_tools)
+                    or name in (blocked_tools or set())
+                ):
+                    result = f"Tool error: tool '{name}' is not allowed in this stage."
                 else:
                     tool_call_count += 1
                     try:
@@ -167,6 +193,15 @@ async def _run_tool_stage(
                             result = await mcp_toolbox.call(name, arguments)
                         else:
                             result = toolbox.call(name, arguments)
+                        if name == "web_fetch" and not result.startswith("Tool error:"):
+                            if page_summarizer is None:
+                                result = "Tool error: webpage summarization is unavailable."
+                            else:
+                                result = page_summarizer(
+                                    result,
+                                    arguments.get("focus", ""),
+                                    user_input,
+                                )
                     except (json.JSONDecodeError, TypeError) as error:
                         result = f"Tool error: invalid JSON arguments: {error}"
 

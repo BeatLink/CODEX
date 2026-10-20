@@ -1,15 +1,24 @@
+from html.parser import HTMLParser
+import ipaddress
 import json
+import socket
 import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 MAX_FILE_BYTES = 100_000
 MAX_TOOL_OUTPUT_CHARS = 12_000
+MAX_WEB_PAGE_BYTES = 2_000_000
+MAX_WEB_PAGE_CHARS = 100_000
+MAX_WEB_PAGE_OUTPUT_CHARS = MAX_WEB_PAGE_CHARS * 2 + 10_000
 MAX_DIRECTORY_ENTRIES = 100
 TEST_TIMEOUT_SECONDS = 120
+WEB_FETCH_TIMEOUT_SECONDS = 15
 SENSITIVE_NAMES = {".env", "credentials", "id_rsa", "id_ed25519", "private_key", "secrets"}
 
 TOOL_DEFINITIONS = [
@@ -25,6 +34,22 @@ TOOL_DEFINITIONS = [
                     "max_results": {"type": "integer", "minimum": 1, "maximum": 10},
                 },
                 "required": ["query"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_fetch",
+            "description": "Fetch a public webpage and summarize its contents for the request. Use a result URL and provide optional focus criteria for what to extract.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "minLength": 1},
+                    "focus": {"type": "string", "maxLength": 500},
+                },
+                "required": ["url"],
                 "additionalProperties": False,
             },
         },
@@ -86,6 +111,79 @@ RUN_TESTS_DEFINITION = {
 }
 
 
+class _HTMLTextExtractor(HTMLParser):
+    _BLOCK_TAGS = {
+        "article", "br", "div", "footer", "h1", "h2", "h3", "h4", "li",
+        "main", "p", "section", "table", "td", "th", "tr",
+    }
+    _HIDDEN_TAGS = {"script", "style", "noscript", "svg"}
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.text_parts: list[str] = []
+        self.title_parts: list[str] = []
+        self._hidden = 0
+        self._in_title = False
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in self._HIDDEN_TAGS:
+            self._hidden += 1
+        if self._hidden:
+            return
+        if tag == "title":
+            self._in_title = True
+        if tag in self._BLOCK_TAGS:
+            self.text_parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self._HIDDEN_TAGS and self._hidden:
+            self._hidden -= 1
+        if self._hidden:
+            return
+        if tag == "title":
+            self._in_title = False
+        if tag in self._BLOCK_TAGS:
+            self.text_parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if self._hidden:
+            return
+        if self._in_title:
+            self.title_parts.append(data)
+        self.text_parts.append(data)
+
+    def extracted(self) -> tuple[str, str]:
+        title = " ".join(" ".join(self.title_parts).split())
+        lines = [" ".join(line.split()) for line in "".join(self.text_parts).splitlines()]
+        text = "\n".join(line for line in lines if line)
+        return title[:500], text
+
+
+def _validate_public_web_url(url: str) -> str:
+    parsed = urlsplit(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("url must be an absolute public HTTP or HTTPS URL.")
+    if parsed.username or parsed.password:
+        raise ValueError("URLs with embedded credentials are not allowed.")
+    hostname = parsed.hostname.rstrip(".")
+    try:
+        addresses = {
+            ipaddress.ip_address(result[4][0])
+            for result in socket.getaddrinfo(hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
+        }
+    except (OSError, ValueError) as error:
+        raise ValueError("the webpage host could not be resolved.") from error
+    if not addresses or any(not address.is_global for address in addresses):
+        raise ValueError("webpage hosts must resolve only to public IP addresses.")
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path or "/", parsed.query, ""))
+
+
+class _PublicRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, request, response, code, message, headers, newurl):
+        _validate_public_web_url(newurl)
+        return super().redirect_request(request, response, code, message, headers, newurl)
+
+
 class Toolbox:
     def __init__(
         self,
@@ -118,6 +216,7 @@ class Toolbox:
             return "Tool error: arguments must be a JSON object."
         handlers = {
             "web_search": self._web_search,
+            "web_fetch": self._web_fetch,
             "list_directory": self._list_directory,
             "read_file": self._read_file,
             "write_file": self._write_file,
@@ -135,7 +234,10 @@ class Toolbox:
             result = json.dumps(result, ensure_ascii=False)
         if not result.startswith("Tool error:"):
             self.used_tools.add(name)
-        return result[:MAX_TOOL_OUTPUT_CHARS]
+        output_limit = (
+            MAX_WEB_PAGE_OUTPUT_CHARS if name == "web_fetch" else MAX_TOOL_OUTPUT_CHARS
+        )
+        return result[:output_limit]
 
     def _web_search(self, arguments: dict[str, Any]) -> str:
         self._check_arguments(arguments, {"query"}, {"max_results"})
@@ -166,6 +268,53 @@ class Toolbox:
         if self.search_callback is not None:
             self.search_callback(query.strip(), formatted)
         return json.dumps(formatted, ensure_ascii=False)
+
+    def _web_fetch(self, arguments: dict[str, Any]) -> dict[str, str | bool]:
+        self._check_arguments(arguments, {"url"}, {"focus"})
+        url = arguments["url"]
+        focus = arguments.get("focus", "")
+        if not isinstance(url, str) or not url.strip():
+            raise ValueError("url must be a non-empty HTTP or HTTPS URL.")
+        if not isinstance(focus, str) or len(focus) > 500:
+            raise ValueError("focus must be a string of at most 500 characters.")
+        return {**self._download_web_page(url.strip()), "focus": focus}
+
+    @staticmethod
+    def _download_web_page(url: str) -> dict[str, str | bool]:
+        url = _validate_public_web_url(url)
+        request = Request(
+            url,
+            headers={
+                "User-Agent": "SmartHarness/0.1 (+read-only research)",
+                "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1",
+                "Accept-Encoding": "identity",
+            },
+        )
+        opener = build_opener(_PublicRedirectHandler())
+        with opener.open(request, timeout=WEB_FETCH_TIMEOUT_SECONDS) as response:
+            final_url = _validate_public_web_url(response.geturl())
+            content_type = response.headers.get_content_type()
+            if content_type not in {"text/html", "application/xhtml+xml", "text/plain"}:
+                raise ValueError(f"unsupported webpage content type: {content_type}.")
+            raw_content = response.read(MAX_WEB_PAGE_BYTES + 1)
+            truncated = len(raw_content) > MAX_WEB_PAGE_BYTES
+            raw_content = raw_content[:MAX_WEB_PAGE_BYTES]
+            charset = response.headers.get_content_charset() or "utf-8"
+
+        page_content = raw_content.decode(charset, errors="replace")
+        if content_type == "text/plain":
+            title = ""
+            text = page_content
+        else:
+            parser = _HTMLTextExtractor()
+            parser.feed(page_content)
+            title, text = parser.extracted()
+        if len(text) > MAX_WEB_PAGE_CHARS:
+            text = text[:MAX_WEB_PAGE_CHARS]
+            truncated = True
+        if truncated:
+            text += "\n[Page text truncated at the configured fetch limit.]"
+        return {"url": final_url, "title": title, "text": text, "truncated": truncated}
 
     def _resolve_path(self, relative_path: str) -> Path:
         if not isinstance(relative_path, str) or not relative_path.strip():

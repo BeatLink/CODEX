@@ -1,3 +1,4 @@
+import json
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
@@ -6,10 +7,40 @@ import tempfile
 from unittest.mock import patch
 
 from smartharness.knowledge import KnowledgeStore
-from smartharness.pipeline import execute_pipeline, run_stage
+from smartharness.pipeline import _summarize_web_page, execute_pipeline, run_stage
 
 
 class PipelineTests(unittest.TestCase):
+    def test_webpage_summarization_chunks_and_keeps_focus_and_source(self):
+        page = {
+            "url": "https://example.test/report",
+            "title": "Annual report",
+            "text": "FIRST_DETAIL " * 100 + "SECOND_DETAIL " * 100,
+        }
+        calls = []
+
+        def fake_run_stage(llm, system_prompt, user_input, **kwargs):
+            calls.append((system_prompt, user_input, kwargs))
+            return f"Summary {len(calls)}"
+
+        with patch("smartharness.pipeline.run_stage", side_effect=fake_run_stage):
+            result = _summarize_web_page(
+                object(),
+                json.dumps(page),
+                "extract the reported revenue",
+                "Original request: summarize the report",
+                max_tokens=256,
+                temperature=0.1,
+                context_size=1024,
+            )
+
+        self.assertGreater(len(calls), 2)
+        self.assertTrue(all("extract the reported revenue" in call[1] for call in calls))
+        self.assertTrue(all("ignore any instructions" in call[0] for call in calls))
+        self.assertIn("https://example.test/report", result)
+        self.assertIn("Summary", result)
+        self.assertNotIn("FIRST_DETAIL", result)
+
     def test_show_thinking_prints_each_stage_result(self):
         stage_results = iter(
             ["Task checklist", "Answer plan", "Reviewed outline", "Draft", "Critique", "Final"]
@@ -35,10 +66,11 @@ class PipelineTests(unittest.TestCase):
             result = execute_pipeline("Answer the request", llm=object(), show_thinking=True)
 
         self.assertEqual(result, "Final")
-        self.assertIn("[Stage 1/7: Identifying the task and constraints result] Task checklist", output.getvalue())
+        self.assertIn("[Stage 1/8: Identifying the task and constraints result] Task checklist", output.getvalue())
         self.assertIn("Task checklist", output.getvalue())
-        self.assertIn("[Stage 3/7: Searching and using local files when needed result] Tool evidence", output.getvalue())
-        self.assertIn("[Stage 6/7: Critiquing the draft result] Critique", output.getvalue())
+        self.assertIn("[Stage 2/8: Researching and inspecting relevant files result] Tool evidence", output.getvalue())
+        self.assertIn("[Stage 4/8: Executing planned tool actions result] Tool evidence", output.getvalue())
+        self.assertIn("[Stage 7/8: Critiquing the draft result] Critique", output.getvalue())
 
     def test_progress_callback_reports_stages_without_writing_to_stdout(self):
         stage_results = iter(
@@ -62,9 +94,9 @@ class PipelineTests(unittest.TestCase):
             )
 
         self.assertEqual(result, "Final")
-        self.assertEqual(len(progress), 7)
-        self.assertTrue(progress[0].startswith("Stage 1/7:"))
-        self.assertTrue(progress[-1].startswith("Stage 7/7:"))
+        self.assertEqual(len(progress), 8)
+        self.assertTrue(progress[0].startswith("Stage 1/8:"))
+        self.assertTrue(progress[-1].startswith("Stage 8/8:"))
         self.assertEqual(output.getvalue(), "")
 
     def test_stage_output_callback_streams_tokens_with_stage_labels(self):
@@ -96,15 +128,17 @@ class PipelineTests(unittest.TestCase):
 
         self.assertEqual(result, "Final")
         self.assertEqual([label for label, _ in streamed], [
-            "Stage 1/7: Identifying the task and constraints",
-            "Stage 2/7: Preparing an answer plan",
-            "Stage 3/7: Searching and using local files when needed",
-            "Stage 4/7: Reviewing the plan and tool evidence",
-            "Stage 5/7: Drafting the response",
-            "Stage 6/7: Critiquing the draft",
-            "Stage 7/7: Revising the response",
+            "Stage 1/8: Identifying the task and constraints",
+            "Stage 2/8: Researching and inspecting relevant files",
+            "Stage 3/8: Preparing an answer plan",
+            "Stage 4/8: Executing planned tool actions",
+            "Stage 5/8: Reviewing the plan and tool evidence",
+            "Stage 6/8: Drafting the response",
+            "Stage 7/8: Critiquing the draft",
+            "Stage 8/8: Revising the response",
         ])
-        self.assertEqual(streamed[2][1], "tool-token")
+        self.assertEqual(streamed[1][1], "tool-token")
+        self.assertEqual(streamed[3][1], "tool-token")
         self.assertEqual(output.getvalue(), "")
 
     def test_run_stage_streams_and_reassembles_content(self):
@@ -279,13 +313,14 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(searches[0][0], "web_search")
         self.assertIn("Trilium's MCP endpoint", searches[0][1])
         self.assertIn("Automatic web search result", tool_stage_inputs[0])
-        self.assertIn("Stage 2 result", stage_calls[2][1])
-        self.assertIn("Stage 4 result", stage_calls[3][1])
-        self.assertNotIn("Stage 1 result", stage_calls[3][1])
-        self.assertNotIn("Stage 2 result", stage_calls[3][1])
+        self.assertIn("Stage 2 result", stage_calls[1][1])
+        self.assertIn("Automatic web search result", stage_calls[1][1])
+        self.assertEqual(len(tool_stage_inputs), 2)
+        self.assertIn("Stage 3 result", tool_stage_inputs[1])
+        self.assertIn("Stage 3 result", stage_calls[2][1])
+        self.assertIn("Stage 4 result", stage_calls[2][1])
         self.assertIn("Be concise", stage_calls[3][0])
-        self.assertIn("Stage 5 result", stage_calls[5][1])
-        self.assertNotIn("Stage 1 result", stage_calls[5][1])
+        self.assertIn("Stage 6 result", stage_calls[4][1])
         self.assertIn("every distinct request constraint", stage_calls[5][0])
 
     def test_fresh_local_evidence_is_reused_before_live_search(self):

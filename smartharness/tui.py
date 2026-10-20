@@ -32,15 +32,16 @@ from .settings import DEFAULT_SETTINGS_PATH, load_settings, save_settings, valid
 
 
 STAGE_LABELS = (
-    "Stage 1/7: Identifying the task and constraints",
-    "Stage 2/7: Preparing an answer plan",
-    "Stage 3/7: Searching and using local files when needed",
-    "Stage 4/7: Reviewing the plan and tool evidence",
-    "Stage 5/7: Drafting the response",
-    "Stage 6/7: Critiquing the draft",
-    "Stage 7/7: Revising the response",
+    "Stage 1/8: Identifying the task and constraints",
+    "Stage 2/8: Researching and inspecting relevant files",
+    "Stage 3/8: Preparing an answer plan",
+    "Stage 4/8: Executing planned tool actions",
+    "Stage 5/8: Reviewing the plan and tool evidence",
+    "Stage 6/8: Drafting the response",
+    "Stage 7/8: Critiquing the draft",
+    "Stage 8/8: Revising the response",
 )
-STAGE_TAB_TITLES = ("Task", "Plan", "Tools", "Review", "Draft", "Critique", "Revise")
+STAGE_TAB_TITLES = ("Task", "Research", "Plan", "Actions", "Review", "Draft", "Critique", "Revise")
 
 
 class ClarificationScreen(ModalScreen[str]):

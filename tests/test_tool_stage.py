@@ -25,7 +25,7 @@ class FakeModel:
         return next(self.replies)
 
 
-def tool_call_response(call_id="call-1"):
+def tool_call_response(call_id="call-1", name="read_file", arguments=None):
     return {
         "choices": [
             {
@@ -37,8 +37,10 @@ def tool_call_response(call_id="call-1"):
                             "id": call_id,
                             "type": "function",
                             "function": {
-                                "name": "read_file",
-                                "arguments": json.dumps({"path": "notes.txt"}),
+                                "name": name,
+                                "arguments": json.dumps(
+                                    arguments or {"path": "notes.txt"}
+                                ),
                             },
                         }
                     ],
@@ -49,6 +51,94 @@ def tool_call_response(call_id="call-1"):
 
 
 class ToolStageTests(unittest.TestCase):
+    def test_fetched_page_is_summarized_before_returning_to_tool_loop(self):
+        toolbox = FakeToolbox()
+        toolbox.call = lambda name, arguments: json.dumps(
+            {
+                "url": "https://example.test/page",
+                "title": "Page title",
+                "text": "FULL PAGE CONTENT THAT MUST NOT ENTER THE MAIN LOOP",
+                "focus": arguments["focus"],
+            }
+        )
+        model = FakeModel(
+            [
+                tool_call_response(
+                    name="web_fetch",
+                    arguments={"url": "https://example.test/page", "focus": "the date"},
+                ),
+                {
+                    "choices": [
+                        {
+                            "finish_reason": "stop",
+                            "message": {"content": "Research complete."},
+                        }
+                    ]
+                },
+            ]
+        )
+        summarized_pages = []
+
+        def summarize_page(page_json, focus, request_context):
+            summarized_pages.append((page_json, focus, request_context))
+            return "Source URL: https://example.test/page\nRelevant date: 2026"
+
+        result = run_tool_stage(
+            model,
+            "Research only.",
+            "Find the publication date.",
+            toolbox,
+            max_tokens=200,
+            temperature=0.1,
+            max_tool_calls=3,
+            allowed_tools={"web_fetch"},
+            page_summarizer=summarize_page,
+        )
+
+        research_tools = model.requests[0]["tools"]
+        self.assertEqual(
+            [tool["function"]["name"] for tool in research_tools], ["web_fetch"]
+        )
+        returned_to_model = model.requests[1]["messages"][-1]["content"]
+        self.assertIn("Relevant date: 2026", returned_to_model)
+        self.assertNotIn("FULL PAGE CONTENT", returned_to_model)
+        self.assertEqual(summarized_pages[0][1], "the date")
+        self.assertIn("Find the publication date", summarized_pages[0][2])
+        self.assertIn("Relevant date: 2026", result)
+
+    def test_blocked_tools_are_not_offered_to_the_model(self):
+        toolbox = FakeToolbox()
+        model = FakeModel(
+            [
+                {
+                    "choices": [
+                        {
+                            "finish_reason": "stop",
+                            "message": {"content": "No research tools available."},
+                        }
+                    ]
+                }
+            ]
+        )
+
+        run_tool_stage(
+            model,
+            "Execute planned actions.",
+            "Update the requested file.",
+            toolbox,
+            max_tokens=200,
+            temperature=0.1,
+            max_tool_calls=3,
+            blocked_tools={"web_search", "web_fetch"},
+        )
+
+        offered_names = {
+            tool["function"]["name"] for tool in model.requests[0]["tools"]
+        }
+        self.assertNotIn("web_search", offered_names)
+        self.assertNotIn("web_fetch", offered_names)
+        self.assertIn("write_file", offered_names)
+
     def test_streams_content_and_reassembles_split_tool_call(self):
         toolbox = FakeToolbox()
         model = FakeModel(
