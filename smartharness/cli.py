@@ -1,12 +1,19 @@
 import argparse
 import os
+import queue
 import sys
+from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 from rich.markdown import Markdown
 
+from .client import DISCONNECTED_EVENT, connect_to_daemon
 from .pipeline import execute_pipeline
 from .settings import default_settings_path, load_settings, validate_settings
+
+
+PATH_SETTINGS = ("model_path", "filesystem_root", "knowledge_db_path")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -62,20 +69,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error loading settings: {error}", file=sys.stderr)
         return 1
 
+    overrides: dict[str, Any] = {}
     if os.getenv("MODEL_PATH"):
-        settings["model_path"] = os.environ["MODEL_PATH"]
+        overrides["model_path"] = os.environ["MODEL_PATH"]
     for name in ("model_path", "context_size", "gpu_layers", "max_tokens", "temperature"):
         argument = getattr(args, name)
         if argument is not None:
-            settings[name] = argument
+            overrides[name] = argument
     if args.enable_test_execution:
-        settings["enable_test_execution"] = True
+        overrides["enable_test_execution"] = True
     if args.allow_file_writes:
-        settings["allow_file_writes"] = True
+        overrides["allow_file_writes"] = True
     if args.show_thinking is not None:
-        settings["show_thinking"] = args.show_thinking
+        overrides["show_thinking"] = args.show_thinking
     try:
-        settings = validate_settings(settings)
+        settings = validate_settings({**settings, **overrides})
     except ValueError as error:
         print(f"Error in settings: {error}", file=sys.stderr)
         return 1
@@ -87,6 +95,7 @@ def main(argv: list[str] | None = None) -> int:
             settings,
             initial_prompt=" ".join(args.prompt).strip(),
             settings_path=args.settings,
+            settings_overrides=overrides,
         ).run()
         return 0
 
@@ -97,26 +106,28 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("provide a prompt as an argument or through standard input")
 
     try:
-        result = execute_pipeline(
-            prompt,
-            model_path=settings["model_path"],
-            context_size=settings["context_size"],
-            gpu_layers=settings["gpu_layers"],
-            max_tokens=settings["max_tokens"],
-            temperature=settings["temperature"],
-            filesystem_root=settings["filesystem_root"],
-            max_tool_calls=settings["max_tool_calls"],
-            max_search_results=settings["max_search_results"],
-            enable_test_execution=settings["enable_test_execution"],
-            allow_file_writes=settings["allow_file_writes"],
-            mcp_servers=settings["mcp_servers"],
-            knowledge_db_path=settings["knowledge_db_path"],
-            max_pending_research_jobs=settings["background_max_pending_jobs"],
-            show_thinking=settings["show_thinking"],
-            clarification_callback=(
-                _ask_clarification if sys.stdin.isatty() else None
-            ),
-        )
+        result = _run_with_daemon(prompt, settings, interactive=sys.stdin.isatty())
+        if result is None:
+            result = execute_pipeline(
+                prompt,
+                model_path=settings["model_path"],
+                context_size=settings["context_size"],
+                gpu_layers=settings["gpu_layers"],
+                max_tokens=settings["max_tokens"],
+                temperature=settings["temperature"],
+                filesystem_root=settings["filesystem_root"],
+                max_tool_calls=settings["max_tool_calls"],
+                max_search_results=settings["max_search_results"],
+                enable_test_execution=settings["enable_test_execution"],
+                allow_file_writes=settings["allow_file_writes"],
+                mcp_servers=settings["mcp_servers"],
+                knowledge_db_path=settings["knowledge_db_path"],
+                max_pending_research_jobs=settings["background_max_pending_jobs"],
+                show_thinking=settings["show_thinking"],
+                clarification_callback=(
+                    _ask_clarification if sys.stdin.isatty() else None
+                ),
+            )
     except (OSError, RuntimeError, ValueError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
@@ -127,6 +138,50 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(result)
     return 0
+
+
+def _run_with_daemon(prompt: str, settings: dict[str, Any], interactive: bool) -> str | None:
+    """Run the prompt on a daemon that is already running; returns None when none is."""
+    events: queue.Queue[tuple[str, dict[str, Any]]] = queue.Queue()
+    try:
+        client = connect_to_daemon(on_event=lambda event, data: events.put((event, data)), start=False)
+    except OSError:
+        return None
+    # The daemon may have started elsewhere, so paths are sent resolved from this directory.
+    settings = {
+        **settings,
+        **{name: str(Path(settings[name]).expanduser().resolve()) for name in PATH_SETTINGS},
+    }
+    try:
+        run_id = client.call("run", prompt=prompt, settings=settings, interactive=interactive)["run_id"]
+        while True:
+            event, data = events.get()
+            if event == DISCONNECTED_EVENT:
+                raise RuntimeError("The daemon closed the connection.")
+            if data.get("run_id") != run_id:
+                continue
+            if event == "run.progress" and settings["show_thinking"]:
+                print(f"\n[{data['label']} result] ", end="", flush=True)
+            elif event == "run.progress":
+                print(f"[{data['label']}]...")
+            elif event == "run.token" and settings["show_thinking"]:
+                print(data["token"], end="", flush=True)
+            elif event == "run.clarification":
+                answer = _ask_clarification(data["question"])
+                client.call(
+                    "answer_clarification",
+                    run_id=run_id,
+                    clarification_id=data["clarification_id"],
+                    answer=answer,
+                )
+            elif event == "run.finished":
+                return data["result"]
+            elif event == "run.failed":
+                raise RuntimeError(data["message"])
+            elif event == "run.cancelled":
+                raise RuntimeError("The run was cancelled.")
+    finally:
+        client.close()
 
 
 def _ask_clarification(question: str) -> str:

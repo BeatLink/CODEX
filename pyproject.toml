@@ -13,6 +13,7 @@ dependencies = ["llama-cpp-python>=0.3.0", "ddgs>=9.0.0", "mcp>=1.0.0,<2", "rich
 [project.scripts]
 smartharness = "smartharness.cli:main"
 smartharness-tui = "smartharness.tui:main"
+smartharness-daemon = "smartharness.daemon:main"
 
 [tool.setuptools.packages.find]
 include = ["smartharness*"]

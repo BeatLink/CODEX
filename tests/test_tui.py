@@ -7,16 +7,24 @@ from unittest.mock import patch
 
 from textual.widgets import Button, Checkbox, Input, Markdown, TabbedContent, TabPane, TextArea, Tree
 
+from daemon_harness import RunningDaemon
+
 from smartharness.knowledge import KnowledgeStore
 from smartharness.settings import DEFAULT_SETTINGS, load_settings
 from smartharness.tui import STAGE_LABELS, SmartHarnessApp
 
 
 class TuiTests(unittest.IsolatedAsyncioTestCase):
-    async def test_app_mounts_prompt_pipeline_and_response_controls(self):
-        app = SmartHarnessApp(DEFAULT_SETTINGS, initial_prompt="Draft a plan")
+    def app(self, settings=DEFAULT_SETTINGS, settings_path=None, start_worker=False, **options):
+        daemon = RunningDaemon(settings, settings_path, start_worker=start_worker)
+        self.addCleanup(daemon.stop)
+        return SmartHarnessApp(settings, client=daemon.client(), **options)
 
-        async with app.run_test(size=(120, 42)):
+    async def test_app_mounts_prompt_pipeline_and_response_controls(self):
+        app = self.app(initial_prompt="Draft a plan")
+
+        async with app.run_test(size=(120, 42)) as pilot:
+            await connected(pilot, app)
             self.assertEqual(app.query_one("#prompt", TextArea).text, "Draft a plan")
             self.assertTrue(app.query_one("#model-path", TextArea).soft_wrap)
             self.assertEqual(len(app.query(".stage-row")), len(STAGE_LABELS))
@@ -38,9 +46,10 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(app.query_one("#final-output", Markdown).id, "final-output")
 
     async def test_phase_output_scrolls_to_latest_content(self):
-        app = SmartHarnessApp(DEFAULT_SETTINGS)
+        app = self.app()
 
         async with app.run_test(size=(100, 30)) as pilot:
+            await connected(pilot, app)
             await pilot.pause()
             app.query_one("#workbench-tabs", TabbedContent).active = "output-pane"
             app._update_stage(STAGE_LABELS[0])
@@ -70,9 +79,10 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(scroll.scroll_y, 0)
 
     async def test_clear_resets_prompt_and_completed_answer(self):
-        app = SmartHarnessApp(DEFAULT_SETTINGS, initial_prompt="Draft a plan")
+        app = self.app(initial_prompt="Draft a plan")
 
         async with app.run_test(size=(120, 42)) as pilot:
+            await connected(pilot, app)
             app._finish_run("Completed")
             await pilot.click("#clear")
 
@@ -81,7 +91,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(app._last_answer, "")
 
     async def test_run_executes_in_worker_and_updates_stage_progress(self):
-        app = SmartHarnessApp(DEFAULT_SETTINGS, initial_prompt="Draft a plan")
+        app = self.app(initial_prompt="Draft a plan")
 
         def fake_execute_pipeline(prompt, **kwargs):
             self.assertEqual(prompt, "Draft a plan")
@@ -89,8 +99,9 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             kwargs["stage_output_callback"](STAGE_LABELS[0], "Phase output")
             return "Worker response"
 
-        with patch("smartharness.tui.execute_pipeline", side_effect=fake_execute_pipeline):
+        with patch("smartharness.daemon.execute_pipeline", side_effect=fake_execute_pipeline):
             async with app.run_test(size=(120, 42)) as pilot:
+                await connected(pilot, app)
                 app._start_run()
                 for _ in range(20):
                     await pilot.pause(0.05)
@@ -109,10 +120,11 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             settings["knowledge_db_path"] = str(Path(directory) / "knowledge.db")
             settings["background_research_enabled"] = False
             settings_path = Path(directory) / "settings.json"
-            app = SmartHarnessApp(settings, settings_path=settings_path)
+            app = self.app(settings, settings_path, start_worker=True)
 
-            with patch("smartharness.tui.research_one_topic", return_value=False) as research:
+            with patch("smartharness.daemon.research_one_topic", return_value=False) as research:
                 async with app.run_test(size=(140, 48)) as pilot:
+                    await connected(pilot, app)
                     await pilot.click("#--content-tab-background-page")
                     await pilot.pause()
                     app.query_one("#research-topic", Input).value = "Local model RAG"
@@ -139,9 +151,10 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             settings["knowledge_db_path"] = str(Path(directory) / "knowledge.db")
             settings["background_research_enabled"] = False
             settings_path = Path(directory) / "settings.json"
-            app = SmartHarnessApp(settings, settings_path=settings_path)
+            app = self.app(settings, settings_path)
 
             async with app.run_test(size=(140, 48)) as pilot:
+                await connected(pilot, app)
                 await pilot.click("#--content-tab-options-page")
                 await pilot.pause()
                 self.assertFalse(app.query_one("#allow-file-writes", Checkbox).value)
@@ -168,9 +181,10 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 [{"title": "Docker guide", "url": "https://example.test/docker", "snippet": "Multi-stage Docker builds."}],
                 topic="Docker",
             )
-            app = SmartHarnessApp(settings)
+            app = self.app(settings)
 
             async with app.run_test(size=(140, 48)) as pilot:
+                await connected(pilot, app)
                 await pilot.click("#--content-tab-knowledge-page")
                 app.query_one("#knowledge-search", Input).value = "Docker builds"
                 app.query_one("#knowledge-search", Input).focus()
@@ -201,9 +215,10 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                     [{"title": title, "url": f"https://example.test/{title}", "snippet": query}],
                     topic=query,
                 )
-            app = SmartHarnessApp(settings)
+            app = self.app(settings)
 
             async with app.run_test(size=(140, 48)) as pilot:
+                await connected(pilot, app)
                 app._search_knowledge("Docker builds")
                 await wait_until(pilot, lambda: len(app._knowledge_sources) == 1)
                 app._refresh_knowledge()
@@ -212,7 +227,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual([source["title"] for source in app._knowledge_sources], ["Docker guide"])
 
     async def test_cancel_stops_a_running_request(self):
-        app = SmartHarnessApp(DEFAULT_SETTINGS, initial_prompt="Draft a plan")
+        app = self.app(initial_prompt="Draft a plan")
         started = threading.Event()
 
         def endless_pipeline(prompt, **kwargs):
@@ -222,8 +237,9 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 kwargs["stage_output_callback"](STAGE_LABELS[1], "token ")
                 time.sleep(0.01)
 
-        with patch("smartharness.tui.execute_pipeline", side_effect=endless_pipeline):
+        with patch("smartharness.daemon.execute_pipeline", side_effect=endless_pipeline):
             async with app.run_test(size=(120, 42)) as pilot:
+                await connected(pilot, app)
                 app._start_run()
                 await wait_until(pilot, started.is_set)
                 self.assertTrue(app.query_one("#clear", Button).disabled)
@@ -238,7 +254,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(app.query_one("#cancel", Button).disabled)
 
     async def test_skipped_stages_stay_marked_after_the_run(self):
-        app = SmartHarnessApp(DEFAULT_SETTINGS, initial_prompt="Draft a plan")
+        app = self.app(initial_prompt="Draft a plan")
 
         def routed_pipeline(prompt, **kwargs):
             kwargs["progress_callback"](STAGE_LABELS[0])
@@ -246,8 +262,9 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             kwargs["progress_callback"](STAGE_LABELS[2])
             return "Routed response"
 
-        with patch("smartharness.tui.execute_pipeline", side_effect=routed_pipeline):
+        with patch("smartharness.daemon.execute_pipeline", side_effect=routed_pipeline):
             async with app.run_test(size=(120, 42)) as pilot:
+                await connected(pilot, app)
                 app._start_run()
                 await wait_until(pilot, lambda: not app._request_running)
 
@@ -255,14 +272,15 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("DONE", str(app.query_one("#stage-row-3").render()))
 
     async def test_failed_run_marks_the_failing_stage(self):
-        app = SmartHarnessApp(DEFAULT_SETTINGS, initial_prompt="Draft a plan")
+        app = self.app(initial_prompt="Draft a plan")
 
         def failing_pipeline(prompt, **kwargs):
             kwargs["progress_callback"](STAGE_LABELS[3])
             raise RuntimeError("tool exploded")
 
-        with patch("smartharness.tui.execute_pipeline", side_effect=failing_pipeline):
+        with patch("smartharness.daemon.execute_pipeline", side_effect=failing_pipeline):
             async with app.run_test(size=(120, 42)) as pilot:
+                await connected(pilot, app)
                 app._start_run()
                 await wait_until(pilot, lambda: not app._request_running)
 
@@ -270,9 +288,10 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("DONE", str(app.query_one("#stage-row-3").render()))
 
     async def test_choosing_a_phase_tab_stops_following_stages(self):
-        app = SmartHarnessApp(DEFAULT_SETTINGS)
+        app = self.app()
 
         async with app.run_test(size=(120, 42)) as pilot:
+            await connected(pilot, app)
             app._set_running(True)
             app._update_stage(STAGE_LABELS[0])
             await pilot.pause()
@@ -289,14 +308,19 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(app.query_one("#phase-tabs").active, "final")
 
     async def test_ctrl_r_runs_the_prompt(self):
-        app = SmartHarnessApp(DEFAULT_SETTINGS, initial_prompt="Draft a plan")
+        app = self.app(initial_prompt="Draft a plan")
 
-        with patch("smartharness.tui.execute_pipeline", return_value="Shortcut response"):
+        with patch("smartharness.daemon.execute_pipeline", return_value="Shortcut response"):
             async with app.run_test(size=(120, 42)) as pilot:
+                await connected(pilot, app)
                 await pilot.press("ctrl+r")
                 await wait_until(pilot, lambda: app._last_answer)
 
                 self.assertEqual(app._last_answer, "Shortcut response")
+
+
+async def connected(pilot, app):
+    await wait_until(pilot, lambda: str(app.query_one("#status").render()) == "Ready")
 
 
 async def wait_until(pilot, condition, attempts=40):

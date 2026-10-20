@@ -14,6 +14,37 @@ refresh it, so the harness grows more useful the longer it runs.
 Models run through `llama-cpp-python` from a local GGUF file. Nothing is sent to
 a hosted model.
 
+## Daemon and interfaces
+
+SmartHarness is split into a daemon and the interfaces that talk to it. The
+daemon (`smartharness-daemon`) owns the loaded model, runs requests, and runs
+background research. Interfaces connect to it over a Unix socket at
+`$XDG_RUNTIME_DIR/smartharness/daemon.sock` and only show what it reports, so
+several can be open at once and all see the same run, queue, and settings.
+
+- The terminal interface starts the daemon if none is running. A daemon it
+  starts keeps running after the interface closes; stop it with `SIGTERM`. Its
+  output goes to `~/.local/state/smartharness/daemon.log`.
+- A one-shot CLI run uses the daemon when one is running, so the model is
+  already loaded, and otherwise runs the pipeline in its own process.
+- One request runs at a time. A run belongs to the interface that started it:
+  only that interface is asked clarification questions, and the run is
+  cancelled if that interface disconnects.
+- The daemon reads `settings.json` when it starts. Relative paths in settings
+  are resolved from the directory the daemon started in; the CLI sends its
+  paths already resolved.
+
+The protocol is one JSON object per line. A request is
+`{"id", "method", "params"}` and gets `{"id", "result"}` or `{"id", "error"}`
+back; the daemon also sends `{"event", "data"}` lines at any time. Methods are
+`status`, `get_settings`, `apply_settings`, `save_settings`,
+`set_background_enabled`, `run`, `cancel`, `answer_clarification`,
+`queue_topic`, `research_now`, `queue_status`, `knowledge`, and `shutdown`.
+Events are `run.started`, `run.progress`, `run.token`, `run.clarification`,
+`run.finished`, `run.failed`, `run.cancelled`, `background.status`,
+`background.token`, `queue.changed`, `knowledge.changed`, and
+`settings.changed`.
+
 ## How a request is handled
 
 A request runs through up to eight stages. Each stage is a separate model call
@@ -125,7 +156,7 @@ can read your files.
 
 ### Background research
 
-While the TUI is open, a background worker uses idle time to grow the store.
+While the daemon runs, a background worker uses idle time to grow the store.
 For each queued topic it:
 
 1. Searches the web, then fetches and summarizes the first two result pages.
@@ -154,8 +185,9 @@ unless its topic already has facts: one that found results is turned into
 facts, and one that found nothing is tried again later. A page fetched during a
 request keeps its summary in the store as well. Otherwise, add topics on
 the Background page: **Queue topic** adds one to the queue, and **Research now** starts it at once, even
-while idle research is paused. The worker stops when the TUI exits. One-shot
-CLI runs read and write the knowledge store but do not start the worker.
+while idle research is paused. The worker stops when the daemon exits. One-shot
+CLI runs without a daemon read and write the knowledge store but do not start
+the worker.
 
 `background_poll_interval_seconds` and `background_max_tokens` bound its
 resource use, and `background_max_pending_jobs` bounds the backlog. Set
@@ -186,6 +218,7 @@ echo "Summarize this design" | smartharness
 smartharness            # opens the TUI when run in a terminal
 smartharness --tui      # or: smartharness-tui
 python -m smartharness  # same as smartharness
+smartharness-daemon     # run the daemon in the foreground
 ```
 
 ### Terminal interface
@@ -243,7 +276,7 @@ Precedence, lowest first: built-in defaults, the settings file, the
 | `--enable-test-execution` | Let the model run the project's tests |
 | `--show-thinking` / `--no-show-thinking` | Stream or hide each stage's output |
 | `--settings PATH` | Use another settings file |
-| `--tui` | Open the terminal interface |
+| `--tui` | Open the terminal interface; the other options are applied to the daemon it connects to |
 
 `max_tokens` is reserved for the reply in most stages, so it must leave room
 for input within `context_size`.
@@ -317,14 +350,16 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 | `smartharness/knowledge.py` | SQLite knowledge store, queue, and graph |
 | `smartharness/background.py` | One background research job |
 | `smartharness/settings.py` | Defaults and validation |
+| `smartharness/daemon.py` | The daemon: model, runs, background worker, and socket server |
+| `smartharness/client.py`, `smartharness/protocol.py` | Connecting to the daemon, starting it, and the message format |
 | `smartharness/cli.py`, `smartharness/tui.py` | Command line and Textual interface |
 
-Run the tests with `python -m unittest`.
+Run the tests with `python -m unittest discover -s tests`.
 
 ## Current limits
 
-- One-shot CLI runs load the model for each run; the TUI keeps it loaded and
-  shares it with the background worker.
+- One-shot CLI runs without a daemon load the model for each run; the daemon
+  keeps it loaded and shares it with the background worker.
 - Topics found by searches during a request are named after the query and stay
   at the top level until the background worker researches them.
 

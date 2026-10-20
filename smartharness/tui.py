@@ -1,7 +1,5 @@
 import argparse
 from datetime import datetime
-from threading import Event
-from threading import Lock
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +8,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.css.query import NoMatches
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.message import Message
 from textual.screen import ModalScreen
 from textual.theme import Theme
 from textual.widgets import (
@@ -28,10 +27,9 @@ from textual.widgets import (
     Tree,
 )
 
-from .pipeline import SKIPPED_PREFIX, ModelCache, execute_pipeline
-from .background import learn_from_episodes, research_one_topic
-from .knowledge import KnowledgeStore
-from .settings import default_settings_path, load_settings, save_settings, validate_settings
+from .client import DISCONNECTED_EVENT, DaemonClient, DaemonError, connect_to_daemon
+from .pipeline import SKIPPED_PREFIX
+from .settings import default_settings_path, load_settings, validate_settings
 
 
 STAGE_LABELS = (
@@ -92,8 +90,13 @@ HALON_LIGHT_THEME = Theme(
 )
 
 
-class RunCancelled(Exception):
-    pass
+class DaemonEvent(Message):
+    """An event from the daemon, posted from the client's reader thread."""
+
+    def __init__(self, event: str, data: dict[str, Any]) -> None:
+        super().__init__()
+        self.event = event
+        self.data = data
 
 
 class FollowingScroll(VerticalScroll):
@@ -350,6 +353,8 @@ class SmartHarnessApp(App[None]):
         settings: dict[str, Any],
         initial_prompt: str = "",
         settings_path: str | Path | None = None,
+        settings_overrides: dict[str, Any] | None = None,
+        client: DaemonClient | None = None,
     ) -> None:
         super().__init__()
         self.register_theme(HALON_DARK_THEME)
@@ -358,6 +363,11 @@ class SmartHarnessApp(App[None]):
         self.settings = settings.copy()
         self.initial_prompt = initial_prompt
         self.settings_path = Path(settings_path).expanduser() if settings_path else None
+        self.settings_overrides = settings_overrides or {}
+        self.client = client
+        if client is not None:
+            client.on_event = self._receive_daemon_event
+        self._run_id: int | None = None
         self._request_running = False
         self._last_answer = ""
         self._active_stage: int | None = None
@@ -376,13 +386,6 @@ class SmartHarnessApp(App[None]):
         self._knowledge_sources: list[dict[str, Any]] = []
         self._knowledge_graph: list[dict[str, Any]] = []
         self._knowledge_tree_signature: tuple[Any, ...] | None = None
-        self._knowledge_stores: dict[str, KnowledgeStore] = {}
-        self._worker_stop = Event()
-        self._worker_wakeup = Event()
-        self._background_run_requested = Event()
-        self._cancel_requested = Event()
-        self._model_lock = Lock()
-        self._model_cache = ModelCache()
 
     # ==========================================================================
     # Layout
@@ -552,13 +555,13 @@ class SmartHarnessApp(App[None]):
     def on_mount(self) -> None:
         self.query_one("#prompt", TextArea).focus()
         self.set_interval(0.15, self._flush_stage_output)
-        self._refresh_knowledge()
-        self._refresh_queue()
-        self.run_background_worker()
+        self.query_one("#status", Static).update("Connecting to the daemon...")
+        self.connect_daemon()
 
     def on_unmount(self) -> None:
-        self._worker_stop.set()
-        self._worker_wakeup.set()
+        if self.client is not None:
+            self.client.on_event = None
+            self.client.close()
 
     def action_run_prompt(self) -> None:
         self._start_run()
@@ -592,10 +595,9 @@ class SmartHarnessApp(App[None]):
             self._queue_topic()
 
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
-        if event.checkbox.id == "background-enabled":
+        if event.checkbox.id == "background-enabled" and event.value != self.settings["background_research_enabled"]:
             self.settings = {**self.settings, "background_research_enabled": event.value}
-            self._show_background_idle_status()
-            self._worker_wakeup.set()
+            self._call_daemon("set_background_enabled", enabled=event.value)
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         if event.tabbed_content.id == "main-tabs":
@@ -645,24 +647,55 @@ class SmartHarnessApp(App[None]):
 
     def _apply_settings(self) -> bool:
         try:
-            self.settings = self._collect_settings()
+            settings = self._collect_settings()
         except ValueError as error:
             self.notify(str(error), title="Invalid settings", severity="error")
             return False
-        self._worker_wakeup.set()
-        self._show_background_idle_status()
+        applied = self._call_daemon("apply_settings", settings=settings)
+        if applied is None:
+            return False
+        self.settings = applied
         return True
 
     def _save_settings(self) -> None:
-        if not self._apply_settings():
-            return
-        path = self.settings_path or default_settings_path()
         try:
-            self.settings = save_settings(path, self.settings)
-        except (OSError, ValueError) as error:
-            self.notify(str(error), title="Could not save settings", severity="error")
+            settings = self._collect_settings()
+        except ValueError as error:
+            self.notify(str(error), title="Invalid settings", severity="error")
             return
-        self.notify(f"Settings saved to {path}.", title="SmartHarness")
+        saved = self._call_daemon("save_settings", settings=settings)
+        if saved is None:
+            return
+        self.settings = saved["settings"]
+        self.notify(f"Settings saved to {saved['path']}.", title="SmartHarness")
+
+    def _show_settings(self, settings: dict[str, Any]) -> None:
+        self.settings = settings.copy()
+        for selector, name in (
+            ("model-path", "model_path"),
+            ("filesystem-root", "filesystem_root"),
+            ("knowledge-db-path", "knowledge_db_path"),
+        ):
+            self.query_one(f"#{selector}", TextArea).text = settings[name]
+        for selector, name in (
+            ("context-size", "context_size"),
+            ("gpu-layers", "gpu_layers"),
+            ("max-tokens", "max_tokens"),
+            ("temperature", "temperature"),
+            ("max-tool-calls", "max_tool_calls"),
+            ("max-search-results", "max_search_results"),
+            ("background-poll-seconds", "background_poll_interval_seconds"),
+            ("background-refresh-hours", "background_refresh_interval_hours"),
+            ("background-max-tokens", "background_max_tokens"),
+            ("background-queue-cap", "background_max_pending_jobs"),
+        ):
+            self.query_one(f"#{selector}", Input).value = str(settings[name])
+        for selector, name in (
+            ("allow-file-writes", "allow_file_writes"),
+            ("enable-test-execution", "enable_test_execution"),
+            ("background-enabled", "background_research_enabled"),
+        ):
+            self.query_one(f"#{selector}", Checkbox).value = settings[name]
 
     def _int_setting(self, selector: str) -> int:
         value = self.query_one(f"#{selector}", Input).value
@@ -678,12 +711,95 @@ class SmartHarnessApp(App[None]):
         except ValueError as error:
             raise ValueError(f"{selector.replace('-', ' ')} must be a number.") from error
 
-    def _knowledge_store(self, database_path: str) -> KnowledgeStore:
-        store = self._knowledge_stores.get(database_path)
-        if store is None:
-            store = KnowledgeStore(database_path)
-            self._knowledge_stores[database_path] = store
-        return store
+    # ==========================================================================
+    # Daemon connection
+    # ==========================================================================
+
+    @work(thread=True, exclusive=True, group="connect")
+    def connect_daemon(self) -> None:
+        try:
+            if self.client is None:
+                self.client = connect_to_daemon(
+                    settings_path=self.settings_path,
+                    on_event=self._receive_daemon_event,
+                )
+            if self.settings_overrides:
+                self.client.call("apply_settings", settings=self.settings_overrides)
+            status = self.client.call("status")
+        except (OSError, DaemonError) as error:
+            self.call_from_thread(self._show_daemon_error, str(error))
+            return
+        self.call_from_thread(self._show_daemon_status, status)
+
+    def _show_daemon_error(self, message: str) -> None:
+        self.query_one("#status", Static).update("Daemon unavailable")
+        self.notify(message, title="SmartHarness daemon", severity="error", timeout=10)
+
+    def _show_daemon_status(self, status: dict[str, Any]) -> None:
+        self._show_settings(status["settings"])
+        background = status["background"]
+        self._background_output = background["output"]
+        self._set_background_status(background["status"])
+        run = status["run"]
+        if run is None:
+            self.query_one("#status", Static).update("Ready")
+        else:
+            # Another interface started this run, so show its progress so far.
+            self._begin_run(run["run_id"])
+            for label in run["progress"]:
+                self._update_stage(label)
+            for label, text in run["outputs"].items():
+                self._append_stage_output(label, text)
+        self._refresh_knowledge()
+        self._refresh_queue()
+
+    def _receive_daemon_event(self, event: str, data: dict[str, Any]) -> None:
+        # Posting never blocks, so the reader thread stays free to deliver replies.
+        self.post_message(DaemonEvent(event, data))
+
+    def on_daemon_event(self, message: DaemonEvent) -> None:
+        event, data = message.event, message.data
+        if event == "run.started":
+            if not self._request_running or self._run_id is None:
+                self._begin_run(data["run_id"])
+        elif event == "run.progress":
+            self._update_stage(data["label"])
+        elif event == "run.token":
+            self._append_stage_output(data["label"], data["token"])
+        elif event == "run.clarification":
+            self._request_clarification(data["run_id"], data["clarification_id"], data["question"])
+        elif event == "run.finished":
+            self._finish_run(data["result"])
+        elif event == "run.failed":
+            self._fail_run(data["message"])
+        elif event == "run.cancelled":
+            self._cancelled_run()
+        elif event == "background.status":
+            self._set_background_status(data["message"])
+        elif event == "background.token":
+            self._append_background_token(data["token"])
+        elif event == "queue.changed":
+            self._refresh_queue()
+        elif event == "knowledge.changed":
+            self._refresh_knowledge()
+        elif event == "settings.changed":
+            self.settings = data["settings"]
+            self.query_one("#background-enabled", Checkbox).value = self.settings["background_research_enabled"]
+        elif event == DISCONNECTED_EVENT:
+            if self._request_running:
+                self._fail_run("The daemon closed the connection.")
+            self._show_daemon_error("Lost the connection to the SmartHarness daemon.")
+
+    def _call_daemon(self, method: str, **params: Any) -> Any:
+        """Call the daemon from the interface thread and report a failure; returns None when it fails."""
+        if self.client is None:
+            self.notify("Not connected to the daemon yet.", title="SmartHarness", severity="warning")
+            return None
+        try:
+            return self.client.call(method, **params)
+        except DaemonError as error:
+            self.notify(str(error), title="SmartHarness daemon", severity="error")
+            return None
 
     # ==========================================================================
     # Foreground run
@@ -704,15 +820,23 @@ class SmartHarnessApp(App[None]):
             self.notify(str(error), title="Invalid settings", severity="error")
             return
 
+        if self._call_daemon("apply_settings", settings=settings) is None:
+            return
+        self.settings = settings
+        self._begin_run(None)
+        started = self._call_daemon("run", prompt=prompt, settings=settings)
+        if started is None:
+            self._stop_run("_The request could not start._", "WAIT", "Ready")
+            return
+        self._run_id = started["run_id"]
+
+    def _begin_run(self, run_id: int | None) -> None:
+        self._run_id = run_id
         self._reset_stages()
         self.query_one("#final-output", Markdown).update("_Working on your request..._")
         self._show_output_pane()
         self.query_one("#status", Static).update("Starting local model...")
-        self._cancel_requested.clear()
         self._set_running(True)
-        self.settings = settings
-        self._worker_wakeup.set()
-        self.run_pipeline(prompt, settings)
 
     def _set_running(self, running: bool) -> None:
         self._request_running = running
@@ -724,7 +848,7 @@ class SmartHarnessApp(App[None]):
     def _cancel_run(self) -> None:
         if not self._request_running:
             return
-        self._cancel_requested.set()
+        self._call_daemon("cancel", run_id=self._run_id)
         self.query_one("#cancel", Button).disabled = True
         self.query_one("#status", Static).update("Cancelling...")
 
@@ -830,7 +954,6 @@ class SmartHarnessApp(App[None]):
         for index in range(len(STAGE_LABELS)):
             self._set_stage_row(index, "SKIP" if index in self._skipped_stages else "DONE")
         self.query_one("#status", Static).update("Complete")
-        self._worker_wakeup.set()
 
     def _stop_run(self, final_text: str, stage_state: str, status: str) -> None:
         self._flush_stage_output()
@@ -840,7 +963,6 @@ class SmartHarnessApp(App[None]):
         if self._active_stage is not None:
             self._set_stage_row(self._active_stage, stage_state)
         self.query_one("#status", Static).update(status)
-        self._worker_wakeup.set()
 
     def _fail_run(self, message: str) -> None:
         self._stop_run(f"**Run failed**\n\n{message}", "FAIL", "Run failed")
@@ -849,66 +971,16 @@ class SmartHarnessApp(App[None]):
     def _cancelled_run(self) -> None:
         self._stop_run("_Run cancelled._", "STOP", "Cancelled")
 
-    def _raise_if_cancelled(self) -> None:
-        if self._cancel_requested.is_set() or self._worker_stop.is_set():
-            raise RunCancelled
+    def _request_clarification(self, run_id: int, clarification_id: int, question: str) -> None:
+        def on_dismiss(value: str | None) -> None:
+            self._call_daemon(
+                "answer_clarification",
+                run_id=run_id,
+                clarification_id=clarification_id,
+                answer=value or "",
+            )
 
-    def _request_clarification(self, question: str) -> str:
-        completed = Event()
-        answer: dict[str, str] = {}
-
-        def show_dialog() -> None:
-            def on_dismiss(value: str | None) -> None:
-                answer["value"] = value or ""
-                completed.set()
-
-            self.push_screen(ClarificationScreen(question), on_dismiss)
-
-        self.call_from_thread(show_dialog)
-        while not completed.wait(0.2):
-            self._raise_if_cancelled()
-        return answer.get("value", "")
-
-    @work(thread=True, exclusive=True, group="pipeline")
-    def run_pipeline(self, prompt: str, settings: dict[str, Any]) -> None:
-        def report_progress(label: str) -> None:
-            self._raise_if_cancelled()
-            self.call_from_thread(self._update_stage, label)
-
-        def report_token(label: str, token: str) -> None:
-            self._raise_if_cancelled()
-            self.call_from_thread(self._append_stage_output, label, token)
-
-        try:
-            with self._model_lock:
-                result = execute_pipeline(
-                    prompt,
-                    model_path=settings["model_path"],
-                    context_size=settings["context_size"],
-                    gpu_layers=settings["gpu_layers"],
-                    max_tokens=settings["max_tokens"],
-                    temperature=settings["temperature"],
-                    filesystem_root=settings["filesystem_root"],
-                    max_tool_calls=settings["max_tool_calls"],
-                    max_search_results=settings["max_search_results"],
-                    enable_test_execution=settings["enable_test_execution"],
-                    allow_file_writes=settings["allow_file_writes"],
-                    mcp_servers=settings["mcp_servers"],
-                    knowledge_db_path=settings["knowledge_db_path"],
-                    max_pending_research_jobs=settings["background_max_pending_jobs"],
-                    show_thinking=False,
-                    clarification_callback=self._request_clarification,
-                    progress_callback=report_progress,
-                    stage_output_callback=report_token,
-                    model_cache=self._model_cache,
-                )
-        except RunCancelled:
-            if not self._worker_stop.is_set():
-                self.call_from_thread(self._cancelled_run)
-        except Exception as error:
-            self.call_from_thread(self._fail_run, str(error))
-        else:
-            self.call_from_thread(self._finish_run, result)
+        self.push_screen(ClarificationScreen(question), on_dismiss)
 
     # ==========================================================================
     # Background research
@@ -921,41 +993,31 @@ class SmartHarnessApp(App[None]):
             return False
         try:
             priority = int(self.query_one("#research-priority", Input).value)
-            settings = self._collect_settings()
-            self._knowledge_store(settings["knowledge_db_path"]).enqueue_topic(
-                topic,
-                priority=priority,
-                max_pending=settings["background_max_pending_jobs"],
-            )
-        except (OSError, ValueError) as error:
-            self.notify(str(error), title="Could not queue topic", severity="error")
+        except ValueError:
+            self.notify("Priority must be an integer.", title="Could not queue topic", severity="error")
             return False
-        self.settings = settings
+        if self._call_daemon("queue_topic", topic=topic, priority=priority) is None:
+            return False
         self.query_one("#research-topic", Input).value = ""
-        self._refresh_queue()
-        self._worker_wakeup.set()
         return True
 
     def _trigger_background_research(self) -> None:
         topic = self.query_one("#research-topic", Input).value.strip()
         if topic and not self._queue_topic():
             return
-        try:
-            jobs = self._knowledge_store(self.settings["knowledge_db_path"]).queue_status()
-        except (OSError, ValueError, KeyError) as error:
-            self.notify(str(error), title="Could not start research", severity="error")
-            return
-        if not any(job["status"] == "pending" for job in jobs):
-            self.notify("Queue a topic before starting research.", title="No pending research", severity="warning")
-            return
-        self._background_run_requested.set()
-        self._worker_wakeup.set()
+        self._call_daemon("research_now")
 
+    @work(thread=True, exclusive=True, group="queue")
     def _refresh_queue(self) -> None:
+        if self.client is None:
+            return
         try:
-            jobs = self._knowledge_store(self.settings["knowledge_db_path"]).queue_status()
-        except (OSError, ValueError, KeyError):
+            jobs = self.client.call("queue_status")
+        except DaemonError:
             jobs = []
+        self.call_from_thread(self._show_queue, jobs)
+
+    def _show_queue(self, jobs: list[dict[str, Any]]) -> None:
         if not jobs:
             text = "No research jobs"
         else:
@@ -969,10 +1031,6 @@ class SmartHarnessApp(App[None]):
             self.query_one("#background-queue", Static).update(text)
         except NoMatches:
             pass
-
-    def _show_background_idle_status(self) -> None:
-        status = "Waiting for prompt-free time" if self.settings["background_research_enabled"] else "Paused"
-        self._set_background_status(status)
 
     def _set_background_status(self, message: str) -> None:
         self._background_status_text = message
@@ -1009,54 +1067,6 @@ class SmartHarnessApp(App[None]):
         self._write_markdown(output, new_text, append=bool(self._background_output))
         self._background_output += new_text
 
-    @work(thread=True, exclusive=True, group="background")
-    def run_background_worker(self) -> None:
-        while not self._worker_stop.is_set():
-            settings = self.settings.copy()
-            manual_run_requested = self._background_run_requested.is_set()
-            if not settings.get("background_research_enabled") and not manual_run_requested:
-                self.call_from_thread(self._set_background_status, "Paused")
-                wait_seconds = settings.get("background_poll_interval_seconds", 10)
-            elif self._request_running:
-                self.call_from_thread(self._set_background_status, "Foreground prompt active")
-                wait_seconds = 1
-            else:
-                if manual_run_requested:
-                    self._background_run_requested.clear()
-                try:
-                    self._knowledge_store(settings["knowledge_db_path"]).enqueue_due_topics(
-                        settings["background_refresh_interval_hours"],
-                        settings["background_max_pending_jobs"],
-                    )
-                    worker_options = {
-                        "on_progress": lambda message: self.call_from_thread(
-                            self._set_background_status, message
-                        ),
-                        "on_token": lambda token: self.call_from_thread(
-                            self._append_background_token, token
-                        ),
-                        "should_pause": lambda: self._request_running or self._worker_stop.is_set(),
-                        "model_lock": self._model_lock,
-                        "model_cache": self._model_cache,
-                    }
-                    # Queued research comes first; with none left, the worker learns from past requests.
-                    worked = research_one_topic(settings, **worker_options) or learn_from_episodes(
-                        settings, **worker_options
-                    )
-                    self.call_from_thread(self._flush_background_output)
-                    self.call_from_thread(self._refresh_queue)
-                    if worked:
-                        self.call_from_thread(self._refresh_knowledge)
-                        wait_seconds = 0.2
-                    else:
-                        self.call_from_thread(self._set_background_status, "Idle")
-                        wait_seconds = settings["background_poll_interval_seconds"]
-                except Exception as error:
-                    self.call_from_thread(self._set_background_status, f"Worker error: {error}")
-                    wait_seconds = settings.get("background_poll_interval_seconds", 10)
-            self._worker_wakeup.wait(wait_seconds)
-            self._worker_wakeup.clear()
-
     # ==========================================================================
     # Knowledge browser
     # ==========================================================================
@@ -1067,20 +1077,17 @@ class SmartHarnessApp(App[None]):
         self._refresh_knowledge()
 
     def _refresh_knowledge(self) -> None:
-        self.load_knowledge(
-            self.settings["knowledge_db_path"], self._knowledge_query, self._knowledge_topic_id
-        )
+        self.load_knowledge(self._knowledge_query, self._knowledge_topic_id)
 
     @work(thread=True, exclusive=True, group="knowledge")
-    def load_knowledge(self, database_path: str, query: str, topic_id: int | None) -> None:
-        try:
-            store = self._knowledge_store(database_path)
-            topics = store.topics()
-            sources = store.search(query) if query else store.sources(topic_id, limit=30)
-            graph = store.graph()
-        except (OSError, ValueError, KeyError):
+    def load_knowledge(self, query: str, topic_id: int | None) -> None:
+        if self.client is None:
             return
-        self.call_from_thread(self._show_knowledge, topics, sources, graph)
+        try:
+            knowledge = self.client.call("knowledge", query=query, topic_id=topic_id)
+        except DaemonError:
+            return
+        self.call_from_thread(self._show_knowledge, knowledge["topics"], knowledge["sources"], knowledge["graph"])
 
     def _show_knowledge(
         self,
