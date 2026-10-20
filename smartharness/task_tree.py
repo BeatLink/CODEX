@@ -23,6 +23,7 @@ from .pipeline import (
     _requires_web_research,
     _search_query,
     _uncited_urls,
+    _unsupported_values,
     build_toolbox,
     filesystem_note,
     load_model,
@@ -895,6 +896,12 @@ class TaskTreeRun:
             f"The result cites {url}, which is not in the captured evidence; remove it or say it is unverified."
             for url in _uncited_urls(result, known)
         )
+        # Only researched results are held to their evidence; arithmetic and rewriting produce new numbers.
+        if self.local_knowledge_used or {"web_search", "web_fetch"} & self.toolbox.used_tools:
+            problems.extend(
+                f"The result states {value}, which appears in no gathered evidence; remove it or say it could not be verified."
+                for value in _unsupported_values(result, f"{self.user_prompt}\n{known}")
+            )
         return " ".join(problem for problem in problems if problem)
 
     def plan_subtasks(

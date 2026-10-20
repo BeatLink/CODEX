@@ -328,6 +328,60 @@ def _uncited_urls(answer: str, evidence: str) -> list[str]:
     return [url for url in urls if url not in evidence]
 
 
+_VERSION = re.compile(r"(?<![\w.])v?(\d+(?:\.\d+)+)(?![\w.]*\d)")
+_MONTHS = {
+    name: number
+    for number, names in enumerate(
+        (("january", "jan"), ("february", "feb"), ("march", "mar"), ("april", "apr"), ("may",), ("june", "jun"),
+         ("july", "jul"), ("august", "aug"), ("september", "sep", "sept"), ("october", "oct"),
+         ("november", "nov"), ("december", "dec")),
+        start=1,
+    )
+    for name in names
+}
+_MONTH = r"(" + "|".join(sorted(_MONTHS, key=len, reverse=True)) + r")\.?"
+_DATE_FORMATS = (
+    # 2026-10-09
+    (re.compile(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b"), ("year", "month", "day")),
+    # October 9, 2026
+    (re.compile(rf"\b{_MONTH}\s+(\d{{1,2}})(?:st|nd|rd|th)?,?\s+(\d{{4}})\b", re.IGNORECASE), ("month", "day", "year")),
+    # 9 October 2026
+    (re.compile(rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+{_MONTH},?\s+(\d{{4}})\b", re.IGNORECASE), ("day", "month", "year")),
+)
+
+
+def _dates(text: str) -> list[tuple[str, tuple[int, int, int]]]:
+    """Find the calendar dates written in text, in any of the usual forms, as (as written, (year, month, day))."""
+    found = []
+    for pattern, fields in _DATE_FORMATS:
+        for match in pattern.finditer(text):
+            parts = dict(zip(fields, match.groups()))
+            month = parts["month"]
+            month_number = int(month) if month.isdigit() else _MONTHS[month.casefold()]
+            found.append((match.group(0), (int(parts["year"]), month_number, int(parts["day"]))))
+    return found
+
+
+def _unsupported_values(answer: str, evidence: str) -> list[str]:
+    """List version numbers and dates the answer states that appear nowhere in the evidence.
+
+    A small model fills gaps with plausible numbers, so a stated value must be found in what was gathered.
+    """
+    prose = _URL.sub(" ", _CODE_BLOCK.sub(" ", answer))
+    known_versions = set(_VERSION.findall(evidence))
+    known_dates = {date for _, date in _dates(evidence)}
+    values = [version for version in _VERSION.findall(prose) if version not in known_versions]
+    values.extend(written for written, date in _dates(prose) if date not in known_dates)
+    return list(dict.fromkeys(values))
+
+
+def _value_problems(unsupported_values: list[str]) -> list[str]:
+    return [
+        f"The answer states {value}, which appears in no gathered evidence; remove it or say it could not be verified."
+        for value in unsupported_values
+    ]
+
+
 def _url_problems(unsupported_urls: list[str]) -> list[str]:
     return [
         f"The answer cites {url}, which is not in the captured evidence; remove it or say it is unverified."
@@ -369,13 +423,14 @@ def _corrections_text(problems: list[str]) -> str:
     return "Corrections needed:\n" + "\n".join(f"- {problem}" for problem in problems) if problems else ""
 
 
-def _critique_corrections(critique: Critique, unsupported_urls: list[str]) -> str:
+def _critique_corrections(critique: Critique, unsupported_urls: list[str], other_problems: list[str] = ()) -> str:
     problems = [
         f"{requirement} ({status}): {fix or 'cover this requirement fully.'}"
         for requirement, status, fix in critique.unmet
     ]
     problems.extend(critique.other_issues)
     problems.extend(_url_problems(unsupported_urls))
+    problems.extend(other_problems)
     return _corrections_text(problems)
 
 
@@ -1242,13 +1297,20 @@ def execute_pipeline(
     answer = run_answer_stage(draft_label, draft_prompt, outline | {"Stage 5 result"})
     set_result("Stage 6 result", answer)
     evidence = "\n".join(text for label, text in previous_results if label in EVIDENCE_LABELS | {"Stage 5 result"})
+    researched = analysis.needs_research or bool({"web_search", "web_fetch"} & toolbox.used_tools)
+
+    def value_problems(text: str) -> list[str]:
+        # Only researched answers are held to their evidence; arithmetic and rewriting produce new numbers.
+        return _value_problems(_unsupported_values(text, f"{user_prompt}\n{evidence}")) if researched else []
 
     if not analysis.runs_critique:
         # Without a model critique, checks that need no model decide whether the draft gets one revision.
         if analysis.runs_actions:
             corrections = _corrections_text(_action_report_problems(answer, toolbox.action_log))
         else:
-            corrections = _corrections_text(_url_problems(_uncited_urls(answer, evidence)))
+            corrections = _corrections_text(
+                _url_problems(_uncited_urls(answer, evidence)) + value_problems(answer)
+            )
         if corrections or analysis.runs_actions:
             report_stage(critique_label)
             show_check = token_callback_for(critique_label)
@@ -1290,7 +1352,7 @@ def execute_pipeline(
         if critique is None:
             corrections = critique_reply
         else:
-            corrections = _critique_corrections(critique, unsupported)
+            corrections = _critique_corrections(critique, unsupported, value_problems(answer))
             if not corrections:
                 skip_stage(revise_label)
                 return finish(answer, f"passed the critique after {round_number - 1} revision(s)")

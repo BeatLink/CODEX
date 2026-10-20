@@ -20,6 +20,7 @@ from smartharness.pipeline import (
     _parse_route,
     _parse_task_analysis,
     _uncited_urls,
+    _unsupported_values,
     _requires_web_research,
     _search_query,
     _summarize_web_page,
@@ -869,6 +870,27 @@ class CritiqueTests(unittest.TestCase):
 
         self.assertEqual(result, "Fixed")
         self.assertIn("https://invented.example/page, which is not in the captured evidence", calls[2][1])
+
+    def test_versions_and_dates_missing_from_the_evidence_are_unsupported(self):
+        evidence = '[{"snippet": "Python 3.13.0 was released on 2024-10-07.", "url": "https://docs.python.org/3.12/"}]'
+        answer = (
+            "Python 3.13.0 came out on October 7, 2024, after 3.12 and before 3.15.0, "
+            "which shipped 9 October 2026. See https://example.test/v9.9.9.\n"
+            "```\npip install tool==1.2.3\n```"
+        )
+
+        self.assertEqual(_unsupported_values(answer, evidence), ["3.15.0", "9 October 2026"])
+
+    def test_researched_answer_stating_a_version_missing_from_the_evidence_is_revised(self):
+        search = [{"title": "Design A", "snippet": "Design A 2.4.0 is stable.", "url": "https://a.example/"}]
+        result, calls, _ = self.run_reasoning(
+            "Design A 2.4.0 beats B 3.1.", critique_json("met"), "Design A 2.4.0 is stable.", critique_json("met"),
+            evidence_search=search,
+        )
+
+        self.assertEqual(result, "Design A 2.4.0 is stable.")
+        self.assertIn("The answer states 3.1, which appears in no gathered evidence", calls[2][1])
+        self.assertNotIn("states 2.4.0", calls[2][1])
 
     def test_uncited_urls_ignore_trailing_punctuation_and_known_sources(self):
         evidence = '[{"url": "https://docs.example/a"}]'

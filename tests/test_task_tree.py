@@ -300,6 +300,36 @@ class DirectTaskTests(unittest.TestCase):
             model.call("revise", "1")["input"],
         )
 
+    def test_researched_result_stating_an_unfound_version_fails_its_check(self):
+        def found_rust(query, store, toolbox, max_pending):
+            return "Local knowledge result", '[{"summary": "Rust 1.80.0 shipped on 2024-07-25."}]', True
+
+        model = ScriptedModel({
+            ("decide", "1"): decision("research", queries=["latest rust"]),
+            ("write", "1"): "Rust 1.85.0 shipped on July 25, 2024.",
+            ("revise", "1"): "Rust 1.80.0 shipped on July 25, 2024.",
+        })
+        with (
+            patch("smartharness.task_tree.run_stage", side_effect=model),
+            patch("smartharness.task_tree.search_with_memory", side_effect=found_rust),
+        ):
+            result = execute_task_tree(
+                "What is the latest Rust?", llm=object(), progress_callback=lambda label: None, max_task_depth=0
+            )
+
+        self.assertEqual(result, "Rust 1.80.0 shipped on July 25, 2024.")
+        revise_input = model.call("revise", "1")["input"]
+        self.assertIn("The result states 1.85.0, which appears in no gathered evidence", revise_input)
+        self.assertNotIn("July 25, 2024, which", revise_input)
+
+    def test_unresearched_results_may_state_new_numbers(self):
+        _, model, _, _ = run_tree(
+            {("decide", "1"): decision("answer"), ("write", "1"): "17 * 3.5 is 59.5."},
+            prompt="What is 17 * 3.5?",
+        )
+
+        self.assertNotIn(("revise", "1"), model.steps())
+
     def test_clarification_is_asked_once_and_the_decision_is_made_again(self):
         questions = []
         model = ScriptedModel({

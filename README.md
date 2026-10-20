@@ -98,7 +98,9 @@ top task's write or combine step is the final answer.
   request is plain arithmetic or rewriting pasted text, and when every search
   finds nothing the writer is told not to describe what it could not look up.
 - **Checks that do not rely on the model.** A result citing a URL that appears
-  in no captured evidence fails its check.
+  in no captured evidence fails its check, and so does a researched result
+  that states a version number or date found nowhere in the evidence or the
+  request.
 - **Earlier results are condensed, not cut.** When a call's input would
   overflow the window, the largest earlier results are summarized first, as in
   the pipeline; the request and the current task are never condensed.
@@ -161,7 +163,14 @@ Execute mode is checked against what the tools really did, not by a model
 critique. The report must name every file written, say when a write or a test
 run failed, give the test result, and not claim a change when nothing was
 written. Any mismatch gets one revision. A quick answer gets one revision only
-when it cites a URL that is not in the evidence.
+when it cites a URL that is not in the evidence, or, after research, states a
+version number or date that no gathered evidence contains. The critique adds
+those same problems to its own.
+
+Dates are compared by value, so "October 9, 2026", "9 October 2026", and
+"2026-10-09" all match each other. Numbers in code blocks are not checked, and
+neither are answers that did no research, since arithmetic and rewriting
+produce new numbers of their own.
 
 Design points:
 
