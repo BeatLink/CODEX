@@ -49,21 +49,46 @@ PHASE_WAITING_TEXT = "_Waiting for this phase..._"
 FINAL_WAITING_TEXT = "Your final response will appear here."
 BACKGROUND_WAITING_TEXT = "_Waiting for background work..._"
 
-SMARTHARNESS_THEME = Theme(
-    name="smartharness",
-    primary="#e5b85c",
-    foreground="#e4ebe4",
-    background="#101715",
-    surface="#141d19",
-    panel="#17221e",
-    dark=True,
-)
-THEME_VARIABLE_DEFAULTS = {
-    "field-border": "#34473d",
-    "label-text": "#9caf9f",
-    "stage-text": "#83968a",
-    "footer-foreground": "#a3b5a9",
+# Colours come from the dark and light token sets in the Halon theme's tokens.json.
+HALON_DARK_VARIABLES = {
+    "field-border": "#64748b",
+    "label-text": "#cbd5e1",
+    "stage-text": "#94a3b8",
+    "footer-foreground": "#ffffff",
 }
+HALON_DARK_THEME = Theme(
+    name="halon-dark",
+    primary="#60a5fa",
+    accent="#60a5fa",
+    foreground="#e2e8f0",
+    background="#060b14",
+    surface="#16213a",
+    panel="#060b14",
+    warning="#f59e0b",
+    error="#f87171",
+    success="#10b981",
+    dark=True,
+    variables=HALON_DARK_VARIABLES,
+)
+HALON_LIGHT_THEME = Theme(
+    name="halon",
+    primary="#2563eb",
+    accent="#2563eb",
+    foreground="#1a1a2e",
+    background="#f1f5f9",
+    surface="#ffffff",
+    panel="#f1f5f9",
+    warning="#f59e0b",
+    error="#dc2626",
+    success="#047857",
+    dark=False,
+    variables={
+        "field-border": "#8792a3",
+        "label-text": "#475569",
+        "stage-text": "#64748b",
+        "footer-foreground": "#475569",
+    },
+)
 
 
 class RunCancelled(Exception):
@@ -292,7 +317,7 @@ class SmartHarnessApp(App[None]):
         max-height: 80%;
         padding: 1 2 2 2;
         border: tall $primary;
-        background: $panel;
+        background: $surface;
     }
     #clarification-question {
         height: auto;
@@ -311,8 +336,9 @@ class SmartHarnessApp(App[None]):
         settings_path: str | Path | None = None,
     ) -> None:
         super().__init__()
-        self.register_theme(SMARTHARNESS_THEME)
-        self.theme = SMARTHARNESS_THEME.name
+        self.register_theme(HALON_DARK_THEME)
+        self.register_theme(HALON_LIGHT_THEME)
+        self.theme = HALON_DARK_THEME.name
         self.settings = settings.copy()
         self.initial_prompt = initial_prompt
         self.settings_path = Path(settings_path).expanduser() if settings_path else None
@@ -503,7 +529,7 @@ class SmartHarnessApp(App[None]):
     # ==========================================================================
 
     def get_theme_variable_defaults(self) -> dict[str, str]:
-        return THEME_VARIABLE_DEFAULTS
+        return HALON_DARK_VARIABLES
 
     def on_mount(self) -> None:
         self.query_one("#prompt", TextArea).focus()
