@@ -3,6 +3,7 @@
 ## postponed
 
 - [ ]
+- [ ] Purge the removed LM Studio notes (`docs/design/lm-studio-models-and-settings.md`, commits 46b2616 and 538c143) from the public history
 
 ## Planned
 
