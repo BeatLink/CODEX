@@ -2,7 +2,26 @@
 
 Record written 2026-10-20, when LM Studio and Hermes Agent were removed from the TechNet flake (commit "feat(odin): remove Hermes and LM Studio"). It keeps the models that were chosen, the settings that differed from the defaults, and the measurements behind them, so they can be reused in SmartHarness. The hardware is the same laptop described in [model-selection-and-background-model.md](model-selection-and-background-model.md): RTX 3050 Ti with 3.68 GiB usable VRAM, Ryzen 5 5600H with 6 cores / 12 threads.
 
-The model files are still on disk under `/Storage/Apps/AI/LMStudio/home/.lmstudio/models` (51 GB), with parked vision projectors in `.lmstudio/disabled-mmproj`. The TechNet backup excludes for those folders were kept, so the files stay out of borg until they are deleted.
+The model files are still on disk under `/Storage/Apps/AI/LMStudio/home/beatlink/.lmstudio/models` (51 GB), with parked vision projectors in `.lmstudio/disabled-mmproj`. The TechNet backup excludes for those folders were kept, so the files stay out of borg until they are deleted.
+
+## Files on disk
+
+Every model file left after the removal, relative to `/Storage/Apps/AI/LMStudio/home/beatlink/.lmstudio`. Sizes are in GB.
+
+| Size | Path |
+|---|---|
+| 14.44 | `models/lmstudio-community/gemma-4-26B-A4B-it-QAT-GGUF/gemma-4-26B-A4B-it-QAT-Q4_0.gguf` |
+| 13.58 | `models/LiquidAI/LFM2.5-24B-A2B-GGUF/LFM2.5-24B-A2B-QAD-Q4_0.gguf` |
+| 12.11 | `models/lmstudio-community/gpt-oss-20b-GGUF/gpt-oss-20b-MXFP4.gguf` |
+| 5.63 | `models/lmstudio-community/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q4_K_M.gguf` |
+| 0.92 | `models/lmstudio-community/Qwen3.5-9B-GGUF/mmproj-Qwen3.5-9B-BF16.gguf` |
+| 2.71 | `models/lmstudio-community/Qwen3.5-4B-GGUF/Qwen3.5-4B-Q4_K_M.gguf` |
+| 0.68 | `disabled-mmproj/mmproj-Qwen3.5-4B-BF16.gguf` |
+| 2.71 | `models/Smoffyy/Qwen3.5-4B-Instruct-Revised-GGUF/Qwen3.5-4B-Revised-q4_k_m.gguf` |
+| 0.67 | `models/Smoffyy/Qwen3.5-4B-Instruct-Revised-GGUF/mmproj-f16.gguf` |
+| 2.02 | `models/lmstudio-community/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-Q4_K_M.gguf` |
+
+Each file can be fetched again from `https://huggingface.co/<repository>/resolve/main/<file>`, where the repository is the two folders under `models/`. App settings, chats and runtimes are in the rest of `.lmstudio` and in `/Storage/Apps/AI/LMStudio/home/beatlink/.config/LM Studio`.
 
 ## Models
 
@@ -130,4 +149,22 @@ Hermes ran as a NixOS service on the laptop and used LM Studio's server as its m
 | `stateDir` | `/Storage/Apps/AI/Hermes` |
 | `environmentFiles` | the sops secret `hermes_env` from `secrets/3-laptop/hermes.yaml` (deleted with the module) |
 
-An unfinished move to the home-manager module (`programs.hermes-agent` with `desktop.enable`, and `services.hermes-agent` with `backend.mode = "serve"` and `hermesHome`) was in progress and was dropped with the removal. Its state in `/Storage/Apps/AI/Hermes` is still on disk.
+An unfinished move to the home-manager module (`programs.hermes-agent` with `desktop.enable`, and `services.hermes-agent` with `backend.mode = "serve"` and `hermesHome`) was in progress and was dropped with the removal.
+
+### Data left on disk
+
+`/Storage/Apps/AI/Hermes` is still there, owned by root and readable only with sudo. It holds 2.1 GB of files (583 MB on disk after ZFS compression), and almost none of it is user data:
+
+| Path | Size | What it is |
+|---|---|---|
+| `logs/` | 1.3 GB | Mostly `gateway-stdio.log`, from the crash loop |
+| `tools/` | 777 MB | Tool binaries Hermes downloaded |
+| `skills/` | 2.7 MB | The bundled skill set (apple, creative, devops, email, media, research, software-development, web and others); none written here |
+| `.hermes/`, `cache/` | 4.9 MB | Internal state and catalog caches |
+| `state.db` | 1.7 MB with its WAL | 2 sessions, 12 messages |
+| `config.yaml` | 2.7 KB | The generated config; five earlier copies are in `backups/config/` |
+| `SOUL.md` | 667 B | The system prompt, asking for short, direct replies |
+| `auth.json` | 636 B | Credentials |
+| `kanban.db`, `projects.db`, `cron/` | small | All empty: no tasks, projects or cron jobs |
+
+`memories/`, `sessions/`, `workspace/`, `vault/` and `home/` are empty. Only the two sessions, `SOUL.md` and `config.yaml` would be worth keeping.
