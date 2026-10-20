@@ -184,11 +184,14 @@ The knowledge is organised in three layers that mirror each other:
 
 There are two read paths, used at different moments:
 
-1. **Recall**, once per request, before the first model call (`KnowledgeStore.recall`). It returns
-   the ten most-used user memories, plus facts and past episodes whose text shares at least half of
-   the prompt's search terms (stopwords removed, at most twelve terms). Each recalled fact carries
-   its chain of ancestor topics and their summaries. The result is formatted as a "Remembered
-   context" section, and recall bumps the use counts of what it returned.
+1. **Recall** (`KnowledgeStore.recall`), before the first model call. It returns the ten most-used
+   user memories, plus facts and past episodes whose text shares half the prompt's search terms,
+   or three of them for a longer prompt (stopwords removed, at most twelve terms), those sharing
+   the most terms first. Each recalled fact carries its chain of ancestor topics and their
+   summaries. The result is formatted as a "Remembered context" section, and recall bumps the use
+   counts of what it returned. In a task tree, each subtask adds the facts its own prompt recalls,
+   and each search query recalls facts as a "Stored facts" evidence section; when facts or stored
+   summaries answer every query of a task, its tool loop is skipped.
 2. **Search with memory**, for every search query (`search_with_memory`). It looks the query up in
    `knowledge_search`, keeping unexpired sources that share half the query's terms. A hit is used
    as "Local knowledge result" and no web search runs; when every query was answered by a stored
@@ -283,18 +286,14 @@ research_queue ─► research_one_topic (idle time) ─► facts, summaries, pa
 
 These are properties of the code as it stands, recorded so changes can be measured against them.
 
-- **Retrieval is lexical only.** Both read paths use FTS5 plus a "shares half the terms" filter, so
-  a paraphrase finds nothing, and a long prompt (twelve terms, six needed) rarely matches a
-  one-sentence fact at all.
-- **Recall runs once, on the whole prompt.** Subtasks never recall memory for their own narrower
-  prompt or for their search queries.
+- **Retrieval is lexical only.** Both read paths use FTS5 plus a shared-terms filter, so a
+  paraphrase that shares no words with a stored fact finds nothing.
+- **The pipeline recalls once, on the whole prompt.** Only the task tree recalls for each subtask
+  and search query.
 - **The topic tree decorates results but does not route them.** Facts are found by flat search and
   then given their ancestor summaries; nothing walks the tree from the top to pick a branch.
 - **The graph is write-only.** Relationships are stored and shown in the Knowledge browser, but no
   request reads them.
-- **Recalled memory is not evidence for the task tree's checks.** The tree's URL and value checks
-  compare against gathered evidence and dependency results only, so citing a recalled fact's URL,
-  as the recall section asks, is flagged. The pipeline does count recalled memory as evidence.
 - **Well-supported facts never age.** Sources expire after a week, but a medium or high confidence
   fact stays `active` indefinitely; only contradiction or the low-confidence prune retires one, so a
   version number that has since changed is still recalled until a newer fact contradicts it.

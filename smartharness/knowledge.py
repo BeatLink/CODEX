@@ -171,10 +171,18 @@ def _same_wording(statement: str) -> str:
     return " ".join(re.findall(r"\w+", statement.casefold()))
 
 
+def _shared_term_count(terms: list[str], text: str) -> int:
+    words = set(re.findall(r"\w{2,}", text.casefold()))
+    return sum(term in words for term in terms)
+
+
 def _shares_half_the_terms(terms: list[str], text: str) -> bool:
     """A stored item counts as relevant only when it shares at least half of the query's terms."""
-    words = set(re.findall(r"\w{2,}", text.casefold()))
-    return sum(term in words for term in terms) >= (len(terms) + 1) // 2
+    return _shared_term_count(terms, text) >= (len(terms) + 1) // 2
+
+
+# A remembered fact is one short sentence, so a long request can only ever share a few words with it.
+RECALL_MIN_SHARED_TERMS = 3
 
 
 class _ClosingConnection(sqlite3.Connection):
@@ -604,10 +612,14 @@ class KnowledgeStore:
         with self._connect() as connection:
             connection.execute("UPDATE episodes SET processed_at = ? WHERE id = ?", (time.time(), episode_id))
 
-    def recall(self, query: str, limit: int = 5) -> dict[str, list[dict[str, Any]]]:
-        """Return what memory holds for a request: user memory, matching facts, and similar past episodes."""
+    def recall(self, query: str, limit: int = 5, include_user: bool = True) -> dict[str, list[dict[str, Any]]]:
+        """Return what memory holds for a request: user memory, matching facts, and similar past episodes.
+
+        An item matches when it shares half the query's terms, or three of them for a longer query,
+        and the items sharing the most terms come first.
+        """
         recalled: dict[str, list[dict[str, Any]]] = {
-            "user": self.user_memories(limit=10),
+            "user": self.user_memories(limit=10) if include_user else [],
             "facts": [],
             "episodes": [],
         }
@@ -618,11 +630,14 @@ class KnowledgeStore:
                 rows = connection.execute(
                     "SELECT m.kind, m.item_id, m.body FROM memory_search m "
                     "WHERE memory_search MATCH ? ORDER BY rank LIMIT ?",
-                    (_match_expression(terms), limit * 8),
+                    # Rows sharing too few terms are dropped below, so FTS5 is asked for plenty.
+                    (_match_expression(terms), limit * 20),
                 ).fetchall()
-                for row in rows:
-                    if not _shares_half_the_terms(terms, row["body"]):
-                        continue
+                needed = min(RECALL_MIN_SHARED_TERMS, (len(terms) + 1) // 2)
+                counted = [(_shared_term_count(terms, row["body"]), row) for row in rows]
+                # The sort is stable, so items sharing as many terms keep their FTS5 rank order.
+                ranked = sorted((pair for pair in counted if pair[0] >= needed), key=lambda pair: -pair[0])
+                for _, row in ranked:
                     if row["kind"] == "fact" and len(recalled["facts"]) < limit:
                         fact = connection.execute(
                             "SELECT f.id, f.statement, f.confidence, f.topic_id, t.name AS topic, "

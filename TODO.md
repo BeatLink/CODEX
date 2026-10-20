@@ -53,9 +53,9 @@
 - [x] Track memory usage counts
 - [ ] Refresh topics by usage and staleness
 - [ ] Add embedding retrieval with sqlite-vec and combine it with FTS5 ranking
-- [ ] Count recalled memory as evidence in the task tree's URL and value checks, as the pipeline does
-- [ ] Recall memory for each task's own prompt and search queries, not only once for the whole request
-- [ ] Rank recalled facts by FTS5 score and term overlap instead of requiring half the prompt's terms
+- [x] Count recalled memory as evidence in the task tree's URL and value checks, as the pipeline does
+- [x] Recall memory for each task's own prompt and search queries, not only once for the whole request
+- [x] Rank recalled facts by FTS5 score and term overlap instead of requiring half the prompt's terms
 - [ ] Retrieve along the topic tree: pick the best-matching branch, then search only the facts under it
 - [ ] Add one-hop graph neighbours of entities named in recalled facts to the remembered context
 - [ ] Give facts an expiry from their source and recheck them when their topic is refreshed

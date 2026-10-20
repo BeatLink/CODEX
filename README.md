@@ -232,11 +232,16 @@ Knowledge lives in a SQLite database at `knowledge_db_path`
   carry the source that supports them.
 - **A research queue** of pending, running, done, and failed jobs.
 
-Before stage 1, the pipeline recalls what memory holds for the request: the
+Before the first model call, the request recalls what memory holds for it: the
 user memory, plus facts and past episodes that share at least half of the
-prompt's search terms, ignoring common words. These go to stage 1 and the later
-stages as "Remembered context", and each recall counts towards that fact's and
-topic's use count. When the run ends, it is recorded as an episode.
+prompt's search terms, or three of them for a longer prompt, ignoring common
+words; those sharing the most terms come first. These go to every later step as
+"Remembered context", and each recall counts towards that fact's and topic's use
+count. In a task tree, each subtask also recalls facts for its own prompt, and
+each search query recalls facts for itself; facts that answer every query of a
+task let it skip its tool loop, as stored summaries do. Recalled facts count as
+evidence when checking cited URLs and values. When the run ends, it is recorded
+as an episode.
 
 Every web search the pipeline runs is stored under a topic named after its
 query. A stored source is reused only while it has not expired and shares at

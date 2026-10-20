@@ -75,6 +75,8 @@ CLARIFICATION_LABEL = "User clarification"
 SEARCH_LABELS = ("Local knowledge result", "Automatic web search result")
 TREE_LABEL = "Task tree"
 SNAPSHOT_RESULT_CHARS = 2_000
+# Facts recalled for one task, its own and the request's together.
+MAX_FACTS_PER_TASK = 8
 
 
 def _subtask_schema(min_items: int) -> dict[str, Any]:
@@ -534,7 +536,8 @@ class TaskTreeRun:
         self.summarize = section_summarizer(llm, temperature, context_size, self.count_tokens)
         self.condensed: set[tuple[str, str]] = set()
         self.today = date.today().isoformat()
-        self.memory = ""
+        self.recalled: dict[str, list[dict[str, Any]]] = {"user": [], "facts": [], "episodes": []}
+        self.task_memory: dict[str, tuple[str, set[int]]] = {}
         self.recalled_facts = False
         self.local_knowledge_used = False
         self.clarification: tuple[str, str] | None = None
@@ -603,8 +606,9 @@ class TaskTreeRun:
         sections.extend(evidence)
         if node.parent is not None:
             sections.append((TREE_LABEL, self.tree.outline(node)))
-        if self.memory:
-            sections.append((MEMORY_LABEL, self.memory))
+        memory = self.memory_for(node)
+        if memory:
+            sections.append((MEMORY_LABEL, memory))
         return sections
 
     def pinned_count(self, correction: str) -> int:
@@ -659,6 +663,25 @@ class TaskTreeRun:
         )
         return VERIFIED_EVIDENCE_RULE + RESEARCHED_EVIDENCE_RULE + ("" if evidence_found else NO_EVIDENCE_RULE)
 
+    def memory_for(self, node: TaskNode) -> str:
+        """Return the remembered context for a task: what the request recalled plus facts matching the task itself."""
+        return self.task_recall(node)[0]
+
+    def task_recall(self, node: TaskNode) -> tuple[str, set[int]]:
+        if node.id not in self.task_memory:
+            facts = list(self.recalled["facts"])
+            if node.parent is not None and self.knowledge_store is not None:
+                known = {fact["id"] for fact in facts}
+                own = self.knowledge_store.recall(node.prompt, include_user=False)["facts"]
+                # A subtask is narrower than the request, so its own matches come first.
+                facts = [*(fact for fact in own if fact["id"] not in known), *facts][:MAX_FACTS_PER_TASK]
+                self.recalled_facts = self.recalled_facts or bool(own)
+            self.task_memory[node.id] = (
+                _format_recall({**self.recalled, "facts": facts}),
+                {fact["id"] for fact in facts},
+            )
+        return self.task_memory[node.id]
+
     def dependency_results(self, node: TaskNode) -> list[tuple[str, str]]:
         """Return the results of the earlier tasks this task, or any task above it, builds on."""
         results = []
@@ -680,9 +703,8 @@ class TaskTreeRun:
 
     def run(self) -> str:
         if self.knowledge_store is not None:
-            recalled = self.knowledge_store.recall(self.user_prompt)
-            self.recalled_facts = bool(recalled["facts"])
-            self.memory = _format_recall(recalled)
+            self.recalled = self.knowledge_store.recall(self.user_prompt)
+            self.recalled_facts = bool(self.recalled["facts"])
         self.publish()
         self.work(self.tree.root)
         return self.tree.root.result
@@ -779,17 +801,30 @@ class TaskTreeRun:
         node.result, node.note = result, problem
         node.status = "unverified" if problem else "done"
 
-    def search(self, queries: list[str]) -> tuple[list[tuple[str, str]], bool]:
+    def search(self, node: TaskNode, queries: list[str]) -> tuple[list[tuple[str, str]], bool]:
         """Look each query up, and say whether stored summaries answered every one of them."""
         evidence = []
         answered_from_memory = True
+        shown = set(self.task_recall(node)[1])
         for query in queries[:MAX_SEARCH_QUERIES]:
+            facts = []
+            if self.knowledge_store is not None:
+                # A short query matches stored facts that the whole request was too long to match.
+                facts = [
+                    fact for fact in self.knowledge_store.recall(query, include_user=False)["facts"]
+                    if fact["id"] not in shown
+                ]
+                if facts:
+                    shown.update(fact["id"] for fact in facts)
+                    self.recalled_facts = True
+                    evidence.append((f"Stored facts for '{query}'", _format_recall({"facts": facts})))
             label, text, from_summary = search_with_memory(
                 query, self.knowledge_store, self.toolbox, self.max_pending_research_jobs
             )
             evidence.append((f"{label} for '{query}'", text))
             self.local_knowledge_used = self.local_knowledge_used or label == "Local knowledge result"
-            answered_from_memory = answered_from_memory and from_summary
+            # Stored facts were extracted from fetched pages, so they answer a query as a stored summary does.
+            answered_from_memory = answered_from_memory and (from_summary or bool(facts))
         self.evidence.extend(text for _, text in evidence)
         return evidence, answered_from_memory
 
@@ -798,14 +833,14 @@ class TaskTreeRun:
         if decision.approach == "answer":
             # The model cannot tell when it does not know something, so a top-level answer gets one quick search.
             if node.parent is None and not _is_self_contained(self.user_prompt):
-                return self.search([_search_query(self.user_prompt)])[0]
+                return self.search(node, [_search_query(self.user_prompt)])[0]
             return []
         evidence: list[tuple[str, str]] = []
         if decision.approach == "research":
             # The request's own words come first at the top, so a query the model made up is never the only search.
             own_words = [_search_query(self.user_prompt)] if node.parent is None else []
             queries = list(dict.fromkeys([*own_words, *decision.search_queries])) or [_search_query(node.prompt)]
-            evidence, answered_from_memory = self.search(queries)
+            evidence, answered_from_memory = self.search(node, queries)
             # Stored page and topic summaries answer on their own, so nothing more is fetched.
             if answered_from_memory:
                 return evidence
@@ -891,7 +926,10 @@ class TaskTreeRun:
             return f"The check could not run ({error}), so this result is unverified."
         # A malformed verdict cannot say what to fix, so it does not send the task round again.
         problems = [parse_check(reply) or ""]
-        known = "\n".join([*self.evidence, *(text for _, text in self.dependency_results(node))])
+        # Recalled facts carry their source URLs and are offered as evidence, so they count as seen.
+        known = "\n".join([
+            *self.evidence, *(text for _, text in self.dependency_results(node)), self.memory_for(node)
+        ])
         problems.extend(
             f"The result cites {url}, which is not in the captured evidence; remove it or say it is unverified."
             for url in _uncited_urls(result, known)

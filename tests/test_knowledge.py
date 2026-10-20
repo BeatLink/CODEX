@@ -139,6 +139,23 @@ class KnowledgeStoreTests(unittest.TestCase):
         use_counts = {fact["topic"]: fact["use_count"] for fact in self.store.facts()}
         self.assertEqual(use_counts, {"SQLite": 1, "Rust": 0})
 
+    def test_a_long_request_recalls_a_fact_sharing_three_of_its_terms(self):
+        self.store.add_user_memory("preference", "Prefers Python examples")
+        self.store.add_fact("FastAPI", "FastAPI runs async def endpoints on the event loop.")
+        self.store.add_fact("FastAPI", "FastAPI is a Python web framework.")
+
+        recalled = self.store.recall(
+            "I am building a web service with FastAPI and Postgres; how should I structure"
+            " async endpoints and database sessions so they do not block?",
+            include_user=False,
+        )
+
+        self.assertEqual(recalled["user"], [])
+        self.assertEqual(
+            [fact["statement"] for fact in recalled["facts"]],
+            ["FastAPI runs async def endpoints on the event loop."],
+        )
+
     def test_recalled_fact_carries_its_chain_of_parent_summaries(self):
         self.store.add_topic("SQLite", parent="Databases")
         self.store.add_topic("SQLite FTS5", parent="SQLite")

@@ -548,6 +548,61 @@ class ParsingTests(unittest.TestCase):
         self.assertEqual([child.depends_on for child in tree.root.children], [[], ["1.1"]])
 
 
+class RecallTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.database_path = str(Path(self.directory.name) / "knowledge.db")
+        self.store = KnowledgeStore(self.database_path)
+        self.store.store_search_results("sqlite fts5", [
+            {"url": "https://sqlite.example/fts5", "title": "FTS5", "snippet": "Full-text search."},
+        ])
+
+    def tearDown(self):
+        self.directory.cleanup()
+
+    def test_citing_a_recalled_facts_url_passes_the_check(self):
+        self.store.add_fact("SQLite", "SQLite FTS5 ranks matches with bm25.", "https://sqlite.example/fts5")
+
+        _, model, _, _ = run_tree({
+            ("decide", "1"): decision("answer"),
+            ("write", "1"): "FTS5 ranks with bm25 (https://sqlite.example/fts5).",
+        }, prompt="How does SQLite FTS5 rank matches?", knowledge_db_path=self.database_path, max_task_depth=0)
+
+        self.assertIn("https://sqlite.example/fts5", model.call("write", "1")["input"])
+        self.assertNotIn(("revise", "1"), model.steps())
+
+    def test_a_subtask_recalls_facts_matching_its_own_prompt(self):
+        self.store.add_fact("Rust", "Cargo builds Rust crates and fetches their dependencies.")
+
+        _, model, _, _ = run_tree({
+            ("decide", "1"): decision("decompose", subtasks=[("Explain how Cargo builds crates", []), ("Explain the rest", [])]),
+            ("decide", "1.1"): decision("answer"),
+            ("write", "1.1"): "Cargo builds crates.",
+            ("decide", "1.2"): decision("answer"),
+            ("write", "1.2"): "The rest.",
+            ("combine", "1"): "Both.",
+        }, prompt="Write a guide to a new toolchain", knowledge_db_path=self.database_path)
+
+        self.assertIn("Cargo builds Rust crates", model.call("decide", "1.1")["input"])
+        self.assertNotIn("Cargo builds Rust crates", model.call("decide", "1")["input"])
+
+    def test_a_search_query_recalls_facts_that_answer_it_without_tools(self):
+        self.store.add_fact("Zig", "Zig 0.13.0 was released in June 2024.")
+
+        _, model, _, _ = run_tree({
+            ("decide", "1"): decision("decompose", subtasks=[("Describe the newest version", []), ("Explain the rest", [])]),
+            ("decide", "1.1"): decision("research", queries=["zig release"]),
+            ("write", "1.1"): "Zig 0.13.0 was released in June 2024.",
+            ("decide", "1.2"): decision("answer"),
+            ("write", "1.2"): "The rest.",
+            ("combine", "1"): "Both.",
+        }, prompt="Write a guide to a systems language", knowledge_db_path=self.database_path)
+
+        self.assertNotIn("Zig 0.13.0", model.call("decide", "1.1")["input"])
+        self.assertIn("Stored facts for 'zig release'", model.call("write", "1.1")["input"])
+        self.assertNotIn(("revise", "1.1"), model.steps())
+
+
 class EpisodeTests(unittest.TestCase):
     def test_finished_tree_is_recorded_with_the_episode(self):
         with tempfile.TemporaryDirectory() as directory:
