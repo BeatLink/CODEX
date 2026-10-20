@@ -3,6 +3,7 @@ import json
 from collections.abc import Callable
 from typing import Any
 
+from .context_budget import input_char_budget
 from .mcp_tools import MCPToolbox
 from .tools import Toolbox
 
@@ -22,6 +23,7 @@ def run_tool_stage(
     allowed_tools: set[str] | None = None,
     page_summarizer: Callable[[str, str, str], str] | None = None,
     blocked_tools: set[str] | None = None,
+    context_size: int | None = None,
 ) -> str:
     if (
         isinstance(max_tool_calls, bool)
@@ -43,6 +45,7 @@ def run_tool_stage(
             allowed_tools,
             page_summarizer,
             blocked_tools,
+            context_size,
         )
     )
 
@@ -60,6 +63,7 @@ async def _run_tool_stage(
     allowed_tools: set[str] | None,
     page_summarizer: Callable[[str, str, str], str] | None,
     blocked_tools: set[str] | None,
+    context_size: int | None,
 ) -> str:
     async with MCPToolbox(mcp_servers) as mcp_toolbox:
         tool_definitions = [
@@ -81,6 +85,11 @@ async def _run_tool_stage(
         tool_history = []
         tool_call_count = 0
         tool_output_chars = 0
+        message_char_budget = (
+            input_char_budget(context_size, max_tokens, json.dumps(tool_definitions))
+            if context_size is not None
+            else None
+        )
 
         while True:
             request = {
@@ -151,7 +160,7 @@ async def _run_tool_stage(
             choice = choices[0]
             if choice.get("finish_reason") == "length":
                 raise RuntimeError(
-                    "The tool stage reached the token limit; increase --max-tokens."
+                    "The tool stage reached the token limit; increase --max-tokens or --context-size."
                 )
             assistant_message = choice.get("message", {})
             tool_calls = assistant_message.get("tool_calls") or []
@@ -163,7 +172,17 @@ async def _run_tool_stage(
                     return content.strip() + "\n\nTool call results:\n" + "\n".join(tool_history)
                 return content.strip()
             if tool_call_count >= max_tool_calls:
-                raise RuntimeError("The model continued requesting tools after the call limit.")
+                content = assistant_message.get("content")
+                findings = content.strip() if isinstance(content, str) else ""
+                return "\n\n".join(
+                    part
+                    for part in (
+                        findings,
+                        "The tool-call limit was reached; further requested tool calls were not run.",
+                        "Tool call results:\n" + "\n".join(tool_history) if tool_history else "",
+                    )
+                    if part
+                )
 
             messages.append(assistant_message)
             for tool_call in tool_calls:
@@ -206,6 +225,10 @@ async def _run_tool_stage(
                         result = f"Tool error: invalid JSON arguments: {error}"
 
                 remaining_output = MAX_TOOL_HISTORY_CHARS - tool_output_chars
+                if message_char_budget is not None:
+                    used_chars = sum(len(json.dumps(message)) for message in messages)
+                    remaining_output = min(remaining_output, message_char_budget - used_chars)
+                remaining_output = max(0, remaining_output)
                 if len(result) > remaining_output:
                     result = result[:remaining_output]
                 tool_output_chars += len(result)

@@ -238,23 +238,49 @@ class ToolStageTests(unittest.TestCase):
         self.assertEqual(model.requests[1]["messages"][-1]["content"], "sample tool output")
         self.assertIn("sample tool output", result)
 
-    def test_stops_after_tool_call_limit(self):
+    def test_stops_after_tool_call_limit_and_keeps_results(self):
         toolbox = FakeToolbox()
         model = FakeModel([tool_call_response("call-1"), tool_call_response("call-2")])
 
-        with self.assertRaisesRegex(RuntimeError, "after the call limit"):
-            run_tool_stage(
-                model,
-                "Use tools when useful.",
-                "Read notes.txt.",
-                toolbox,
-                max_tokens=200,
-                temperature=0.1,
-                max_tool_calls=1,
-            )
+        result = run_tool_stage(
+            model,
+            "Use tools when useful.",
+            "Read notes.txt.",
+            toolbox,
+            max_tokens=200,
+            temperature=0.1,
+            max_tool_calls=1,
+        )
 
         self.assertEqual(model.requests[1]["tool_choice"], "none")
         self.assertEqual(len(toolbox.calls), 1)
+        self.assertIn("tool-call limit was reached", result)
+        self.assertIn("sample tool output", result)
+
+    def test_tool_output_is_trimmed_to_the_context_window(self):
+        toolbox = FakeToolbox()
+        toolbox.call = lambda name, arguments: "z" * 50_000
+        model = FakeModel(
+            [
+                tool_call_response("call-1"),
+                {"choices": [{"finish_reason": "stop", "message": {"content": "Done."}}]},
+            ]
+        )
+
+        run_tool_stage(
+            model,
+            "Use tools when useful.",
+            "Read notes.txt.",
+            toolbox,
+            max_tokens=1024,
+            temperature=0.1,
+            max_tool_calls=1,
+            context_size=2048,
+        )
+
+        sent = model.requests[1]
+        sent_chars = sum(len(json.dumps(message)) for message in sent["messages"]) + len(json.dumps(sent["tools"]))
+        self.assertLessEqual(sent_chars, (2048 - 1024) * 3)
 
 
 if __name__ == "__main__":

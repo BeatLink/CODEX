@@ -5,6 +5,17 @@ import time
 from pathlib import Path
 from typing import Any
 
+# Common words that would match almost any stored snippet, so they never count as a search term.
+_SEARCH_STOPWORDS = frozenset(
+    """
+    a about all also an and any are as at be been but by can could do does for from had has
+    have how i if in into is it its me my no not of on or our please should so some tell than
+    that the their them then there these they this to up us was we what when where which who
+    why will with would you your
+    explain find latest look online recent research search show source verify web
+    """.split()
+)
+
 
 class _ClosingConnection(sqlite3.Connection):
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> bool:
@@ -239,7 +250,10 @@ class KnowledgeStore:
         return stored
 
     def search(self, query: str, limit: int = 8) -> list[dict[str, Any]]:
-        terms = re.findall(r"[\w]{2,}", query.casefold())[:12]
+        terms = list(dict.fromkeys(
+            term for term in re.findall(r"\w{2,}", query.casefold())
+            if term not in _SEARCH_STOPWORDS
+        ))[:12]
         if not terms:
             return []
         expression = " OR ".join('"' + term.replace('"', '""') + '"' for term in terms)
@@ -250,9 +264,19 @@ class KnowledgeStore:
                 "LEFT JOIN topics t ON t.id = s.topic_id "
                 "WHERE knowledge_search MATCH ? AND s.expires_at >= ? "
                 "ORDER BY rank LIMIT ?",
-                (expression, time.time(), limit),
+                (expression, time.time(), limit * 4),
             ).fetchall()
-        return [dict(row) for row in rows]
+        # A source counts only when it shares at least half of the query's terms.
+        required_matches = (len(terms) + 1) // 2
+        matching_rows = []
+        for row in rows:
+            source_words = set(re.findall(
+                r"\w{2,}",
+                " ".join(str(row[column] or "") for column in ("title", "url", "snippet", "summary", "query")).casefold(),
+            ))
+            if sum(term in source_words for term in terms) >= required_matches:
+                matching_rows.append(dict(row))
+        return matching_rows[:limit]
 
     def topics(self) -> list[dict[str, Any]]:
         with self._connect() as connection:

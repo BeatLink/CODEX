@@ -15,7 +15,6 @@ MAX_FILE_BYTES = 100_000
 MAX_TOOL_OUTPUT_CHARS = 12_000
 MAX_WEB_PAGE_BYTES = 2_000_000
 MAX_WEB_PAGE_CHARS = 100_000
-MAX_WEB_PAGE_OUTPUT_CHARS = MAX_WEB_PAGE_CHARS * 2 + 10_000
 MAX_DIRECTORY_ENTRIES = 100
 TEST_TIMEOUT_SECONDS = 120
 WEB_FETCH_TIMEOUT_SECONDS = 15
@@ -246,10 +245,10 @@ class Toolbox:
             result = json.dumps(result, ensure_ascii=False)
         if not result.startswith("Tool error:"):
             self.used_tools.add(name)
-        output_limit = (
-            MAX_WEB_PAGE_OUTPUT_CHARS if name == "web_fetch" else MAX_TOOL_OUTPUT_CHARS
-        )
-        return result[:output_limit]
+        # Page JSON is already bounded by the fetch limits and must stay whole for the summarizer to parse it.
+        if name == "web_fetch":
+            return result
+        return result[:MAX_TOOL_OUTPUT_CHARS]
 
     def _web_search(self, arguments: dict[str, Any]) -> str:
         self._check_arguments(arguments, {"query"}, {"max_results"})

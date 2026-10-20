@@ -38,19 +38,31 @@ Stage output streams by default; set `show_thinking` to `false` in
 `settings.json` or pass `--no-show-thinking` to disable it. Use
 `--show-thinking` to enable it for a single run.
 
-The tool stage can search the web using DDGS and list, read, or write files.
-Prompts asking to verify/research facts or configure a technical integration
-automatically run a web search before the model-controlled tool stage.
+Each request runs through eight stages: identify the task, research, plan,
+review the plan, carry out the reviewed tool actions, draft, critique, and
+revise. The plan is reviewed before any tool action runs, so file changes
+happen only after that check. If the critique or revision fails, the draft is
+returned with a note saying so.
+
+The research stage can search the web using DDGS, fetch and summarize pages,
+and list or read files; the action stage can list, read, or write files.
+Prompts that ask to verify, research, or look something up, or to install,
+configure, or connect a technical integration such as an API, SDK, or MCP
+server, automatically run a web search before the research stage. The query is
+built from the prompt with pasted code blocks removed and is cut to 200
+characters.
 `filesystem_root` is resolved from the current working directory; file tools
 cannot access paths outside that root. Paths are relative to the root, and an
 absolute path is accepted only when it points inside it. File access is
 read-only by default: set `allow_file_writes` to `true`, pass
 `--allow-file-writes`, or tick the box on the TUI Options page to let the
 model create or replace files. Writes cannot delete files. Tool calls and search results are capped by the settings.
-Later stages ground researched claims only in captured titles, URLs, and
-snippets; pages are not fetched for independent verification. If search fails
+Later stages ground researched claims only in captured search titles, URLs,
+snippets, and summaries of pages the research stage fetched. If search fails
 or returns no useful evidence, the harness instructs the model to say that the
-claims could not be verified. The model asks one concise clarification question in interactive
+claims could not be verified. Each stage's input is trimmed to fit
+`context_size` minus `max_tokens`, and tool results are cut to the room that
+is left, so long evidence is shortened rather than overflowing the model. The model asks one concise clarification question in interactive
 terminal sessions when it finds a material ambiguity; otherwise it proceeds
 with an explicit assumption.
 
@@ -62,8 +74,9 @@ retrieval timestamps, and expiry times. SQLite FTS5 is used for retrieval;
 topic hierarchy and evidence-linked relationships are stored as graph nodes
 and edges in the same database. Fresh local evidence is used before live search
 for research-intent prompts. Expired or missing evidence falls back to web
-search. Search results contain snippets only; pages are not fetched or
-independently verified.
+search. A stored source is reused only when it shares at least half of the
+prompt's search terms, ignoring common words. Stored search results contain
+snippets and summaries only.
 
 When the TUI is open, its Background page can queue research topics and pause or
 resume the idle worker; the worker's intervals and limits are on the Options page. Enter a topic and choose **Research now** to start a queued
