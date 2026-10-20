@@ -20,6 +20,8 @@ class DaemonTests(unittest.TestCase):
         self.settings = DEFAULT_SETTINGS.copy()
         self.settings["knowledge_db_path"] = str(Path(self.directory.name) / "knowledge.db")
         self.settings["background_research_enabled"] = False
+        # These tests patch the eight-stage pipeline, so they run in pipeline mode.
+        self.settings["runner"] = "pipeline"
         self.settings_path = Path(self.directory.name) / "settings.json"
 
     def tearDown(self):
@@ -50,6 +52,29 @@ class DaemonTests(unittest.TestCase):
         self.assertEqual(pipeline.call_args.kwargs["max_tokens"], 512)
         self.assertEqual(daemon.harness.settings["max_tokens"], DEFAULT_SETTINGS["max_tokens"])
         self.assertIsNone(client.call("status")["run"])
+
+    def test_tree_run_broadcasts_the_tree_and_keeps_it_for_late_interfaces(self):
+        tree = [{"id": "1", "prompt": "Draft a plan", "status": "running"}]
+        late_status = []
+
+        def fake_task_tree(prompt, **kwargs):
+            kwargs["tree_callback"](tree)
+            late_status.append(daemon.client().call("status")["run"])
+            return "Tree answer"
+
+        with patch("smartharness.daemon.execute_task_tree", side_effect=fake_task_tree) as task_tree:
+            daemon = self.start()
+            events = EventLog()
+            client = daemon.client(events)
+            client.call("run", prompt="Draft a plan", settings={"runner": "tree", "max_task_depth": 1})
+            finished = events.wait_for("run.finished")
+
+        self.assertEqual(finished["result"], "Tree answer")
+        self.assertEqual(events.wait_for("run.started")["runner"], "tree")
+        self.assertEqual(events.wait_for("run.tree")["nodes"], tree)
+        self.assertEqual(task_tree.call_args.kwargs["max_task_depth"], 1)
+        self.assertEqual(late_status[0]["runner"], "tree")
+        self.assertEqual(late_status[0]["tree"], tree)
 
     def test_clarification_is_asked_of_the_owner_and_answered(self):
         answers = []

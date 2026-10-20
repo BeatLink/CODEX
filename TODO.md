@@ -6,6 +6,9 @@
 
 ## Planned
 
+- [x] Work each request as a tree of tasks that the model decides, decomposes, checks, and re-plans
+- [ ] Resume an unfinished task tree after the daemon restarts
+- [ ] Show each task's result when its row is chosen in the interfaces
 - [ ] Subagents / refinement loops
 - [ ] Tool calling
 - [ ] Web search
@@ -22,12 +25,12 @@
 - [x] Check execute-mode reports against the recorded file writes and test runs
 - [x] Let stage 1 decide whether research is needed instead of keyword regexes
 - [x] Let the model write focused search queries instead of reusing the prompt
-- [ ] Turn the plan into numbered steps and run each step as its own small call
+- [x] Turn the plan into numbered steps and run each step as its own small call
 - [x] Make the critique mark each requirement pass or fail and revise only what failed, in a bounded loop
 - [x] Add checks that do not rely on the model, such as cited URLs appearing in the evidence
 - [x] Count tokens with the model's tokenizer instead of a characters-per-token estimate
 - [x] Never trim the original request
-- [ ] Summarize older stage output instead of cutting it
+- [x] Summarize older stage output instead of cutting it
 - [x] Give each stage its own reply token budget
 - [ ] Add an eval harness comparing the bare model with the pipeline on a fixed task set
 - [x] Add schema migrations to the knowledge store

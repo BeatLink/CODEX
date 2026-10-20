@@ -11,6 +11,7 @@ from rich.markdown import Markdown
 from .client import DISCONNECTED_EVENT, connect_to_daemon
 from .pipeline import execute_pipeline
 from .settings import MODE_CHOICES, default_settings_path, load_settings, validate_settings
+from .task_tree import execute_task_tree
 
 
 PATH_SETTINGS = ("model_path", "filesystem_root", "knowledge_db_path")
@@ -115,8 +116,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         result = _run_with_daemon(prompt, settings, interactive=sys.stdin.isatty())
         if result is None:
-            result = execute_pipeline(
-                prompt,
+            options = dict(
                 model_path=settings["model_path"],
                 context_size=settings["context_size"],
                 gpu_layers=settings["gpu_layers"],
@@ -136,6 +136,15 @@ def main(argv: list[str] | None = None) -> int:
                     _ask_clarification if sys.stdin.isatty() else None
                 ),
             )
+            if settings["runner"] == "tree":
+                result = execute_task_tree(
+                    prompt,
+                    **options,
+                    max_task_depth=settings["max_task_depth"],
+                    max_task_nodes=settings["max_task_nodes"],
+                )
+            else:
+                result = execute_pipeline(prompt, **options)
     except (OSError, RuntimeError, ValueError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1

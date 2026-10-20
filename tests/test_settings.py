@@ -33,6 +33,13 @@ class SettingsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "mode"):
             validate_settings(settings)
 
+    def test_requests_run_as_a_task_tree_by_default_within_checked_limits(self):
+        self.assertEqual(DEFAULT_SETTINGS["runner"], "tree")
+
+        for name, value in (("runner", "graph"), ("max_task_depth", 7), ("max_task_nodes", 0)):
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, name):
+                validate_settings({**DEFAULT_SETTINGS, name: value})
+
     def test_test_execution_setting_must_be_boolean(self):
         settings = DEFAULT_SETTINGS.copy()
         settings["enable_test_execution"] = "yes"

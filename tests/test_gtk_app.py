@@ -79,6 +79,8 @@ class WindowTests(unittest.TestCase):
         self.settings = DEFAULT_SETTINGS.copy()
         self.settings["knowledge_db_path"] = str(Path(directory.name) / "knowledge.db")
         self.settings["background_research_enabled"] = False
+        # Most tests drive the eight-stage view, so the window starts in pipeline mode.
+        self.settings["runner"] = "pipeline"
         self.daemon = RunningDaemon(self.settings)
         self.addCleanup(self.daemon.stop)
         self.window = SmartHarnessWindow(self.application, self.settings, client=self.daemon.client())
@@ -123,6 +125,32 @@ class WindowTests(unittest.TestCase):
             wait_until(lambda: self.window.status.get_label() == "Complete")
 
         self.assertIn("Execute mode · Stage 3 of 8", statuses)
+
+    def test_tree_run_shows_the_task_tree_and_each_step(self):
+        def fake_task_tree(prompt, **kwargs):
+            kwargs["tree_callback"]([
+                {"id": "1", "prompt": "Compare two designs", "status": "done"},
+                {"id": "1.1", "prompt": "Describe design A", "status": "unverified"},
+            ])
+            kwargs["progress_callback"]("Task 1.1 · Writing")
+            kwargs["stage_output_callback"]("Task 1.1 · Writing", "Design A is simple.")
+            return "Pick A."
+
+        self.window.tree_switch.set_active(True)
+        self.window.prompt.get_buffer().set_text("Compare two designs")
+        with patch("smartharness.daemon.execute_task_tree", side_effect=fake_task_tree):
+            self.window.run_button.emit("clicked")
+            wait_until(lambda: self.window.status.get_label() == "Complete")
+
+        rows = {row.page_name: row for row in self.window._phase_rows()}
+        self.assertFalse(rows["phase-1"].get_visible())
+        self.assertTrue(rows["steps"].get_visible())
+        self.assertEqual(
+            self.window.task_tree.get_label(),
+            "DONE  1 Compare two designs\nWARN    1.1 Describe design A",
+        )
+        self.assertEqual(self.window.steps_output.text, "▸ Task 1.1 · Writing\n\nDesign A is simple.")
+        self.assertEqual(self.window._last_answer, "Pick A.")
 
     def test_failed_run_marks_the_failing_stage(self):
         def failing_pipeline(prompt, **kwargs):

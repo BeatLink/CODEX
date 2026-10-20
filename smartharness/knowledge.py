@@ -113,6 +113,9 @@ _MIGRATIONS = (
         body, kind UNINDEXED, item_id UNINDEXED, tokenize='unicode61'
     );
     """,
+    """
+    ALTER TABLE episodes ADD COLUMN task_tree TEXT NOT NULL DEFAULT '';
+    """,
 )
 
 MEMORY_KINDS = ("fact", "episode")
@@ -519,13 +522,21 @@ class KnowledgeStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def record_episode(self, prompt: str, task_type: str, checklist: str, answer: str, outcome: str) -> int:
+    def record_episode(
+        self,
+        prompt: str,
+        task_type: str,
+        checklist: str,
+        answer: str,
+        outcome: str,
+        task_tree: str = "",
+    ) -> int:
         """Remember one finished request so later requests and the background worker can learn from it."""
         with self._connect() as connection:
             cursor = connection.execute(
-                "INSERT INTO episodes(prompt, task_type, checklist, answer, outcome, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (prompt[:4000], task_type, checklist[:4000], answer[:4000], outcome[:500], time.time()),
+                "INSERT INTO episodes(prompt, task_type, checklist, answer, outcome, task_tree, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (prompt[:4000], task_type, checklist[:4000], answer[:4000], outcome[:500], task_tree, time.time()),
             )
             episode_id = int(cursor.lastrowid)
             self._index_memory(connection, "episode", episode_id, f"{prompt[:4000]} {checklist[:4000]}")
@@ -534,7 +545,7 @@ class KnowledgeStore:
     def episodes(self, unprocessed_only: bool = False, limit: int = 50) -> list[dict[str, Any]]:
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT id, prompt, task_type, checklist, answer, outcome, created_at, processed_at "
+                "SELECT id, prompt, task_type, checklist, answer, outcome, task_tree, created_at, processed_at "
                 "FROM episodes WHERE (? = 0 OR processed_at IS NULL) ORDER BY created_at DESC LIMIT ?",
                 (int(unprocessed_only), limit),
             ).fetchall()

@@ -112,3 +112,52 @@ def fit_sections_to_tokens(
             break
         char_budget = char_budget * token_budget * 19 // (tokens * 20)
     return fitted
+
+
+# How many sections one call may condense before falling back to trimming.
+MAX_CONDENSED_SECTIONS = 3
+
+# The smallest reply a condensing call is asked for.
+MIN_SUMMARY_TOKENS = 64
+
+CONDENSED_MARKER = "[Condensed to fit the context window.]\n"
+
+
+def condense_sections(
+    sections: list[tuple[str, str]],
+    token_budget: int,
+    count_tokens: Callable[[str], int],
+    summarize: Callable[[str, str, int], str] | None,
+    pinned: int = 0,
+) -> list[tuple[str, str]]:
+    """Summarize the largest unpinned sections until the input fits, then trim whatever still overflows.
+
+    summarize(heading, text, reply_tokens) returns a shorter version of text; pinned sections are never summarized.
+    """
+    if summarize is None:
+        return fit_sections_to_tokens(sections, token_budget, count_tokens, pinned)
+    sections = list(sections)
+    condensed: set[int] = set()
+    for _ in range(MAX_CONDENSED_SECTIONS):
+        overflow = count_tokens(render_sections(sections)) - token_budget
+        if overflow <= 0:
+            return sections
+        sizes = {
+            index: count_tokens(text)
+            for index, (_, text) in enumerate(sections)
+            if index >= pinned and index not in condensed
+        }
+        if not sizes:
+            break
+        index = max(sizes, key=sizes.get)
+        condensed.add(index)
+        heading, text = sections[index]
+        # The summary gets what this section can keep once the overflow is gone, so one condensing may be enough.
+        reply_tokens = max(MIN_SUMMARY_TOKENS, sizes[index] - overflow)
+        try:
+            summary = summarize(heading, text, reply_tokens).strip()
+        except (RuntimeError, ValueError):
+            continue
+        if summary and count_tokens(summary) < sizes[index]:
+            sections[index] = (heading, CONDENSED_MARKER + summary)
+    return fit_sections_to_tokens(sections, token_budget, count_tokens, pinned)

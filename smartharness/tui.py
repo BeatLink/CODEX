@@ -37,7 +37,7 @@ from .settings import (
     mcp_servers_to_json,
     validate_settings,
 )
-from .stages import STAGE_LABELS, STAGE_TAB_TITLES
+from .stages import STAGE_LABELS, STAGE_TAB_TITLES, TASK_STEP_PREFIX, task_tree_lines
 
 
 PHASE_WAITING_TEXT = "_Waiting for this phase..._"
@@ -49,6 +49,7 @@ MODE_OPTIONS = (
     ("Draft mode", "draft"),
     ("Execute mode", "execute"),
 )
+STEPS_WAITING_TEXT = "_Each step of each task will appear here as it runs._"
 BACKGROUND_WAITING_TEXT = "_Waiting for background work..._"
 
 # Colours come from the dark and light token sets in the Halon theme's tokens.json.
@@ -229,6 +230,10 @@ class SmartHarnessApp(App[None]):
         height: 2;
         color: $stage-text;
     }
+    #task-tree {
+        height: auto;
+        color: $stage-text;
+    }
     #status {
         height: 2;
         margin-top: 1;
@@ -389,6 +394,10 @@ class SmartHarnessApp(App[None]):
         self._programmatic_phase_tabs: list[str] = []
         self._stage_output_buffers = [""] * len(STAGE_LABELS)
         self._pending_stage_output: list[list[str]] = [[] for _ in STAGE_LABELS]
+        self._runner = self.settings["runner"]
+        self._steps_output = ""
+        self._pending_steps_output: list[str] = []
+        self._last_step_label = ""
         self._background_output = ""
         self._background_status_text = "Idle"
         self._queue_text = "No research jobs"
@@ -420,9 +429,10 @@ class SmartHarnessApp(App[None]):
     def _compose_workbench_page(self) -> ComposeResult:
         with Horizontal(id="workspace"):
             with VerticalScroll(id="sidebar"):
-                yield Static("PIPELINE", classes="eyebrow")
+                yield Static("PIPELINE", classes="eyebrow", id="sidebar-title")
                 for index, label in enumerate(STAGE_LABELS, start=1):
                     yield Static(f"WAIT  {label}", classes="stage-row", id=f"stage-row-{index}")
+                yield Static("", id="task-tree", markup=False)
                 yield Static("Ready", id="status")
             with TabbedContent(initial="request-pane", id="workbench-tabs"):
                 with TabPane("Request", id="request-pane"):
@@ -445,6 +455,9 @@ class SmartHarnessApp(App[None]):
                                         classes="stage-output",
                                         id=f"stage-output-{index}",
                                     )
+                        with TabPane("Steps", id="steps"):
+                            with FollowingScroll(classes="stage-output-scroll"):
+                                yield Markdown(STEPS_WAITING_TEXT, classes="stage-output", id="steps-output")
                         with TabPane("Final", id="final"):
                             with FollowingScroll(classes="stage-output-scroll"):
                                 yield Markdown(FINAL_WAITING_TEXT, classes="stage-output", id="final-output")
@@ -508,6 +521,17 @@ class SmartHarnessApp(App[None]):
                 "Allow model to run project tests",
                 value=self.settings["enable_test_execution"],
                 id="enable-test-execution",
+            )
+
+            yield Static("HOW REQUESTS RUN", classes="eyebrow section-heading")
+            yield Checkbox(
+                "Work requests as a task tree (off runs the fixed eight-stage pipeline)",
+                value=self.settings["runner"] == "tree",
+                id="tree-runner",
+            )
+            yield from self._number_fields(
+                ("Max task depth (0-6)", "max-task-depth", "max_task_depth"),
+                ("Max tasks (1-60)", "max-task-nodes", "max_task_nodes"),
             )
 
             yield Static("TOOL LIMITS", classes="eyebrow section-heading")
@@ -575,6 +599,7 @@ class SmartHarnessApp(App[None]):
         return HALON_DARK_VARIABLES
 
     def on_mount(self) -> None:
+        self._show_runner(self._runner)
         self.query_one("#prompt", TextArea).focus()
         self.set_interval(0.15, self._flush_stage_output)
         self.query_one("#status", Static).update("Connecting to the daemon...")
@@ -660,6 +685,9 @@ class SmartHarnessApp(App[None]):
                 "enable_test_execution": self.query_one("#enable-test-execution", Checkbox).value,
                 "max_tool_calls": self._int_setting("max-tool-calls"),
                 "max_search_results": self._int_setting("max-search-results"),
+                "runner": "tree" if self.query_one("#tree-runner", Checkbox).value else "pipeline",
+                "max_task_depth": self._int_setting("max-task-depth"),
+                "max_task_nodes": self._int_setting("max-task-nodes"),
                 "knowledge_db_path": self.query_one("#knowledge-db-path", TextArea).text,
                 "background_research_enabled": self.query_one("#background-enabled", Checkbox).value,
                 "background_poll_interval_seconds": self._int_setting("background-poll-seconds"),
@@ -711,6 +739,8 @@ class SmartHarnessApp(App[None]):
             ("temperature", "temperature"),
             ("max-tool-calls", "max_tool_calls"),
             ("max-search-results", "max_search_results"),
+            ("max-task-depth", "max_task_depth"),
+            ("max-task-nodes", "max_task_nodes"),
             ("background-poll-seconds", "background_poll_interval_seconds"),
             ("background-refresh-hours", "background_refresh_interval_hours"),
             ("background-max-tokens", "background_max_tokens"),
@@ -723,7 +753,10 @@ class SmartHarnessApp(App[None]):
             ("background-enabled", "background_research_enabled"),
         ):
             self.query_one(f"#{selector}", Checkbox).value = settings[name]
+        self.query_one("#tree-runner", Checkbox).value = settings["runner"] == "tree"
         self.query_one("#mcp-servers", TextArea).text = mcp_servers_to_json(settings["mcp_servers"])
+        if not self._request_running:
+            self._show_runner(settings["runner"])
 
     def _auto_size(self) -> None:
         """Fill the context and token limits from the model file and free memory, ready to apply or save."""
@@ -797,11 +830,18 @@ class SmartHarnessApp(App[None]):
             self.query_one("#status", Static).update("Ready")
         else:
             # Another interface started this run, so show its progress so far.
-            self._begin_run(run["run_id"])
-            for label in run["progress"]:
-                self._update_stage(label)
-            for label, text in run["outputs"].items():
-                self._append_stage_output(label, text)
+            self._begin_run(run["run_id"], run["runner"])
+            if run["runner"] == "tree":
+                self._show_task_tree(run["tree"])
+                for label, text in run["outputs"].items():
+                    self._append_stage_output(label, text)
+                if run["progress"]:
+                    self._update_stage(run["progress"][-1])
+            else:
+                for label in run["progress"]:
+                    self._update_stage(label)
+                for label, text in run["outputs"].items():
+                    self._append_stage_output(label, text)
         self._refresh_knowledge()
         self._refresh_queue()
 
@@ -813,7 +853,9 @@ class SmartHarnessApp(App[None]):
         event, data = message.event, message.data
         if event == "run.started":
             if not self._request_running or self._run_id is None:
-                self._begin_run(data["run_id"])
+                self._begin_run(data["run_id"], data.get("runner", "pipeline"))
+        elif event == "run.tree":
+            self._show_task_tree(data["nodes"])
         elif event == "run.progress":
             self._update_stage(data["label"])
         elif event == "run.token":
@@ -875,15 +917,16 @@ class SmartHarnessApp(App[None]):
         if self._call_daemon("apply_settings", settings=settings) is None:
             return
         self.settings = settings
-        self._begin_run(None)
+        self._begin_run(None, settings["runner"])
         started = self._call_daemon("run", prompt=prompt, settings=settings)
         if started is None:
             self._stop_run("_The request could not start._", "WAIT", "Ready")
             return
         self._run_id = started["run_id"]
 
-    def _begin_run(self, run_id: int | None) -> None:
+    def _begin_run(self, run_id: int | None, runner: str) -> None:
         self._run_id = run_id
+        self._show_runner(runner)
         self._reset_stages()
         self.query_one("#final-output", Markdown).update("_Working on your request..._")
         self._show_output_pane()
@@ -934,6 +977,28 @@ class SmartHarnessApp(App[None]):
             self._programmatic_phase_tabs.append(pane_id)
             tabs.active = pane_id
 
+    def _show_runner(self, runner: str) -> None:
+        """Show the eight stages for a pipeline run, or the task tree and its steps for a tree run."""
+        self._runner = runner
+        tree_mode = runner == "tree"
+        self.query_one("#sidebar-title", Static).update("TASK TREE" if tree_mode else "PIPELINE")
+        for row in self.query(".stage-row"):
+            row.display = not tree_mode
+        self.query_one("#task-tree", Static).display = tree_mode
+        tabs = self.query_one("#phase-tabs", TabbedContent)
+        for index in range(1, len(STAGE_LABELS) + 1):
+            (tabs.hide_tab if tree_mode else tabs.show_tab)(f"phase-{index}")
+        (tabs.show_tab if tree_mode else tabs.hide_tab)("steps")
+
+    def _show_task_tree(self, nodes: list[dict[str, Any]]) -> None:
+        self.query_one("#task-tree", Static).update("\n".join(task_tree_lines(nodes)))
+
+    def _note_step(self, label: str) -> None:
+        """Start a new heading in the steps view whenever the step changes."""
+        if label != self._last_step_label:
+            self._last_step_label = label
+            self._pending_steps_output.append(f"\n\n### {label}\n\n")
+
     def _set_stage_row(self, index: int, state: str) -> None:
         self.query_one(f"#stage-row-{index + 1}", Static).update(f"{state}  {STAGE_LABELS[index]}")
 
@@ -947,9 +1012,18 @@ class SmartHarnessApp(App[None]):
             self._stage_output_buffers[index] = ""
             self._pending_stage_output[index].clear()
             self.query_one(f"#stage-output-{index + 1}", Markdown).update(PHASE_WAITING_TEXT)
+        self._steps_output = ""
+        self._pending_steps_output.clear()
+        self._last_step_label = ""
+        self.query_one("#steps-output", Markdown).update(STEPS_WAITING_TEXT)
+        self.query_one("#task-tree", Static).update("")
         self._show_phase_tab("final")
 
     def _append_stage_output(self, label: str, token: str) -> None:
+        if label.startswith(TASK_STEP_PREFIX):
+            self._note_step(label)
+            self._pending_steps_output.append(token)
+            return
         try:
             index = STAGE_LABELS.index(label)
         except ValueError:
@@ -965,6 +1039,14 @@ class SmartHarnessApp(App[None]):
             output = self.query_one(f"#stage-output-{index + 1}", Markdown)
             self._write_markdown(output, new_text, append=bool(self._stage_output_buffers[index]))
             self._stage_output_buffers[index] += new_text
+        if self._pending_steps_output:
+            new_text = "".join(self._pending_steps_output)
+            self._pending_steps_output.clear()
+            if not self._steps_output:
+                new_text = new_text.lstrip()
+            output = self.query_one("#steps-output", Markdown)
+            self._write_markdown(output, new_text, append=bool(self._steps_output))
+            self._steps_output += new_text
         self._flush_background_output()
 
     def _write_markdown(self, output: Markdown, text: str, append: bool) -> None:
@@ -974,12 +1056,18 @@ class SmartHarnessApp(App[None]):
             output.update(text)
 
     def _update_stage(self, label: str) -> None:
+        if label.startswith(TASK_STEP_PREFIX):
+            self._note_step(label)
         self._flush_stage_output()
         if label == "Loading model":
             self.query_one("#status", Static).update("Loading local model...")
             return
         if label.startswith(MODE_PROGRESS_PREFIX):
             self._run_mode = f"{label.removeprefix(MODE_PROGRESS_PREFIX).capitalize()} mode · "
+        if label.startswith(TASK_STEP_PREFIX):
+            self.query_one("#status", Static).update(label)
+            if self._follow_stages:
+                self._show_phase_tab("steps")
             return
         if label.startswith(SKIPPED_PREFIX) and label.removeprefix(SKIPPED_PREFIX) in STAGE_LABELS:
             skipped = STAGE_LABELS.index(label.removeprefix(SKIPPED_PREFIX))

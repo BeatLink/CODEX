@@ -16,6 +16,7 @@ from .knowledge import KnowledgeStore
 from .pipeline import ModelCache, execute_pipeline
 from .protocol import decode_message, default_socket_path, encode_message
 from .settings import default_settings_path, load_settings, save_settings, validate_settings
+from .task_tree import execute_task_tree
 
 
 class RunCancelled(Exception):
@@ -55,10 +56,12 @@ class Clarification:
 
 
 class ActiveRun:
-    def __init__(self, run_id: int, prompt: str, owner: ClientConnection | None) -> None:
+    def __init__(self, run_id: int, prompt: str, owner: ClientConnection | None, runner: str) -> None:
         self.id = run_id
         self.prompt = prompt
         self.owner = owner
+        self.runner = runner
+        self.tree: list[dict[str, Any]] = []
         self.cancel_requested = threading.Event()
         self.progress: list[str] = []
         self.outputs: dict[str, str] = {}
@@ -68,6 +71,8 @@ class ActiveRun:
         return {
             "run_id": self.id,
             "prompt": self.prompt,
+            "runner": self.runner,
+            "tree": list(self.tree),
             "progress": list(self.progress),
             "outputs": dict(self.outputs),
         }
@@ -301,10 +306,10 @@ class HarnessDaemon:
         with self._lock:
             if self._run is not None:
                 raise RuntimeError("Another request is already running.")
-            run = ActiveRun(next(self._run_ids), prompt, connection)
+            run = ActiveRun(next(self._run_ids), prompt, connection, run_settings["runner"])
             self._run = run
         self._worker_wakeup.set()
-        self.broadcast("run.started", run_id=run.id, prompt=prompt)
+        self.broadcast("run.started", run_id=run.id, prompt=prompt, runner=run.runner)
         threading.Thread(
             target=self._execute_run,
             args=(run, run_settings, interactive),
@@ -352,6 +357,11 @@ class HarnessDaemon:
             run.outputs[label] = run.outputs.get(label, "") + token
             self.broadcast("run.token", run_id=run.id, label=label, token=token)
 
+        def report_tree(nodes: list[dict[str, Any]]) -> None:
+            raise_if_cancelled()
+            run.tree = nodes
+            self.broadcast("run.tree", run_id=run.id, nodes=nodes)
+
         def ask_clarification(question: str) -> str:
             clarification = Clarification(next(self._clarification_ids), question)
             run.clarification = clarification
@@ -376,29 +386,38 @@ class HarnessDaemon:
 
         event, data = "run.finished", {}
         try:
+            options = dict(
+                model_path=settings["model_path"],
+                context_size=settings["context_size"],
+                gpu_layers=settings["gpu_layers"],
+                max_tokens=settings["max_tokens"],
+                temperature=settings["temperature"],
+                filesystem_root=settings["filesystem_root"],
+                max_tool_calls=settings["max_tool_calls"],
+                max_search_results=settings["max_search_results"],
+                enable_test_execution=settings["enable_test_execution"],
+                allow_file_writes=settings["allow_file_writes"],
+                mcp_servers=settings["mcp_servers"],
+                knowledge_db_path=settings["knowledge_db_path"],
+                max_pending_research_jobs=settings["background_max_pending_jobs"],
+                mode=settings["mode"],
+                show_thinking=False,
+                clarification_callback=ask_clarification if interactive else None,
+                progress_callback=report_progress,
+                stage_output_callback=report_token,
+                model_cache=self._model_cache,
+            )
             with self._model_lock:
-                data["result"] = execute_pipeline(
-                    run.prompt,
-                    model_path=settings["model_path"],
-                    context_size=settings["context_size"],
-                    gpu_layers=settings["gpu_layers"],
-                    max_tokens=settings["max_tokens"],
-                    temperature=settings["temperature"],
-                    filesystem_root=settings["filesystem_root"],
-                    max_tool_calls=settings["max_tool_calls"],
-                    max_search_results=settings["max_search_results"],
-                    enable_test_execution=settings["enable_test_execution"],
-                    allow_file_writes=settings["allow_file_writes"],
-                    mcp_servers=settings["mcp_servers"],
-                    knowledge_db_path=settings["knowledge_db_path"],
-                    max_pending_research_jobs=settings["background_max_pending_jobs"],
-                    mode=settings["mode"],
-                    show_thinking=False,
-                    clarification_callback=ask_clarification if interactive else None,
-                    progress_callback=report_progress,
-                    stage_output_callback=report_token,
-                    model_cache=self._model_cache,
-                )
+                if run.runner == "tree":
+                    data["result"] = execute_task_tree(
+                        run.prompt,
+                        **options,
+                        tree_callback=report_tree,
+                        max_task_depth=settings["max_task_depth"],
+                        max_task_nodes=settings["max_task_nodes"],
+                    )
+                else:
+                    data["result"] = execute_pipeline(run.prompt, **options)
         except RunCancelled:
             event = "run.cancelled"
         except Exception as error:

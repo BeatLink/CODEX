@@ -13,9 +13,12 @@ from smartharness.knowledge import KnowledgeStore
 from smartharness.settings import DEFAULT_SETTINGS, load_settings
 from smartharness.tui import STAGE_LABELS, SmartHarnessApp
 
+# Most tests drive the eight-stage view, so they run in pipeline mode.
+PIPELINE_SETTINGS = {**DEFAULT_SETTINGS, "runner": "pipeline"}
+
 
 class TuiTests(unittest.IsolatedAsyncioTestCase):
-    def app(self, settings=DEFAULT_SETTINGS, settings_path=None, start_worker=False, **options):
+    def app(self, settings=PIPELINE_SETTINGS, settings_path=None, start_worker=False, **options):
         daemon = RunningDaemon(settings, settings_path, start_worker=start_worker)
         self.addCleanup(daemon.stop)
         return SmartHarnessApp(settings, client=daemon.client(), **options)
@@ -29,7 +32,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(app.query_one("#model-path", TextArea).soft_wrap)
             self.assertEqual(len(app.query(".stage-row")), len(STAGE_LABELS))
             self.assertEqual(
-                len(app.query_one("#phase-tabs").query(TabPane)), len(STAGE_LABELS) + 1
+                len(app.query_one("#phase-tabs").query(TabPane)), len(STAGE_LABELS) + 2
             )
             self.assertIsInstance(app.query_one("#request-pane", TabPane), TabPane)
             self.assertIsInstance(app.query_one("#output-pane", TabPane), TabPane)
@@ -363,6 +366,43 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             await pilot.pause()
 
             self.assertEqual(app.query_one("#phase-tabs").active, "final")
+
+    async def test_tree_run_shows_the_task_tree_and_each_step(self):
+        app = self.app(settings=DEFAULT_SETTINGS, initial_prompt="Compare two designs")
+        tree = [
+            {"id": "1", "prompt": "Compare two designs", "status": "running"},
+            {"id": "1.1", "prompt": "Describe design A", "status": "done"},
+            {"id": "1.2", "prompt": "Describe design B", "status": "pending"},
+        ]
+
+        def fake_task_tree(prompt, **kwargs):
+            kwargs["tree_callback"](tree)
+            kwargs["progress_callback"]("Task 1.1 · Writing")
+            kwargs["stage_output_callback"]("Task 1.1 · Writing", "Design A is simple.")
+            kwargs["progress_callback"]("Task 1.1 · Checking")
+            return "Pick A."
+
+        with patch("smartharness.daemon.execute_task_tree", side_effect=fake_task_tree):
+            async with app.run_test(size=(120, 42)) as pilot:
+                await connected(pilot, app)
+                app._start_run()
+                await wait_until(pilot, lambda: app._last_answer)
+                app._flush_stage_output()
+
+                self.assertEqual(app._last_answer, "Pick A.")
+                self.assertEqual(str(app.query_one("#sidebar-title").render()), "TASK TREE")
+                self.assertFalse(app.query_one("#stage-row-1").display)
+                self.assertEqual(
+                    str(app.query_one("#task-tree").render()).splitlines(),
+                    ["NOW   1 Compare two designs", "DONE    1.1 Describe design A", "WAIT    1.2 Describe design B"],
+                )
+                self.assertEqual(
+                    app._steps_output,
+                    "### Task 1.1 · Writing\n\nDesign A is simple.\n\n### Task 1.1 · Checking\n\n",
+                )
+                tabs = app.query_one("#phase-tabs", TabbedContent)
+                self.assertTrue(tabs.get_tab("steps").display)
+                self.assertFalse(tabs.get_tab("phase-1").display)
 
     async def test_ctrl_r_runs_the_prompt(self):
         app = self.app(initial_prompt="Draft a plan")

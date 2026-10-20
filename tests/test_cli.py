@@ -8,6 +8,9 @@ from smartharness.cli import main
 from smartharness.client import DaemonClient
 from smartharness.settings import DEFAULT_SETTINGS
 
+# These tests patch the eight-stage pipeline, so they run in pipeline mode.
+PIPELINE_SETTINGS = {**DEFAULT_SETTINGS, "runner": "pipeline"}
+
 
 class CliTests(unittest.TestCase):
     def setUp(self):
@@ -19,7 +22,7 @@ class CliTests(unittest.TestCase):
     def test_final_result_uses_markdown_renderer_in_terminal(self):
         result = "```python\nprint('hello')\n```"
         with (
-            patch("smartharness.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
+            patch("smartharness.cli.load_settings", return_value=PIPELINE_SETTINGS.copy()),
             patch("smartharness.cli.execute_pipeline", return_value=result),
             patch("sys.stdin.isatty", return_value=False),
             patch("sys.stdout.isatty", return_value=True),
@@ -36,7 +39,7 @@ class CliTests(unittest.TestCase):
         for arguments, expected in ((["prompt"], True), (["--no-show-thinking", "prompt"], False)):
             with self.subTest(arguments=arguments):
                 with (
-                    patch("smartharness.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
+                    patch("smartharness.cli.load_settings", return_value=PIPELINE_SETTINGS.copy()),
                     patch("smartharness.cli.execute_pipeline", return_value="answer") as execute_pipeline,
                     patch("sys.stdin.isatty", return_value=False),
                     patch("builtins.print"),
@@ -47,7 +50,7 @@ class CliTests(unittest.TestCase):
 
     def test_mode_option_overrides_the_setting(self):
         with (
-            patch("smartharness.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
+            patch("smartharness.cli.load_settings", return_value=PIPELINE_SETTINGS.copy()),
             patch("smartharness.cli.execute_pipeline", return_value="answer") as execute_pipeline,
             patch("sys.stdin.isatty", return_value=False),
             patch("builtins.print"),
@@ -55,6 +58,22 @@ class CliTests(unittest.TestCase):
             self.assertEqual(main(["--mode", "draft", "prompt"]), 0)
 
         self.assertEqual(execute_pipeline.call_args.kwargs["mode"], "draft")
+
+    def test_tree_mode_runs_the_task_tree_with_its_limits(self):
+        settings = {**DEFAULT_SETTINGS, "max_task_nodes": 9}
+        with (
+            patch("smartharness.cli.load_settings", return_value=settings),
+            patch("smartharness.cli.execute_task_tree", return_value="tree answer") as task_tree,
+            patch("smartharness.cli.execute_pipeline", side_effect=AssertionError("pipeline")),
+            patch("sys.stdin.isatty", return_value=False),
+            patch("sys.stdout.isatty", return_value=False),
+            patch("builtins.print") as printed,
+        ):
+            self.assertEqual(main(["prompt"]), 0)
+
+        printed.assert_called_with("tree answer")
+        self.assertEqual(task_tree.call_args.kwargs["max_task_nodes"], 9)
+        self.assertEqual(task_tree.call_args.kwargs["max_task_depth"], DEFAULT_SETTINGS["max_task_depth"])
 
     def test_tui_subcommand_opens_interface_with_initial_prompt(self):
         with (
@@ -73,7 +92,7 @@ class CliTests(unittest.TestCase):
         app.return_value.run.assert_called_once_with()
 
     def test_prompt_runs_on_a_running_daemon_with_resolved_paths(self):
-        daemon = RunningDaemon(DEFAULT_SETTINGS.copy())
+        daemon = RunningDaemon(PIPELINE_SETTINGS.copy())
         self.addCleanup(daemon.stop)
 
         def connect(on_event, start):
@@ -83,7 +102,7 @@ class CliTests(unittest.TestCase):
             return client
 
         with (
-            patch("smartharness.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
+            patch("smartharness.cli.load_settings", return_value=PIPELINE_SETTINGS.copy()),
             patch("smartharness.cli.connect_to_daemon", side_effect=connect),
             patch("smartharness.cli.execute_pipeline") as local_pipeline,
             patch("smartharness.daemon.execute_pipeline", return_value="daemon answer") as daemon_pipeline,

@@ -10,6 +10,10 @@ CONTEXT_SIZE = 4096
 MAX_TOKENS = 2048
 TEMPERATURE = 0.1
 MODE_CHOICES = ("auto", "answer", "draft", "execute")
+# "tree" works a request as a tree of tasks; "pipeline" runs the fixed eight-stage pipeline.
+RUNNERS = ("tree", "pipeline")
+MAX_TASK_DEPTH = 3
+MAX_TASK_NODES = 20
 DEFAULT_SETTINGS_PATH = Path(__file__).resolve().parent.parent / "settings.json"
 USER_SETTINGS_PATH = (
     Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "smartharness" / "settings.json"
@@ -28,6 +32,9 @@ DEFAULT_SETTINGS = {
     "enable_test_execution": False,
     "show_thinking": True,
     "mode": "auto",
+    "runner": "tree",
+    "max_task_depth": MAX_TASK_DEPTH,
+    "max_task_nodes": MAX_TASK_NODES,
     "mcp_servers": [],
     "knowledge_db_path": DEFAULT_KNOWLEDGE_DB_PATH,
     "background_research_enabled": True,
@@ -104,11 +111,15 @@ def validate_settings(values: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("show_thinking must be a boolean.")
     if values["mode"] not in MODE_CHOICES:
         raise ValueError(f"mode must be one of: {', '.join(MODE_CHOICES)}.")
+    if values["runner"] not in RUNNERS:
+        raise ValueError(f"runner must be one of: {', '.join(RUNNERS)}.")
     if not isinstance(values["knowledge_db_path"], str) or not values["knowledge_db_path"].strip():
         raise ValueError("knowledge_db_path must be a non-empty path string.")
     if not isinstance(values["background_research_enabled"], bool):
         raise ValueError("background_research_enabled must be a boolean.")
     for name, minimum, maximum in (
+        ("max_task_depth", 0, 6),
+        ("max_task_nodes", 1, 60),
         ("background_poll_interval_seconds", 1, 3600),
         ("background_refresh_interval_hours", 1, 8760),
         ("background_max_tokens", 32, 4096),

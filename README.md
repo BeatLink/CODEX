@@ -5,9 +5,9 @@ otherwise fumble.
 
 Small models struggle with long, multistep reasoning: they lose track of
 constraints, skip requirements, and invent facts. SmartHarness never asks the
-model to do the whole job at once. It breaks each request into stages, gives the
-model one narrow goal per stage, and passes forward only the results that stage
-needs. Alongside the pipeline, a local SQLite knowledge store keeps what the
+model to do the whole job at once. It works each request as a tree of tasks,
+gives the model one narrow goal per call, and passes forward only the results
+that call needs. Alongside the task tree, a local SQLite knowledge store keeps what the
 harness has researched, and a background worker uses idle time to research and
 refresh it, so the harness grows more useful the longer it runs.
 
@@ -29,7 +29,7 @@ several can be open at once and all see the same run, queue, and settings.
   to keep one running, and background research with it, until it gets
   `SIGTERM`. `--exit-when-unused SECONDS` gives it the same timeout.
 - A one-shot CLI run uses the daemon when one is running, so the model is
-  already loaded, and otherwise runs the pipeline in its own process.
+  already loaded, and otherwise runs the request in its own process.
 - One request runs at a time. A run belongs to the interface that started it:
   only that interface is asked clarification questions, and the run is
   cancelled if that interface disconnects.
@@ -43,12 +43,74 @@ back; the daemon also sends `{"event", "data"}` lines at any time. Methods are
 `status`, `get_settings`, `apply_settings`, `save_settings`,
 `set_background_enabled`, `run`, `cancel`, `answer_clarification`,
 `queue_topic`, `research_now`, `queue_status`, `knowledge`, and `shutdown`.
-Events are `run.started`, `run.progress`, `run.token`, `run.clarification`,
+Events are `run.started` (with the run's `runner`), `run.progress`, `run.token`,
+`run.tree` (every task's state, sent whenever one changes), `run.clarification`,
 `run.finished`, `run.failed`, `run.cancelled`, `background.status`,
 `background.token`, `queue.changed`, `knowledge.changed`, and
 `settings.changed`.
 
 ## How a request is handled
+
+`runner` picks how a request runs: as a tree of tasks (`tree`, the default),
+or through the fixed eight-stage pipeline (`pipeline`).
+
+### Task tree
+
+The request becomes the top task, whose deliverable is a complete reply to it.
+Each task is worked the same way:
+
+| Step | What the model does | Reply |
+| --- | --- | --- |
+| Decide | Choose how to do the task: `answer` it without tools, `research` it, read local `files`, `act` with file, test, or MCP tools, or `decompose` it into 2 to 5 subtasks, each with a prompt, a deliverable, and the earlier subtasks it depends on | JSON |
+| Gather | Run the chosen tools: stored knowledge and web searches first, then the tool-calling loop with only that approach's tools | Findings |
+| Write | Produce exactly what the task's deliverable describes | Text |
+| Check | Mark whether the result delivers it: met, partly met, or missing, with the correction needed | JSON |
+| Revise | Apply the correction once | Text |
+
+A decomposed task runs its subtasks in order, then a combine step writes its
+result from theirs, and that result is checked and revised in the same way. The
+top task's write or combine step is the final answer.
+
+- **The model sees where it is.** Every call gets the original request, the
+  current task and its deliverable, the results of the earlier tasks it or any
+  task above it depends on, and an outline of the whole tree with each task's
+  state, so it does not redo work another task covers.
+- **Only allowed approaches are offered.** The decision's JSON schema lists
+  only the approaches the settings permit: `act` only when file writes, tests,
+  or an MCP server are enabled, and `decompose` only while the task is above
+  `max_task_depth` and the tree is below `max_task_nodes`. llama.cpp enforces
+  the schema as a grammar, so the model cannot pick anything else.
+- **Try first, split on failure.** Small models split too eagerly, so the
+  decision prompt asks for a direct approach whenever one step can finish the
+  task. A task whose result still fails its check after one revision is then
+  split into smaller subtasks and tried again, when depth and node limits
+  allow; otherwise its result is kept and marked unverified.
+- **No runaway recursion.** A subtask that restates its parent, or a
+  decomposition into fewer than two real subtasks, is dropped, and the task is
+  done directly instead. Dependencies may only point to earlier subtasks.
+- **Failures are planned around.** An error in a subtask marks it failed and
+  the run carries on; the parent re-plans its remaining subtasks once with the
+  failure in view. Its combine step says plainly what failed. Only an error in
+  the top task fails the run.
+- **Research is not left to the model's judgement.** A decision that lists
+  outside facts to check is turned into research. The top task's own words are
+  always searched first, a top-level answer gets one quick search unless the
+  request is plain arithmetic or rewriting pasted text, and when every search
+  finds nothing the writer is told not to describe what it could not look up.
+- **Checks that do not rely on the model.** A result citing a URL that appears
+  in no captured evidence fails its check.
+- **Earlier results are condensed, not cut.** When a call's input would
+  overflow the window, the largest earlier results are summarized first, as in
+  the pipeline; the request and the current task are never condensed.
+
+The tree honours `mode` and the `/ask`, `/plan`, and `/do` prefixes: in answer
+and draft mode the `act` approach is never offered, so nothing is changed.
+
+The decision asks one clarification question for the top task when the request
+is materially ambiguous, then decides again with the answer. The finished tree
+is saved with the request's episode in the knowledge store.
+
+### Eight-stage pipeline
 
 A request runs through up to eight stages. Each stage is a separate model call
 with its own system prompt, and its input is the original request plus only the
@@ -113,9 +175,11 @@ Design points:
 - **Untrusted input.** Web pages, file contents, and tool output are presented
   as data, never as instructions, in every stage that sees them.
 - **Context budget.** Each stage's input is measured with the model's own
-  tokenizer and trimmed to fit `context_size` minus that stage's reply budget.
-  The original request is never trimmed unless it alone overflows the window;
-  earlier results are shortened first. Stage 1 and the critique reply in at most
+  tokenizer and fitted to `context_size` minus that stage's reply budget. When
+  it overflows, the largest earlier results are condensed by a short summarize
+  call, at most three per stage and each result only once per run, and only
+  what still overflows is trimmed. The original request is never condensed, and
+  is trimmed only when it alone overflows the window. Stage 1 and the critique reply in at most
   1024 tokens, which leaves them more room for input. Tool results are cut to
   the room that is left, and fetched pages are summarized in chunks, then the
   chunk summaries are merged.
@@ -252,12 +316,16 @@ smartharness-daemon     # run the daemon in the foreground
 The TUI has four pages:
 
 - **Workbench**: write a request, pick a mode, and run it with **Ctrl+R** or
-  the Run button, and stop it with the Cancel button. The Output tab shows each stage's streamed
-  output in its own tab and the final Markdown answer, which can be copied.
+  the Run button, and stop it with the Cancel button. For a task tree run the
+  sidebar shows the live tree with each task's state (WAIT, NOW, DONE, WARN for
+  unverified, FAIL), and the Output tab's Steps tab streams every step under its
+  own heading; for a pipeline run the sidebar lists the eight stages and each
+  has its own output tab. The Final tab shows the Markdown answer, which can be
+  copied.
   Clarification questions appear as a dialog.
 - **Background**: queue topics, start research now, pause or resume the worker,
   and watch its output and queue.
-- **Options**: every setting, including model, folder access, tool limits,
+- **Options**: every setting, including model, how requests run, folder access, tool limits,
   background research, and the MCP server list, edited as JSON. Changes can be
   saved back to the settings file. **Auto size** reads the model file and free
   GPU memory (or RAM without a GPU) and fills in the context size and both token
@@ -268,8 +336,9 @@ The TUI has four pages:
 ### GTK interface
 
 `smartharness-gtk` has the same four pages in a GTK 4 window that follows the
-desktop's GTK theme. On the Workbench page the pipeline list on the left shows
-each stage's state, and choosing a stage shows its output; the final answer's
+desktop's GTK theme. On the Workbench page the list on the left shows each
+stage's state, or for a task tree run the live tree and a Steps page with every
+step's output; choosing an entry shows its output. The final answer's
 Markdown is shown with headings, emphasis, code, and lists styled, and web
 links open in the browser when clicked. **Ctrl+R**
 or **Ctrl+Enter** runs the request. It needs PyGObject and GTK 4, which the Nix
@@ -296,6 +365,9 @@ another. Unknown keys are rejected.
 	"enable_test_execution": false,
 	"show_thinking": true,
 	"mode": "auto",
+	"runner": "tree",
+	"max_task_depth": 3,
+	"max_task_nodes": 20,
 	"knowledge_db_path": "~/.local/share/smartharness/knowledge.sqlite3",
 	"background_research_enabled": true,
 	"background_poll_interval_seconds": 10,
@@ -306,6 +378,11 @@ another. Unknown keys are rejected.
 }
 ```
 
+`max_task_depth` (0 to 6) is how many levels of subtasks may sit below the top
+task, and `max_task_nodes` (1 to 60) caps the tasks in one tree, the top task
+included. Each task takes three to six model calls, so these bound how long a
+request can run.
+
 Precedence, lowest first: built-in defaults, the settings file, the
 `MODEL_PATH` environment variable, then command-line options.
 
@@ -314,7 +391,7 @@ Precedence, lowest first: built-in defaults, the settings file, the
 | `--model-path`, `--context-size`, `--gpu-layers`, `--max-tokens`, `--temperature` | Override the matching setting |
 | `--allow-file-writes` | Let the model create or replace files |
 | `--enable-test-execution` | Let the model run the project's tests |
-| `--show-thinking` / `--no-show-thinking` | Stream or hide each stage's output |
+| `--show-thinking` / `--no-show-thinking` | Stream or hide each stage's or step's output |
 | `--mode auto\|answer\|draft\|execute` | Pick the mode instead of letting the router choose |
 | `--settings PATH` | Use another settings file |
 | `--tui` | Open the terminal interface; the other options are applied to the daemon it connects to |
@@ -385,8 +462,9 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 
 | Path | Contents |
 | --- | --- |
-| `smartharness/pipeline.py` | The eight stages, model loading, and page summarization |
-| `smartharness/tool_stage.py` | The tool-calling loop used by stages 2 and 5 |
+| `smartharness/task_tree.py` | The task tree: deciding, gathering, writing, checking, and splitting tasks |
+| `smartharness/pipeline.py` | The eight stages, model loading, page summarization, and setup shared with the task tree |
+| `smartharness/tool_stage.py` | The tool-calling loop used by stages 2 and 5 and by task tree tool steps |
 | `smartharness/tools.py` | Built-in tools and their path and URL checks |
 | `smartharness/mcp_tools.py` | MCP client for stdio and HTTP servers |
 | `smartharness/context_budget.py` | Fitting stage input into the context window |
@@ -397,11 +475,14 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 | `smartharness/client.py`, `smartharness/protocol.py` | Connecting to the daemon, starting it, and the message format |
 | `smartharness/cli.py`, `smartharness/tui.py` | Command line and Textual interface |
 | `smartharness/gtk_app.py` | GTK 4 interface |
-| `smartharness/stages.py` | Stage labels shared by the interfaces |
+| `smartharness/stages.py` | Stage labels and task tree lines shared by the interfaces |
 
 Run the tests with `python -m unittest discover -s tests`.
 
 ## Current limits
+
+- Subtasks run one after another, and a task tree is not resumed after the
+  daemon restarts; the saved tree is a record, not a checkpoint.
 
 - One-shot CLI runs without a daemon load the model for each run; the daemon
   keeps it loaded and shares it with the background worker.
