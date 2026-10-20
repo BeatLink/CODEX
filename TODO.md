@@ -18,6 +18,8 @@
 - [x] Keep the loaded model between requests and share it with the background worker
 - [x] Return structured JSON from stages using llama.cpp schema-constrained output
 - [x] Route each request by task type so simple requests skip stages they do not need
+- [x] Route each request to an answer, draft, or execute mode with its own stages, chosen by a short router call or by the user
+- [x] Check execute-mode reports against the recorded file writes and test runs
 - [x] Let stage 1 decide whether research is needed instead of keyword regexes
 - [x] Let the model write focused search queries instead of reusing the prompt
 - [ ] Turn the plan into numbered steps and run each step as its own small call

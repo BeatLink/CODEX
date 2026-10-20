@@ -19,6 +19,7 @@ from textual.widgets import (
     Input,
     Label,
     Markdown,
+    Select,
     Static,
     TabbedContent,
     TabPane,
@@ -28,7 +29,7 @@ from textual.widgets import (
 )
 
 from .client import DISCONNECTED_EVENT, DaemonClient, DaemonError, connect_to_daemon
-from .pipeline import SKIPPED_PREFIX
+from .pipeline import MODE_PROGRESS_PREFIX, SKIPPED_PREFIX
 from .settings import (
     default_settings_path,
     load_settings,
@@ -42,6 +43,12 @@ from .stages import STAGE_LABELS, STAGE_TAB_TITLES
 PHASE_WAITING_TEXT = "_Waiting for this phase..._"
 PHASE_SKIPPED_TEXT = "_Skipped: this request does not need this phase._"
 FINAL_WAITING_TEXT = "Your final response will appear here."
+MODE_OPTIONS = (
+    ("Auto mode", "auto"),
+    ("Answer mode", "answer"),
+    ("Draft mode", "draft"),
+    ("Execute mode", "execute"),
+)
 BACKGROUND_WAITING_TEXT = "_Waiting for background work..._"
 
 # Colours come from the dark and light token sets in the Halon theme's tokens.json.
@@ -243,6 +250,10 @@ class SmartHarnessApp(App[None]):
         height: 3;
         margin: 1 0;
     }
+    #mode {
+        width: 22;
+        margin-right: 1;
+    }
     Button {
         margin-right: 1;
         min-width: 12;
@@ -372,6 +383,7 @@ class SmartHarnessApp(App[None]):
         self._request_running = False
         self._last_answer = ""
         self._active_stage: int | None = None
+        self._run_mode = ""
         self._skipped_stages: set[int] = set()
         self._follow_stages = True
         self._programmatic_phase_tabs: list[str] = []
@@ -418,6 +430,7 @@ class SmartHarnessApp(App[None]):
                         yield Static("YOUR REQUEST", classes="eyebrow", id="prompt-label")
                         yield TextArea(self.initial_prompt, show_line_numbers=False, id="prompt")
                         with Horizontal(id="actions"):
+                            yield Select(MODE_OPTIONS, value=self.settings["mode"], allow_blank=False, id="mode")
                             yield Button("Run  Ctrl+R", id="run", variant="primary")
                             yield Button("Cancel", id="cancel", disabled=True)
                             yield Button("Clear", id="clear")
@@ -636,6 +649,7 @@ class SmartHarnessApp(App[None]):
         settings = self.settings.copy()
         settings.update(
             {
+                "mode": self.query_one("#mode", Select).value,
                 "model_path": self.query_one("#model-path", TextArea).text,
                 "context_size": self._int_setting("context-size"),
                 "gpu_layers": self._int_setting("gpu-layers"),
@@ -683,6 +697,7 @@ class SmartHarnessApp(App[None]):
 
     def _show_settings(self, settings: dict[str, Any]) -> None:
         self.settings = settings.copy()
+        self.query_one("#mode", Select).value = settings["mode"]
         for selector, name in (
             ("model-path", "model_path"),
             ("filesystem-root", "filesystem_root"),
@@ -924,6 +939,7 @@ class SmartHarnessApp(App[None]):
 
     def _reset_stages(self) -> None:
         self._active_stage = None
+        self._run_mode = ""
         self._skipped_stages.clear()
         self._follow_stages = True
         for index in range(len(STAGE_LABELS)):
@@ -962,6 +978,9 @@ class SmartHarnessApp(App[None]):
         if label == "Loading model":
             self.query_one("#status", Static).update("Loading local model...")
             return
+        if label.startswith(MODE_PROGRESS_PREFIX):
+            self._run_mode = f"{label.removeprefix(MODE_PROGRESS_PREFIX).capitalize()} mode · "
+            return
         if label.startswith(SKIPPED_PREFIX) and label.removeprefix(SKIPPED_PREFIX) in STAGE_LABELS:
             skipped = STAGE_LABELS.index(label.removeprefix(SKIPPED_PREFIX))
             self._skipped_stages.add(skipped)
@@ -980,7 +999,7 @@ class SmartHarnessApp(App[None]):
             self._set_stage_row(index, "DONE" if index < active else "NOW " if index == active else "WAIT")
         if self._follow_stages:
             self._show_phase_tab(f"phase-{active + 1}")
-        self.query_one("#status", Static).update(f"Stage {active + 1} of {len(STAGE_LABELS)}")
+        self.query_one("#status", Static).update(f"{self._run_mode}Stage {active + 1} of {len(STAGE_LABELS)}")
 
     def _finish_run(self, result: str) -> None:
         self._flush_stage_output()

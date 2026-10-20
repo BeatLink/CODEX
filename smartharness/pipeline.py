@@ -1,13 +1,14 @@
 from collections.abc import Callable
 from dataclasses import dataclass, field
 import json
+from pathlib import Path
 import re
 import sqlite3
 from typing import Any
 
 from .context_budget import fit_sections_to_tokens, input_token_budget, render_sections, token_counter
 from .knowledge import KnowledgeStore
-from .settings import CONTEXT_SIZE, DEFAULT_MODEL_PATH, MAX_TOKENS, TEMPERATURE
+from .settings import CONTEXT_SIZE, DEFAULT_MODEL_PATH, MAX_TOKENS, MODE_CHOICES, TEMPERATURE
 from .tool_stage import run_tool_stage
 from .tools import Toolbox
 
@@ -34,7 +35,18 @@ _REWRITE_TASK = re.compile(
 MIN_PASTED_TEXT_CHARS = 300
 MAX_SEARCH_QUERY_CHARS = 200
 
-TASK_TYPES = ("direct", "reasoning", "research", "action")
+MODES = ("answer", "draft", "execute")
+ANSWER_DEPTHS = ("quick", "thorough")
+# A leading word such as /plan picks the mode and skips the router call.
+MODE_PREFIXES = {
+    "/ask": "answer",
+    "/answer": "answer",
+    "/draft": "draft",
+    "/plan": "draft",
+    "/do": "execute",
+    "/execute": "execute",
+}
+MODE_PROGRESS_PREFIX = "Mode: "
 
 # Replies that are short by design get a smaller budget, leaving more of the window for their input.
 TASK_ANALYSIS_MAX_TOKENS = 1024
@@ -53,22 +65,42 @@ VERIFIED_EVIDENCE_RULE = (
     " the evidence, such as arithmetic or logic, needs no source."
 )
 
-# Fields come in this order so the model lists requirements before it picks a route.
+_RESEARCH_PROPERTIES = {
+    "facts_to_check": {"type": "array", "items": {"type": "string"}, "maxItems": MAX_FACTS_TO_CHECK},
+    "needs_files": {"type": "boolean"},
+    "search_queries": {"type": "array", "items": {"type": "string"}, "maxItems": MAX_SEARCH_QUERIES},
+}
+_CLARIFICATION_PROPERTY = {"clarification": {"type": "string"}}
+
+ANSWER_ANALYSIS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        **_RESEARCH_PROPERTIES,
+        "depth": {"type": "string", "enum": list(ANSWER_DEPTHS)},
+        **_CLARIFICATION_PROPERTY,
+    },
+    "required": ["facts_to_check", "needs_files", "search_queries", "depth", "clarification"],
+}
+
+# The mode comes first so the router can be short; the rest is only used when it picks answer mode.
+ROUTE_SCHEMA = {
+    "type": "object",
+    "properties": {"mode": {"type": "string", "enum": list(MODES)}, **ANSWER_ANALYSIS_SCHEMA["properties"]},
+    "required": ["mode", *ANSWER_ANALYSIS_SCHEMA["required"]],
+}
+
 TASK_ANALYSIS_SCHEMA = {
     "type": "object",
     "properties": {
         "requirements": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 8},
         "constraints": {"type": "array", "items": {"type": "string"}, "maxItems": 8},
         "assumptions": {"type": "array", "items": {"type": "string"}, "maxItems": 5},
-        "facts_to_check": {"type": "array", "items": {"type": "string"}, "maxItems": MAX_FACTS_TO_CHECK},
-        "needs_files": {"type": "boolean"},
-        "search_queries": {"type": "array", "items": {"type": "string"}, "maxItems": MAX_SEARCH_QUERIES},
-        "task_type": {"type": "string", "enum": list(TASK_TYPES)},
-        "clarification": {"type": "string"},
+        **_RESEARCH_PROPERTIES,
+        **_CLARIFICATION_PROPERTY,
     },
     "required": [
         "requirements", "constraints", "assumptions", "facts_to_check",
-        "needs_files", "search_queries", "task_type", "clarification",
+        "needs_files", "search_queries", "clarification",
     ],
 }
 
@@ -98,6 +130,16 @@ CRITIQUE_SCHEMA = {
     "required": ["checks", "other_issues"],
 }
 _URL = re.compile(r"https?://[^\s<>()\[\]\"'`]+")
+_FAILURE_WORD = re.compile(
+    r"\b(fail\w*|error\w*|unable|blocked|timed out|could not|couldn't|did not|didn't|was not|wasn't)\b",
+    re.IGNORECASE,
+)
+# Phrases such as "was updated" or "I changed", which a report must not use when no file was written.
+_CLAIMED_CHANGE = re.compile(
+    r"\b(?:i|i've|i have|has been|have been|was|were)\s+(?:now\s+)?"
+    r"(?:wrote|written|updated|changed|created|modified|edited|renamed)\b",
+    re.IGNORECASE,
+)
 MEMORY_LABEL = "Remembered context"
 EVIDENCE_LABELS = {"Stage 2 result", "Automatic web search result", "Local knowledge result", MEMORY_LABEL}
 
@@ -113,10 +155,11 @@ def _requires_web_research(user_prompt: str) -> bool:
 class TaskAnalysis:
     """What stage 1 found, and which later stages the request needs."""
 
-    task_type: str
+    mode: str
     checklist: str
     needs_research: bool
     needs_files: bool
+    thorough: bool = True
     search_queries: list[str] = field(default_factory=list)
     clarification: str | None = None
 
@@ -126,62 +169,106 @@ class TaskAnalysis:
 
     @property
     def runs_planning(self) -> bool:
-        return self.task_type != "direct"
+        return self.mode != "answer"
 
     @property
     def runs_actions(self) -> bool:
-        return self.task_type == "action"
+        return self.mode == "execute"
+
+    @property
+    def runs_critique(self) -> bool:
+        return self.mode == "draft" or (self.mode == "answer" and self.thorough)
 
 
-def _parse_task_analysis(result: str) -> TaskAnalysis | None:
-    """Read stage 1's JSON reply, or return None when it is not the expected shape."""
+def split_mode_prefix(user_prompt: str) -> tuple[str | None, str]:
+    """Return the mode a leading word such as /plan picks, or None, and the prompt without that word."""
+    parts = user_prompt.strip().split(maxsplit=1)
+    if parts and parts[0].casefold() in MODE_PREFIXES:
+        return MODE_PREFIXES[parts[0].casefold()], parts[1] if len(parts) > 1 else ""
+    return None, user_prompt
+
+
+def _json_object(result: str) -> dict[str, Any] | None:
     try:
         data = json.loads(result)
     except json.JSONDecodeError:
         return None
-    if not isinstance(data, dict) or data.get("task_type") not in TASK_TYPES:
-        return None
+    return data if isinstance(data, dict) else None
 
-    def strings(key: str) -> list[str]:
-        values = data.get(key)
-        if not isinstance(values, list):
-            return []
-        return [" ".join(value.split()) for value in values if isinstance(value, str) and value.strip()]
 
-    requirements = strings("requirements")
-    if not requirements:
-        return None
-    lines = ["Requirements:", *(f"{index}. {text}" for index, text in enumerate(requirements, start=1))]
-    for heading, key in (("Constraints", "constraints"), ("Assumptions", "assumptions")):
-        values = strings(key)
-        if values:
-            lines.extend(["", f"{heading}:", *(f"- {text}" for text in values)])
+def _strings(data: dict[str, Any], key: str) -> list[str]:
+    values = data.get(key)
+    if not isinstance(values, list):
+        return []
+    return [" ".join(value.split()) for value in values if isinstance(value, str) and value.strip()]
 
+
+def _analysis_from(data: dict[str, Any], mode: str, checklist_lines: list[str], thorough: bool) -> TaskAnalysis:
+    """Build the analysis fields every mode shares: research, files, and the clarification question."""
+    facts = _strings(data, "facts_to_check")
+    if facts:
+        separator = [""] if checklist_lines else []
+        checklist_lines = [*checklist_lines, *separator, "Facts to check:", *(f"- {fact}" for fact in facts)]
     clarification = str(data.get("clarification") or "").strip()
     if clarification.casefold().rstrip(".!") in {"", "none"}:
         clarification = None
-    queries = [query[:MAX_SEARCH_QUERY_CHARS] for query in strings("search_queries")][:MAX_SEARCH_QUERIES]
-    task_type = data["task_type"]
     # A small model cannot tell when it does not know something, so any listed fact means a search.
-    needs_research = bool(strings("facts_to_check")) or task_type == "research"
+    needs_research = bool(facts)
+    queries = [query[:MAX_SEARCH_QUERY_CHARS] for query in _strings(data, "search_queries")][:MAX_SEARCH_QUERIES]
     return TaskAnalysis(
-        task_type=task_type,
-        checklist="\n".join(lines),
+        mode=mode,
+        checklist="\n".join(checklist_lines),
         needs_research=needs_research,
-        needs_files=bool(data.get("needs_files")),
+        needs_files=bool(data.get("needs_files")) or mode == "execute",
+        thorough=thorough,
         search_queries=queries if needs_research else [],
         clarification=clarification,
     )
 
 
-def _fallback_task_analysis(result: str, user_prompt: str) -> TaskAnalysis:
-    """Run every stage when stage 1 did not return usable JSON, using the keyword research check."""
+def _parse_answer_analysis(result: str) -> TaskAnalysis | None:
+    """Read the short answer-mode analysis, or return None when it is not the expected shape."""
+    data = _json_object(result)
+    if data is None or data.get("depth") not in ANSWER_DEPTHS:
+        return None
+    return _analysis_from(data, "answer", [], thorough=data["depth"] == "thorough")
+
+
+def _parse_route(result: str) -> tuple[str, TaskAnalysis | None] | None:
+    """Read the router's reply as a mode, with the answer analysis when that mode is answer, or return None."""
+    data = _json_object(result)
+    if data is None or data.get("mode") not in MODES:
+        return None
+    if data["mode"] != "answer":
+        return data["mode"], None
+    analysis = _parse_answer_analysis(result)
+    return ("answer", analysis) if analysis is not None else None
+
+
+def _parse_task_analysis(result: str, mode: str) -> TaskAnalysis | None:
+    """Read the draft or execute analysis as a numbered checklist, or return None when it is not the expected shape."""
+    data = _json_object(result)
+    if data is None:
+        return None
+    requirements = _strings(data, "requirements")
+    if not requirements:
+        return None
+    lines = ["Requirements:", *(f"{index}. {text}" for index, text in enumerate(requirements, start=1))]
+    for heading, key in (("Constraints", "constraints"), ("Assumptions", "assumptions")):
+        values = _strings(data, key)
+        if values:
+            lines.extend(["", f"{heading}:", *(f"- {text}" for text in values)])
+    return _analysis_from(data, mode, lines, thorough=True)
+
+
+def _fallback_task_analysis(result: str, user_prompt: str, mode: str) -> TaskAnalysis:
+    """Keep the mode when its analysis is not usable JSON, using the keyword research check."""
     checklist, question = _extract_clarification(result)
     return TaskAnalysis(
-        task_type="action",
+        mode=mode,
         checklist=checklist,
         needs_research=_requires_web_research(user_prompt),
-        needs_files=True,
+        needs_files=mode == "execute",
         clarification=question,
     )
 
@@ -219,18 +306,55 @@ def _uncited_urls(answer: str, evidence: str) -> list[str]:
     return [url for url in urls if url not in evidence]
 
 
-def _critique_corrections(critique: Critique, unsupported_urls: list[str]) -> str:
+def _url_problems(unsupported_urls: list[str]) -> list[str]:
+    return [
+        f"The answer cites {url}, which is not in the captured evidence; remove it or say it is unverified."
+        for url in unsupported_urls
+    ]
+
+
+def _action_report_problems(report: str, action_log: list[tuple[str, dict[str, Any], str]]) -> list[str]:
+    """List the places where the report disagrees with what the file and test tools really did."""
+    folded = report.casefold()
+    mentions_failure = bool(_FAILURE_WORD.search(report))
+    problems = []
+    for name, arguments, result in action_log:
+        failed = result.startswith(("Tool error", "Tests failed", "Tests timed out"))
+        if name == "write_file":
+            path = str(arguments.get("path", ""))
+            if not path:
+                continue
+            if Path(path).name.casefold() not in folded:
+                outcome = "failed" if failed else "was made"
+                problems.append(f"The change to {path} {outcome}, but the report does not mention it.")
+            elif failed and not mentions_failure:
+                problems.append(f"Writing {path} failed ({result[:200]}); say plainly that this change was not made.")
+        elif name == "run_tests":
+            if failed and not mentions_failure:
+                problems.append(f"The test run did not pass ({result.splitlines()[0]}); the report must say so.")
+            elif "test" not in folded:
+                problems.append(f"The tests were run ({result.splitlines()[0]}); the report must give the result.")
+    wrote_a_file = any(
+        name == "write_file" and not result.startswith("Tool error") for name, _, result in action_log
+    )
+    if not wrote_a_file and _CLAIMED_CHANGE.search(report):
+        problems.append("No file was written, so the report must not say that anything was changed.")
+    return problems
+
+
+def _corrections_text(problems: list[str]) -> str:
     """Write the corrections the revision must make, or return an empty string when there are none."""
-    lines = [
-        f"- {requirement} ({status}): {fix or 'cover this requirement fully.'}"
+    return "Corrections needed:\n" + "\n".join(f"- {problem}" for problem in problems) if problems else ""
+
+
+def _critique_corrections(critique: Critique, unsupported_urls: list[str]) -> str:
+    problems = [
+        f"{requirement} ({status}): {fix or 'cover this requirement fully.'}"
         for requirement, status, fix in critique.unmet
     ]
-    lines.extend(f"- {issue}" for issue in critique.other_issues)
-    lines.extend(
-        f"- The answer cites {url}, which is not in the captured evidence; remove it or say it is unverified."
-        for url in unsupported_urls
-    )
-    return "Corrections needed:\n" + "\n".join(lines) if lines else ""
+    problems.extend(critique.other_issues)
+    problems.extend(_url_problems(unsupported_urls))
+    return _corrections_text(problems)
 
 
 def _with_failure_note(answer: str, stage_name: str, error: Exception, round_number: int) -> str:
@@ -519,7 +643,12 @@ def execute_pipeline(
     llm: Any = None,
     model_cache: ModelCache | None = None,
     max_pending_research_jobs: int = 100,
+    mode: str = "auto",
 ) -> str:
+    if mode not in MODE_CHOICES:
+        raise ValueError(f"mode must be one of: {', '.join(MODE_CHOICES)}.")
+    prefix_mode, user_prompt = split_mode_prefix(user_prompt)
+    mode = prefix_mode or mode
     if not user_prompt.strip():
         raise ValueError("The prompt cannot be empty.")
     if isinstance(max_tool_calls, bool) or not isinstance(max_tool_calls, int) or not 1 <= max_tool_calls <= 10:
@@ -579,29 +708,47 @@ def execute_pipeline(
 
         return emit
 
+    research_instructions = (
+        " In 'facts_to_check', list each outside"
+        " fact the answer would state: what a named product, device,"
+        " project, person, place, or term is, and any version, date,"
+        " number, or specification. Leave it empty only when the answer"
+        " needs nothing beyond the request itself, such as arithmetic,"
+        " logic, or rewriting text the user gave. When it is not empty,"
+        " write up to three short web search queries in 'search_queries',"
+        " leaving out pasted code. Set 'needs_files' to true when local"
+        " files must be read or changed."
+    )
+    depth_instructions = (
+        " Set 'depth' to 'thorough' when the answer needs multi-part"
+        " analysis, a comparison, or careful reasoning, and to 'quick' for a"
+        " short answer that one quick search can verify."
+    )
+    clarification_instructions = (
+        " If a material ambiguity must be resolved to answer"
+        " correctly, put one concise question in 'clarification';"
+        " otherwise set it to an empty string."
+    )
+    route_prompt = (
+        "Classify the request and reply with JSON only. Choose 'mode':"
+        " 'answer' when the user wants a question answered or something"
+        " explained, 'draft' when they want a piece of writing, a plan, or a"
+        " design produced, and 'execute' when local files must be changed or"
+        " tests run." + research_instructions + depth_instructions + clarification_instructions
+    )
+    answer_analysis_prompt = (
+        "Analyse the question and reply with JSON only."
+        + research_instructions + depth_instructions + clarification_instructions
+    )
+    task_analysis_prompt = (
+        "Analyse the request and reply with JSON only. List every distinct"
+        " requirement that could affect the result in 'requirements', each"
+        " as one short sentence; avoid minor paraphrases and do not omit any."
+        " List explicit limits in 'constraints' and assumptions you are"
+        " making in 'assumptions'." + research_instructions + clarification_instructions
+    )
+
     stages = [
-        (
-            "Stage 1/8: Identifying the task and constraints",
-            "Analyse the request and reply with JSON only. List every distinct"
-            " requirement that could affect the answer in 'requirements', each"
-            " as one short sentence; avoid minor paraphrases and do not omit any."
-            " List explicit limits in 'constraints' and assumptions you are"
-            " making in 'assumptions'. In 'facts_to_check', list each outside"
-            " fact the answer would state: what a named product, device,"
-            " project, person, place, or term is, and any version, date,"
-            " number, or specification. Leave it empty only when the answer"
-            " needs nothing beyond the request itself, such as arithmetic,"
-            " logic, or rewriting text the user gave. When it is not empty,"
-            " write up to three short web search queries in 'search_queries',"
-            " leaving out pasted code. Set 'needs_files' to true when local"
-            " files must be read or changed. Choose 'task_type': 'direct' for a"
-            " short answer that one quick search can verify, 'reasoning' for multi-part"
-            " analysis or writing without tools, 'research' when looked-up"
-            " evidence is central, and 'action' when files must be changed or"
-            " tests run. If a material ambiguity must be resolved to answer"
-            " correctly, put one concise question in 'clarification';"
-            " otherwise set it to an empty string.",
-        ),
         (
             "Stage 3/8: Preparing an answer plan",
             "Using the original request, task checklist, and research"
@@ -706,19 +853,43 @@ def execute_pipeline(
         if remembered:
             previous_results.append((MEMORY_LABEL, remembered))
 
-    label, system_prompt = stages[0]
-    report_stage(label)
+    analysis_label = "Stage 1/8: Identifying the task and constraints"
     analysis_tokens = min(max_tokens, TASK_ANALYSIS_MAX_TOKENS)
-    result = run_stage(
-        llm,
-        system_prompt,
-        stage_input(system_prompt, {MEMORY_LABEL}, analysis_tokens),
-        max_tokens=analysis_tokens,
-        temperature=temperature,
-        on_token=token_callback_for(label),
-        json_schema=TASK_ANALYSIS_SCHEMA,
-    )
-    analysis = _parse_task_analysis(result) or _fallback_task_analysis(result, user_prompt)
+
+    def analyse(system_prompt: str, json_schema: dict[str, Any]) -> str:
+        report_stage(analysis_label)
+        result = run_stage(
+            llm,
+            system_prompt,
+            stage_input(system_prompt, {MEMORY_LABEL}, analysis_tokens),
+            max_tokens=analysis_tokens,
+            temperature=temperature,
+            on_token=token_callback_for(analysis_label),
+            json_schema=json_schema,
+        )
+        if show_thinking:
+            print()
+        return result
+
+    analysis: TaskAnalysis | None = None
+    if mode == "auto":
+        result = analyse(route_prompt, ROUTE_SCHEMA)
+        route = _parse_route(result)
+        # An unreadable route falls back to answering, which cannot change files.
+        mode, analysis = route or ("answer", _fallback_task_analysis(result, user_prompt, "answer"))
+        if analysis is None and stage_output_callback is not None:
+            stage_output_callback(analysis_label, "\n\n")
+    if analysis is None and mode == "answer":
+        result = analyse(answer_analysis_prompt, ANSWER_ANALYSIS_SCHEMA)
+        analysis = _parse_answer_analysis(result) or _fallback_task_analysis(result, user_prompt, mode)
+    elif analysis is None:
+        result = analyse(task_analysis_prompt, TASK_ANALYSIS_SCHEMA)
+        analysis = _parse_task_analysis(result, mode) or _fallback_task_analysis(result, user_prompt, mode)
+    if progress_callback is not None:
+        progress_callback(f"{MODE_PROGRESS_PREFIX}{mode}")
+    else:
+        print(f"[{MODE_PROGRESS_PREFIX}{mode}]")
+
     question = analysis.clarification
     if question:
         if clarification_callback is None:
@@ -737,13 +908,12 @@ def execute_pipeline(
                     answer or "No answer was provided; state a reasonable assumption.",
                 )
             )
-    if show_thinking:
-        print()
-    previous_results.append(("Stage 1 result", analysis.checklist))
+    if analysis.checklist:
+        previous_results.append(("Stage 1 result", analysis.checklist))
 
     # The model cannot tell when it does not know something, so any request that needs outside facts gets searched.
     unresearched = not analysis.runs_research and not _is_self_contained(user_prompt)
-    quick_search = unresearched and analysis.task_type == "direct"
+    quick_search = unresearched and analysis.mode == "answer" and not analysis.thorough
     if unresearched:
         analysis.needs_research = True
 
@@ -856,7 +1026,7 @@ def execute_pipeline(
             " again later."
         )
 
-    for index, (label, system_prompt) in zip((3, 4), stages[1:3]):
+    for index, (label, system_prompt) in zip((3, 4), stages[0:2]):
         if not analysis.runs_planning:
             skip_stage(label)
             continue
@@ -920,9 +1090,9 @@ def execute_pipeline(
 
     # Without a reviewed outline, the draft works from the task checklist instead.
     outline = {"Stage 4 result"} if analysis.runs_planning else {"Stage 1 result"}
-    draft_label, draft_prompt = stages[3]
-    critique_label, critique_prompt = stages[4]
-    revise_label, revise_prompt = stages[5]
+    draft_label, draft_prompt = stages[2]
+    critique_label, critique_prompt = stages[3]
+    revise_label, revise_prompt = stages[4]
 
     def run_answer_stage(
         label: str,
@@ -953,7 +1123,7 @@ def execute_pipeline(
             try:
                 knowledge_store.record_episode(
                     user_prompt,
-                    analysis.task_type,
+                    analysis.mode,
                     "\n\n".join(part for part in (analysis.checklist, clarifications) if part),
                     final_answer,
                     outcome,
@@ -969,12 +1139,37 @@ def execute_pipeline(
 
     answer = run_answer_stage(draft_label, draft_prompt, outline | {"Stage 5 result"})
     set_result("Stage 6 result", answer)
-    if not analysis.runs_planning:
-        skip_stage(critique_label)
-        skip_stage(revise_label)
-        return finish(answer, "answered directly")
-
     evidence = "\n".join(text for label, text in previous_results if label in EVIDENCE_LABELS | {"Stage 5 result"})
+
+    if not analysis.runs_critique:
+        # Without a model critique, checks that need no model decide whether the draft gets one revision.
+        if analysis.runs_actions:
+            corrections = _corrections_text(_action_report_problems(answer, toolbox.action_log))
+        else:
+            corrections = _corrections_text(_url_problems(_uncited_urls(answer, evidence)))
+        if corrections or analysis.runs_actions:
+            report_stage(critique_label)
+            show_check = token_callback_for(critique_label)
+            if show_check is not None:
+                show_check(corrections or "The report matches the recorded file changes and test runs.")
+            if show_thinking:
+                print()
+        else:
+            skip_stage(critique_label)
+        if not corrections:
+            skip_stage(revise_label)
+            return finish(answer, "report matched the actions" if analysis.runs_actions else "answered directly")
+        set_result("Stage 7 result", corrections)
+        try:
+            answer = run_answer_stage(
+                revise_label,
+                revise_prompt,
+                outline | {"Stage 5 result", "Stage 6 result", "Stage 7 result"},
+            )
+        except (RuntimeError, ValueError) as error:
+            return finish(_with_failure_note(answer, "revising the response", error, 1), "revision failed")
+        return finish(answer, "revised once from automatic checks")
+
     for round_number in range(1, MAX_REVISION_ROUNDS + 1):
         try:
             critique_reply = run_answer_stage(

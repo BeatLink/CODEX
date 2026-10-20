@@ -21,6 +21,7 @@ WEB_FETCH_TIMEOUT_SECONDS = 15
 SENSITIVE_NAMES = {".env", "credentials", "id_rsa", "id_ed25519", "private_key", "secrets"}
 
 READ_ONLY_TOOL_NAMES = {"web_search", "web_fetch", "list_directory", "read_file"}
+ACTION_TOOL_NAMES = {"write_file", "run_tests"}
 
 TOOL_DEFINITIONS = [
     {
@@ -212,6 +213,7 @@ class Toolbox:
         self.allow_file_writes = allow_file_writes
         self.search_callback = search_callback
         self.used_tools: set[str] = set()
+        self.action_log: list[tuple[str, dict[str, Any], str]] = []
         self.tool_definitions = [
             definition
             for definition in TOOL_DEFINITIONS
@@ -221,6 +223,18 @@ class Toolbox:
             self.tool_definitions.append(RUN_TESTS_DEFINITION)
 
     def call(self, name: str, arguments: Any) -> str:
+        result = self._call(name, arguments)
+        if name in ACTION_TOOL_NAMES:
+            # The pipeline checks the final report against this record of what really changed.
+            recorded = (
+                {key: value for key, value in arguments.items() if key != "content"}
+                if isinstance(arguments, dict)
+                else {}
+            )
+            self.action_log.append((name, recorded, result))
+        return result
+
+    def _call(self, name: str, arguments: Any) -> str:
         if not isinstance(arguments, dict):
             return "Tool error: arguments must be a JSON object."
         handlers = {

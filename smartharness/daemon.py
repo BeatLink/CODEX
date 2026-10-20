@@ -392,6 +392,7 @@ class HarnessDaemon:
                     mcp_servers=settings["mcp_servers"],
                     knowledge_db_path=settings["knowledge_db_path"],
                     max_pending_research_jobs=settings["background_max_pending_jobs"],
+                    mode=settings["mode"],
                     show_thinking=False,
                     clarification_callback=ask_clarification if interactive else None,
                     progress_callback=report_progress,

@@ -9,6 +9,7 @@ DEFAULT_MODEL_PATH = "./models/model.gguf"
 CONTEXT_SIZE = 4096
 MAX_TOKENS = 2048
 TEMPERATURE = 0.1
+MODE_CHOICES = ("auto", "answer", "draft", "execute")
 DEFAULT_SETTINGS_PATH = Path(__file__).resolve().parent.parent / "settings.json"
 USER_SETTINGS_PATH = (
     Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "smartharness" / "settings.json"
@@ -26,6 +27,7 @@ DEFAULT_SETTINGS = {
     "max_search_results": 5,
     "enable_test_execution": False,
     "show_thinking": True,
+    "mode": "auto",
     "mcp_servers": [],
     "knowledge_db_path": DEFAULT_KNOWLEDGE_DB_PATH,
     "background_research_enabled": True,
@@ -100,6 +102,8 @@ def validate_settings(values: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("enable_test_execution must be a boolean.")
     if not isinstance(values["show_thinking"], bool):
         raise ValueError("show_thinking must be a boolean.")
+    if values["mode"] not in MODE_CHOICES:
+        raise ValueError(f"mode must be one of: {', '.join(MODE_CHOICES)}.")
     if not isinstance(values["knowledge_db_path"], str) or not values["knowledge_db_path"].strip():
         raise ValueError("knowledge_db_path must be a non-empty path string.")
     if not isinstance(values["background_research_enabled"], bool):

@@ -45,6 +45,17 @@ class CliTests(unittest.TestCase):
 
                 self.assertIs(execute_pipeline.call_args.kwargs["show_thinking"], expected)
 
+    def test_mode_option_overrides_the_setting(self):
+        with (
+            patch("smartharness.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
+            patch("smartharness.cli.execute_pipeline", return_value="answer") as execute_pipeline,
+            patch("sys.stdin.isatty", return_value=False),
+            patch("builtins.print"),
+        ):
+            self.assertEqual(main(["--mode", "draft", "prompt"]), 0)
+
+        self.assertEqual(execute_pipeline.call_args.kwargs["mode"], "draft")
+
     def test_tui_subcommand_opens_interface_with_initial_prompt(self):
         with (
             patch("smartharness.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),

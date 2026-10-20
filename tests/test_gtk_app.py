@@ -104,6 +104,26 @@ class WindowTests(unittest.TestCase):
         self.assertEqual(self.window.phase_pages.get_visible_child_name(), "final")
         self.assertTrue(self.window.copy_button.get_sensitive())
 
+    def test_selected_mode_is_passed_to_the_run_and_shown_in_the_status(self):
+        statuses = []
+
+        def routed_pipeline(prompt, **kwargs):
+            kwargs["progress_callback"]("Mode: " + kwargs["mode"])
+            kwargs["progress_callback"](STAGE_LABELS[2])
+            return "Done"
+
+        def record_status(*_arguments):
+            statuses.append(self.window.status.get_label())
+
+        self.window.status.connect("notify::label", record_status)
+        self.window.mode_dropdown.set_selected(3)
+        self.window.prompt.get_buffer().set_text("Fix the parser")
+        with patch("smartharness.daemon.execute_pipeline", side_effect=routed_pipeline):
+            self.window.run_button.emit("clicked")
+            wait_until(lambda: self.window.status.get_label() == "Complete")
+
+        self.assertIn("Execute mode · Stage 3 of 8", statuses)
+
     def test_failed_run_marks_the_failing_stage(self):
         def failing_pipeline(prompt, **kwargs):
             kwargs["progress_callback"](STAGE_LABELS[3])

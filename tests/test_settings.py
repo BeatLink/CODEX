@@ -24,6 +24,15 @@ class SettingsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "show_thinking"):
             validate_settings(settings)
 
+    def test_mode_defaults_to_auto_and_must_be_known(self):
+        self.assertEqual(DEFAULT_SETTINGS["mode"], "auto")
+
+        settings = DEFAULT_SETTINGS.copy()
+        settings["mode"] = "chat"
+
+        with self.assertRaisesRegex(ValueError, "mode"):
+            validate_settings(settings)
+
     def test_test_execution_setting_must_be_boolean(self):
         settings = DEFAULT_SETTINGS.copy()
         settings["enable_test_execution"] = "yes"

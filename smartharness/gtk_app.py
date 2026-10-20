@@ -12,8 +12,9 @@ gi.require_version("Gtk", "4.0")
 from gi.repository import Gio, GLib, Gtk, Pango  # noqa: E402
 
 from .client import DISCONNECTED_EVENT, DaemonClient, DaemonError, connect_to_daemon  # noqa: E402
-from .pipeline import SKIPPED_PREFIX  # noqa: E402
+from .pipeline import MODE_PROGRESS_PREFIX, SKIPPED_PREFIX  # noqa: E402
 from .settings import (  # noqa: E402
+    MODE_CHOICES,
     default_settings_path,
     load_settings,
     mcp_servers_from_json,
@@ -27,6 +28,7 @@ APPLICATION_ID = "org.smartharness.SmartHarness"
 PHASE_WAITING_TEXT = "Waiting for this phase..."
 PHASE_SKIPPED_TEXT = "Skipped: this request does not need this phase."
 FINAL_WAITING_TEXT = "Your final response will appear here."
+MODE_NAMES = {"auto": "Auto mode", "answer": "Answer mode", "draft": "Draft mode", "execute": "Execute mode"}
 BACKGROUND_WAITING_TEXT = "Waiting for background work..."
 OUTPUT_FLUSH_MILLISECONDS = 150
 NOTICE_SECONDS = 8
@@ -332,6 +334,7 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         self._request_running = False
         self._last_answer = ""
         self._active_stage: int | None = None
+        self._run_mode = ""
         self._skipped_stages: set[int] = set()
         self._follow_stages = True
         self._showing_phase_programmatically = False
@@ -409,6 +412,9 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         self.prompt = Gtk.TextView(wrap_mode=Gtk.WrapMode.WORD_CHAR, top_margin=8, bottom_margin=8, left_margin=8, right_margin=8)
         prompt_scroller = Gtk.ScrolledWindow(child=self.prompt, vexpand=True, min_content_height=120)
         prompt_scroller.add_css_class("frame")
+        self.mode_dropdown = Gtk.DropDown.new_from_strings([MODE_NAMES[mode] for mode in MODE_CHOICES])
+        self.mode_dropdown.set_selected(MODE_CHOICES.index(self.settings["mode"]))
+        self.mode_dropdown.set_tooltip_text("Answer a question, draft writing or a plan, or execute file changes")
         self.run_button = Gtk.Button(label="Run")
         self.run_button.set_tooltip_text("Run the request (Ctrl+R)")
         self.run_button.add_css_class("suggested-action")
@@ -420,6 +426,7 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         self.copy_button = Gtk.Button(label="Copy answer", sensitive=False)
         self.copy_button.connect("clicked", lambda _button: self._copy_answer())
         actions = Gtk.Box(spacing=6)
+        actions.append(self.mode_dropdown)
         for button in (self.run_button, self.cancel_button, self.clear_button, self.copy_button):
             actions.append(button)
         request = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin_bottom=6)
@@ -736,6 +743,7 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         settings["background_research_enabled"] = self.background_switch.get_active()
         buffer = self.mcp_servers.get_buffer()
         settings["mcp_servers"] = mcp_servers_from_json(buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), False))
+        settings["mode"] = MODE_CHOICES[self.mode_dropdown.get_selected()]
         return validate_settings(settings)
 
     def _show_settings(self, settings: dict[str, Any]) -> None:
@@ -748,6 +756,7 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
             switch.set_active(settings[name])
         self.mcp_servers.get_buffer().set_text(mcp_servers_to_json(settings["mcp_servers"]))
         self._set_background_switch(settings["background_research_enabled"])
+        self.mode_dropdown.set_selected(MODE_CHOICES.index(settings["mode"]))
 
     def _apply_settings(self) -> None:
         try:
@@ -888,6 +897,7 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
 
     def _reset_stages(self) -> None:
         self._active_stage = None
+        self._run_mode = ""
         self._skipped_stages.clear()
         self._follow_stages = True
         for index, output in enumerate(self.stage_outputs):
@@ -921,6 +931,9 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         if label == "Loading model":
             self.status.set_label("Loading local model...")
             return
+        if label.startswith(MODE_PROGRESS_PREFIX):
+            self._run_mode = f"{MODE_NAMES[label.removeprefix(MODE_PROGRESS_PREFIX)]} · "
+            return
         if label.startswith(SKIPPED_PREFIX) and label.removeprefix(SKIPPED_PREFIX) in STAGE_LABELS:
             skipped = STAGE_LABELS.index(label.removeprefix(SKIPPED_PREFIX))
             self._skipped_stages.add(skipped)
@@ -937,7 +950,7 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
                 self._set_stage_state(index, "DONE" if index < active else "NOW" if index == active else "WAIT")
         if self._follow_stages:
             self._show_phase(f"phase-{active + 1}")
-        self.status.set_label(f"Stage {active + 1} of {len(STAGE_LABELS)}")
+        self.status.set_label(f"{self._run_mode}Stage {active + 1} of {len(STAGE_LABELS)}")
 
     def _finish_run(self, result: str) -> None:
         self._flush_output()

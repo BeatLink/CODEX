@@ -10,7 +10,7 @@ from rich.markdown import Markdown
 
 from .client import DISCONNECTED_EVENT, connect_to_daemon
 from .pipeline import execute_pipeline
-from .settings import default_settings_path, load_settings, validate_settings
+from .settings import MODE_CHOICES, default_settings_path, load_settings, validate_settings
 
 
 PATH_SETTINGS = ("model_path", "filesystem_root", "knowledge_db_path")
@@ -56,6 +56,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Let the model create or replace files under filesystem_root (read-only by default).",
     )
     parser.add_argument(
+        "--mode",
+        choices=MODE_CHOICES,
+        help="Answer a question, draft a piece of writing or a plan, or execute file changes; auto lets the model pick.",
+    )
+    parser.add_argument(
         "--show-thinking",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -82,6 +87,8 @@ def main(argv: list[str] | None = None) -> int:
         overrides["allow_file_writes"] = True
     if args.show_thinking is not None:
         overrides["show_thinking"] = args.show_thinking
+    if args.mode is not None:
+        overrides["mode"] = args.mode
     try:
         settings = validate_settings({**settings, **overrides})
     except ValueError as error:
@@ -123,6 +130,7 @@ def main(argv: list[str] | None = None) -> int:
                 mcp_servers=settings["mcp_servers"],
                 knowledge_db_path=settings["knowledge_db_path"],
                 max_pending_research_jobs=settings["background_max_pending_jobs"],
+                mode=settings["mode"],
                 show_thinking=settings["show_thinking"],
                 clarification_callback=(
                     _ask_clarification if sys.stdin.isatty() else None

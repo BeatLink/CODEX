@@ -56,36 +56,50 @@ earlier results it needs.
 
 | Stage | Goal | Sees | Tools |
 | --- | --- | --- | --- |
-| 1. Identify | Return JSON listing the requirements, constraints, and assumptions, whether research or files are needed, search queries, the task type, and an optional clarification question | Request | none |
+| 1. Identify | Return JSON picking the mode, then the facts to check, search queries, whether files are needed, and an optional clarification question; draft and execute requests also list requirements, constraints, and assumptions | Request | none |
 | 2. Research | Gather at most five findings | Stage 1, clarification, stored or searched evidence | `web_search`, `web_fetch`, `list_directory`, `read_file` |
 | 3. Plan | Make an ordered plan covering every requirement, including any tool actions | Stages 1 and 2, evidence | none |
 | 4. Review plan | Check the plan against the request before anything runs; output a corrected outline and the exact tool actions still needed | Stages 1 to 3, evidence | none |
 | 5. Act | Carry out only the reviewed tool actions | Stage 4, evidence | file tools, `run_tests`, MCP tools (no web) |
 | 6. Draft | Write the answer from the reviewed outline and action results | Stages 4 and 5, evidence | none |
-| 7. Critique | Return JSON marking each requirement met, partly met, or missing, with a fix for each one not met, plus other issues | Stages 1 and 4 to 6, evidence | none |
+| 7. Critique | Return JSON marking each requirement met, partly met, or missing, with a fix for each one not met, plus other issues; in execute mode and quick answers, a check that needs no model | Stages 1 and 4 to 6, evidence | none |
 | 8. Revise | Apply the corrections and return only the final answer | Stages 4 to 7, evidence | none |
 
-Stage 1's reply is constrained by a JSON schema, which llama.cpp enforces as a
-grammar, so even a small model returns a well-formed analysis. Its task type
-picks the route:
+Every request runs in one of three modes, and each mode has its own route:
 
-| Task type | Stages run |
-| --- | --- |
-| `direct`: a short answer from general knowledge | 1, 6 |
-| `reasoning`: multi-part analysis or writing without tools | 1, 3, 4, 6, 7, 8 |
-| `research`: looked-up evidence is central | 1 to 4, 6 to 8 |
-| `action`: files must change or tests run | all eight |
+| Mode | For | Stages run |
+| --- | --- | --- |
+| `answer`, quick | A question answered or something explained | 1, 6 |
+| `answer`, thorough | An answer that needs analysis, a comparison, or careful reasoning | 1, 6, 7, 8 |
+| `draft` | A piece of writing, a plan, or a design | 1, 3, 4, 6, 7, 8 |
+| `execute` | Files changed or tests run | all eight, with an automatic check at 7 |
 
-Stage 2 also runs on any route when stage 1 lists outside facts to check or
-says file reading is needed. A `direct` answer gets one quick web search even
-when stage 1 lists nothing, unless the request is plain arithmetic or rewriting
-pasted text, because a small model cannot tell when it does not know something.
-The request's own words are always one of the search queries. When every search
+Stage 2 runs in any mode when the analysis lists a fact to check or says files
+must be read, and always in execute mode. It checks the knowledge store first,
+and skips its own web searches when every query matches a stored page or topic
+summary. A quick answer gets one quick web search even when stage 1 lists
+nothing, unless the request is plain arithmetic or rewriting pasted text,
+because a small model cannot tell when it does not know something. The
+request's own words are always one of the search queries. When every search
 finds nothing, the draft says it could not look the subject up rather than
-describing it. Stage 2 checks the knowledge store first, and
-skips its own web searches when every query matches a stored page or topic
-summary. Skipped stages are marked SKIP in the TUI. If stage 1's reply is not
-valid JSON, every stage runs and research is decided by keywords in the prompt.
+describing it. Skipped stages are marked SKIP in the interfaces.
+
+In `auto` mode, the default, stage 1 first asks a short router question
+whose JSON reply starts with the mode. An answer needs nothing more, so a quick
+answer costs two model calls. A draft or execute request then gets its full
+analysis with requirements. Pick the mode yourself to skip the router: set
+`mode` in the settings, pass `--mode`, use the selector beside the Run button,
+or start the prompt with `/ask` or `/answer`, `/draft` or `/plan`, or `/do`
+or `/execute`. All replies are constrained by a JSON schema, which llama.cpp
+enforces as a grammar. If a reply is still not valid JSON, the chosen mode is
+kept and research is decided by keywords in the prompt; an unreadable router
+reply falls back to a thorough answer, which never changes files.
+
+Execute mode is checked against what the tools really did, not by a model
+critique. The report must name every file written, say when a write or a test
+run failed, give the test result, and not claim a change when nothing was
+written. Any mismatch gets one revision. A quick answer gets one revision only
+when it cites a URL that is not in the evidence.
 
 Design points:
 
@@ -136,7 +150,7 @@ Knowledge lives in a SQLite database at `knowledge_db_path`
 - **Facts**: single statements under a topic, each with its source and a
   confidence from 0 to 1. A repeated fact keeps its highest confidence.
 - **User memory**: preferences, projects, and corrections about the user.
-- **Episodes**: each finished request with its task type, checklist, any
+- **Episodes**: each finished request with its mode, checklist, any
   clarification, the answer, and how it ended (answered directly, passed the
   critique, revised, or failed).
 - **Full-text indexes** (FTS5) over sources, and over facts and episodes.
@@ -237,8 +251,8 @@ smartharness-daemon     # run the daemon in the foreground
 
 The TUI has four pages:
 
-- **Workbench**: write a request and run it with **Ctrl+R** or the Run button,
-  and stop it with the Cancel button. The Output tab shows each stage's streamed
+- **Workbench**: write a request, pick a mode, and run it with **Ctrl+R** or
+  the Run button, and stop it with the Cancel button. The Output tab shows each stage's streamed
   output in its own tab and the final Markdown answer, which can be copied.
   Clarification questions appear as a dialog.
 - **Background**: queue topics, start research now, pause or resume the worker,
@@ -281,6 +295,7 @@ another. Unknown keys are rejected.
 	"max_search_results": 5,
 	"enable_test_execution": false,
 	"show_thinking": true,
+	"mode": "auto",
 	"knowledge_db_path": "~/.local/share/smartharness/knowledge.sqlite3",
 	"background_research_enabled": true,
 	"background_poll_interval_seconds": 10,
@@ -300,6 +315,7 @@ Precedence, lowest first: built-in defaults, the settings file, the
 | `--allow-file-writes` | Let the model create or replace files |
 | `--enable-test-execution` | Let the model run the project's tests |
 | `--show-thinking` / `--no-show-thinking` | Stream or hide each stage's output |
+| `--mode auto\|answer\|draft\|execute` | Pick the mode instead of letting the router choose |
 | `--settings PATH` | Use another settings file |
 | `--tui` | Open the terminal interface; the other options are applied to the daemon it connects to |
 

@@ -8,6 +8,7 @@
   "max_tool_calls": 5,
   "max_search_results": 5,
   "show_thinking": true,
+  "mode": "auto",
   "knowledge_db_path": "~/.local/share/smartharness/knowledge.sqlite3",
   "background_research_enabled": true,
   "background_poll_interval_seconds": 10,

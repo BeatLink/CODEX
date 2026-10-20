@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from textual.widgets import Button, Checkbox, Input, Markdown, TabbedContent, TabPane, TextArea, Tree
+from textual.widgets import Button, Checkbox, Input, Markdown, Select, Static, TabbedContent, TabPane, TextArea, Tree
 
 from daemon_harness import RunningDaemon
 
@@ -113,6 +113,36 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(app.query_one("#copy", Button).disabled)
                 self.assertEqual(app._stage_output_buffers[0], "Phase output")
                 self.assertEqual(app.query_one("#phase-tabs").active, "final")
+
+    async def test_selected_mode_is_passed_to_the_run(self):
+        app = self.app(initial_prompt="Fix the parser")
+        modes = []
+
+        def fake_execute_pipeline(prompt, **kwargs):
+            modes.append(kwargs["mode"])
+            return "Done"
+
+        with patch("smartharness.daemon.execute_pipeline", side_effect=fake_execute_pipeline):
+            async with app.run_test(size=(120, 42)) as pilot:
+                await connected(pilot, app)
+                app.query_one("#mode", Select).value = "execute"
+                app._start_run()
+                for _ in range(20):
+                    await pilot.pause(0.05)
+                    if not app._request_running:
+                        break
+
+        self.assertEqual(modes, ["execute"])
+
+    async def test_reported_mode_is_shown_in_the_status(self):
+        app = self.app()
+
+        async with app.run_test(size=(120, 42)) as pilot:
+            await connected(pilot, app)
+            app._update_stage("Mode: execute")
+            app._update_stage(STAGE_LABELS[2])
+
+            self.assertEqual(str(app.query_one("#status", Static).render()), "Execute mode · Stage 3 of 8")
 
     async def test_background_page_queues_topics_and_saves_worker_settings(self):
         with tempfile.TemporaryDirectory() as directory:

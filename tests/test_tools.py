@@ -68,6 +68,17 @@ class ToolboxTests(unittest.TestCase):
                 {tool["function"]["name"] for tool in toolbox.tool_definitions},
             )
 
+    def test_file_writes_and_test_runs_are_logged_without_file_content(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            toolbox = Toolbox(temp_dir)
+            toolbox.call("write_file", {"path": "notes.txt", "content": "hello"})
+            toolbox.call("read_file", {"path": "notes.txt"})
+
+            self.assertEqual(len(toolbox.action_log), 1)
+            name, arguments, result = toolbox.action_log[0]
+            self.assertEqual((name, arguments), ("write_file", {"path": "notes.txt"}))
+            self.assertIn("read-only", result)
+
     def test_root_and_absolute_paths_inside_root_are_accepted(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
