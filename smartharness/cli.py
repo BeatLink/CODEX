@@ -111,6 +111,7 @@ def main(argv: list[str] | None = None) -> int:
             allow_file_writes=settings["allow_file_writes"],
             mcp_servers=settings["mcp_servers"],
             knowledge_db_path=settings["knowledge_db_path"],
+            max_pending_research_jobs=settings["background_max_pending_jobs"],
             show_thinking=settings["show_thinking"],
             clarification_callback=(
                 _ask_clarification if sys.stdin.isatty() else None

@@ -2,6 +2,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 import json
 import re
+import sqlite3
 from typing import Any
 
 from .context_budget import fit_sections_to_tokens, input_token_budget, render_sections, token_counter
@@ -79,7 +80,8 @@ CRITIQUE_SCHEMA = {
     "required": ["checks", "other_issues"],
 }
 _URL = re.compile(r"https?://[^\s<>()\[\]\"'`]+")
-EVIDENCE_LABELS = {"Stage 2 result", "Automatic web search result", "Local knowledge result"}
+MEMORY_LABEL = "Remembered context"
+EVIDENCE_LABELS = {"Stage 2 result", "Automatic web search result", "Local knowledge result", MEMORY_LABEL}
 
 
 def _requires_web_research(user_prompt: str) -> bool:
@@ -216,6 +218,36 @@ def _with_failure_note(answer: str, stage_name: str, error: Exception, round_num
     if round_number == 1:
         return f"{answer}\n\n_Note: {stage_name} failed ({error}), so this is the unrevised draft._"
     return f"{answer}\n\n_Note: a further round of {stage_name} failed ({error}), so this revision was not rechecked._"
+
+
+def _format_recall(recalled: dict[str, list[dict[str, Any]]]) -> str:
+    """Write recalled memory as short plain lists, or return an empty string when nothing was recalled."""
+    parts = []
+    if recalled.get("user"):
+        parts.append("About the user:\n" + "\n".join(
+            f"- ({memory['kind']}) {memory['statement']}" for memory in recalled["user"]
+        ))
+    if recalled.get("facts"):
+        parts.append("Stored facts (from earlier research; cite the URL when using one):\n" + "\n".join(
+            f"- {fact['statement']} [{fact['topic']}; confidence {fact['confidence']:.1f}"
+            + (f"; {fact['source_url']}" if fact.get("source_url") else "") + "]"
+            for fact in recalled["facts"]
+        ))
+    if recalled.get("episodes"):
+        parts.append("Similar past requests:\n" + "\n".join(
+            f"- {' '.join(episode['prompt'].split())[:200]} ({episode['task_type']}; {episode['outcome']})"
+            for episode in recalled["episodes"]
+        ))
+    return "\n\n".join(parts)
+
+
+def _search_found_nothing(search_result: str) -> bool:
+    if search_result.startswith("Tool error"):
+        return True
+    try:
+        return json.loads(search_result) == []
+    except json.JSONDecodeError:
+        return False
 
 
 def _search_query(user_prompt: str) -> str:
@@ -446,6 +478,7 @@ def execute_pipeline(
     knowledge_db_path: str | None = None,
     llm: Any = None,
     model_cache: ModelCache | None = None,
+    max_pending_research_jobs: int = 100,
 ) -> str:
     if not user_prompt.strip():
         raise ValueError("The prompt cannot be empty.")
@@ -611,13 +644,18 @@ def execute_pipeline(
             print(f"[{label}] skipped")
 
     previous_results: list[tuple[str, str]] = []
+    if knowledge_store is not None:
+        remembered = _format_recall(knowledge_store.recall(user_prompt))
+        if remembered:
+            previous_results.append((MEMORY_LABEL, remembered))
+
     label, system_prompt = stages[0]
     report_stage(label)
     analysis_tokens = min(max_tokens, TASK_ANALYSIS_MAX_TOKENS)
     result = run_stage(
         llm,
         system_prompt,
-        stage_input(system_prompt, set(), analysis_tokens),
+        stage_input(system_prompt, {MEMORY_LABEL}, analysis_tokens),
         max_tokens=analysis_tokens,
         temperature=temperature,
         on_token=token_callback_for(label),
@@ -659,6 +697,12 @@ def execute_pipeline(
                 else:
                     search_result = toolbox.call("web_search", {"query": search_query})
                     previous_results.append(("Automatic web search result", search_result))
+                    if knowledge_store is not None and _search_found_nothing(search_result):
+                        # A search that found nothing becomes a background research topic to try again later.
+                        try:
+                            knowledge_store.enqueue_topic(search_query[:200], max_pending=max_pending_research_jobs)
+                        except ValueError:
+                            pass
 
         def summarize_page(page_json: str, focus: str, request_context: str) -> str:
             return _summarize_web_page(
@@ -805,6 +849,24 @@ def execute_pipeline(
             print()
         return result
 
+    def finish(final_answer: str, outcome: str) -> str:
+        if knowledge_store is not None:
+            clarifications = "\n".join(
+                f"{label}: {text}" for label, text in previous_results if label in CLARIFICATION_LABELS
+            )
+            try:
+                knowledge_store.record_episode(
+                    user_prompt,
+                    analysis.task_type,
+                    "\n\n".join(part for part in (analysis.checklist, clarifications) if part),
+                    final_answer,
+                    outcome,
+                )
+            except sqlite3.Error:
+                # The answer matters more than the memory of it, so a storage failure is not fatal.
+                pass
+        return final_answer
+
     def set_result(label: str, text: str) -> None:
         previous_results[:] = [item for item in previous_results if item[0] != label]
         previous_results.append((label, text))
@@ -814,7 +876,7 @@ def execute_pipeline(
     if not analysis.runs_planning:
         skip_stage(critique_label)
         skip_stage(revise_label)
-        return answer
+        return finish(answer, "answered directly")
 
     evidence = "\n".join(text for label, text in previous_results if label in EVIDENCE_LABELS | {"Stage 5 result"})
     for round_number in range(1, MAX_REVISION_ROUNDS + 1):
@@ -827,7 +889,9 @@ def execute_pipeline(
                 json_schema=CRITIQUE_SCHEMA,
             )
         except (RuntimeError, ValueError) as error:
-            return _with_failure_note(answer, "critiquing the draft", error, round_number)
+            return finish(
+                _with_failure_note(answer, "critiquing the draft", error, round_number), "critique failed"
+            )
         critique = _parse_critique(critique_reply)
         unsupported = _uncited_urls(answer, evidence)
         if critique is None:
@@ -836,7 +900,7 @@ def execute_pipeline(
             corrections = _critique_corrections(critique, unsupported)
             if not corrections:
                 skip_stage(revise_label)
-                return answer
+                return finish(answer, f"passed the critique after {round_number - 1} revision(s)")
         set_result("Stage 7 result", corrections)
         try:
             answer = run_answer_stage(
@@ -845,9 +909,11 @@ def execute_pipeline(
                 outline | {"Stage 5 result", "Stage 6 result", "Stage 7 result"},
             )
         except (RuntimeError, ValueError) as error:
-            return _with_failure_note(answer, "revising the response", error, round_number)
+            return finish(
+                _with_failure_note(answer, "revising the response", error, round_number), "revision failed"
+            )
         set_result("Stage 6 result", answer)
         # A free-text critique cannot say whether the revision passed, so it gets one round only.
         if critique is None:
-            break
-    return answer
+            return finish(answer, "revised once from a free-text critique")
+    return finish(answer, f"revised {MAX_REVISION_ROUNDS} times without a passing critique")

@@ -88,20 +88,35 @@ cut to 200 characters.
 Knowledge lives in a SQLite database at `knowledge_db_path`
 (`~/.local/share/smartharness/knowledge.sqlite3` by default). It holds:
 
-- **Topics**, each with an optional parent topic, a priority, and when it was
-  last researched.
-- **Sources**: URL, title, snippet, summary, the search query, the topic, when
-  it was retrieved, and when it expires (one week by default).
-- **A full-text index** (FTS5) over source titles, snippets, summaries, and URLs.
+- **Topics**, each with an optional parent topic, a priority, a summary, how
+  often it has been used, and when it was last researched.
+- **Sources**: URL, title, snippet, the search query, the topic, when it was
+  retrieved, and when it expires (one week by default).
+- **Facts**: single statements under a topic, each with its source and a
+  confidence from 0 to 1. A repeated fact keeps its highest confidence.
+- **User memory**: preferences, projects, and corrections about the user.
+- **Episodes**: each finished request with its task type, checklist, any
+  clarification, the answer, and how it ended (answered directly, passed the
+  critique, revised, or failed).
+- **Full-text indexes** (FTS5) over sources, and over facts and episodes.
 - **A graph** of nodes and labelled edges. Topics link to child topics
   (`contains`) and to their sources (`supported_by`); entity relationships can
   carry the source that supports them.
 - **A research queue** of pending, running, done, and failed jobs.
 
+Before stage 1, the pipeline recalls what memory holds for the request: the
+user memory, plus facts and past episodes that share at least half of the
+prompt's search terms, ignoring common words. These go to stage 1 and the later
+stages as "Remembered context", and each recall counts towards that fact's and
+topic's use count. When the run ends, it is recorded as an episode.
+
 Every web search the pipeline runs is stored under a topic named after its
 query. A stored source is reused only while it has not expired and shares at
-least half of the prompt's search terms, ignoring common words. Only snippets
-and summaries are stored, never full pages.
+least half of the prompt's search terms. Only snippets and summaries are
+stored, never full pages.
+
+The schema is versioned, and an older database is upgraded in place when it is
+opened; a database from a newer version is refused.
 
 The database is local and not encrypted; choose a private path if other users
 can read your files.
@@ -118,8 +133,9 @@ The worker yields to foreground work: it waits for the shared model lock,
 checks before every step and every generated token whether a prompt has
 started, and if so puts its job back in the queue.
 
-The worker does not invent topics; add them on the Background page. **Queue
-topic** adds one to the queue, and **Research now** starts it at once, even
+Topics reach the queue in two ways. A search during a request that finds
+nothing is queued, so the worker tries it again later. Otherwise, add topics on
+the Background page: **Queue topic** adds one to the queue, and **Research now** starts it at once, even
 while idle research is paused. The worker stops when the TUI exits. One-shot
 CLI runs read and write the knowledge store but do not start the worker.
 

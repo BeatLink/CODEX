@@ -636,6 +636,59 @@ class CritiqueTests(unittest.TestCase):
         self.assertEqual(_uncited_urls(answer, evidence), ["https://other.example/b"])
 
 
+class MemoryTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.database_path = str(Path(directory.name) / "knowledge.db")
+        self.store = KnowledgeStore(self.database_path)
+
+    def test_recalled_memory_reaches_stage_one_and_the_episode_is_recorded(self):
+        self.store.add_user_memory("preference", "Prefers Python examples")
+        stage_inputs = []
+        results = iter([task_json("direct"), "Use a list comprehension."])
+
+        def fake_run_stage(llm, system_prompt, user_input, **kwargs):
+            stage_inputs.append(user_input)
+            return next(results)
+
+        with patch("smartharness.pipeline.run_stage", side_effect=fake_run_stage):
+            execute_pipeline(
+                "How do I filter a list?",
+                llm=object(),
+                knowledge_db_path=self.database_path,
+                progress_callback=lambda label: None,
+            )
+
+        self.assertIn("Remembered context:\nAbout the user:\n- (preference) Prefers Python examples", stage_inputs[0])
+        self.assertIn("Prefers Python examples", stage_inputs[1])
+        episode = self.store.episodes()[0]
+        self.assertEqual(
+            (episode["prompt"], episode["task_type"], episode["answer"], episode["outcome"]),
+            ("How do I filter a list?", "direct", "Use a list comprehension.", "answered directly"),
+        )
+
+    def test_search_that_finds_nothing_is_queued_for_background_research(self):
+        results = iter([task_json("direct", needs_research=True, queries=["obscure library 9.1 release"]), "Answer"])
+
+        with (
+            patch("smartharness.pipeline.run_stage", side_effect=lambda *args, **kwargs: next(results)),
+            patch("smartharness.pipeline.run_tool_stage", return_value="Findings"),
+            patch("smartharness.pipeline.Toolbox.call", return_value="[]"),
+        ):
+            execute_pipeline(
+                "When was obscure library 9.1 released?",
+                llm=object(),
+                knowledge_db_path=self.database_path,
+                progress_callback=lambda label: None,
+            )
+
+        self.assertEqual(
+            [(job["topic"], job["status"]) for job in self.store.queue_status()],
+            [("obscure library 9.1 release", "pending")],
+        )
+
+
 class ModelCacheTests(unittest.TestCase):
     def test_cache_reuses_the_model_until_load_settings_change(self):
         with patch("smartharness.pipeline.create_model", side_effect=lambda *args: object()) as create_model:
