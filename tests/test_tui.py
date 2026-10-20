@@ -16,6 +16,9 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
 
         async with app.run_test(size=(120, 42)):
             self.assertEqual(app.query_one("#prompt", TextArea).text, "Draft a plan")
+            self.assertTrue(app.query_one("#model-path", TextArea).soft_wrap)
+            self.assertTrue(app.query_one("#research-topic", TextArea).soft_wrap)
+            self.assertTrue(app.query_one("#knowledge-search", TextArea).soft_wrap)
             self.assertEqual(len(app.query(".stage-row")), len(STAGE_LABELS))
             self.assertEqual(
                 len(app.query_one("#phase-tabs").query(TabPane)), len(STAGE_LABELS) + 1
@@ -97,7 +100,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 async with app.run_test(size=(140, 48)) as pilot:
                     app.query_one("#main-tabs").active = "background-page"
                     await pilot.pause()
-                    app.query_one("#research-topic", Input).value = "Local model RAG"
+                    app.query_one("#research-topic", TextArea).text = "Local model RAG"
                     app.query_one("#research-priority", Input).value = "4"
                     await pilot.click("#research-now")
                     for _ in range(20):

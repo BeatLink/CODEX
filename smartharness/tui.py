@@ -63,23 +63,24 @@ class ClarificationScreen(ModalScreen[str]):
         with Vertical(id="clarification-dialog"):
             yield Static("CLARIFICATION", classes="eyebrow")
             yield Static(self.question, id="clarification-question")
-            yield Input(placeholder="Type an answer, or leave blank to continue", id="clarification-answer")
+            yield Label("Your response", classes="field-label")
+            yield TextArea(
+                soft_wrap=True,
+                classes="wrapped-field",
+                id="clarification-answer",
+            )
             with Horizontal(classes="button-row"):
                 yield Button("Continue", id="clarification-submit", variant="primary")
                 yield Button("Skip", id="clarification-skip")
 
     def on_mount(self) -> None:
-        self.query_one("#clarification-answer", Input).focus()
+        self.query_one("#clarification-answer", TextArea).focus()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "clarification-submit":
-            self.dismiss(self.query_one("#clarification-answer", Input).value)
+            self.dismiss(self.query_one("#clarification-answer", TextArea).text)
         elif event.button.id == "clarification-skip":
             self.dismiss("")
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        if event.input.id == "clarification-answer":
-            self.dismiss(event.value)
 
     def action_cancel(self) -> None:
         self.dismiss("")
@@ -136,6 +137,12 @@ class SmartHarnessApp(App[None]):
     }
     Input:focus, TextArea:focus {
         border: tall #e5b85c;
+    }
+    .wrapped-field {
+        height: 3;
+        min-height: 3;
+        border: tall #34473d;
+        background: #141d19;
     }
     #numeric-row {
         height: 5;
@@ -288,7 +295,12 @@ class SmartHarnessApp(App[None]):
             with VerticalScroll(id="sidebar"):
                 yield Static("MODEL CONFIGURATION", classes="eyebrow")
                 yield Label("GGUF model path", classes="field-label")
-                yield Input(value=self.settings["model_path"], id="model-path")
+                yield TextArea(
+                    self.settings["model_path"],
+                    soft_wrap=True,
+                    classes="wrapped-field",
+                    id="model-path",
+                )
                 with Horizontal(id="numeric-row-one"):
                     for label, key in (("Context", "context-size"), ("GPU layers", "gpu-layers")):
                         with Vertical(classes="numeric-field"):
@@ -302,7 +314,12 @@ class SmartHarnessApp(App[None]):
                             value = self.settings["max_tokens"] if key == "max-tokens" else self.settings["temperature"]
                             yield Input(value=str(value), id=key)
                 yield Label("Filesystem root", classes="field-label")
-                yield Input(value=self.settings["filesystem_root"], id="filesystem-root")
+                yield TextArea(
+                    self.settings["filesystem_root"],
+                    soft_wrap=True,
+                    classes="wrapped-field",
+                    id="filesystem-root",
+                )
                 yield Checkbox(
                     "Allow model to run project tests",
                     value=self.settings["enable_test_execution"],
@@ -379,12 +396,21 @@ class SmartHarnessApp(App[None]):
                                 id="background-queue-cap",
                             )
                         yield Label("SQLite database", classes="field-label")
-                        yield Input(value=self.settings["knowledge_db_path"], id="knowledge-db-path")
+                        yield TextArea(
+                            self.settings["knowledge_db_path"],
+                            soft_wrap=True,
+                            classes="wrapped-field",
+                            id="knowledge-db-path",
+                        )
                         with Horizontal(classes="button-row"):
                             yield Button("Apply", id="apply-background", variant="primary")
                             yield Button("Save settings", id="save-settings")
                         with Horizontal(id="topic-row"):
-                            yield Input(placeholder="Research topic", id="research-topic")
+                            yield TextArea(
+                                soft_wrap=True,
+                                classes="wrapped-field",
+                                id="research-topic",
+                            )
                             yield Input(value="0", placeholder="Priority", id="research-priority")
                             yield Button("Queue topic", id="queue-topic")
                         with Horizontal(classes="button-row"):
@@ -398,8 +424,13 @@ class SmartHarnessApp(App[None]):
                 with TabPane("Knowledge", id="knowledge-page"):
                     with Vertical(id="knowledge-page-content"):
                         yield Static("KNOWLEDGE STORE", classes="eyebrow")
+                        yield Label("Search stored evidence", classes="field-label")
                         with Horizontal(id="knowledge-search-row"):
-                            yield Input(placeholder="Search stored evidence", id="knowledge-search")
+                            yield TextArea(
+                                soft_wrap=True,
+                                classes="wrapped-field",
+                                id="knowledge-search",
+                            )
                             yield Button("Search", id="search-knowledge")
                             yield Button("Refresh", id="refresh-knowledge")
                         with Horizontal(id="knowledge-browser"):
@@ -446,7 +477,7 @@ class SmartHarnessApp(App[None]):
         elif event.button.id == "research-now":
             self._trigger_background_research()
         elif event.button.id == "search-knowledge":
-            self._refresh_knowledge(query=self.query_one("#knowledge-search", Input).value)
+            self._refresh_knowledge(query=self.query_one("#knowledge-search", TextArea).text)
         elif event.button.id == "refresh-knowledge":
             self._refresh_knowledge()
 
@@ -480,14 +511,14 @@ class SmartHarnessApp(App[None]):
         settings = self.settings.copy()
         settings.update(
             {
-                "model_path": self.query_one("#model-path", Input).value,
+                "model_path": self.query_one("#model-path", TextArea).text,
                 "context_size": self._int_setting("context-size"),
                 "gpu_layers": self._int_setting("gpu-layers"),
                 "max_tokens": self._int_setting("max-tokens"),
                 "temperature": self._float_setting("temperature"),
-                "filesystem_root": self.query_one("#filesystem-root", Input).value,
+                "filesystem_root": self.query_one("#filesystem-root", TextArea).text,
                 "enable_test_execution": self.query_one("#enable-test-execution", Checkbox).value,
-                "knowledge_db_path": self.query_one("#knowledge-db-path", Input).value,
+                "knowledge_db_path": self.query_one("#knowledge-db-path", TextArea).text,
                 "background_research_enabled": self.query_one("#background-enabled", Checkbox).value,
                 "background_poll_interval_seconds": self._int_setting("background-poll-seconds"),
                 "background_refresh_interval_hours": self._int_setting("background-refresh-hours"),
@@ -520,7 +551,7 @@ class SmartHarnessApp(App[None]):
         self.notify(f"Settings saved to {path}.", title="SmartHarness")
 
     def _queue_topic(self) -> bool:
-        topic = self.query_one("#research-topic", Input).value.strip()
+        topic = self.query_one("#research-topic", TextArea).text.strip()
         if not topic:
             self.notify("Enter a topic to research.", title="Topic required", severity="warning")
             return False
@@ -537,13 +568,13 @@ class SmartHarnessApp(App[None]):
             self.notify(str(error), title="Could not queue topic", severity="error")
             return False
         self.settings = settings
-        self.query_one("#research-topic", Input).value = ""
+        self.query_one("#research-topic", TextArea).text = ""
         self._refresh_queue()
         self._worker_wakeup.set()
         return True
 
     def _trigger_background_research(self) -> None:
-        topic = self.query_one("#research-topic", Input).value.strip()
+        topic = self.query_one("#research-topic", TextArea).text.strip()
         if topic and not self._queue_topic():
             return
         try:
@@ -556,10 +587,6 @@ class SmartHarnessApp(App[None]):
             return
         self._background_run_requested.set()
         self._worker_wakeup.set()
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        if event.input.id == "knowledge-search":
-            self._refresh_knowledge(query=event.value)
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         if event.tabbed_content.id == "main-tabs":
