@@ -44,6 +44,14 @@ STAGE_LABELS = (
 STAGE_TAB_TITLES = ("Task", "Research", "Plan", "Actions", "Review", "Draft", "Critique", "Revise")
 
 
+class AutoScrollMarkdown(Markdown):
+    def on_markdown_table_of_contents_updated(
+        self, event: Markdown.TableOfContentsUpdated
+    ) -> None:
+        if isinstance(self.parent, VerticalScroll):
+            self.parent.scroll_end(animate=False)
+
+
 class ClarificationScreen(ModalScreen[str]):
     BINDINGS = [("escape", "cancel", "Cancel")]
 
@@ -177,6 +185,9 @@ class SmartHarnessApp(App[None]):
         margin-right: 1;
         min-width: 12;
     }
+    #workbench-tabs, #request-pane, #output-pane {
+        height: 1fr;
+    }
     #phase-tabs {
         height: 1fr;
         min-height: 7;
@@ -303,34 +314,36 @@ class SmartHarnessApp(App[None]):
                 yield Static("Ready", id="status")
             with TabbedContent(id="main-tabs"):
                 with TabPane("Workbench", id="workbench"):
-                    with Vertical(id="content"):
-                        yield Static("YOUR REQUEST", classes="eyebrow", id="prompt-label")
-                        yield TextArea(
-                            self.initial_prompt,
-                            show_line_numbers=False,
-                            id="prompt",
-                        )
-                        with Horizontal(id="actions"):
-                            yield Button("Run  Ctrl+Enter", id="run", variant="primary")
-                            yield Button("Clear", id="clear")
-                            yield Button("Copy answer", id="copy", disabled=True)
-                        yield Static("PHASE OUTPUT", classes="eyebrow", id="answer-label")
-                        with TabbedContent(initial="final", id="phase-tabs"):
-                            for index, title in enumerate(STAGE_TAB_TITLES, start=1):
-                                with TabPane(f"{index} {title}", id=f"stage-{index}"):
+                    with TabbedContent(initial="request-pane", id="workbench-tabs"):
+                        with TabPane("Request", id="request-pane"):
+                            with Vertical(id="content"):
+                                yield Static("YOUR REQUEST", classes="eyebrow", id="prompt-label")
+                                yield TextArea(
+                                    self.initial_prompt,
+                                    show_line_numbers=False,
+                                    id="prompt",
+                                )
+                                with Horizontal(id="actions"):
+                                    yield Button("Run  Ctrl+Enter", id="run", variant="primary")
+                                    yield Button("Clear", id="clear")
+                                    yield Button("Copy answer", id="copy", disabled=True)
+                        with TabPane("Output", id="output-pane"):
+                            with TabbedContent(initial="final", id="phase-tabs"):
+                                for index, title in enumerate(STAGE_TAB_TITLES, start=1):
+                                    with TabPane(f"{index} {title}", id=f"stage-{index}"):
+                                        with VerticalScroll(classes="stage-output-scroll"):
+                                            yield AutoScrollMarkdown(
+                                                "_Waiting for this phase..._",
+                                                classes="stage-output",
+                                                id=f"stage-output-{index}",
+                                            )
+                                with TabPane("Final", id="final"):
                                     with VerticalScroll(classes="stage-output-scroll"):
-                                        yield Markdown(
-                                            "_Waiting for this phase..._",
+                                        yield AutoScrollMarkdown(
+                                            "Your final response will appear here.",
                                             classes="stage-output",
-                                            id=f"stage-output-{index}",
+                                            id="final-output",
                                         )
-                            with TabPane("Final", id="final"):
-                                with VerticalScroll(classes="stage-output-scroll"):
-                                    yield Markdown(
-                                        "Your final response will appear here.",
-                                        classes="stage-output",
-                                        id="final-output",
-                                    )
                 with TabPane("Background", id="background-page"):
                     with VerticalScroll():
                         yield Static("BACKGROUND RESEARCH", classes="eyebrow")
@@ -379,7 +392,9 @@ class SmartHarnessApp(App[None]):
                         yield Static("QUEUE", classes="eyebrow")
                         yield Static("No research jobs", id="background-queue")
                         yield Static("MODEL OUTPUT", classes="eyebrow")
-                        yield Markdown("_Waiting for background work..._", id="background-output")
+                        yield AutoScrollMarkdown(
+                            "_Waiting for background work..._", id="background-output"
+                        )
                 with TabPane("Knowledge", id="knowledge-page"):
                     with Vertical(id="knowledge-page-content"):
                         yield Static("KNOWLEDGE STORE", classes="eyebrow")
@@ -452,6 +467,7 @@ class SmartHarnessApp(App[None]):
 
         self._reset_stages()
         self.query_one("#final-output", Markdown).update("_Working on your request..._")
+        self.query_one("#workbench-tabs", TabbedContent).active = "output-pane"
         self.query_one("#copy", Button).disabled = True
         self.query_one("#run", Button).disabled = True
         self.query_one("#status", Static).update("Starting local model...")
@@ -780,6 +796,7 @@ class SmartHarnessApp(App[None]):
             state = "DONE" if index < active else "NOW " if index == active else "WAIT"
             self.query_one(f"#stage-{index + 1}", Static).update(f"{state}  {stage_label}")
         self.query_one("#phase-tabs", TabbedContent).active = f"stage-{active + 1}"
+        self.query_one("#workbench-tabs", TabbedContent).active = "output-pane"
         self.query_one("#status", Static).update(f"Stage {active + 1} of 7")
 
     def _finish_run(self, result: str) -> None:

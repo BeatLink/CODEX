@@ -20,15 +20,36 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 len(app.query_one("#phase-tabs").query(TabPane)), len(STAGE_LABELS) + 1
             )
+            self.assertIsInstance(app.query_one("#request-pane", TabPane), TabPane)
+            self.assertIsInstance(app.query_one("#output-pane", TabPane), TabPane)
+            self.assertEqual(app.query_one("#workbench-tabs").active, "request-pane")
             self.assertTrue(app.query_one("#copy", Button).disabled)
 
             app._update_stage(STAGE_LABELS[2])
+            self.assertEqual(app.query_one("#workbench-tabs").active, "output-pane")
             self.assertEqual(app.query_one("#phase-tabs").active, "stage-3")
             app._finish_run("# Completed")
 
             self.assertFalse(app.query_one("#copy", Button).disabled)
             self.assertEqual(app._last_answer, "# Completed")
             self.assertEqual(app.query_one("#final-output", Markdown).id, "final-output")
+
+    async def test_phase_output_scrolls_to_latest_content(self):
+        app = SmartHarnessApp(DEFAULT_SETTINGS)
+
+        async with app.run_test(size=(100, 30)) as pilot:
+            app._update_stage(STAGE_LABELS[0])
+            await pilot.pause()
+            app._append_stage_output(
+                STAGE_LABELS[0],
+                "\n\n".join(f"Output line {index}" for index in range(100)),
+            )
+            app._flush_stage_output()
+            await pilot.pause(0.5)
+
+            scroll = app.query_one("#stage-output-1", Markdown).parent
+            self.assertGreater(scroll.max_scroll_y, 0)
+            self.assertEqual(scroll.scroll_y, scroll.max_scroll_y)
 
     async def test_clear_resets_prompt_and_completed_answer(self):
         app = SmartHarnessApp(DEFAULT_SETTINGS, initial_prompt="Draft a plan")
