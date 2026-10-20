@@ -20,6 +20,18 @@ class SettingsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "enable_test_execution"):
             validate_settings(settings)
 
+    def test_background_settings_are_bounded_and_boolean(self):
+        settings = DEFAULT_SETTINGS.copy()
+        settings["background_poll_interval_seconds"] = 0
+
+        with self.assertRaisesRegex(ValueError, "background_poll_interval_seconds"):
+            validate_settings(settings)
+
+        settings = DEFAULT_SETTINGS.copy()
+        settings["background_research_enabled"] = "yes"
+        with self.assertRaisesRegex(ValueError, "background_research_enabled"):
+            validate_settings(settings)
+
     def test_mcp_servers_require_stdio_and_an_allowlist(self):
         settings = DEFAULT_SETTINGS.copy()
         settings["mcp_servers"] = [

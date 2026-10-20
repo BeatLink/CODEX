@@ -1,8 +1,11 @@
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
+from pathlib import Path
+import tempfile
 from unittest.mock import patch
 
+from smartharness.knowledge import KnowledgeStore
 from smartharness.pipeline import execute_pipeline, run_stage
 
 
@@ -284,6 +287,44 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("Stage 5 result", stage_calls[5][1])
         self.assertNotIn("Stage 1 result", stage_calls[5][1])
         self.assertIn("every distinct request constraint", stage_calls[5][0])
+
+    def test_fresh_local_evidence_is_reused_before_live_search(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = Path(directory) / "knowledge.db"
+            store = KnowledgeStore(database_path)
+            store.store_search_results(
+                "Research Python SQLite",
+                [{"title": "SQLite docs", "url": "https://example.test/sqlite", "snippet": "Python SQLite FTS."}],
+                topic="SQLite",
+            )
+            stage_results = iter(
+                ["Task checklist", "Answer plan", "Reviewed outline", "Draft", "Critique", "Final"]
+            )
+            stage_calls = []
+            tool_inputs = []
+
+            def fake_run_stage(llm, system_prompt, user_input, **kwargs):
+                stage_calls.append((system_prompt, user_input))
+                return next(stage_results)
+
+            def fake_tool_stage(llm, system_prompt, user_input, toolbox, **kwargs):
+                tool_inputs.append(user_input)
+                return "Tool findings"
+
+            with (
+                patch("smartharness.pipeline.run_stage", side_effect=fake_run_stage),
+                patch("smartharness.pipeline.run_tool_stage", side_effect=fake_tool_stage),
+                patch("smartharness.pipeline.Toolbox.call", side_effect=AssertionError("live search")),
+            ):
+                execute_pipeline(
+                    "Research Python SQLite",
+                    llm=object(),
+                    knowledge_db_path=str(database_path),
+                )
+
+            self.assertIn("Local knowledge result", tool_inputs[0])
+            self.assertIn("https://example.test/sqlite", stage_calls[3][1])
+            self.assertIn("captured search evidence", stage_calls[4][0])
 
 
 if __name__ == "__main__":

@@ -77,6 +77,7 @@ class ToolboxTests(unittest.TestCase):
 
     def test_search_results_are_bounded_by_settings(self):
         observed = {}
+        persisted = []
 
         class FakeDDGS:
             def text(self, query, max_results):
@@ -86,12 +87,18 @@ class ToolboxTests(unittest.TestCase):
 
         fake_module = types.SimpleNamespace(DDGS=FakeDDGS)
         with patch.dict(sys.modules, {"ddgs": fake_module}):
-            results = Toolbox(".", max_search_results=2).call(
+            results = Toolbox(
+                ".",
+                max_search_results=2,
+                search_callback=lambda query, items: persisted.append((query, items)),
+            ).call(
                 "web_search", {"query": "local models", "max_results": 8}
             )
 
         self.assertEqual(json.loads(results)[0]["title"], "Result")
         self.assertEqual(observed, {"query": "local models", "max_results": 2})
+        self.assertEqual(persisted[0][0], "local models")
+        self.assertEqual(persisted[0][1][0]["snippet"], "Snippet")
 
 
 if __name__ == "__main__":

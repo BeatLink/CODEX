@@ -9,6 +9,7 @@ CONTEXT_SIZE = 4096
 MAX_TOKENS = 2048
 TEMPERATURE = 0.1
 DEFAULT_SETTINGS_PATH = Path(__file__).resolve().parent.parent / "settings.json"
+DEFAULT_KNOWLEDGE_DB_PATH = "~/.local/share/smartharness/knowledge.sqlite3"
 DEFAULT_SETTINGS = {
     "model_path": DEFAULT_MODEL_PATH,
     "context_size": CONTEXT_SIZE,
@@ -21,6 +22,12 @@ DEFAULT_SETTINGS = {
     "enable_test_execution": False,
     "show_thinking": True,
     "mcp_servers": [],
+    "knowledge_db_path": DEFAULT_KNOWLEDGE_DB_PATH,
+    "background_research_enabled": True,
+    "background_poll_interval_seconds": 10,
+    "background_refresh_interval_hours": 168,
+    "background_max_tokens": 512,
+    "background_max_pending_jobs": 100,
 }
 
 
@@ -44,6 +51,14 @@ def load_settings(settings_path: str | Path) -> dict[str, Any]:
         raise ValueError(f"Unknown setting(s): {', '.join(sorted(unknown_keys))}")
 
     return validate_settings({**DEFAULT_SETTINGS, **settings})
+
+
+def save_settings(settings_path: str | Path, values: dict[str, Any]) -> dict[str, Any]:
+    validated = validate_settings(values.copy())
+    path = Path(settings_path).expanduser()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(validated, indent=2) + "\n", encoding="utf-8")
+    return validated
 
 
 def validate_settings(values: dict[str, Any]) -> dict[str, Any]:
@@ -70,6 +85,19 @@ def validate_settings(values: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("enable_test_execution must be a boolean.")
     if not isinstance(values["show_thinking"], bool):
         raise ValueError("show_thinking must be a boolean.")
+    if not isinstance(values["knowledge_db_path"], str) or not values["knowledge_db_path"].strip():
+        raise ValueError("knowledge_db_path must be a non-empty path string.")
+    if not isinstance(values["background_research_enabled"], bool):
+        raise ValueError("background_research_enabled must be a boolean.")
+    for name, minimum, maximum in (
+        ("background_poll_interval_seconds", 1, 3600),
+        ("background_refresh_interval_hours", 1, 8760),
+        ("background_max_tokens", 32, 4096),
+        ("background_max_pending_jobs", 1, 1000),
+    ):
+        value = values[name]
+        if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
+            raise ValueError(f"{name} must be an integer from {minimum} to {maximum}.")
     for name in ("max_tool_calls", "max_search_results"):
         if isinstance(values[name], bool) or not isinstance(values[name], int) or not 1 <= values[name] <= 10:
             raise ValueError(f"{name} must be an integer from 1 to 10.")

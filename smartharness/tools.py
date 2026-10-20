@@ -1,6 +1,7 @@
 import json
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -91,6 +92,7 @@ class Toolbox:
         filesystem_root: str | Path,
         max_search_results: int = 5,
         enable_test_execution: bool = False,
+        search_callback: Callable[[str, list[dict[str, str]]], None] | None = None,
     ):
         self.root = Path(filesystem_root).expanduser().resolve()
         if not self.root.is_dir():
@@ -105,6 +107,7 @@ class Toolbox:
             raise ValueError("enable_test_execution must be a boolean.")
         self.max_search_results = max_search_results
         self.enable_test_execution = enable_test_execution
+        self.search_callback = search_callback
         self.used_tools: set[str] = set()
         self.tool_definitions = [*TOOL_DEFINITIONS]
         if enable_test_execution:
@@ -160,6 +163,8 @@ class Toolbox:
             }
             for result in results
         ]
+        if self.search_callback is not None:
+            self.search_callback(query.strip(), formatted)
         return json.dumps(formatted, ensure_ascii=False)
 
     def _resolve_path(self, relative_path: str) -> Path:
