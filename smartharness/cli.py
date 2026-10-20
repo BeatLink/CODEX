@@ -78,7 +78,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.tui or (not args.prompt and sys.stdin.isatty()):
         from .tui import SmartHarnessApp
 
-        SmartHarnessApp(settings, initial_prompt=" ".join(args.prompt).strip()).run()
+        SmartHarnessApp(
+            settings,
+            initial_prompt=" ".join(args.prompt).strip(),
+            settings_path=args.settings,
+        ).run()
         return 0
 
     prompt = " ".join(args.prompt).strip()
@@ -100,6 +104,7 @@ def main(argv: list[str] | None = None) -> int:
             max_search_results=settings["max_search_results"],
             enable_test_execution=settings["enable_test_execution"],
             mcp_servers=settings["mcp_servers"],
+            knowledge_db_path=settings["knowledge_db_path"],
             show_thinking=settings["show_thinking"],
             clarification_callback=(
                 _ask_clarification if sys.stdin.isatty() else None

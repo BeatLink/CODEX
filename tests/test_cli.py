@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from smartharness.cli import main
@@ -43,7 +44,11 @@ class CliTests(unittest.TestCase):
         ):
             self.assertEqual(main(["tui", "draft", "a", "plan"]), 0)
 
-        app.assert_called_once_with(DEFAULT_SETTINGS.copy(), initial_prompt="draft a plan")
+            app.assert_called_once_with(
+                DEFAULT_SETTINGS.copy(),
+                initial_prompt="draft a plan",
+                settings_path=str(Path.cwd() / "settings.json"),
+            )
         app.return_value.run.assert_called_once_with()
 
 
