@@ -1,6 +1,9 @@
 # Models
 models/
 
+# Claude Code local state
+.claude/
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
