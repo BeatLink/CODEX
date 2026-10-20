@@ -1,4 +1,6 @@
 import json
+import sys
+import types
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
@@ -739,6 +741,66 @@ class MemoryTests(unittest.TestCase):
             [(job["topic"], job["status"]) for job in self.store.queue_status()],
             [("obscure library 9.1 release", "pending")],
         )
+
+
+    def run_pinetime_request(self, tool_stage, reply_list):
+        results = iter([task_json("direct", needs_research=True, queries=["PineTime"]), *reply_list])
+        stage_inputs = []
+
+        def fake_run_stage(llm, system_prompt, user_input, **kwargs):
+            stage_inputs.append(user_input)
+            return next(results)
+
+        with (
+            patch("smartharness.pipeline.run_stage", side_effect=fake_run_stage),
+            patch("smartharness.pipeline.run_tool_stage", side_effect=tool_stage),
+        ):
+            execute_pipeline(
+                "What is a PineTime?",
+                llm=object(),
+                knowledge_db_path=self.database_path,
+                progress_callback=lambda label: None,
+            )
+        return stage_inputs
+
+    def test_live_search_and_fetched_page_are_saved_and_queued_for_facts(self):
+        url = "https://pine64.example/pinetime"
+
+        class FakeDDGS:
+            def text(self, query, max_results):
+                return [{"title": "PineTime", "href": url, "body": "A PineTime smartwatch."}]
+
+        def fake_tool_stage(llm, system_prompt, user_input, toolbox, **kwargs):
+            page = json.dumps({"url": url, "title": "PineTime", "text": "A smartwatch."})
+            kwargs["page_summarizer"](page, "", "")
+            return "Findings"
+
+        with patch.dict(sys.modules, {"ddgs": types.SimpleNamespace(DDGS=FakeDDGS)}):
+            self.run_pinetime_request(fake_tool_stage, ["An open source smartwatch.", "Answer"])
+
+        self.assertEqual(self.store.search("PineTime")[0]["summary"], "An open source smartwatch.")
+        self.assertEqual(
+            [(job["topic"], job["status"]) for job in self.store.queue_status()], [("PineTime", "pending")]
+        )
+
+    def test_stored_page_summary_answers_without_searching_again(self):
+        url = "https://pine64.example/pinetime"
+        self.store.store_search_results("PineTime", [{"url": url, "title": "PineTime", "snippet": "PineTime"}])
+        self.store.set_source_summary(url, "An open source smartwatch.")
+
+        with patch("smartharness.pipeline.Toolbox.call", side_effect=AssertionError("web search")):
+            stage_inputs = self.run_pinetime_request(AssertionError("tool stage"), ["Answer"])
+
+        self.assertIn("An open source smartwatch.", stage_inputs[1])
+
+    def test_stored_snippets_alone_still_run_the_research_stage(self):
+        url = "https://pine64.example/pinetime"
+        self.store.store_search_results("PineTime", [{"url": url, "title": "PineTime", "snippet": "PineTime"}])
+        tool_stages = []
+
+        self.run_pinetime_request(lambda *args, **kwargs: tool_stages.append(args) or "Findings", ["Answer"])
+
+        self.assertEqual(len(tool_stages), 1)
 
 
 class ModelCacheTests(unittest.TestCase):

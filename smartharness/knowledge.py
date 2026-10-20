@@ -449,6 +449,15 @@ class KnowledgeStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def has_facts(self, topic: str) -> bool:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM facts f JOIN topics t ON t.id = f.topic_id "
+                "WHERE t.name = ? AND f.status = 'active' LIMIT 1",
+                (topic,),
+            ).fetchone()
+        return row is not None
+
     def set_topic_summary(self, topic: str, summary: str) -> None:
         topic_id = self.add_topic(topic)
         with self._connect() as connection:

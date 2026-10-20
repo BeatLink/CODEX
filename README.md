@@ -42,8 +42,10 @@ picks the route:
 | `research`: looked-up evidence is central | 1 to 4, 6 to 8 |
 | `action`: files must change or tests run | all eight |
 
-Stage 2 also runs on any route when stage 1 says research or file reading is
-needed. Skipped stages are marked SKIP in the TUI. If stage 1's reply is not
+Stage 2 also runs on any route when stage 1 lists outside facts to check or
+says file reading is needed. Stage 2 checks the knowledge store first, and
+skips its own web searches when every query matches a stored page or topic
+summary. Skipped stages are marked SKIP in the TUI. If stage 1's reply is not
 valid JSON, every stage runs and research is decided by keywords in the prompt.
 
 Design points:
@@ -147,8 +149,10 @@ The worker yields to foreground work. It takes the shared model lock for one
 model call at a time, checks before every step and every generated token
 whether a prompt has started, and if so puts its job back in the queue.
 
-Topics reach the queue in two ways. A search during a request that finds
-nothing is queued, so the worker tries it again later. Otherwise, add topics on
+Topics reach the queue in two ways. Every search during a request is queued
+unless its topic already has facts: one that found results is turned into
+facts, and one that found nothing is tried again later. A page fetched during a
+request keeps its summary in the store as well. Otherwise, add topics on
 the Background page: **Queue topic** adds one to the queue, and **Research now** starts it at once, even
 while idle research is paused. The worker stops when the TUI exits. One-shot
 CLI runs read and write the knowledge store but do not start the worker.

@@ -39,6 +39,8 @@
 - [x] Return a matched fact with its chain of parent summaries during retrieval
 - [x] Record entity relationships from extracted facts in the graph
 - [x] Queue background research from searches that found nothing
+- [x] Save fetched page summaries and queue successful searches for fact extraction
+- [x] Answer from stored summaries without searching again
 - [ ] Queue background research from unsupported claims and recurring topics
 - [x] Fetch full pages during background research, not snippets only
 - [ ] Merge duplicate facts, flag contradictions, and prune unused facts in the background
