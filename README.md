@@ -28,8 +28,8 @@ earlier results it needs.
 | 4. Review plan | Check the plan against the request before anything runs; output a corrected outline and the exact tool actions still needed | Stages 1 to 3, evidence | none |
 | 5. Act | Carry out only the reviewed tool actions | Stage 4, evidence | file tools, `run_tests`, MCP tools (no web) |
 | 6. Draft | Write the answer from the reviewed outline and action results | Stages 4 and 5, evidence | none |
-| 7. Critique | Mark each requirement as met, partly met, or missing; list corrections | Stages 4 to 6, evidence | none |
-| 8. Revise | Apply the valid corrections and return only the final answer | Stages 4 to 7, evidence | none |
+| 7. Critique | Return JSON marking each requirement met, partly met, or missing, with a fix for each one not met, plus other issues | Stages 1 and 4 to 6, evidence | none |
+| 8. Revise | Apply the corrections and return only the final answer | Stages 4 to 7, evidence | none |
 
 Stage 1's reply is constrained by a JSON schema, which llama.cpp enforces as a
 grammar, so even a small model returns a well-formed analysis. Its task type
@@ -61,8 +61,14 @@ Design points:
   `max_tokens`, and tool results are cut to the room that is left, so long
   evidence is shortened rather than overflowing the window. Fetched pages are
   summarized in chunks, then the chunk summaries are merged.
-- **Graceful failure.** If the critique or revision fails, the draft is returned
-  with a note saying so.
+- **Revise only what failed.** When every requirement is met and the critique
+  finds no other issue, the revision is skipped and the draft is the answer.
+  Otherwise the revision gets only the corrections, and the result is critiqued
+  again, for at most two rounds.
+- **Citation check.** Any URL the answer cites that does not appear in the
+  captured evidence is added to the corrections, whatever the critique says.
+- **Graceful failure.** If a critique or revision fails, the latest answer is
+  returned with a note saying so.
 - **Clarification.** In an interactive session the model may ask one concise
   question after stage 1; otherwise it proceeds and states its assumption.
 

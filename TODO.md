@@ -21,8 +21,8 @@
 - [x] Let stage 1 decide whether research is needed instead of keyword regexes
 - [x] Let the model write focused search queries instead of reusing the prompt
 - [ ] Turn the plan into numbered steps and run each step as its own small call
-- [ ] Make the critique mark each requirement pass or fail and revise only what failed, in a bounded loop
-- [ ] Add checks that do not rely on the model, such as cited URLs appearing in the evidence
+- [x] Make the critique mark each requirement pass or fail and revise only what failed, in a bounded loop
+- [x] Add checks that do not rely on the model, such as cited URLs appearing in the evidence
 - [ ] Count tokens with the model's tokenizer instead of a characters-per-token estimate
 - [ ] Never trim the original request; summarize older stage output instead of cutting it
 - [ ] Give each stage its own reply token budget

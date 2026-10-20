@@ -11,6 +11,7 @@ from smartharness.pipeline import (
     TASK_ANALYSIS_SCHEMA,
     ModelCache,
     _parse_task_analysis,
+    _uncited_urls,
     _requires_web_research,
     _search_query,
     _summarize_web_page,
@@ -563,6 +564,75 @@ class RoutingTests(unittest.TestCase):
             )
 
         self.assertEqual(questions, ["Which language?"])
+
+
+def critique_json(*statuses, other_issues=()):
+    return json.dumps({
+        "checks": [
+            {"requirement": f"Requirement {index}", "status": status, "fix": "" if status == "met" else f"Fix {index}"}
+            for index, status in enumerate(statuses, start=1)
+        ],
+        "other_issues": list(other_issues),
+    })
+
+
+class CritiqueTests(unittest.TestCase):
+    def run_reasoning(self, *replies, evidence_search=None):
+        stage_calls = []
+        progress = []
+        results = iter([task_json("reasoning"), "Plan", "Outline", *replies])
+
+        def fake_run_stage(llm, system_prompt, user_input, **kwargs):
+            stage_calls.append((system_prompt, user_input, kwargs))
+            return next(results)
+
+        with (
+            patch("smartharness.pipeline.run_stage", side_effect=fake_run_stage),
+            patch("smartharness.pipeline.run_tool_stage", side_effect=AssertionError("tool stage")),
+        ):
+            result = execute_pipeline("Compare two designs", llm=object(), progress_callback=progress.append)
+        return result, stage_calls[3:], progress
+
+    def test_passing_critique_skips_the_revision(self):
+        result, calls, progress = self.run_reasoning("Draft", critique_json("met", "met"))
+
+        self.assertEqual(result, "Draft")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(progress[-1], "Skipped: Stage 8/8: Revising the response")
+
+    def test_failed_requirements_are_revised_then_rechecked(self):
+        result, calls, _ = self.run_reasoning(
+            "Draft", critique_json("met", "missing"), "Revised", critique_json("met", "met")
+        )
+
+        self.assertEqual(result, "Revised")
+        self.assertEqual(len(calls), 4)
+        self.assertIn("Requirement 2 (missing): Fix 2", calls[2][1])
+        self.assertNotIn("Requirement 1", calls[2][1])
+        self.assertIn("Stage 6 result:\nRevised", calls[3][1])
+
+    def test_revision_rounds_are_bounded(self):
+        result, calls, _ = self.run_reasoning(
+            "Draft", critique_json("partly met"), "Revised once",
+            critique_json("partly met"), "Revised twice",
+        )
+
+        self.assertEqual(result, "Revised twice")
+        self.assertEqual(len(calls), 5)
+
+    def test_answer_citing_a_url_missing_from_the_evidence_is_revised(self):
+        result, calls, _ = self.run_reasoning(
+            "See https://invented.example/page.", critique_json("met"), "Fixed", critique_json("met")
+        )
+
+        self.assertEqual(result, "Fixed")
+        self.assertIn("https://invented.example/page, which is not in the captured evidence", calls[2][1])
+
+    def test_uncited_urls_ignore_trailing_punctuation_and_known_sources(self):
+        evidence = '[{"url": "https://docs.example/a"}]'
+        answer = "Per https://docs.example/a, and https://other.example/b."
+
+        self.assertEqual(_uncited_urls(answer, evidence), ["https://other.example/b"])
 
 
 class ModelCacheTests(unittest.TestCase):
