@@ -34,6 +34,7 @@ TASK_TYPES = ("direct", "reasoning", "research", "action")
 TASK_ANALYSIS_MAX_TOKENS = 1024
 CRITIQUE_MAX_TOKENS = 1024
 MAX_SEARCH_QUERIES = 3
+MAX_FACTS_TO_CHECK = 5
 
 # Fields come in this order so the model lists requirements before it picks a route.
 TASK_ANALYSIS_SCHEMA = {
@@ -42,14 +43,14 @@ TASK_ANALYSIS_SCHEMA = {
         "requirements": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 8},
         "constraints": {"type": "array", "items": {"type": "string"}, "maxItems": 8},
         "assumptions": {"type": "array", "items": {"type": "string"}, "maxItems": 5},
-        "needs_research": {"type": "boolean"},
+        "facts_to_check": {"type": "array", "items": {"type": "string"}, "maxItems": MAX_FACTS_TO_CHECK},
         "needs_files": {"type": "boolean"},
         "search_queries": {"type": "array", "items": {"type": "string"}, "maxItems": MAX_SEARCH_QUERIES},
         "task_type": {"type": "string", "enum": list(TASK_TYPES)},
         "clarification": {"type": "string"},
     },
     "required": [
-        "requirements", "constraints", "assumptions", "needs_research",
+        "requirements", "constraints", "assumptions", "facts_to_check",
         "needs_files", "search_queries", "task_type", "clarification",
     ],
 }
@@ -144,7 +145,8 @@ def _parse_task_analysis(result: str) -> TaskAnalysis | None:
         clarification = None
     queries = [query[:MAX_SEARCH_QUERY_CHARS] for query in strings("search_queries")][:MAX_SEARCH_QUERIES]
     task_type = data["task_type"]
-    needs_research = bool(data.get("needs_research")) or task_type == "research"
+    # A small model cannot tell when it does not know something, so any listed fact means a search.
+    needs_research = bool(strings("facts_to_check")) or task_type == "research"
     return TaskAnalysis(
         task_type=task_type,
         checklist="\n".join(lines),
@@ -548,8 +550,12 @@ def execute_pipeline(
             " requirement that could affect the answer in 'requirements', each"
             " as one short sentence; avoid minor paraphrases and do not omit any."
             " List explicit limits in 'constraints' and assumptions you are"
-            " making in 'assumptions'. Set 'needs_research' to true when the"
-            " answer depends on current, external, or uncertain facts, and then"
+            " making in 'assumptions'. In 'facts_to_check', list each outside"
+            " fact the answer would state: what a named product, device,"
+            " project, person, place, or term is, and any version, date,"
+            " number, or specification. Leave it empty only when the answer"
+            " needs nothing beyond the request itself, such as arithmetic,"
+            " logic, or rewriting text the user gave. When it is not empty,"
             " write up to three short web search queries in 'search_queries',"
             " leaving out pasted code. Set 'needs_files' to true when local"
             " files must be read or changed. Choose 'task_type': 'direct' for a"
@@ -759,7 +765,10 @@ def execute_pipeline(
     else:
         skip_stage(research_label)
 
-    source_check = ""
+    source_check = (
+        " If the request names something you do not recognise, say so"
+        " plainly instead of guessing what it is."
+    )
     if analysis.needs_research or {"web_search", "web_fetch"} & toolbox.used_tools:
         source_check = (
             " For researched factual claims, use only captured search evidence:"

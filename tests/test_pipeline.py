@@ -475,7 +475,7 @@ def task_json(task_type, needs_research=False, needs_files=False, queries=(), cl
         "requirements": ["Answer the question", "Keep it short"],
         "constraints": ["Use plain words"],
         "assumptions": [],
-        "needs_research": needs_research,
+        "facts_to_check": ["What the named thing is"] if needs_research else [],
         "needs_files": needs_files,
         "search_queries": list(queries),
         "task_type": task_type,
@@ -520,6 +520,36 @@ class RoutingTests(unittest.TestCase):
             [label.partition(":")[0] for label in progress],
             ["Stage 1/8", "Skipped", "Skipped", "Skipped", "Skipped", "Stage 6/8", "Skipped", "Skipped"],
         )
+
+    def test_direct_request_that_lists_a_fact_still_searches(self):
+        searches = []
+        results = iter([task_json("direct", needs_research=True, queries=["PineTime"]), "Answer"])
+
+        def fake_search(toolbox, name, arguments):
+            searches.append(arguments["query"])
+            return "[]"
+
+        with (
+            patch("smartharness.pipeline.run_stage", side_effect=lambda *args, **kwargs: next(results)),
+            patch("smartharness.pipeline.run_tool_stage", return_value="Findings"),
+            patch("smartharness.pipeline.Toolbox.call", new=fake_search),
+        ):
+            execute_pipeline("What is a PineTime?", llm=object(), progress_callback=lambda label: None)
+
+        self.assertEqual(searches, ["PineTime"])
+
+    def test_draft_without_research_is_told_not_to_guess(self):
+        stage_calls = []
+        results = iter([task_json("direct"), "Answer"])
+
+        def fake_run_stage(llm, system_prompt, user_input, **kwargs):
+            stage_calls.append(system_prompt)
+            return next(results)
+
+        with patch("smartharness.pipeline.run_stage", side_effect=fake_run_stage):
+            execute_pipeline("What is 2 + 2?", llm=object(), progress_callback=lambda label: None)
+
+        self.assertIn("instead of guessing", stage_calls[1])
 
     def test_research_request_searches_each_written_query_and_skips_actions(self):
         searches = []
