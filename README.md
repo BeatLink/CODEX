@@ -302,8 +302,10 @@ Changes that need no model come first:
 - Topics whose names have the same words, such as "Python packaging" and
   "packaging Python", are merged, and so are facts under one topic that differ
   only in case and punctuation.
-- Topics with no facts, sources, subtopics, or unfinished or failed research
-  are removed.
+- Topics with no facts, sources, or subtopics, such as a parent whose
+  subtopics were filed elsewhere, are queued for research, unless their
+  research is still unfinished or has failed. A full queue leaves them for a
+  later pass.
 - Low-confidence facts that have never been recalled are pruned once they are
   `background_prune_after_days` old. A pruned fact stays in the store and comes
   back if research finds it again.

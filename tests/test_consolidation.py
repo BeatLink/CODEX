@@ -53,15 +53,24 @@ class TidyTests(ConsolidationTestCase):
         self.assertEqual(set(facts), {"Wheels are built distributions.", "Sdists hold source code."})
         self.assertEqual(facts["Wheels are built distributions."]["confidence"], 0.9)
 
-    def test_empty_topics_go_but_queued_and_failed_ones_stay(self):
+    def test_empty_topics_are_queued_for_research_once(self):
         self.store.add_topic("Empty")
         failed_job = self.store.enqueue_topic("Failed")
         self.store.claim_job()
         self.store.finish_job(failed_job, "No results")
         self.store.enqueue_topic("Queued")
 
-        self.assertEqual(self.store.tidy(prune_after_days=90), {"empty topics removed": 1})
-        self.assertEqual(set(self.topic_names()), {"Queued", "Failed"})
+        self.assertEqual(self.store.tidy(prune_after_days=90), {"empty topics queued for research": 1})
+        self.assertEqual(self.store.tidy(prune_after_days=90), {})
+        self.assertEqual(set(self.topic_names()), {"Empty", "Queued", "Failed"})
+        pending = {job["topic"] for job in self.store.queue_status() if job["status"] == "pending"}
+        self.assertEqual(pending, {"Empty", "Queued"})
+
+    def test_empty_topics_wait_while_the_queue_is_full(self):
+        self.store.add_topic("Empty")
+        self.store.enqueue_topic("Queued")
+
+        self.assertEqual(self.store.tidy(prune_after_days=90, max_pending=1), {})
 
     def test_old_unused_low_confidence_facts_are_pruned_and_return_when_found_again(self):
         self.store.add_fact("SQLite", "SQLite is small.", confidence=0.3)

@@ -661,14 +661,14 @@ class KnowledgeStore:
     # Consolidation
     # ==========================================================================
 
-    def tidy(self, prune_after_days: int) -> dict[str, int]:
-        """Make every change that needs no model: break parent loops, merge exact duplicates, and drop what is empty or stale."""
+    def tidy(self, prune_after_days: int, max_pending: int = 100) -> dict[str, int]:
+        """Make every change that needs no model: break parent loops, merge exact duplicates, research empty topics, and prune stale facts."""
         with self._connect() as connection:
             changes = {
                 "parent loops broken": self._break_topic_loops(connection),
                 "topics merged": self._merge_same_named_topics(connection),
                 "facts merged": self._merge_same_worded_facts(connection),
-                "empty topics removed": self._remove_empty_topics(connection),
+                "empty topics queued for research": self._queue_empty_topics(connection, max_pending),
             }
             changes["facts pruned"] = connection.execute(
                 "UPDATE facts SET status = 'pruned' WHERE status = 'active' AND use_count = 0 "
@@ -968,17 +968,24 @@ class KnowledgeStore:
             merged += 1
         return merged
 
-    def _remove_empty_topics(self, connection: sqlite3.Connection) -> int:
-        """Delete topics with no facts, sources, subtopics, or unfinished or failed research."""
+    def _queue_empty_topics(self, connection: sqlite3.Connection, max_pending: int) -> int:
+        """Queue research for topics with no facts, sources, or subtopics, unless research is unfinished or has failed."""
+        pending_count = connection.execute(
+            "SELECT COUNT(*) FROM research_queue WHERE status = 'pending'"
+        ).fetchone()[0]
         rows = connection.execute(
-            "SELECT id, name FROM topics t WHERE "
+            "SELECT id FROM topics t WHERE "
             "NOT EXISTS (SELECT 1 FROM facts f WHERE f.topic_id = t.id) "
             "AND NOT EXISTS (SELECT 1 FROM sources s WHERE s.topic_id = t.id) "
             "AND NOT EXISTS (SELECT 1 FROM topics c WHERE c.parent_id = t.id) "
-            "AND NOT EXISTS (SELECT 1 FROM research_queue q WHERE q.topic_id = t.id AND q.status != 'done')"
+            "AND NOT EXISTS (SELECT 1 FROM research_queue q WHERE q.topic_id = t.id AND q.status != 'done') "
+            "ORDER BY t.priority DESC, t.use_count DESC, t.id LIMIT ?",
+            (max(0, max_pending - pending_count),),
         ).fetchall()
-        for row in rows:
-            self._delete_topic(connection, row["id"], row["name"])
+        connection.executemany(
+            "INSERT OR IGNORE INTO research_queue(topic_id, requested_at) VALUES (?, ?)",
+            [(row["id"], time.time()) for row in rows],
+        )
         return len(rows)
 
     def _delete_topic(self, connection: sqlite3.Connection, topic_id: int, name: str) -> None:
