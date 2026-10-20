@@ -53,6 +53,15 @@
 - [x] Track memory usage counts
 - [ ] Refresh topics by usage and staleness
 - [ ] Add embedding retrieval with sqlite-vec and combine it with FTS5 ranking
+- [ ] Count recalled memory as evidence in the task tree's URL and value checks, as the pipeline does
+- [ ] Recall memory for each task's own prompt and search queries, not only once for the whole request
+- [ ] Rank recalled facts by FTS5 score and term overlap instead of requiring half the prompt's terms
+- [ ] Retrieve along the topic tree: pick the best-matching branch, then search only the facts under it
+- [ ] Add one-hop graph neighbours of entities named in recalled facts to the remembered context
+- [ ] Give facts an expiry from their source and recheck them when their topic is refreshed
+- [ ] Check that an extracted fact's numbers, dates, and distinctive words appear in the source it cites
+- [ ] Queue background research from the user's recorded projects
+- [ ] Compare differently worded duplicate topics and facts during consolidation, once embeddings exist
 - [x] Add SQLite-backed knowledge storage with schema initialization and version guard
 - [x] Add full-text knowledge retrieval and source provenance/freshness metadata
 - [x] Add SQLite graph tables for topics, entities, and relationships
