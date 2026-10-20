@@ -3,13 +3,15 @@ from datetime import datetime
 from threading import Event
 from threading import Lock
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable
 
 from textual import work
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.css.query import NoMatches
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
+from textual.theme import Theme
 from textual.widgets import (
     Button,
     Checkbox,
@@ -43,14 +45,29 @@ STAGE_LABELS = (
     "Stage 8/8: Revising the response",
 )
 STAGE_TAB_TITLES = ("Task", "Research", "Plan", "Actions", "Review", "Draft", "Critique", "Revise")
+PHASE_WAITING_TEXT = "_Waiting for this phase..._"
+FINAL_WAITING_TEXT = "Your final response will appear here."
+BACKGROUND_WAITING_TEXT = "_Waiting for background work..._"
+
+SMARTHARNESS_THEME = Theme(
+    name="smartharness",
+    primary="#e5b85c",
+    foreground="#e4ebe4",
+    background="#101715",
+    surface="#141d19",
+    panel="#17221e",
+    dark=True,
+)
+THEME_VARIABLE_DEFAULTS = {
+    "field-border": "#34473d",
+    "label-text": "#9caf9f",
+    "stage-text": "#83968a",
+    "footer-foreground": "#a3b5a9",
+}
 
 
-class AutoScrollMarkdown(Markdown):
-    def on_markdown_table_of_contents_updated(
-        self, event: Markdown.TableOfContentsUpdated
-    ) -> None:
-        if isinstance(self.parent, VerticalScroll):
-            self.parent.scroll_end(animate=False)
+class RunCancelled(Exception):
+    pass
 
 
 class ClarificationScreen(ModalScreen[str]):
@@ -91,21 +108,22 @@ class SmartHarnessApp(App[None]):
     TITLE = "SmartHarness"
     SUB_TITLE = "LOCAL MODEL WORKBENCH"
     BINDINGS = [
-        ("ctrl+enter", "run_prompt", "Run prompt"),
+        ("ctrl+r", "run_prompt", "Run prompt"),
+        Binding("ctrl+enter", "run_prompt", "Run prompt", show=False),
         ("ctrl+q", "quit", "Quit"),
     ]
     CSS = """
     Screen {
-        background: #101715;
-        color: #e4ebe4;
+        background: $background;
+        color: $foreground;
     }
     Header {
-        background: #17221e;
-        color: #e4ebe4;
+        background: $panel;
+        color: $foreground;
     }
     Footer {
-        background: #17221e;
-        color: #a3b5a9;
+        background: $panel;
+        color: $footer-foreground;
     }
     #workspace {
         height: 1fr;
@@ -115,7 +133,7 @@ class SmartHarnessApp(App[None]):
         width: 34;
         min-width: 30;
         padding: 0 2 1 0;
-        border-right: solid #34473d;
+        border-right: solid $field-border;
     }
     #content {
         width: 1fr;
@@ -123,34 +141,37 @@ class SmartHarnessApp(App[None]):
     }
     .eyebrow {
         height: 1;
-        color: #e5b85c;
+        color: $primary;
         text-style: bold;
+    }
+    .section-heading {
+        margin-top: 2;
     }
     .field-label {
         height: 1;
         margin-top: 1;
-        color: #9caf9f;
+        color: $label-text;
     }
     Input {
         height: 3;
-        border: tall #34473d;
-        background: #141d19;
+        border: tall $field-border;
+        background: $surface;
     }
     Input:focus, TextArea:focus {
-        border: tall #e5b85c;
+        border: tall $primary;
     }
     .wrapped-field {
         height: 3;
         min-height: 3;
-        border: tall #34473d;
-        background: #141d19;
+        border: tall $field-border;
+        background: $surface;
     }
-    #numeric-row {
-        height: 5;
-        margin-top: 1;
+    .numeric-row {
+        height: auto;
     }
     .numeric-field {
         width: 1fr;
+        height: auto;
         margin-right: 1;
     }
     .numeric-field Input {
@@ -158,32 +179,28 @@ class SmartHarnessApp(App[None]):
     }
     Checkbox {
         margin-top: 1;
-        color: #c5d0c7;
-    }
-    #stage-heading {
-        margin-top: 2;
-        margin-bottom: 1;
+        color: $foreground;
     }
     .stage-row {
         height: 2;
-        color: #83968a;
+        color: $stage-text;
     }
     #status {
         height: 2;
         margin-top: 1;
-        color: #e5b85c;
+        color: $primary;
     }
-    #prompt-label, #answer-label {
+    #prompt-label {
         height: 1;
         margin-bottom: 1;
-        color: #9caf9f;
+        color: $label-text;
         text-style: bold;
     }
     #prompt {
         height: 1fr;
         min-height: 7;
-        border: tall #34473d;
-        background: #141d19;
+        border: tall $field-border;
+        background: $surface;
     }
     #actions {
         height: 3;
@@ -193,57 +210,74 @@ class SmartHarnessApp(App[None]):
         margin-right: 1;
         min-width: 12;
     }
-    #workbench-tabs, #request-pane, #output-pane {
+    #main-tabs, #workbench, #workspace, #workbench-tabs, #request-pane, #output-pane {
         height: 1fr;
+    }
+    #background-page, #options-page, #knowledge-page {
+        height: 1fr;
+        padding: 1 2;
     }
     #phase-tabs {
         height: 1fr;
         min-height: 7;
-        border: tall #34473d;
-        background: #141d19;
+        border: tall $field-border;
+        background: $surface;
     }
-    #main-tabs, #workbench, #background-page, #knowledge-page {
-        height: 1fr;
+    #background-output-scroll, #knowledge-detail-scroll, #knowledge-graph-scroll {
+        border: tall $field-border;
+        background: $surface;
+        padding: 1;
     }
-    #background-output, #knowledge-detail, #knowledge-graph {
+    #background-output-scroll {
         height: 1fr;
         min-height: 8;
-        border: tall #34473d;
-        background: #141d19;
-        padding: 1;
+    }
+    #knowledge-browser {
+        height: 1fr;
+        min-height: 8;
+        margin-bottom: 1;
     }
     #knowledge-tree {
         width: 1fr;
         min-width: 24;
-        border: tall #34473d;
-        background: #141d19;
+        border: tall $field-border;
+        background: $surface;
     }
-    #knowledge-detail {
+    #knowledge-detail-scroll {
         width: 2fr;
+        height: 1fr;
     }
-    #knowledge-graph {
+    #knowledge-graph-scroll {
         height: 10;
     }
-    #tool-limits-heading {
-        margin-top: 2;
-    }
-    #tool-limits-row {
-        height: 5;
-    }
-    #background-settings, #knowledge-search-row, #topic-row, #knowledge-browser {
+    #knowledge-search-row, #topic-row {
         height: auto;
         min-height: 3;
         margin-bottom: 1;
     }
-    .compact-input {
+    #knowledge-search, #research-topic {
         width: 1fr;
         margin-right: 1;
+    }
+    #research-priority-field {
+        width: 14;
+        height: auto;
+        margin-right: 1;
+    }
+    #research-topic-field {
+        width: 1fr;
+        height: auto;
+    }
+    #topic-buttons {
+        width: auto;
+        height: 3;
+        margin-top: 2;
     }
     #background-status, #background-queue {
         height: auto;
         min-height: 2;
         margin-bottom: 1;
-        color: #e5b85c;
+        color: $primary;
     }
     .stage-output-scroll {
         height: 1fr;
@@ -257,8 +291,8 @@ class SmartHarnessApp(App[None]):
         height: auto;
         max-height: 80%;
         padding: 1 2 2 2;
-        border: tall #e5b85c;
-        background: #17221e;
+        border: tall $primary;
+        background: $panel;
     }
     #clarification-question {
         height: auto;
@@ -277,195 +311,199 @@ class SmartHarnessApp(App[None]):
         settings_path: str | Path | None = None,
     ) -> None:
         super().__init__()
+        self.register_theme(SMARTHARNESS_THEME)
+        self.theme = SMARTHARNESS_THEME.name
         self.settings = settings.copy()
         self.initial_prompt = initial_prompt
         self.settings_path = Path(settings_path).expanduser() if settings_path else None
         self._request_running = False
         self._last_answer = ""
+        self._active_stage: int | None = None
+        self._follow_stages = True
+        self._programmatic_phase_tabs: list[str] = []
         self._stage_output_buffers = [""] * len(STAGE_LABELS)
+        self._pending_stage_output: list[list[str]] = [[] for _ in STAGE_LABELS]
         self._background_output = ""
         self._background_status_text = "Idle"
         self._queue_text = "No research jobs"
         self._pending_background_tokens: list[str] = []
+        self._knowledge_query = ""
+        self._knowledge_topic_id: int | None = None
         self._knowledge_topics: list[dict[str, Any]] = []
         self._knowledge_sources: list[dict[str, Any]] = []
         self._knowledge_graph: list[dict[str, Any]] = []
+        self._knowledge_tree_signature: tuple[Any, ...] | None = None
+        self._knowledge_stores: dict[str, KnowledgeStore] = {}
         self._worker_stop = Event()
         self._worker_wakeup = Event()
         self._background_run_requested = Event()
+        self._cancel_requested = Event()
         self._model_lock = Lock()
-        self._pending_stage_output = [[] for _ in STAGE_LABELS]
+
+    # ==========================================================================
+    # Layout
+    # ==========================================================================
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
+        with TabbedContent(id="main-tabs"):
+            with TabPane("Workbench", id="workbench"):
+                yield from self._compose_workbench_page()
+            with TabPane("Background", id="background-page"):
+                yield from self._compose_background_page()
+            with TabPane("Options", id="options-page"):
+                yield from self._compose_options_page()
+            with TabPane("Knowledge", id="knowledge-page"):
+                yield from self._compose_knowledge_page()
+        yield Footer()
+
+    def _compose_workbench_page(self) -> ComposeResult:
         with Horizontal(id="workspace"):
             with VerticalScroll(id="sidebar"):
-                yield Static("MODEL CONFIGURATION", classes="eyebrow")
-                yield Label("GGUF model path", classes="field-label")
-                yield TextArea(
-                    self.settings["model_path"],
-                    soft_wrap=True,
-                    classes="wrapped-field",
-                    id="model-path",
-                )
-                with Horizontal(id="numeric-row-one"):
-                    for label, key in (("Context", "context-size"), ("GPU layers", "gpu-layers")):
-                        with Vertical(classes="numeric-field"):
-                            yield Label(label, classes="field-label")
-                            value = self.settings["context_size"] if key == "context-size" else self.settings["gpu_layers"]
-                            yield Input(value=str(value), id=key)
-                with Horizontal(id="numeric-row-two"):
-                    for label, key in (("Max tokens", "max-tokens"), ("Temperature", "temperature")):
-                        with Vertical(classes="numeric-field"):
-                            yield Label(label, classes="field-label")
-                            value = self.settings["max_tokens"] if key == "max-tokens" else self.settings["temperature"]
-                            yield Input(value=str(value), id=key)
-                yield Static("PIPELINE", classes="eyebrow", id="stage-heading")
+                yield Static("PIPELINE", classes="eyebrow")
                 for index, label in enumerate(STAGE_LABELS, start=1):
-                    yield Static(f"WAIT  {label}", classes="stage-row", id=f"stage-{index}")
+                    yield Static(f"WAIT  {label}", classes="stage-row", id=f"stage-row-{index}")
                 yield Static("Ready", id="status")
-            with TabbedContent(id="main-tabs"):
-                with TabPane("Workbench", id="workbench"):
-                    with TabbedContent(initial="request-pane", id="workbench-tabs"):
-                        with TabPane("Request", id="request-pane"):
-                            with Vertical(id="content"):
-                                yield Static("YOUR REQUEST", classes="eyebrow", id="prompt-label")
-                                yield TextArea(
-                                    self.initial_prompt,
-                                    show_line_numbers=False,
-                                    id="prompt",
-                                )
-                                with Horizontal(id="actions"):
-                                    yield Button("Run  Ctrl+Enter", id="run", variant="primary")
-                                    yield Button("Clear", id="clear")
-                                    yield Button("Copy answer", id="copy", disabled=True)
-                        with TabPane("Output", id="output-pane"):
-                            with TabbedContent(initial="final", id="phase-tabs"):
-                                for index, title in enumerate(STAGE_TAB_TITLES, start=1):
-                                    with TabPane(f"{index} {title}", id=f"stage-{index}"):
-                                        with VerticalScroll(classes="stage-output-scroll"):
-                                            yield AutoScrollMarkdown(
-                                                "_Waiting for this phase..._",
-                                                classes="stage-output",
-                                                id=f"stage-output-{index}",
-                                            )
-                                with TabPane("Final", id="final"):
-                                    with VerticalScroll(classes="stage-output-scroll"):
-                                        yield AutoScrollMarkdown(
-                                            "Your final response will appear here.",
-                                            classes="stage-output",
-                                            id="final-output",
-                                        )
-                with TabPane("Background", id="background-page"):
-                    with VerticalScroll():
-                        yield Static("BACKGROUND RESEARCH", classes="eyebrow")
-                        yield Static("Idle", id="background-status")
-                        with Horizontal(id="background-settings"):
-                            yield Checkbox(
-                                "Enable idle research",
-                                value=self.settings["background_research_enabled"],
-                                id="background-enabled",
-                            )
-                            yield Input(
-                                value=str(self.settings["background_poll_interval_seconds"]),
-                                placeholder="Poll seconds",
-                                classes="compact-input",
-                                id="background-poll-seconds",
-                            )
-                            yield Input(
-                                value=str(self.settings["background_refresh_interval_hours"]),
-                                placeholder="Refresh hours",
-                                classes="compact-input",
-                                id="background-refresh-hours",
-                            )
-                            yield Input(
-                                value=str(self.settings["background_max_tokens"]),
-                                placeholder="Max tokens",
-                                classes="compact-input",
-                                id="background-max-tokens",
-                            )
-                            yield Input(
-                                value=str(self.settings["background_max_pending_jobs"]),
-                                placeholder="Queue cap",
-                                classes="compact-input",
-                                id="background-queue-cap",
-                            )
-                        yield Label("SQLite database", classes="field-label")
-                        yield TextArea(
-                            self.settings["knowledge_db_path"],
-                            soft_wrap=True,
-                            classes="wrapped-field",
-                            id="knowledge-db-path",
-                        )
-                        with Horizontal(classes="button-row"):
-                            yield Button("Apply", id="apply-background", variant="primary")
-                            yield Button("Save settings", id="save-settings")
-                        with Horizontal(id="topic-row"):
-                            yield TextArea(
-                                soft_wrap=True,
-                                classes="wrapped-field",
-                                id="research-topic",
-                            )
-                            yield Input(value="0", placeholder="Priority", id="research-priority")
-                            yield Button("Queue topic", id="queue-topic")
-                        with Horizontal(classes="button-row"):
-                            yield Button("Research now", id="research-now", variant="primary")
-                        yield Static("QUEUE", classes="eyebrow")
-                        yield Static("No research jobs", id="background-queue")
-                        yield Static("MODEL OUTPUT", classes="eyebrow")
-                        yield AutoScrollMarkdown(
-                            "_Waiting for background work..._", id="background-output"
-                        )
-                with TabPane("Options", id="options-page"):
-                    with VerticalScroll():
-                        yield Static("FOLDER ACCESS", classes="eyebrow")
-                        yield Label("Filesystem root", classes="field-label")
-                        yield TextArea(
-                            self.settings["filesystem_root"],
-                            soft_wrap=True,
-                            classes="wrapped-field",
-                            id="filesystem-root",
-                        )
-                        yield Checkbox(
-                            "Allow model to create and replace files (read-only when off)",
-                            value=self.settings["allow_file_writes"],
-                            id="allow-file-writes",
-                        )
-                        yield Checkbox(
-                            "Allow model to run project tests",
-                            value=self.settings["enable_test_execution"],
-                            id="enable-test-execution",
-                        )
-                        yield Static("TOOL LIMITS", classes="eyebrow", id="tool-limits-heading")
-                        with Horizontal(id="tool-limits-row"):
-                            for label, key, setting in (
-                                ("Max tool calls (1-10)", "max-tool-calls", "max_tool_calls"),
-                                ("Max search results (1-10)", "max-search-results", "max_search_results"),
-                            ):
-                                with Vertical(classes="numeric-field"):
-                                    yield Label(label, classes="field-label")
-                                    yield Input(value=str(self.settings[setting]), id=key)
-                        with Horizontal(classes="button-row"):
-                            yield Button("Apply", id="apply-options", variant="primary")
-                            yield Button("Save settings", id="save-options")
-                with TabPane("Knowledge", id="knowledge-page"):
-                    with Vertical(id="knowledge-page-content"):
-                        yield Static("KNOWLEDGE STORE", classes="eyebrow")
-                        yield Label("Search stored evidence", classes="field-label")
-                        with Horizontal(id="knowledge-search-row"):
-                            yield TextArea(
-                                soft_wrap=True,
-                                classes="wrapped-field",
-                                id="knowledge-search",
-                            )
-                            yield Button("Search", id="search-knowledge")
-                            yield Button("Refresh", id="refresh-knowledge")
-                        with Horizontal(id="knowledge-browser"):
-                            yield Tree("Topics", id="knowledge-tree")
-                            yield Markdown("Select a topic or search stored evidence.", id="knowledge-detail")
-                        yield Static("GRAPH RELATIONSHIPS", classes="eyebrow")
-                        yield Markdown("_No graph relationships yet._", id="knowledge-graph")
-        yield Footer()
+            with TabbedContent(initial="request-pane", id="workbench-tabs"):
+                with TabPane("Request", id="request-pane"):
+                    with Vertical(id="content"):
+                        yield Static("YOUR REQUEST", classes="eyebrow", id="prompt-label")
+                        yield TextArea(self.initial_prompt, show_line_numbers=False, id="prompt")
+                        with Horizontal(id="actions"):
+                            yield Button("Run  Ctrl+R", id="run", variant="primary")
+                            yield Button("Cancel", id="cancel", disabled=True)
+                            yield Button("Clear", id="clear")
+                            yield Button("Copy answer", id="copy", disabled=True)
+                with TabPane("Output", id="output-pane"):
+                    with TabbedContent(initial="final", id="phase-tabs"):
+                        for index, title in enumerate(STAGE_TAB_TITLES, start=1):
+                            with TabPane(f"{index} {title}", id=f"phase-{index}"):
+                                with VerticalScroll(classes="stage-output-scroll"):
+                                    yield Markdown(
+                                        PHASE_WAITING_TEXT,
+                                        classes="stage-output",
+                                        id=f"stage-output-{index}",
+                                    )
+                        with TabPane("Final", id="final"):
+                            with VerticalScroll(classes="stage-output-scroll"):
+                                yield Markdown(FINAL_WAITING_TEXT, classes="stage-output", id="final-output")
+
+    def _compose_background_page(self) -> ComposeResult:
+        with Vertical():
+            yield Static("BACKGROUND RESEARCH", classes="eyebrow")
+            yield Static("Idle", id="background-status")
+            yield Checkbox(
+                "Enable idle research",
+                value=self.settings["background_research_enabled"],
+                id="background-enabled",
+            )
+            with Horizontal(id="topic-row"):
+                with Vertical(id="research-topic-field"):
+                    yield Label("Research topic", classes="field-label")
+                    yield Input(placeholder="Topic to research", id="research-topic")
+                with Vertical(id="research-priority-field"):
+                    yield Label("Priority", classes="field-label")
+                    yield Input(value="0", id="research-priority")
+                with Horizontal(id="topic-buttons"):
+                    yield Button("Queue topic", id="queue-topic")
+                    yield Button("Research now", id="research-now", variant="primary")
+            yield Static("QUEUE", classes="eyebrow")
+            yield Static("No research jobs", id="background-queue")
+            yield Static("MODEL OUTPUT", classes="eyebrow")
+            with VerticalScroll(id="background-output-scroll"):
+                yield Markdown(BACKGROUND_WAITING_TEXT, id="background-output")
+
+    def _compose_options_page(self) -> ComposeResult:
+        with VerticalScroll():
+            yield Static("MODEL", classes="eyebrow")
+            yield Label("GGUF model path", classes="field-label")
+            yield TextArea(
+                self.settings["model_path"],
+                soft_wrap=True,
+                classes="wrapped-field",
+                id="model-path",
+            )
+            yield from self._number_fields(
+                ("Context", "context-size", "context_size"),
+                ("GPU layers", "gpu-layers", "gpu_layers"),
+                ("Max tokens", "max-tokens", "max_tokens"),
+                ("Temperature", "temperature", "temperature"),
+            )
+
+            yield Static("FOLDER ACCESS", classes="eyebrow section-heading")
+            yield Label("Filesystem root", classes="field-label")
+            yield TextArea(
+                self.settings["filesystem_root"],
+                soft_wrap=True,
+                classes="wrapped-field",
+                id="filesystem-root",
+            )
+            yield Checkbox(
+                "Allow model to create and replace files (read-only when off)",
+                value=self.settings["allow_file_writes"],
+                id="allow-file-writes",
+            )
+            yield Checkbox(
+                "Allow model to run project tests",
+                value=self.settings["enable_test_execution"],
+                id="enable-test-execution",
+            )
+
+            yield Static("TOOL LIMITS", classes="eyebrow section-heading")
+            yield from self._number_fields(
+                ("Max tool calls (1-10)", "max-tool-calls", "max_tool_calls"),
+                ("Max search results (1-10)", "max-search-results", "max_search_results"),
+            )
+
+            yield Static("BACKGROUND RESEARCH", classes="eyebrow section-heading")
+            yield from self._number_fields(
+                ("Poll seconds", "background-poll-seconds", "background_poll_interval_seconds"),
+                ("Refresh hours", "background-refresh-hours", "background_refresh_interval_hours"),
+                ("Max tokens", "background-max-tokens", "background_max_tokens"),
+                ("Queue cap", "background-queue-cap", "background_max_pending_jobs"),
+            )
+            yield Label("SQLite database", classes="field-label")
+            yield TextArea(
+                self.settings["knowledge_db_path"],
+                soft_wrap=True,
+                classes="wrapped-field",
+                id="knowledge-db-path",
+            )
+
+            with Horizontal(classes="button-row"):
+                yield Button("Apply", id="apply-options", variant="primary")
+                yield Button("Save settings", id="save-options")
+
+    def _compose_knowledge_page(self) -> ComposeResult:
+        with Vertical(id="knowledge-page-content"):
+            yield Static("KNOWLEDGE STORE", classes="eyebrow")
+            yield Label("Search stored evidence", classes="field-label")
+            with Horizontal(id="knowledge-search-row"):
+                yield Input(placeholder="Press Enter to search", id="knowledge-search")
+                yield Button("Search", id="search-knowledge")
+                yield Button("Refresh", id="refresh-knowledge")
+            with Horizontal(id="knowledge-browser"):
+                yield Tree("Topics", id="knowledge-tree")
+                with VerticalScroll(id="knowledge-detail-scroll"):
+                    yield Markdown("Select a topic or search stored evidence.", id="knowledge-detail")
+            yield Static("GRAPH RELATIONSHIPS", classes="eyebrow")
+            with VerticalScroll(id="knowledge-graph-scroll"):
+                yield Markdown("_No graph relationships yet._", id="knowledge-graph")
+
+    def _number_fields(self, *fields: tuple[str, str, str]) -> ComposeResult:
+        for row_start in range(0, len(fields), 2):
+            with Horizontal(classes="numeric-row"):
+                for label, input_id, setting in fields[row_start : row_start + 2]:
+                    with Vertical(classes="numeric-field"):
+                        yield Label(label, classes="field-label")
+                        yield Input(value=str(self.settings[setting]), id=input_id)
+
+    # ==========================================================================
+    # App lifecycle and events
+    # ==========================================================================
+
+    def get_theme_variable_defaults(self) -> dict[str, str]:
+        return THEME_VARIABLE_DEFAULTS
 
     def on_mount(self) -> None:
         self.query_one("#prompt", TextArea).focus()
@@ -484,55 +522,58 @@ class SmartHarnessApp(App[None]):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "run":
             self._start_run()
+        elif event.button.id == "cancel":
+            self._cancel_run()
         elif event.button.id == "clear":
-            self.query_one("#prompt", TextArea).text = ""
-            self.query_one("#final-output", Markdown).update("Your final response will appear here.")
-            self.query_one("#copy", Button).disabled = True
-            self._last_answer = ""
-            self._reset_stages()
-            self.query_one("#status", Static).update("Ready")
+            self._clear_workbench()
         elif event.button.id == "copy":
-            if self._last_answer:
-                self.copy_to_clipboard(self._last_answer)
-                self.notify("Answer copied to clipboard.", title="SmartHarness")
-        elif event.button.id in ("apply-background", "apply-options"):
+            self._copy_answer()
+        elif event.button.id == "apply-options":
             self._apply_settings()
-        elif event.button.id in ("save-settings", "save-options"):
+        elif event.button.id == "save-options":
             self._save_settings()
         elif event.button.id == "queue-topic":
             self._queue_topic()
         elif event.button.id == "research-now":
             self._trigger_background_research()
         elif event.button.id == "search-knowledge":
-            self._refresh_knowledge(query=self.query_one("#knowledge-search", TextArea).text)
+            self._search_knowledge(self.query_one("#knowledge-search", Input).value)
         elif event.button.id == "refresh-knowledge":
             self._refresh_knowledge()
 
-    def _start_run(self) -> None:
-        if self._request_running:
-            return
-        prompt = self.query_one("#prompt", TextArea).text.strip()
-        if not prompt:
-            self.notify("Enter a prompt before running.", title="Prompt required", severity="warning")
-            self.query_one("#prompt", TextArea).focus()
-            return
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "knowledge-search":
+            self._search_knowledge(event.value)
+        elif event.input.id in ("research-topic", "research-priority"):
+            self._queue_topic()
 
-        try:
-            settings = self._collect_settings()
-        except ValueError as error:
-            self.notify(str(error), title="Invalid settings", severity="error")
-            return
+    def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
+        if event.checkbox.id == "background-enabled":
+            self.settings = {**self.settings, "background_research_enabled": event.value}
+            self._show_background_idle_status()
+            self._worker_wakeup.set()
 
-        self._reset_stages()
-        self.query_one("#final-output", Markdown).update("_Working on your request..._")
-        self._show_output_pane()
-        self.query_one("#copy", Button).disabled = True
-        self.query_one("#run", Button).disabled = True
-        self.query_one("#status", Static).update("Starting local model...")
-        self._request_running = True
-        self.settings = settings
-        self._worker_wakeup.set()
-        self.run_pipeline(prompt, settings)
+    def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
+        if event.tabbed_content.id == "main-tabs":
+            if event.pane.id == "background-page":
+                self._render_background_page()
+            elif event.pane.id == "knowledge-page":
+                self._refresh_knowledge()
+        elif event.tabbed_content.id == "phase-tabs":
+            if event.pane.id in self._programmatic_phase_tabs:
+                self._programmatic_phase_tabs.remove(event.pane.id)
+            elif self._request_running:
+                self._follow_stages = False
+
+    def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
+        selected = event.node.data
+        self._knowledge_query = ""
+        self._knowledge_topic_id = selected if isinstance(selected, int) else None
+        self._refresh_knowledge()
+
+    # ==========================================================================
+    # Settings
+    # ==========================================================================
 
     def _collect_settings(self) -> dict[str, Any]:
         settings = self.settings.copy()
@@ -565,8 +606,7 @@ class SmartHarnessApp(App[None]):
             self.notify(str(error), title="Invalid settings", severity="error")
             return False
         self._worker_wakeup.set()
-        status = "Waiting for prompt-free time" if self.settings["background_research_enabled"] else "Paused"
-        self.query_one("#background-status", Static).update(status)
+        self._show_background_idle_status()
         return True
 
     def _save_settings(self) -> None:
@@ -580,51 +620,6 @@ class SmartHarnessApp(App[None]):
             return
         self.notify(f"Settings saved to {path}.", title="SmartHarness")
 
-    def _queue_topic(self) -> bool:
-        topic = self.query_one("#research-topic", TextArea).text.strip()
-        if not topic:
-            self.notify("Enter a topic to research.", title="Topic required", severity="warning")
-            return False
-        try:
-            priority = int(self.query_one("#research-priority", Input).value)
-            settings = self._collect_settings()
-            store = KnowledgeStore(settings["knowledge_db_path"])
-            store.enqueue_topic(
-                topic,
-                priority=priority,
-                max_pending=settings["background_max_pending_jobs"],
-            )
-        except (OSError, ValueError) as error:
-            self.notify(str(error), title="Could not queue topic", severity="error")
-            return False
-        self.settings = settings
-        self.query_one("#research-topic", TextArea).text = ""
-        self._refresh_queue()
-        self._worker_wakeup.set()
-        return True
-
-    def _trigger_background_research(self) -> None:
-        topic = self.query_one("#research-topic", TextArea).text.strip()
-        if topic and not self._queue_topic():
-            return
-        try:
-            jobs = KnowledgeStore(self.settings["knowledge_db_path"]).queue_status()
-        except (OSError, ValueError, KeyError) as error:
-            self.notify(str(error), title="Could not start research", severity="error")
-            return
-        if not any(job["status"] == "pending" for job in jobs):
-            self.notify("Queue a topic before starting research.", title="No pending research", severity="warning")
-            return
-        self._background_run_requested.set()
-        self._worker_wakeup.set()
-
-    def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
-        if event.tabbed_content.id == "main-tabs":
-            if event.pane.id == "background-page":
-                self._render_background_page()
-            elif event.pane.id == "knowledge-page":
-                self._refresh_knowledge()
-
     def _int_setting(self, selector: str) -> int:
         value = self.query_one(f"#{selector}", Input).value
         try:
@@ -637,11 +632,279 @@ class SmartHarnessApp(App[None]):
         try:
             return float(value)
         except ValueError as error:
-            raise ValueError("temperature must be a number.") from error
+            raise ValueError(f"{selector.replace('-', ' ')} must be a number.") from error
+
+    def _knowledge_store(self, database_path: str) -> KnowledgeStore:
+        store = self._knowledge_stores.get(database_path)
+        if store is None:
+            store = KnowledgeStore(database_path)
+            self._knowledge_stores[database_path] = store
+        return store
+
+    # ==========================================================================
+    # Foreground run
+    # ==========================================================================
+
+    def _start_run(self) -> None:
+        if self._request_running:
+            return
+        prompt = self.query_one("#prompt", TextArea).text.strip()
+        if not prompt:
+            self.notify("Enter a prompt before running.", title="Prompt required", severity="warning")
+            self.query_one("#prompt", TextArea).focus()
+            return
+
+        try:
+            settings = self._collect_settings()
+        except ValueError as error:
+            self.notify(str(error), title="Invalid settings", severity="error")
+            return
+
+        self._reset_stages()
+        self.query_one("#final-output", Markdown).update("_Working on your request..._")
+        self._show_output_pane()
+        self.query_one("#status", Static).update("Starting local model...")
+        self._cancel_requested.clear()
+        self._set_running(True)
+        self.settings = settings
+        self._worker_wakeup.set()
+        self.run_pipeline(prompt, settings)
+
+    def _set_running(self, running: bool) -> None:
+        self._request_running = running
+        self.query_one("#run", Button).disabled = running
+        self.query_one("#clear", Button).disabled = running
+        self.query_one("#cancel", Button).disabled = not running
+        self.query_one("#copy", Button).disabled = running or not self._last_answer
+
+    def _cancel_run(self) -> None:
+        if not self._request_running:
+            return
+        self._cancel_requested.set()
+        self.query_one("#cancel", Button).disabled = True
+        self.query_one("#status", Static).update("Cancelling...")
+
+    def _clear_workbench(self) -> None:
+        if self._request_running:
+            return
+        self.query_one("#prompt", TextArea).text = ""
+        self.query_one("#final-output", Markdown).update(FINAL_WAITING_TEXT)
+        self._last_answer = ""
+        self.query_one("#copy", Button).disabled = True
+        self._reset_stages()
+        self.query_one("#status", Static).update("Ready")
+
+    def _copy_answer(self) -> None:
+        if not self._last_answer:
+            return
+        self.copy_to_clipboard(self._last_answer)
+        self.notify(
+            "Sent the answer to the terminal clipboard. Terminals without OSC 52 support ignore it.",
+            title="SmartHarness",
+        )
+
+    def _show_output_pane(self) -> None:
+        # Focus moves too, or Textual switches back to the tab holding the focused prompt.
+        self.query_one("#workbench-tabs", TabbedContent).active = "output-pane"
+        self.query_one("#phase-tabs", TabbedContent).query_one(Tabs).focus()
+
+    def _show_phase_tab(self, pane_id: str) -> None:
+        tabs = self.query_one("#phase-tabs", TabbedContent)
+        if tabs.active != pane_id:
+            self._programmatic_phase_tabs.append(pane_id)
+            tabs.active = pane_id
+
+    def _set_stage_row(self, index: int, state: str) -> None:
+        self.query_one(f"#stage-row-{index + 1}", Static).update(f"{state}  {STAGE_LABELS[index]}")
+
+    def _reset_stages(self) -> None:
+        self._active_stage = None
+        self._follow_stages = True
+        for index in range(len(STAGE_LABELS)):
+            self._set_stage_row(index, "WAIT")
+            self._stage_output_buffers[index] = ""
+            self._pending_stage_output[index].clear()
+            self.query_one(f"#stage-output-{index + 1}", Markdown).update(PHASE_WAITING_TEXT)
+        self._show_phase_tab("final")
+
+    def _append_stage_output(self, label: str, token: str) -> None:
+        try:
+            index = STAGE_LABELS.index(label)
+        except ValueError:
+            return
+        self._pending_stage_output[index].append(token)
+
+    def _flush_stage_output(self) -> None:
+        for index, pending in enumerate(self._pending_stage_output):
+            if not pending:
+                continue
+            new_text = "".join(pending)
+            pending.clear()
+            output = self.query_one(f"#stage-output-{index + 1}", Markdown)
+            self._write_markdown(output, new_text, append=bool(self._stage_output_buffers[index]))
+            self._stage_output_buffers[index] += new_text
+        self._flush_background_output()
+
+    def _write_markdown(self, output: Markdown, text: str, append: bool) -> None:
+        scroll = output.parent
+        assert isinstance(scroll, VerticalScroll)
+        following = scroll.scroll_y >= scroll.max_scroll_y - 1
+        written = output.append(text) if append else output.update(text)
+        if following:
+            self.run_worker(self._scroll_to_end_after(written, scroll), group="output-scroll")
+
+    async def _scroll_to_end_after(self, written: Awaitable[Any], scroll: VerticalScroll) -> None:
+        await written
+        scroll.scroll_end(animate=False)
+
+    def _update_stage(self, label: str) -> None:
+        self._flush_stage_output()
+        if label == "Loading model":
+            self.query_one("#status", Static).update("Loading local model...")
+            return
+        try:
+            active = STAGE_LABELS.index(label)
+        except ValueError:
+            self.query_one("#status", Static).update(label)
+            return
+        self._active_stage = active
+        for index in range(len(STAGE_LABELS)):
+            self._set_stage_row(index, "DONE" if index < active else "NOW " if index == active else "WAIT")
+        if self._follow_stages:
+            self._show_phase_tab(f"phase-{active + 1}")
+        self.query_one("#status", Static).update(f"Stage {active + 1} of {len(STAGE_LABELS)}")
+
+    def _finish_run(self, result: str) -> None:
+        self._flush_stage_output()
+        self._last_answer = result
+        self._set_running(False)
+        self.query_one("#final-output", Markdown).update(result)
+        self._show_phase_tab("final")
+        for index in range(len(STAGE_LABELS)):
+            self._set_stage_row(index, "DONE")
+        self.query_one("#status", Static).update("Complete")
+        self._worker_wakeup.set()
+
+    def _stop_run(self, final_text: str, stage_state: str, status: str) -> None:
+        self._flush_stage_output()
+        self._set_running(False)
+        self.query_one("#final-output", Markdown).update(final_text)
+        self._show_phase_tab("final")
+        if self._active_stage is not None:
+            self._set_stage_row(self._active_stage, stage_state)
+        self.query_one("#status", Static).update(status)
+        self._worker_wakeup.set()
+
+    def _fail_run(self, message: str) -> None:
+        self._stop_run(f"**Run failed**\n\n{message}", "FAIL", "Run failed")
+        self.notify(message, title="SmartHarness error", severity="error", timeout=8)
+
+    def _cancelled_run(self) -> None:
+        self._stop_run("_Run cancelled._", "STOP", "Cancelled")
+
+    def _raise_if_cancelled(self) -> None:
+        if self._cancel_requested.is_set() or self._worker_stop.is_set():
+            raise RunCancelled
+
+    def _request_clarification(self, question: str) -> str:
+        completed = Event()
+        answer: dict[str, str] = {}
+
+        def show_dialog() -> None:
+            def on_dismiss(value: str | None) -> None:
+                answer["value"] = value or ""
+                completed.set()
+
+            self.push_screen(ClarificationScreen(question), on_dismiss)
+
+        self.call_from_thread(show_dialog)
+        while not completed.wait(0.2):
+            self._raise_if_cancelled()
+        return answer.get("value", "")
+
+    @work(thread=True, exclusive=True, group="pipeline")
+    def run_pipeline(self, prompt: str, settings: dict[str, Any]) -> None:
+        def report_progress(label: str) -> None:
+            self._raise_if_cancelled()
+            self.call_from_thread(self._update_stage, label)
+
+        def report_token(label: str, token: str) -> None:
+            self._raise_if_cancelled()
+            self.call_from_thread(self._append_stage_output, label, token)
+
+        try:
+            with self._model_lock:
+                result = execute_pipeline(
+                    prompt,
+                    model_path=settings["model_path"],
+                    context_size=settings["context_size"],
+                    gpu_layers=settings["gpu_layers"],
+                    max_tokens=settings["max_tokens"],
+                    temperature=settings["temperature"],
+                    filesystem_root=settings["filesystem_root"],
+                    max_tool_calls=settings["max_tool_calls"],
+                    max_search_results=settings["max_search_results"],
+                    enable_test_execution=settings["enable_test_execution"],
+                    allow_file_writes=settings["allow_file_writes"],
+                    mcp_servers=settings["mcp_servers"],
+                    knowledge_db_path=settings["knowledge_db_path"],
+                    show_thinking=False,
+                    clarification_callback=self._request_clarification,
+                    progress_callback=report_progress,
+                    stage_output_callback=report_token,
+                )
+        except RunCancelled:
+            if not self._worker_stop.is_set():
+                self.call_from_thread(self._cancelled_run)
+        except Exception as error:
+            self.call_from_thread(self._fail_run, str(error))
+        else:
+            self.call_from_thread(self._finish_run, result)
+
+    # ==========================================================================
+    # Background research
+    # ==========================================================================
+
+    def _queue_topic(self) -> bool:
+        topic = self.query_one("#research-topic", Input).value.strip()
+        if not topic:
+            self.notify("Enter a topic to research.", title="Topic required", severity="warning")
+            return False
+        try:
+            priority = int(self.query_one("#research-priority", Input).value)
+            settings = self._collect_settings()
+            self._knowledge_store(settings["knowledge_db_path"]).enqueue_topic(
+                topic,
+                priority=priority,
+                max_pending=settings["background_max_pending_jobs"],
+            )
+        except (OSError, ValueError) as error:
+            self.notify(str(error), title="Could not queue topic", severity="error")
+            return False
+        self.settings = settings
+        self.query_one("#research-topic", Input).value = ""
+        self._refresh_queue()
+        self._worker_wakeup.set()
+        return True
+
+    def _trigger_background_research(self) -> None:
+        topic = self.query_one("#research-topic", Input).value.strip()
+        if topic and not self._queue_topic():
+            return
+        try:
+            jobs = self._knowledge_store(self.settings["knowledge_db_path"]).queue_status()
+        except (OSError, ValueError, KeyError) as error:
+            self.notify(str(error), title="Could not start research", severity="error")
+            return
+        if not any(job["status"] == "pending" for job in jobs):
+            self.notify("Queue a topic before starting research.", title="No pending research", severity="warning")
+            return
+        self._background_run_requested.set()
+        self._worker_wakeup.set()
 
     def _refresh_queue(self) -> None:
         try:
-            jobs = KnowledgeStore(self.settings["knowledge_db_path"]).queue_status()
+            jobs = self._knowledge_store(self.settings["knowledge_db_path"]).queue_status()
         except (OSError, ValueError, KeyError):
             jobs = []
         if not jobs:
@@ -658,101 +921,27 @@ class SmartHarnessApp(App[None]):
         except NoMatches:
             pass
 
-    def _refresh_knowledge(self, query: str = "", topic_id: int | None = None) -> None:
-        try:
-            store = KnowledgeStore(self.settings["knowledge_db_path"])
-            topics = store.topics()
-            sources = store.search(query) if query.strip() else store.sources(topic_id, limit=30)
-            graph = store.graph()
-        except (OSError, ValueError, KeyError):
-            return
-
-        self._knowledge_topics = topics
-        self._knowledge_sources = sources
-        self._knowledge_graph = graph
-        try:
-            self._render_knowledge()
-        except NoMatches:
-            pass
-
-    def _render_knowledge(self) -> None:
-        topics = self._knowledge_topics
-        sources = self._knowledge_sources
-        graph = self._knowledge_graph
-        tree = self.query_one("#knowledge-tree", Tree)
-        tree.root.remove_children()
-        by_id = {topic["id"]: topic for topic in topics}
-        children: dict[int | None, list[dict[str, Any]]] = {}
-        for topic in topics:
-            children.setdefault(topic["parent_id"], []).append(topic)
-
-        def add_children(parent_node: Any, parent_id: int | None, visited: set[int]) -> None:
-            for topic in children.get(parent_id, []):
-                if topic["id"] in visited:
-                    continue
-                visited.add(topic["id"])
-                node = parent_node.add(
-                    f"{topic['name']}  ({topic['source_count']})", data=topic["id"]
-                )
-                add_children(node, topic["id"], visited)
-
-        visited: set[int] = set()
-        add_children(tree.root, None, visited)
-        for topic_id_orphan, topic in by_id.items():
-            if topic_id_orphan not in visited:
-                node = tree.root.add(f"{topic['name']}  ({topic['source_count']})", data=topic_id_orphan)
-                add_children(node, topic_id_orphan, visited)
-        tree.root.expand()
-
-        if sources:
-            detail = []
-            for source in sources:
-                title = source.get("title") or source["url"]
-                when = datetime.fromtimestamp(source["retrieved_at"]).strftime("%Y-%m-%d %H:%M")
-                detail.append(
-                    f"### [{title}]({source['url']})\n"
-                    f"{source.get('topic') or 'Uncategorized'} | Retrieved {when}\n\n"
-                    f"{source.get('snippet', '')}\n\n"
-                    f"{source.get('summary', '')}"
-                )
-            self.query_one("#knowledge-detail", Markdown).update("\n\n---\n\n".join(detail))
-        else:
-            self.query_one("#knowledge-detail", Markdown).update("_No matching stored evidence._")
-
-        edge_lines = [
-            f"`{edge['source']}` -{edge['relation']}-> `{edge['target']}`"
-            + (f" ([evidence]({edge['evidence_url']}))" if edge["evidence_url"] else "")
-            for edge in graph[:50]
-        ]
-        self.query_one("#knowledge-graph", Markdown).update(
-            "\n".join(edge_lines) if edge_lines else "_No graph relationships yet._"
-        )
-
-    def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
-        selected = event.node.data
-        self._refresh_knowledge(topic_id=selected if isinstance(selected, int) else None)
+    def _show_background_idle_status(self) -> None:
+        status = "Waiting for prompt-free time" if self.settings["background_research_enabled"] else "Paused"
+        self._set_background_status(status)
 
     def _set_background_status(self, message: str) -> None:
         self._background_status_text = message
-        if message.startswith("Searching:"):
+        starting_search = message.startswith("Searching:")
+        if starting_search:
             self._background_output = ""
             self._pending_background_tokens.clear()
         try:
             self.query_one("#background-status", Static).update(message)
-        except NoMatches:
-            pass
-        try:
-            if message.startswith("Searching:"):
-                output = self.query_one("#background-output", Markdown)
-                output.update("_Searching and summarizing..._")
+            if starting_search:
+                self.query_one("#background-output", Markdown).update("_Searching and summarizing..._")
         except NoMatches:
             pass
 
     def _render_background_page(self) -> None:
         self.query_one("#background-status", Static).update(self._background_status_text)
         self.query_one("#background-queue", Static).update(self._queue_text)
-        output = self.query_one("#background-output", Markdown)
-        output.update(self._background_output or "_Waiting for background work..._")
+        self.query_one("#background-output", Markdown).update(self._background_output or BACKGROUND_WAITING_TEXT)
         self._refresh_queue()
 
     def _append_background_token(self, token: str) -> None:
@@ -761,15 +950,17 @@ class SmartHarnessApp(App[None]):
     def _flush_background_output(self) -> None:
         if not self._pending_background_tokens:
             return
-        self._background_output += "".join(self._pending_background_tokens)
+        new_text = "".join(self._pending_background_tokens)
         self._pending_background_tokens.clear()
         try:
             output = self.query_one("#background-output", Markdown)
-            output.update(self._background_output)
         except NoMatches:
-            pass
+            self._background_output += new_text
+            return
+        self._write_markdown(output, new_text, append=bool(self._background_output))
+        self._background_output += new_text
 
-    @work(thread=True, exclusive=True)
+    @work(thread=True, exclusive=True, group="background")
     def run_background_worker(self) -> None:
         while not self._worker_stop.is_set():
             settings = self.settings.copy()
@@ -784,8 +975,7 @@ class SmartHarnessApp(App[None]):
                 if manual_run_requested:
                     self._background_run_requested.clear()
                 try:
-                    store = KnowledgeStore(settings["knowledge_db_path"])
-                    store.enqueue_due_topics(
+                    self._knowledge_store(settings["knowledge_db_path"]).enqueue_due_topics(
                         settings["background_refresh_interval_hours"],
                         settings["background_max_pending_jobs"],
                     )
@@ -814,122 +1004,117 @@ class SmartHarnessApp(App[None]):
             self._worker_wakeup.wait(wait_seconds)
             self._worker_wakeup.clear()
 
-    def _show_output_pane(self) -> None:
-        # Focus moves too, or Textual switches back to the tab holding the focused prompt.
-        self.query_one("#workbench-tabs", TabbedContent).active = "output-pane"
-        self.query_one("#phase-tabs", TabbedContent).query_one(Tabs).focus()
+    # ==========================================================================
+    # Knowledge browser
+    # ==========================================================================
 
-    def _reset_stages(self) -> None:
-        for index, label in enumerate(STAGE_LABELS, start=1):
-            self.query_one(f"#stage-{index}", Static).update(f"WAIT  {label}")
-            self._stage_output_buffers[index - 1] = ""
-            self._pending_stage_output[index - 1].clear()
-            self.query_one(f"#stage-output-{index}", Markdown).update("_Waiting for this phase..._")
-        self.query_one("#phase-tabs", TabbedContent).active = "final"
+    def _search_knowledge(self, query: str) -> None:
+        self._knowledge_query = query.strip()
+        self._knowledge_topic_id = None
+        self._refresh_knowledge()
 
-    def _append_stage_output(self, label: str, token: str) -> None:
+    def _refresh_knowledge(self) -> None:
+        self.load_knowledge(
+            self.settings["knowledge_db_path"], self._knowledge_query, self._knowledge_topic_id
+        )
+
+    @work(thread=True, exclusive=True, group="knowledge")
+    def load_knowledge(self, database_path: str, query: str, topic_id: int | None) -> None:
         try:
-            index = STAGE_LABELS.index(label)
-        except ValueError:
+            store = self._knowledge_store(database_path)
+            topics = store.topics()
+            sources = store.search(query) if query else store.sources(topic_id, limit=30)
+            graph = store.graph()
+        except (OSError, ValueError, KeyError):
             return
-        self._pending_stage_output[index].append(token)
+        self.call_from_thread(self._show_knowledge, topics, sources, graph)
 
-    def _flush_stage_output(self) -> None:
-        for index, pending in enumerate(self._pending_stage_output):
-            if not pending:
-                continue
-            self._stage_output_buffers[index] += "".join(pending)
-            pending.clear()
-            output = self.query_one(f"#stage-output-{index + 1}", Markdown)
-            output.update(self._stage_output_buffers[index])
-        self._flush_background_output()
-
-    def _update_stage(self, label: str) -> None:
-        self._flush_stage_output()
-        if label == "Loading model":
-            self.query_one("#status", Static).update("Loading local model...")
-            return
+    def _show_knowledge(
+        self,
+        topics: list[dict[str, Any]],
+        sources: list[dict[str, Any]],
+        graph: list[dict[str, Any]],
+    ) -> None:
+        self._knowledge_topics = topics
+        self._knowledge_sources = sources
+        self._knowledge_graph = graph
         try:
-            active = STAGE_LABELS.index(label)
-        except ValueError:
-            self.query_one("#status", Static).update(label)
+            self._render_knowledge_tree()
+            self._render_knowledge_sources()
+            self._render_knowledge_graph()
+        except NoMatches:
+            pass
+
+    def _render_knowledge_tree(self) -> None:
+        topics = self._knowledge_topics
+        signature = tuple(
+            (topic["id"], topic["parent_id"], topic["name"], topic["source_count"]) for topic in topics
+        )
+        if signature == self._knowledge_tree_signature:
             return
-        for index, stage_label in enumerate(STAGE_LABELS):
-            state = "DONE" if index < active else "NOW " if index == active else "WAIT"
-            self.query_one(f"#stage-{index + 1}", Static).update(f"{state}  {stage_label}")
-        self.query_one("#phase-tabs", TabbedContent).active = f"stage-{active + 1}"
-        self._show_output_pane()
-        self.query_one("#status", Static).update(f"Stage {active + 1} of {len(STAGE_LABELS)}")
+        self._knowledge_tree_signature = signature
 
-    def _finish_run(self, result: str) -> None:
-        self._flush_stage_output()
-        self._request_running = False
-        self._last_answer = result
-        final_output = self.query_one("#final-output", Markdown)
-        final_output.update(result)
-        self.query_one("#phase-tabs", TabbedContent).active = "final"
-        self.query_one("#copy", Button).disabled = False
-        self.query_one("#run", Button).disabled = False
-        for index, label in enumerate(STAGE_LABELS, start=1):
-            self.query_one(f"#stage-{index}", Static).update(f"DONE  {label}")
-        self.query_one("#status", Static).update("Complete")
-        self._worker_wakeup.set()
+        tree = self.query_one("#knowledge-tree", Tree)
+        expanded_ids = self._expanded_topic_ids(tree.root)
+        tree.root.remove_children()
+        by_id = {topic["id"]: topic for topic in topics}
+        children: dict[int | None, list[dict[str, Any]]] = {}
+        for topic in topics:
+            children.setdefault(topic["parent_id"], []).append(topic)
 
-    def _fail_run(self, message: str) -> None:
-        self._flush_stage_output()
-        self._request_running = False
-        final_output = self.query_one("#final-output", Markdown)
-        final_output.update(f"**Run failed**\n\n{message}")
-        self.query_one("#phase-tabs", TabbedContent).active = "final"
-        self.query_one("#run", Button).disabled = False
-        self.query_one("#status", Static).update("Run failed")
-        self.notify(message, title="SmartHarness error", severity="error", timeout=8)
-        self._worker_wakeup.set()
+        def add_topic(parent_node: Any, topic: dict[str, Any], visited: set[int]) -> None:
+            visited.add(topic["id"])
+            node = parent_node.add(
+                f"{topic['name']}  ({topic['source_count']})",
+                data=topic["id"],
+                expand=topic["id"] in expanded_ids,
+            )
+            for child in children.get(topic["id"], []):
+                if child["id"] not in visited:
+                    add_topic(node, child, visited)
 
-    def _request_clarification(self, question: str) -> str:
-        completed = Event()
-        answer: dict[str, str] = {}
+        visited: set[int] = set()
+        for topic in children.get(None, []):
+            add_topic(tree.root, topic, visited)
+        for topic_id, topic in by_id.items():
+            if topic_id not in visited:
+                add_topic(tree.root, topic, visited)
+        tree.root.expand()
 
-        def show_dialog() -> None:
-            def on_dismiss(value: str | None) -> None:
-                answer["value"] = value or ""
-                completed.set()
+    def _expanded_topic_ids(self, node: Any) -> set[int]:
+        expanded: set[int] = set()
+        for child in node.children:
+            if child.is_expanded and isinstance(child.data, int):
+                expanded.add(child.data)
+            expanded |= self._expanded_topic_ids(child)
+        return expanded
 
-            self.push_screen(ClarificationScreen(question), on_dismiss)
+    def _render_knowledge_sources(self) -> None:
+        detail = self.query_one("#knowledge-detail", Markdown)
+        if not self._knowledge_sources:
+            detail.update("_No matching stored evidence._")
+            return
+        entries = []
+        for source in self._knowledge_sources:
+            title = source.get("title") or source["url"]
+            when = datetime.fromtimestamp(source["retrieved_at"]).strftime("%Y-%m-%d %H:%M")
+            entries.append(
+                f"### [{title}]({source['url']})\n"
+                f"{source.get('topic') or 'Uncategorized'} | Retrieved {when}\n\n"
+                f"{source.get('snippet', '')}\n\n"
+                f"{source.get('summary', '')}"
+            )
+        detail.update("\n\n---\n\n".join(entries))
 
-        self.call_from_thread(show_dialog)
-        completed.wait()
-        return answer.get("value", "")
-
-    @work(thread=True, exclusive=True)
-    def run_pipeline(self, prompt: str, settings: dict[str, Any]) -> None:
-        try:
-            with self._model_lock:
-                result = execute_pipeline(
-                    prompt,
-                    model_path=settings["model_path"],
-                    context_size=settings["context_size"],
-                    gpu_layers=settings["gpu_layers"],
-                    max_tokens=settings["max_tokens"],
-                    temperature=settings["temperature"],
-                    filesystem_root=settings["filesystem_root"],
-                    max_tool_calls=settings["max_tool_calls"],
-                    max_search_results=settings["max_search_results"],
-                    enable_test_execution=settings["enable_test_execution"],
-                    allow_file_writes=settings["allow_file_writes"],
-                    mcp_servers=settings["mcp_servers"],
-                    knowledge_db_path=settings["knowledge_db_path"],
-                    show_thinking=False,
-                    clarification_callback=self._request_clarification,
-                    progress_callback=lambda label: self.call_from_thread(self._update_stage, label),
-                    stage_output_callback=lambda label, token: self.call_from_thread(
-                        self._append_stage_output, label, token
-                    ),
-                )
-        except Exception as error:
-            self.call_from_thread(self._fail_run, str(error))
-        else:
-            self.call_from_thread(self._finish_run, result)
+    def _render_knowledge_graph(self) -> None:
+        edge_lines = [
+            f"`{edge['source']}` -{edge['relation']}-> `{edge['target']}`"
+            + (f" ([evidence]({edge['evidence_url']}))" if edge["evidence_url"] else "")
+            for edge in self._knowledge_graph[:50]
+        ]
+        self.query_one("#knowledge-graph", Markdown).update(
+            "\n\n".join(edge_lines) if edge_lines else "_No graph relationships yet._"
+        )
 
 
 def main(argv: list[str] | None = None) -> int:

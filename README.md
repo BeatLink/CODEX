@@ -65,8 +65,8 @@ for research-intent prompts. Expired or missing evidence falls back to web
 search. Search results contain snippets only; pages are not fetched or
 independently verified.
 
-When the TUI is open, its Background page can queue research topics and control
-the idle worker. Enter a topic and choose **Research now** to start a queued
+When the TUI is open, its Background page can queue research topics and pause or
+resume the idle worker; the worker's intervals and limits are on the Options page. Enter a topic and choose **Research now** to start a queued
 job immediately, even when idle research is paused; **Queue topic** adds work
 without starting it manually. The worker refreshes previously researched topics after
 `background_refresh_interval_hours`, summarizes search snippets with the local
@@ -129,10 +129,11 @@ echo "Summarize this design" | python -m smartharness
 
 In a terminal, launch `smartharness` without a prompt to open the interactive
 Textual interface. You can also launch it explicitly with `smartharness --tui`
-or `smartharness-tui`; the TUI lets you edit runtime settings, follow pipeline
-stage progress, inspect each phase's streamed output in its own tab, set
-folder access and tool limits on the Options page, answer
-clarification questions, configure background research, browse stored
-knowledge, and read or copy the final Markdown response. Use
+or `smartharness-tui`; the TUI lets you run a prompt with **Ctrl+R** (or the
+Run button) and cancel it mid-run, follow pipeline stage progress, inspect each
+phase's streamed output in its own tab, answer clarification questions, queue
+background research, browse stored knowledge, and read or copy the final
+Markdown response. All settings (model, folder access, tool limits and
+background research) live on the Options page. Use
 `--settings path/to/settings.json` to select a settings file; TUI changes can
 be saved back to that file.
