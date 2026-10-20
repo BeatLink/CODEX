@@ -116,10 +116,31 @@ _MIGRATIONS = (
     """
     ALTER TABLE episodes ADD COLUMN task_tree TEXT NOT NULL DEFAULT '';
     """,
+    """
+    ALTER TABLE topics ADD COLUMN placed_at REAL;
+    ALTER TABLE user_memory ADD COLUMN status TEXT NOT NULL DEFAULT 'active';
+    CREATE TABLE consolidation_checks (
+        kind TEXT NOT NULL,
+        first_id INTEGER NOT NULL,
+        second_id INTEGER NOT NULL,
+        verdict TEXT NOT NULL,
+        checked_at REAL NOT NULL,
+        PRIMARY KEY (kind, first_id, second_id)
+    );
+    """,
 )
 
 MEMORY_KINDS = ("fact", "episode")
 USER_MEMORY_KINDS = ("preference", "project", "correction")
+
+# What consolidation compares: two topics, two facts under one topic, or two user memories.
+CONSOLIDATION_KINDS = ("topic", "fact", "memory")
+
+# Two items sharing at least this share of their words are compared by the model.
+SIMILAR_OVERLAP = 0.5
+
+# Facts this weak are pruned once they have gone unused for the configured number of days.
+PRUNE_BELOW_CONFIDENCE = 0.5
 
 
 def _search_terms(query: str) -> list[str]:
@@ -131,6 +152,23 @@ def _search_terms(query: str) -> list[str]:
 
 def _match_expression(terms: list[str]) -> str:
     return " OR ".join('"' + term.replace('"', '""') + '"' for term in terms)
+
+
+def _comparison_terms(text: str) -> frozenset[str]:
+    """Return the meaningful words of a short text, with a plural 's' dropped, for comparing two items."""
+    return frozenset(
+        term[:-1] if len(term) > 3 and term.endswith("s") else term
+        for term in re.findall(r"\w{2,}", text.casefold())
+        if term not in _SEARCH_STOPWORDS
+    )
+
+
+def _overlap(first: frozenset[str], second: frozenset[str]) -> float:
+    return len(first & second) / len(first | second) if first or second else 0.0
+
+
+def _same_wording(statement: str) -> str:
+    return " ".join(re.findall(r"\w+", statement.casefold()))
 
 
 def _shares_half_the_terms(terms: list[str], text: str) -> bool:
@@ -428,6 +466,12 @@ class KnowledgeStore:
             if source_url:
                 row = connection.execute("SELECT id FROM sources WHERE url = ?", (source_url,)).fetchone()
                 source_id = row["id"] if row else None
+            previous = connection.execute(
+                "SELECT id, status FROM facts WHERE topic_id = ? AND statement = ?", (topic_id, statement)
+            ).fetchone()
+            if previous and previous["status"] != "active":
+                # A fact learned again after being set aside is compared afresh.
+                self._forget_checks(connection, "fact", previous["id"])
             connection.execute(
                 "INSERT INTO facts(topic_id, statement, source_id, confidence, created_at) "
                 "VALUES (?, ?, ?, ?, ?) ON CONFLICT(topic_id, statement) DO UPDATE SET "
@@ -504,9 +548,14 @@ class KnowledgeStore:
             raise ValueError(f"kind must be one of: {', '.join(USER_MEMORY_KINDS)}.")
         statement = " ".join(self._clean_text(statement, "memory", 500).split())
         with self._connect() as connection:
+            previous = connection.execute(
+                "SELECT id, status FROM user_memory WHERE statement = ? COLLATE NOCASE", (statement,)
+            ).fetchone()
+            if previous and previous["status"] != "active":
+                self._forget_checks(connection, "memory", previous["id"])
             connection.execute(
                 "INSERT INTO user_memory(kind, statement, created_at) VALUES (?, ?, ?) "
-                "ON CONFLICT(statement) DO UPDATE SET kind = excluded.kind",
+                "ON CONFLICT(statement) DO UPDATE SET kind = excluded.kind, status = 'active'",
                 (kind, statement, time.time()),
             )
             return int(connection.execute(
@@ -517,7 +566,7 @@ class KnowledgeStore:
         with self._connect() as connection:
             rows = connection.execute(
                 "SELECT id, kind, statement, created_at, use_count FROM user_memory "
-                "ORDER BY use_count DESC, created_at DESC LIMIT ?",
+                "WHERE status = 'active' ORDER BY use_count DESC, created_at DESC LIMIT ?",
                 (limit,),
             ).fetchall()
         return [dict(row) for row in rows]
@@ -607,6 +656,409 @@ class KnowledgeStore:
                 [(now, memory["id"]) for memory in recalled["user"]],
             )
         return recalled
+
+    # ==========================================================================
+    # Consolidation
+    # ==========================================================================
+
+    def tidy(self, prune_after_days: int) -> dict[str, int]:
+        """Make every change that needs no model: break parent loops, merge exact duplicates, and drop what is empty or stale."""
+        with self._connect() as connection:
+            changes = {
+                "parent loops broken": self._break_topic_loops(connection),
+                "topics merged": self._merge_same_named_topics(connection),
+                "facts merged": self._merge_same_worded_facts(connection),
+                "empty topics removed": self._remove_empty_topics(connection),
+            }
+            changes["facts pruned"] = connection.execute(
+                "UPDATE facts SET status = 'pruned' WHERE status = 'active' AND use_count = 0 "
+                "AND confidence < ? AND created_at < ?",
+                (PRUNE_BELOW_CONFIDENCE, time.time() - prune_after_days * 86400),
+            ).rowcount
+        return {name: count for name, count in changes.items() if count}
+
+    def next_unchecked_pair(self, kind: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
+        """Return the most alike pair of the given kind that the model has not compared yet."""
+        if kind not in CONSOLIDATION_KINDS:
+            raise ValueError(f"kind must be one of: {', '.join(CONSOLIDATION_KINDS)}.")
+        with self._connect() as connection:
+            checked = {
+                (row["first_id"], row["second_id"])
+                for row in connection.execute(
+                    "SELECT first_id, second_id FROM consolidation_checks WHERE kind = ?", (kind,)
+                )
+            }
+            if kind == "topic":
+                rows = connection.execute("SELECT id, name, summary, parent_id, 0 AS grouping FROM topics").fetchall()
+                text_column = "name"
+            elif kind == "fact":
+                rows = connection.execute(
+                    "SELECT f.id, f.statement, f.confidence, f.topic_id AS grouping, t.name AS topic "
+                    "FROM facts f JOIN topics t ON t.id = f.topic_id WHERE f.status = 'active'"
+                ).fetchall()
+                text_column = "statement"
+            else:
+                rows = connection.execute(
+                    "SELECT id, kind, statement, created_at, 0 AS grouping FROM user_memory WHERE status = 'active'"
+                ).fetchall()
+                text_column = "statement"
+        items = {row["id"]: dict(row) for row in rows}
+        terms = {item_id: _comparison_terms(item[text_column]) for item_id, item in items.items()}
+        # Only items sharing a word, in the same group, can be alike, so the index keeps this from comparing every pair.
+        index: dict[tuple[int, str], list[int]] = {}
+        for item_id in sorted(items):
+            for term in terms[item_id]:
+                index.setdefault((items[item_id]["grouping"], term), []).append(item_id)
+        candidates = {}
+        for item_ids in index.values():
+            for position, first_id in enumerate(item_ids):
+                for second_id in item_ids[position + 1:]:
+                    if (first_id, second_id) in checked or (first_id, second_id) in candidates:
+                        continue
+                    first, second = items[first_id], items[second_id]
+                    overlap = _overlap(terms[first_id], terms[second_id])
+                    if kind == "topic":
+                        if first["id"] == second["parent_id"] or second["id"] == first["parent_id"]:
+                            continue
+                        # A name inside another, such as SQLite in SQLite FTS5, may be the broader topic.
+                        if terms[first_id] <= terms[second_id] or terms[second_id] <= terms[first_id]:
+                            overlap = max(overlap, SIMILAR_OVERLAP)
+                    if overlap >= SIMILAR_OVERLAP:
+                        candidates[(first_id, second_id)] = overlap
+        if not candidates:
+            return None
+        first_id, second_id = min(candidates, key=lambda pair: (-candidates[pair], pair))
+        return items[first_id], items[second_id]
+
+    def record_check(self, kind: str, first_id: int, second_id: int, verdict: str) -> None:
+        first_id, second_id = sorted((first_id, second_id))
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT OR REPLACE INTO consolidation_checks(kind, first_id, second_id, verdict, checked_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (kind, first_id, second_id, verdict, time.time()),
+            )
+
+    def merge_topics(self, first_id: int, second_id: int) -> str:
+        """Fold two topics that name one subject into the one with more behind it, returning its name."""
+        with self._connect() as connection:
+            keep_id, drop_id = self._rank_topics(connection, first_id, second_id)
+            self._merge_topic_into(connection, keep_id, drop_id)
+            return connection.execute("SELECT name FROM topics WHERE id = ?", (keep_id,)).fetchone()["name"]
+
+    def adopt_topic(self, parent_id: int, child_id: int) -> bool:
+        """File a topic under a broader one when that narrows where it sits now; return whether it moved."""
+        with self._connect() as connection:
+            child = connection.execute("SELECT parent_id FROM topics WHERE id = ?", (child_id,)).fetchone()
+            if child is None or parent_id in self._descendant_ids(connection, child_id) | {child_id}:
+                return False
+            current_parent = child["parent_id"]
+            if current_parent == parent_id:
+                return False
+            if current_parent is not None and current_parent not in self._ancestor_ids(connection, parent_id):
+                return False
+            self._set_parent(connection, child_id, parent_id)
+            return True
+
+    def set_topic_parent(self, topic_id: int, parent_id: int | None) -> bool:
+        """Move a topic under another, or to the top level; return whether it moved."""
+        with self._connect() as connection:
+            row = connection.execute("SELECT parent_id FROM topics WHERE id = ?", (topic_id,)).fetchone()
+            if row is None or row["parent_id"] == parent_id:
+                return False
+            if parent_id is not None and parent_id in self._descendant_ids(connection, topic_id) | {topic_id}:
+                return False
+            self._set_parent(connection, topic_id, parent_id)
+            return True
+
+    def next_topic_to_place(self, reviewed_before: float) -> dict[str, Any] | None:
+        """Return the topic whose place in the tree has gone longest without review, if any is due."""
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT t.id, t.name, t.summary, t.parent_id, p.name AS parent FROM topics t "
+                "LEFT JOIN topics p ON p.id = t.parent_id "
+                "WHERE t.placed_at IS NULL OR t.placed_at < ? "
+                "ORDER BY t.placed_at IS NOT NULL, t.placed_at, t.use_count DESC, t.id LIMIT 1",
+                (reviewed_before,),
+            ).fetchone()
+            if row is None:
+                return None
+            topic = dict(row)
+            topic["children"] = [
+                child["name"] for child in connection.execute(
+                    "SELECT name FROM topics WHERE parent_id = ? ORDER BY name", (topic["id"],)
+                )
+            ]
+            return topic
+
+    def placement_candidates(self, topic_id: int, limit: int = 20) -> list[dict[str, Any]]:
+        """Return the topics this one could sit under, the most related first, with the current parent kept in."""
+        with self._connect() as connection:
+            topic = connection.execute("SELECT name, summary, parent_id FROM topics WHERE id = ?", (topic_id,)).fetchone()
+            if topic is None:
+                return []
+            excluded = self._descendant_ids(connection, topic_id) | {topic_id}
+            rows = [
+                dict(row) for row in connection.execute("SELECT id, name, summary, parent_id FROM topics")
+                if row["id"] not in excluded
+            ]
+        terms = _comparison_terms(f"{topic['name']} {topic['summary']}")
+
+        def rank(row: dict[str, Any]) -> tuple[bool, int, bool, str]:
+            return (
+                row["id"] != topic["parent_id"],
+                -len(terms & _comparison_terms(row["name"])),
+                row["parent_id"] is not None,
+                row["name"].casefold(),
+            )
+
+        return sorted(rows, key=rank)[:limit]
+
+    def mark_topic_placed(self, topic_id: int) -> None:
+        with self._connect() as connection:
+            connection.execute("UPDATE topics SET placed_at = ? WHERE id = ?", (time.time(), topic_id))
+
+    def merge_facts(self, first_id: int, second_id: int) -> None:
+        """Fold two facts that say the same thing into the more trusted one."""
+        with self._connect() as connection:
+            self._merge_fact_into(connection, *self._rank_facts(connection, first_id, second_id))
+
+    def dispute_facts(self, first_id: int, second_id: int) -> str:
+        """Set aside the less trusted of two contradicting facts, or both when neither is more trusted; return their topic."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT f.id, f.confidence, t.name AS topic FROM facts f JOIN topics t ON t.id = f.topic_id "
+                "WHERE f.id IN (?, ?) ORDER BY f.confidence DESC",
+                (first_id, second_id),
+            ).fetchall()
+            if not rows:
+                return ""
+            disputed = [row["id"] for row in rows if row["confidence"] == rows[-1]["confidence"]]
+            connection.executemany("UPDATE facts SET status = 'disputed' WHERE id = ?", [(item,) for item in disputed])
+            return rows[0]["topic"]
+
+    def merge_user_memories(self, first_id: int, second_id: int) -> None:
+        """Fold two memories that say the same thing into the more used one, or the newer when used equally."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT id, use_count, last_used_at FROM user_memory WHERE id IN (?, ?) "
+                "ORDER BY use_count DESC, created_at DESC, id DESC",
+                (first_id, second_id),
+            ).fetchall()
+            if len(rows) != 2:
+                return
+            keep, drop = rows
+            connection.execute(
+                "UPDATE user_memory SET use_count = use_count + ?, last_used_at = MAX(COALESCE(last_used_at, 0), ?) "
+                "WHERE id = ?",
+                (drop["use_count"], drop["last_used_at"] or 0, keep["id"]),
+            )
+            connection.execute("DELETE FROM user_memory WHERE id = ?", (drop["id"],))
+            self._forget_checks(connection, "memory", drop["id"])
+
+    def supersede_user_memory(self, first_id: int, second_id: int) -> None:
+        """Set aside the older of two contradicting memories, since the newer one reflects the user now."""
+        with self._connect() as connection:
+            older = connection.execute(
+                "SELECT id FROM user_memory WHERE id IN (?, ?) ORDER BY created_at, id LIMIT 1",
+                (first_id, second_id),
+            ).fetchone()
+            if older:
+                connection.execute("UPDATE user_memory SET status = 'superseded' WHERE id = ?", (older["id"],))
+
+    @staticmethod
+    def _forget_checks(connection: sqlite3.Connection, kind: str, item_id: int) -> None:
+        connection.execute(
+            "DELETE FROM consolidation_checks WHERE kind = ? AND (first_id = ? OR second_id = ?)",
+            (kind, item_id, item_id),
+        )
+
+    @staticmethod
+    def _ancestor_ids(connection: sqlite3.Connection, topic_id: int) -> set[int]:
+        ancestors: set[int] = set()
+        row = connection.execute("SELECT parent_id FROM topics WHERE id = ?", (topic_id,)).fetchone()
+        parent_id = row["parent_id"] if row else None
+        while parent_id is not None and parent_id not in ancestors and parent_id != topic_id:
+            ancestors.add(parent_id)
+            row = connection.execute("SELECT parent_id FROM topics WHERE id = ?", (parent_id,)).fetchone()
+            parent_id = row["parent_id"] if row else None
+        return ancestors
+
+    @staticmethod
+    def _descendant_ids(connection: sqlite3.Connection, topic_id: int) -> set[int]:
+        descendants: set[int] = set()
+        frontier = [topic_id]
+        while frontier:
+            rows = connection.execute(
+                f"SELECT id FROM topics WHERE parent_id IN ({', '.join('?' * len(frontier))})", frontier
+            ).fetchall()
+            frontier = [row["id"] for row in rows if row["id"] not in descendants and row["id"] != topic_id]
+            descendants.update(frontier)
+        return descendants
+
+    def _set_parent(self, connection: sqlite3.Connection, topic_id: int, parent_id: int | None) -> None:
+        """Move a topic and replace its 'contains' edge in the graph to match."""
+        name = connection.execute("SELECT name FROM topics WHERE id = ?", (topic_id,)).fetchone()["name"]
+        node_id = self._node_id(connection, "topic", name)
+        connection.execute("UPDATE topics SET parent_id = ? WHERE id = ?", (parent_id, topic_id))
+        connection.execute(
+            "DELETE FROM graph_edges WHERE relation = 'contains' AND target_node_id = ? "
+            "AND source_node_id IN (SELECT id FROM graph_nodes WHERE kind = 'topic')",
+            (node_id,),
+        )
+        if parent_id is not None:
+            parent = connection.execute("SELECT name FROM topics WHERE id = ?", (parent_id,)).fetchone()["name"]
+            connection.execute(
+                "INSERT OR IGNORE INTO graph_edges (source_node_id, relation, target_node_id) "
+                "VALUES (?, 'contains', ?)",
+                (self._node_id(connection, "topic", parent), node_id),
+            )
+
+    def _break_topic_loops(self, connection: sqlite3.Connection) -> int:
+        broken = 0
+        for row in connection.execute("SELECT id FROM topics WHERE parent_id IS NOT NULL").fetchall():
+            if self._walks_back_to(connection, row["id"]):
+                self._set_parent(connection, row["id"], None)
+                broken += 1
+        return broken
+
+    @staticmethod
+    def _walks_back_to(connection: sqlite3.Connection, topic_id: int) -> bool:
+        seen = set()
+        parent_id = topic_id
+        while parent_id is not None and parent_id not in seen:
+            seen.add(parent_id)
+            row = connection.execute("SELECT parent_id FROM topics WHERE id = ?", (parent_id,)).fetchone()
+            parent_id = row["parent_id"] if row else None
+            if parent_id == topic_id:
+                return True
+        return False
+
+    def _merge_same_named_topics(self, connection: sqlite3.Connection) -> int:
+        """Merge topics whose names have exactly the same words, such as 'Python packaging' and 'packaging Python'."""
+        by_terms: dict[frozenset[str], int] = {}
+        merged = 0
+        for row in connection.execute("SELECT id, name FROM topics ORDER BY id").fetchall():
+            terms = _comparison_terms(row["name"])
+            if not terms:
+                continue
+            if terms not in by_terms:
+                by_terms[terms] = row["id"]
+                continue
+            keep_id, drop_id = self._rank_topics(connection, by_terms[terms], row["id"])
+            self._merge_topic_into(connection, keep_id, drop_id)
+            by_terms[terms] = keep_id
+            merged += 1
+        return merged
+
+    def _merge_same_worded_facts(self, connection: sqlite3.Connection) -> int:
+        """Merge active facts under one topic that differ only in case and punctuation."""
+        by_wording: dict[tuple[int, str], int] = {}
+        merged = 0
+        for row in connection.execute(
+            "SELECT id, topic_id, statement FROM facts WHERE status = 'active' ORDER BY id"
+        ).fetchall():
+            key = (row["topic_id"], _same_wording(row["statement"]))
+            if key not in by_wording:
+                by_wording[key] = row["id"]
+                continue
+            keep_id, drop_id = self._rank_facts(connection, by_wording[key], row["id"])
+            self._merge_fact_into(connection, keep_id, drop_id)
+            by_wording[key] = keep_id
+            merged += 1
+        return merged
+
+    def _remove_empty_topics(self, connection: sqlite3.Connection) -> int:
+        """Delete topics with no facts, sources, subtopics, or unfinished or failed research."""
+        rows = connection.execute(
+            "SELECT id, name FROM topics t WHERE "
+            "NOT EXISTS (SELECT 1 FROM facts f WHERE f.topic_id = t.id) "
+            "AND NOT EXISTS (SELECT 1 FROM sources s WHERE s.topic_id = t.id) "
+            "AND NOT EXISTS (SELECT 1 FROM topics c WHERE c.parent_id = t.id) "
+            "AND NOT EXISTS (SELECT 1 FROM research_queue q WHERE q.topic_id = t.id AND q.status != 'done')"
+        ).fetchall()
+        for row in rows:
+            self._delete_topic(connection, row["id"], row["name"])
+        return len(rows)
+
+    def _delete_topic(self, connection: sqlite3.Connection, topic_id: int, name: str) -> None:
+        connection.execute("DELETE FROM topics WHERE id = ?", (topic_id,))
+        connection.execute("DELETE FROM graph_nodes WHERE kind = 'topic' AND label = ?", (name,))
+        self._forget_checks(connection, "topic", topic_id)
+
+    @staticmethod
+    def _rank_topics(connection: sqlite3.Connection, first_id: int, second_id: int) -> tuple[int, int]:
+        """Order two topics as (keep, drop): more facts, sources, and use first, then the shorter name."""
+        rows = connection.execute(
+            "SELECT t.id, t.name, t.use_count "
+            "+ (SELECT COUNT(*) FROM facts f WHERE f.topic_id = t.id) "
+            "+ (SELECT COUNT(*) FROM sources s WHERE s.topic_id = t.id) AS weight "
+            "FROM topics t WHERE t.id IN (?, ?)",
+            (first_id, second_id),
+        ).fetchall()
+        keep, drop = sorted(rows, key=lambda row: (-row["weight"], len(row["name"]), row["id"]))
+        return keep["id"], drop["id"]
+
+    def _merge_topic_into(self, connection: sqlite3.Connection, keep_id: int, drop_id: int) -> None:
+        keep = connection.execute("SELECT * FROM topics WHERE id = ?", (keep_id,)).fetchone()
+        drop = connection.execute("SELECT * FROM topics WHERE id = ?", (drop_id,)).fetchone()
+        # Lifting the kept topic out from under the dropped one stops its old subtopics forming a loop.
+        if drop_id in self._ancestor_ids(connection, keep_id):
+            self._set_parent(connection, keep_id, drop["parent_id"])
+        elif keep["parent_id"] is None and drop["parent_id"] not in self._descendant_ids(connection, keep_id) | {keep_id, None}:
+            self._set_parent(connection, keep_id, drop["parent_id"])
+        for child in connection.execute(
+            "SELECT id FROM topics WHERE parent_id = ? AND id != ?", (drop_id, keep_id)
+        ).fetchall():
+            self._set_parent(connection, child["id"], keep_id)
+        for fact in connection.execute("SELECT id, statement FROM facts WHERE topic_id = ?", (drop_id,)).fetchall():
+            twin = connection.execute(
+                "SELECT id FROM facts WHERE topic_id = ? AND statement = ?", (keep_id, fact["statement"])
+            ).fetchone()
+            if twin:
+                self._merge_fact_into(connection, twin["id"], fact["id"])
+            else:
+                connection.execute("UPDATE facts SET topic_id = ? WHERE id = ?", (keep_id, fact["id"]))
+        connection.execute("UPDATE sources SET topic_id = ? WHERE topic_id = ?", (keep_id, drop_id))
+        if connection.execute(
+            "SELECT 1 FROM research_queue WHERE topic_id = ? AND status = 'pending'", (keep_id,)
+        ).fetchone():
+            connection.execute("DELETE FROM research_queue WHERE topic_id = ? AND status = 'pending'", (drop_id,))
+        connection.execute("UPDATE research_queue SET topic_id = ? WHERE topic_id = ?", (keep_id, drop_id))
+        connection.execute(
+            "UPDATE topics SET priority = MAX(priority, ?), use_count = use_count + ?, "
+            "last_used_at = MAX(COALESCE(last_used_at, 0), ?), "
+            "last_researched_at = MAX(COALESCE(last_researched_at, 0), ?), "
+            "summary = CASE WHEN summary = '' THEN ? ELSE summary END WHERE id = ?",
+            (drop["priority"], drop["use_count"], drop["last_used_at"] or 0,
+             drop["last_researched_at"] or 0, drop["summary"], keep_id),
+        )
+        keep_node = self._node_id(connection, "topic", keep["name"])
+        drop_node = self._node_id(connection, "topic", drop["name"])
+        connection.execute("UPDATE OR IGNORE graph_edges SET source_node_id = ? WHERE source_node_id = ?", (keep_node, drop_node))
+        connection.execute("UPDATE OR IGNORE graph_edges SET target_node_id = ? WHERE target_node_id = ?", (keep_node, drop_node))
+        connection.execute("DELETE FROM graph_edges WHERE source_node_id = target_node_id")
+        self._delete_topic(connection, drop_id, drop["name"])
+
+    @staticmethod
+    def _rank_facts(connection: sqlite3.Connection, first_id: int, second_id: int) -> tuple[int, int]:
+        """Order two facts as (keep, drop): higher confidence first, then more used, then older."""
+        rows = connection.execute(
+            "SELECT id FROM facts WHERE id IN (?, ?) ORDER BY confidence DESC, use_count DESC, id",
+            (first_id, second_id),
+        ).fetchall()
+        return rows[0]["id"], rows[1]["id"]
+
+    def _merge_fact_into(self, connection: sqlite3.Connection, keep_id: int, drop_id: int) -> None:
+        drop = connection.execute("SELECT * FROM facts WHERE id = ?", (drop_id,)).fetchone()
+        connection.execute(
+            "UPDATE facts SET confidence = MAX(confidence, ?), use_count = use_count + ?, "
+            "last_used_at = MAX(COALESCE(last_used_at, 0), ?), source_id = COALESCE(source_id, ?) WHERE id = ?",
+            (drop["confidence"], drop["use_count"], drop["last_used_at"] or 0, drop["source_id"], keep_id),
+        )
+        connection.execute("DELETE FROM facts WHERE id = ?", (drop_id,))
+        connection.execute("DELETE FROM memory_search WHERE kind = 'fact' AND item_id = ?", (drop_id,))
+        self._forget_checks(connection, "fact", drop_id)
 
     def queue_status(self) -> list[dict[str, Any]]:
         with self._connect() as connection:

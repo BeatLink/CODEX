@@ -18,5 +18,6 @@
   "background_refresh_interval_hours": 168,
   "background_max_tokens": 1920,
   "background_max_pending_jobs": 100,
+  "background_prune_after_days": 90,
   "mcp_servers": []
 }

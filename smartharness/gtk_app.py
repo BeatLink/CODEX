@@ -54,6 +54,7 @@ BACKGROUND_NUMBER_FIELDS = (
     ("Refresh hours", "background_refresh_interval_hours", 1, 8760, 1, 0),
     ("Max tokens", "background_max_tokens", 32, 4096, 32, 0),
     ("Queue cap", "background_max_pending_jobs", 1, 1000, 1, 0),
+    ("Prune after days", "background_prune_after_days", 1, 3650, 1, 0),
 )
 PATH_FIELDS = (
     ("GGUF model path", "model_path"),

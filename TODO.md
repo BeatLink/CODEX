@@ -48,7 +48,8 @@
 - [x] Answer from stored summaries without searching again
 - [ ] Queue background research from unsupported claims and recurring topics
 - [x] Fetch full pages during background research, not snippets only
-- [ ] Merge duplicate facts, flag contradictions, and prune unused facts in the background
+- [x] Merge duplicate facts, flag contradictions, and prune unused facts in the background
+- [x] Merge duplicate topics and user memories and re-file topics under better parents in the background
 - [x] Track memory usage counts
 - [ ] Refresh topics by usage and staleness
 - [ ] Add embedding retrieval with sqlite-vec and combine it with FTS5 ranking

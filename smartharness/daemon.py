@@ -12,6 +12,7 @@ from typing import Any, Callable
 
 from .auto_size import auto_size
 from .background import learn_from_episodes, research_one_topic
+from .consolidation import consolidate_knowledge
 from .knowledge import KnowledgeStore
 from .pipeline import ModelCache, execute_pipeline
 from .protocol import decode_message, default_socket_path, encode_message
@@ -502,9 +503,11 @@ class HarnessDaemon:
                         "model_lock": self._model_lock,
                         "model_cache": self._model_cache,
                     }
-                    # Queued research comes first; with none left, the worker learns from past requests.
-                    worked = research_one_topic(settings, **worker_options) or learn_from_episodes(
-                        settings, **worker_options
+                    # Queued research comes first, then learning from past requests, then tidying the store.
+                    worked = (
+                        research_one_topic(settings, **worker_options)
+                        or learn_from_episodes(settings, **worker_options)
+                        or consolidate_knowledge(settings, **worker_options)
                     )
                     self.broadcast("queue.changed")
                     if worked:

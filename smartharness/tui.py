@@ -546,6 +546,7 @@ class SmartHarnessApp(App[None]):
                 ("Refresh hours", "background-refresh-hours", "background_refresh_interval_hours"),
                 ("Max tokens", "background-max-tokens", "background_max_tokens"),
                 ("Queue cap", "background-queue-cap", "background_max_pending_jobs"),
+                ("Prune after days", "background-prune-days", "background_prune_after_days"),
             )
             yield Label("SQLite database", classes="field-label")
             yield TextArea(
@@ -694,6 +695,7 @@ class SmartHarnessApp(App[None]):
                 "background_refresh_interval_hours": self._int_setting("background-refresh-hours"),
                 "background_max_tokens": self._int_setting("background-max-tokens"),
                 "background_max_pending_jobs": self._int_setting("background-queue-cap"),
+                "background_prune_after_days": self._int_setting("background-prune-days"),
                 "mcp_servers": mcp_servers_from_json(self.query_one("#mcp-servers", TextArea).text),
             }
         )
@@ -745,6 +747,7 @@ class SmartHarnessApp(App[None]):
             ("background-refresh-hours", "background_refresh_interval_hours"),
             ("background-max-tokens", "background_max_tokens"),
             ("background-queue-cap", "background_max_pending_jobs"),
+            ("background-prune-days", "background_prune_after_days"),
         ):
             self.query_one(f"#{selector}", Input).value = str(settings[name])
         for selector, name in (

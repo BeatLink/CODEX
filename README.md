@@ -291,6 +291,43 @@ the worker.
 resource use, and `background_max_pending_jobs` bounds the backlog. Set
 `background_research_enabled` to `false` to pause it.
 
+### Background consolidation
+
+With no research queued and no requests left to learn from, the worker tidies
+the store, one small piece per pass, until nothing is left to do.
+
+Changes that need no model come first:
+
+- A topic that is its own ancestor is moved to the top level.
+- Topics whose names have the same words, such as "Python packaging" and
+  "packaging Python", are merged, and so are facts under one topic that differ
+  only in case and punctuation.
+- Topics with no facts, sources, subtopics, or unfinished or failed research
+  are removed.
+- Low-confidence facts that have never been recalled are pruned once they are
+  `background_prune_after_days` old. A pruned fact stays in the store and comes
+  back if research finds it again.
+
+Then the model compares pairs that share at least half their words, one pair
+per call, with a schema that lets it reply only with a short reason and one
+verdict:
+
+| Pair | Verdicts | What happens |
+| --- | --- | --- |
+| Two topics | same subject, first is broader, second is broader, different | Same subjects are merged into the one with more facts and sources, carrying over its facts, sources, subtopics, queued research, and graph edges. A broader topic adopts the narrower one when that narrows where it sits now |
+| Two facts under one topic | same, contradict, different | Same facts are merged into the more trusted one. Of two contradicting facts the less trusted is marked disputed, or both when neither is more trusted, and the topic is queued for fresh research |
+| Two user memories | same, contradict, different | Same memories are merged. Of two contradicting memories the older is set aside |
+
+Disputed and pruned facts and set-aside memories are no longer recalled. Each
+pair is compared once; its verdict is stored, and a fact or memory learned
+again after being set aside is compared afresh.
+
+Each topic's place in the tree is also reviewed once every
+`background_refresh_interval_hours`. The model picks the narrowest of up to 20
+related topics that this one is part of, or the top level, from a list fixed by
+the schema; its own subtopics are never offered. When a topic moves, the
+summaries of its new and old parents are rewritten.
+
 ## Installation
 
 With Nix (CUDA build of llama.cpp):
@@ -383,6 +420,7 @@ another. Unknown keys are rejected.
 	"background_refresh_interval_hours": 168,
 	"background_max_tokens": 512,
 	"background_max_pending_jobs": 100,
+	"background_prune_after_days": 90,
 	"mcp_servers": []
 }
 ```
@@ -479,6 +517,7 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 | `smartharness/context_budget.py` | Fitting stage input into the context window |
 | `smartharness/knowledge.py` | SQLite knowledge store, queue, and graph |
 | `smartharness/background.py` | One background research job |
+| `smartharness/consolidation.py` | One background consolidation step: merging, re-filing, and pruning the store |
 | `smartharness/settings.py` | Defaults and validation |
 | `smartharness/daemon.py` | The daemon: model, runs, background worker, and socket server |
 | `smartharness/client.py`, `smartharness/protocol.py` | Connecting to the daemon, starting it, and the message format |
