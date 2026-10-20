@@ -1,8 +1,8 @@
 {
   "model_path": "./models/model.gguf",
-  "context_size": 15360,
+  "context_size": 6144,
   "gpu_layers": -1,
-  "max_tokens": 3840,
+  "max_tokens": 1536,
   "temperature": 0.1,
   "filesystem_root": ".",
   "max_tool_calls": 5,
@@ -16,7 +16,7 @@
   "background_research_enabled": true,
   "background_poll_interval_seconds": 10,
   "background_refresh_interval_hours": 168,
-  "background_max_tokens": 1920,
+  "background_max_tokens": 768,
   "background_max_pending_jobs": 100,
   "background_prune_after_days": 90,
   "mcp_servers": []

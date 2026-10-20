@@ -36,17 +36,23 @@ Other quants of the same models, for reference:
 
 For a fixed memory budget, a larger model at about 4 bits usually beats a smaller model at higher precision. Below about 3 bits, quality falls steeply, and small models suffer most. A 4B at Q3 is on the wrong side of that line, and structured JSON output, which this pipeline relies on, is among the first things to degrade. Qwen3.5 uses full attention on only every 4th layer, so its context cache is small and the larger 4B quant still fits on the GPU.
 
-## Open problem: context size with the new 4B file
+## Context size with the 4B UD-Q4_K_XL file
 
-`settings.json` on main has `context_size: 15360`, `max_tokens: 3840` and `background_max_tokens: 1920`. Those were sized for the old Q3 file. The Q4_K_XL file is about 600 MB larger, so 15,360 tokens probably no longer fits in 4 GB.
+Measured on 2026-10-20 with nothing else on the GPU. Each size was loaded with `n_gpu_layers=-1` in its own process, given a prompt that filled the window to within 200 tokens, and asked for 64 tokens:
 
-- `auto_size.choose_sizes` with 3.8 GiB of free VRAM gives **12,288** tokens for Q3_K_M but only **3,072** for UD-Q4_K_XL. Its rule is cautious: 10% headroom, a 512 MiB reserve, and 64 KiB per token, which includes batch scratch.
-- A rough estimate from real buffer sizes puts the actual limit near **8k**. This is unmeasured.
-- The first load test failed with `unable to allocate CUDA0 buffer`, because another session's smoke-test daemon was holding the GPU at the time. That test proves nothing either way.
+| Context | UD-Q4_K_XL | Q3_K_M |
+| --- | --- | --- |
+| 4,096 | runs, 4.4 s | runs, 4.6 s |
+| 6,144 | runs, 6.2 s | runs, 6.6 s |
+| 7,168 | CUDA error during the prompt | not tried |
+| 8,192 | CUDA error during the prompt | runs, 9.0 s |
+| 10,240 | CUDA error during the prompt | runs, 11.8 s |
+| 12,288 | `Failed to create llama_context` | runs, 17.1 s |
+| 15,360 | `Failed to create llama_context` | runs, 17.2 s |
 
-**Decision pending.** Either keep UD-Q4_K_XL and lower the context to whatever fits, or switch to IQ4_XS (2.48 GB). IQ4_XS is 4-bit quality at close to Q3 size and should keep about 12k of context.
+Between 7,168 and 10,240 the Q4_K_XL file loads but aborts the whole process once a long prompt arrives, so a context that only loads is not proof that it fits.
 
-**Next step:** when no other process holds `nvidia-uvm`, load each candidate with `n_gpu_layers=-1` at several `n_ctx` values. Record the largest context that loads, and the generation speed in tokens per second.
+**Decision:** keep UD-Q4_K_XL at **6,144** tokens. `settings.json` has `context_size: 6144`, `max_tokens: 1536`, and `background_max_tokens: 768`, keeping the same quarter and eighth of the window as before. `auto_size` suggests 2,048 for this file, which is safe but well below what runs.
 
 ## Expected speeds
 
@@ -118,6 +124,5 @@ The 35B model needs about 17.5 GB of RAM on the CPU, or 12–16 GB with the Q2 o
 
 ## Decisions waiting on the user
 
-1. Keep 4B UD-Q4_K_XL at a smaller context (measure it first), or switch to IQ4_XS and keep about 12k.
-2. Build the separate background model as designed above.
-3. Investigate the Attic server on heimdall. This is outside this repo.
+1. Build the separate background model as designed above.
+2. Investigate the Attic server on heimdall. This is outside this repo.
