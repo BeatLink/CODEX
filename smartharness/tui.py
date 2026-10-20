@@ -686,16 +686,16 @@ class SmartHarnessApp(App[None]):
             pass
         try:
             if message.startswith("Searching:"):
-                self.query_one("#background-output", Markdown).update("_Searching and summarizing..._")
+                output = self.query_one("#background-output", Markdown)
+                output.update("_Searching and summarizing..._")
         except NoMatches:
             pass
 
     def _render_background_page(self) -> None:
         self.query_one("#background-status", Static).update(self._background_status_text)
         self.query_one("#background-queue", Static).update(self._queue_text)
-        self.query_one("#background-output", Markdown).update(
-            self._background_output or "_Waiting for background work..._"
-        )
+        output = self.query_one("#background-output", Markdown)
+        output.update(self._background_output or "_Waiting for background work..._")
         self._refresh_queue()
 
     def _append_background_token(self, token: str) -> None:
@@ -707,7 +707,8 @@ class SmartHarnessApp(App[None]):
         self._background_output += "".join(self._pending_background_tokens)
         self._pending_background_tokens.clear()
         try:
-            self.query_one("#background-output", Markdown).update(self._background_output)
+            output = self.query_one("#background-output", Markdown)
+            output.update(self._background_output)
         except NoMatches:
             pass
 
@@ -777,9 +778,8 @@ class SmartHarnessApp(App[None]):
                 continue
             self._stage_output_buffers[index] += "".join(pending)
             pending.clear()
-            self.query_one(f"#stage-output-{index + 1}", Markdown).update(
-                self._stage_output_buffers[index]
-            )
+            output = self.query_one(f"#stage-output-{index + 1}", Markdown)
+            output.update(self._stage_output_buffers[index])
         self._flush_background_output()
 
     def _update_stage(self, label: str) -> None:
@@ -803,7 +803,8 @@ class SmartHarnessApp(App[None]):
         self._flush_stage_output()
         self._request_running = False
         self._last_answer = result
-        self.query_one("#final-output", Markdown).update(result)
+        final_output = self.query_one("#final-output", Markdown)
+        final_output.update(result)
         self.query_one("#phase-tabs", TabbedContent).active = "final"
         self.query_one("#copy", Button).disabled = False
         self.query_one("#run", Button).disabled = False
@@ -815,7 +816,8 @@ class SmartHarnessApp(App[None]):
     def _fail_run(self, message: str) -> None:
         self._flush_stage_output()
         self._request_running = False
-        self.query_one("#final-output", Markdown).update(f"**Run failed**\n\n{message}")
+        final_output = self.query_one("#final-output", Markdown)
+        final_output.update(f"**Run failed**\n\n{message}")
         self.query_one("#phase-tabs", TabbedContent).active = "final"
         self.query_one("#run", Button).disabled = False
         self.query_one("#status", Static).update("Run failed")
