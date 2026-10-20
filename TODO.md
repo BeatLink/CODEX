@@ -16,10 +16,10 @@
 - [ ] Add approval gates for consequential actions
 - [ ] Benchmark on real maintenance tasks
 - [x] Keep the loaded model between requests and share it with the background worker
-- [ ] Return structured JSON from stages using llama.cpp schema-constrained output
-- [ ] Route each request by task type so simple requests skip stages they do not need
-- [ ] Let stage 1 decide whether research is needed instead of keyword regexes
-- [ ] Let the model write focused search queries instead of reusing the prompt
+- [x] Return structured JSON from stages using llama.cpp schema-constrained output
+- [x] Route each request by task type so simple requests skip stages they do not need
+- [x] Let stage 1 decide whether research is needed instead of keyword regexes
+- [x] Let the model write focused search queries instead of reusing the prompt
 - [ ] Turn the plan into numbered steps and run each step as its own small call
 - [ ] Make the critique mark each requirement pass or fail and revise only what failed, in a bounded loop
 - [ ] Add checks that do not rely on the model, such as cited URLs appearing in the evidence

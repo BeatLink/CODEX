@@ -8,7 +8,9 @@ from unittest.mock import patch
 
 from smartharness.knowledge import KnowledgeStore
 from smartharness.pipeline import (
+    TASK_ANALYSIS_SCHEMA,
     ModelCache,
+    _parse_task_analysis,
     _requires_web_research,
     _search_query,
     _summarize_web_page,
@@ -464,6 +466,103 @@ class PipelineTests(unittest.TestCase):
             self.assertIn("Local knowledge result", tool_inputs[0])
             self.assertIn("https://example.test/sqlite", stage_calls[3][1])
             self.assertIn("captured search evidence", stage_calls[4][0])
+
+
+def task_json(task_type, needs_research=False, needs_files=False, queries=(), clarification=""):
+    return json.dumps({
+        "requirements": ["Answer the question", "Keep it short"],
+        "constraints": ["Use plain words"],
+        "assumptions": [],
+        "needs_research": needs_research,
+        "needs_files": needs_files,
+        "search_queries": list(queries),
+        "task_type": task_type,
+        "clarification": clarification,
+    })
+
+
+class RoutingTests(unittest.TestCase):
+    def test_task_analysis_becomes_a_numbered_checklist(self):
+        analysis = _parse_task_analysis(task_json("reasoning", queries=["ignored query"], clarification="NONE"))
+
+        self.assertEqual(analysis.task_type, "reasoning")
+        self.assertIn("1. Answer the question\n2. Keep it short", analysis.checklist)
+        self.assertIn("Constraints:\n- Use plain words", analysis.checklist)
+        self.assertEqual(analysis.search_queries, [])
+        self.assertIsNone(analysis.clarification)
+
+    def test_task_analysis_rejects_replies_that_are_not_the_schema(self):
+        self.assertIsNone(_parse_task_analysis("Task checklist"))
+        self.assertIsNone(_parse_task_analysis('{"task_type": "unknown", "requirements": ["x"]}'))
+        self.assertIsNone(_parse_task_analysis('{"task_type": "direct", "requirements": []}'))
+
+    def test_direct_request_skips_to_the_draft(self):
+        stage_calls = []
+        progress = []
+        results = iter([task_json("direct"), "Short answer"])
+
+        def fake_run_stage(llm, system_prompt, user_input, **kwargs):
+            stage_calls.append((system_prompt, user_input, kwargs))
+            return next(results)
+
+        with (
+            patch("smartharness.pipeline.run_stage", side_effect=fake_run_stage),
+            patch("smartharness.pipeline.run_tool_stage", side_effect=AssertionError("tool stage")),
+        ):
+            result = execute_pipeline("What is 2 + 2?", llm=object(), progress_callback=progress.append)
+
+        self.assertEqual(result, "Short answer")
+        self.assertEqual(stage_calls[0][2]["json_schema"], TASK_ANALYSIS_SCHEMA)
+        self.assertIn("1. Answer the question", stage_calls[1][1])
+        self.assertEqual(
+            [label.partition(":")[0] for label in progress],
+            ["Stage 1/8", "Skipped", "Skipped", "Skipped", "Skipped", "Stage 6/8", "Skipped", "Skipped"],
+        )
+
+    def test_research_request_searches_each_written_query_and_skips_actions(self):
+        searches = []
+        tool_stages = []
+        results = iter([
+            task_json("research", needs_research=True, queries=["python 3.13 distutils", "pep 632"]),
+            "Plan", "Outline", "Draft", "Critique", "Final",
+        ])
+
+        def fake_search(toolbox, name, arguments):
+            searches.append(arguments["query"])
+            return "[]"
+
+        def fake_tool_stage(llm, system_prompt, user_input, toolbox, **kwargs):
+            tool_stages.append(system_prompt)
+            return "Findings"
+
+        with (
+            patch("smartharness.pipeline.run_stage", side_effect=lambda *args, **kwargs: next(results)),
+            patch("smartharness.pipeline.run_tool_stage", side_effect=fake_tool_stage),
+            patch("smartharness.pipeline.Toolbox.call", new=fake_search),
+        ):
+            result = execute_pipeline("Was distutils removed?", llm=object(), progress_callback=lambda label: None)
+
+        self.assertEqual(result, "Final")
+        self.assertEqual(searches, ["python 3.13 distutils", "pep 632"])
+        self.assertEqual(len(tool_stages), 1)
+        self.assertTrue(tool_stages[0].startswith("Gather evidence"))
+
+    def test_clarification_comes_from_the_json_field(self):
+        results = iter([task_json("direct", clarification="Which language?"), "Answer"])
+        questions = []
+
+        with (
+            patch("smartharness.pipeline.run_stage", side_effect=lambda *args, **kwargs: next(results)),
+            patch("smartharness.pipeline.run_tool_stage", side_effect=AssertionError("tool stage")),
+        ):
+            execute_pipeline(
+                "Write a parser",
+                llm=object(),
+                progress_callback=lambda label: None,
+                clarification_callback=lambda question: questions.append(question) or "Python",
+            )
+
+        self.assertEqual(questions, ["Which language?"])
 
 
 class ModelCacheTests(unittest.TestCase):

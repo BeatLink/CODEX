@@ -237,6 +237,23 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(app.query_one("#run", Button).disabled)
                 self.assertTrue(app.query_one("#cancel", Button).disabled)
 
+    async def test_skipped_stages_stay_marked_after_the_run(self):
+        app = SmartHarnessApp(DEFAULT_SETTINGS, initial_prompt="Draft a plan")
+
+        def routed_pipeline(prompt, **kwargs):
+            kwargs["progress_callback"](STAGE_LABELS[0])
+            kwargs["progress_callback"]("Skipped: " + STAGE_LABELS[1])
+            kwargs["progress_callback"](STAGE_LABELS[2])
+            return "Routed response"
+
+        with patch("smartharness.tui.execute_pipeline", side_effect=routed_pipeline):
+            async with app.run_test(size=(120, 42)) as pilot:
+                app._start_run()
+                await wait_until(pilot, lambda: not app._request_running)
+
+                self.assertIn("SKIP", str(app.query_one("#stage-row-2").render()))
+                self.assertIn("DONE", str(app.query_one("#stage-row-3").render()))
+
     async def test_failed_run_marks_the_failing_stage(self):
         app = SmartHarnessApp(DEFAULT_SETTINGS, initial_prompt="Draft a plan")
 

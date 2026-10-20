@@ -16,13 +16,13 @@ a hosted model.
 
 ## How a request is handled
 
-Every request runs through eight stages. Each stage is a separate model call
+A request runs through up to eight stages. Each stage is a separate model call
 with its own system prompt, and its input is the original request plus only the
 earlier results it needs.
 
 | Stage | Goal | Sees | Tools |
 | --- | --- | --- | --- |
-| 1. Identify | List the requested outcome, constraints, and assumptions; ask one clarification question if something material is ambiguous | Request | none |
+| 1. Identify | Return JSON listing the requirements, constraints, and assumptions, whether research or files are needed, search queries, the task type, and an optional clarification question | Request | none |
 | 2. Research | Gather at most five findings | Stage 1, clarification, stored or searched evidence | `web_search`, `web_fetch`, `list_directory`, `read_file` |
 | 3. Plan | Make an ordered plan covering every requirement, including any tool actions | Stages 1 and 2, evidence | none |
 | 4. Review plan | Check the plan against the request before anything runs; output a corrected outline and the exact tool actions still needed | Stages 1 to 3, evidence | none |
@@ -30,6 +30,21 @@ earlier results it needs.
 | 6. Draft | Write the answer from the reviewed outline and action results | Stages 4 and 5, evidence | none |
 | 7. Critique | Mark each requirement as met, partly met, or missing; list corrections | Stages 4 to 6, evidence | none |
 | 8. Revise | Apply the valid corrections and return only the final answer | Stages 4 to 7, evidence | none |
+
+Stage 1's reply is constrained by a JSON schema, which llama.cpp enforces as a
+grammar, so even a small model returns a well-formed analysis. Its task type
+picks the route:
+
+| Task type | Stages run |
+| --- | --- |
+| `direct`: a short answer from general knowledge | 1, 6 |
+| `reasoning`: multi-part analysis or writing without tools | 1, 3, 4, 6, 7, 8 |
+| `research`: looked-up evidence is central | 1 to 4, 6 to 8 |
+| `action`: files must change or tests run | all eight |
+
+Stage 2 also runs on any route when stage 1 says research or file reading is
+needed. Skipped stages are marked SKIP in the TUI. If stage 1's reply is not
+valid JSON, every stage runs and research is decided by keywords in the prompt.
 
 Design points:
 
@@ -51,11 +66,11 @@ Design points:
 - **Clarification.** In an interactive session the model may ask one concise
   question after stage 1; otherwise it proceeds and states its assumption.
 
-Prompts that ask to verify, research, or look something up, or to install,
-configure, or connect a technical integration such as an API, SDK, or MCP
-server, trigger an automatic search before stage 2. The query is the prompt
-with pasted code blocks removed, cut to 200 characters. Fresh stored knowledge
-is used first; the web is searched only when nothing relevant is stored.
+When stage 1 says research is needed, each of its search queries (up to three)
+is looked up before stage 2 runs. Fresh stored knowledge is used first; the web
+is searched only when nothing relevant is stored. Without model-written
+queries, the prompt is used as the query, with pasted code blocks removed and
+cut to 200 characters.
 
 ## Long-term memory
 
@@ -265,8 +280,8 @@ Run the tests with `python -m unittest`.
 
 ## Current limits
 
-- Every request runs all eight stages, however simple it is.
-- The model is loaded afresh for each request and each background job.
+- One-shot CLI runs load the model for each run; the TUI keeps it loaded and
+  shares it with the background worker.
 - The topic tree is flat in practice: topics are named after search queries,
   nothing sets a parent, and nothing yet records entity relationships.
 - The knowledge store holds web evidence only, not facts about the user or

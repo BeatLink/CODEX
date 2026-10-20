@@ -28,7 +28,7 @@ from textual.widgets import (
     Tree,
 )
 
-from .pipeline import ModelCache, execute_pipeline
+from .pipeline import SKIPPED_PREFIX, ModelCache, execute_pipeline
 from .background import research_one_topic
 from .knowledge import KnowledgeStore
 from .settings import default_settings_path, load_settings, save_settings, validate_settings
@@ -46,6 +46,7 @@ STAGE_LABELS = (
 )
 STAGE_TAB_TITLES = ("Task", "Research", "Plan", "Review", "Actions", "Draft", "Critique", "Revise")
 PHASE_WAITING_TEXT = "_Waiting for this phase..._"
+PHASE_SKIPPED_TEXT = "_Skipped: this request does not need this phase._"
 FINAL_WAITING_TEXT = "Your final response will appear here."
 BACKGROUND_WAITING_TEXT = "_Waiting for background work..._"
 
@@ -360,6 +361,7 @@ class SmartHarnessApp(App[None]):
         self._request_running = False
         self._last_answer = ""
         self._active_stage: int | None = None
+        self._skipped_stages: set[int] = set()
         self._follow_stages = True
         self._programmatic_phase_tabs: list[str] = []
         self._stage_output_buffers = [""] * len(STAGE_LABELS)
@@ -761,6 +763,7 @@ class SmartHarnessApp(App[None]):
 
     def _reset_stages(self) -> None:
         self._active_stage = None
+        self._skipped_stages.clear()
         self._follow_stages = True
         for index in range(len(STAGE_LABELS)):
             self._set_stage_row(index, "WAIT")
@@ -798,6 +801,12 @@ class SmartHarnessApp(App[None]):
         if label == "Loading model":
             self.query_one("#status", Static).update("Loading local model...")
             return
+        if label.startswith(SKIPPED_PREFIX) and label.removeprefix(SKIPPED_PREFIX) in STAGE_LABELS:
+            skipped = STAGE_LABELS.index(label.removeprefix(SKIPPED_PREFIX))
+            self._skipped_stages.add(skipped)
+            self._set_stage_row(skipped, "SKIP")
+            self.query_one(f"#stage-output-{skipped + 1}", Markdown).update(PHASE_SKIPPED_TEXT)
+            return
         try:
             active = STAGE_LABELS.index(label)
         except ValueError:
@@ -805,6 +814,8 @@ class SmartHarnessApp(App[None]):
             return
         self._active_stage = active
         for index in range(len(STAGE_LABELS)):
+            if index in self._skipped_stages:
+                continue
             self._set_stage_row(index, "DONE" if index < active else "NOW " if index == active else "WAIT")
         if self._follow_stages:
             self._show_phase_tab(f"phase-{active + 1}")
@@ -817,7 +828,7 @@ class SmartHarnessApp(App[None]):
         self.query_one("#final-output", Markdown).update(result)
         self._show_phase_tab("final")
         for index in range(len(STAGE_LABELS)):
-            self._set_stage_row(index, "DONE")
+            self._set_stage_row(index, "SKIP" if index in self._skipped_stages else "DONE")
         self.query_one("#status", Static).update("Complete")
         self._worker_wakeup.set()
 
