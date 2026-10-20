@@ -327,7 +327,7 @@ class PipelineTests(unittest.TestCase):
         stage_inputs = []
 
         def fake_run_stage(llm, system_prompt, user_input, **kwargs):
-            stage_inputs.append(system_prompt + user_input)
+            stage_inputs.append((system_prompt + user_input, kwargs["max_tokens"]))
             return "x" * 20_000
 
         with (
@@ -342,9 +342,10 @@ class PipelineTests(unittest.TestCase):
                 progress_callback=lambda label: None,
             )
 
-        self.assertTrue(all(len(text) <= (4096 - 2048) * 3 for text in stage_inputs))
-        self.assertIn("Original user request:\nAnswer the request", stage_inputs[-1])
-        self.assertIn("Trimmed to fit the context window", stage_inputs[-1])
+        self.assertTrue(all(len(text) <= (4096 - reply_tokens) * 3 for text, reply_tokens in stage_inputs))
+        self.assertIn("Original user request:\nAnswer the request", stage_inputs[-1][0])
+        self.assertIn("Trimmed to fit the context window", stage_inputs[-1][0])
+        self.assertEqual(stage_inputs[0][1], 1024)
 
     def test_research_trigger_ignores_ordinary_code_words(self):
         self.assertFalse(_requires_web_research("Explain this source file and the current directory"))

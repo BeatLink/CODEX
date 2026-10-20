@@ -57,10 +57,13 @@ Design points:
   be verified.
 - **Untrusted input.** Web pages, file contents, and tool output are presented
   as data, never as instructions, in every stage that sees them.
-- **Context budget.** Each stage's input is trimmed to fit `context_size` minus
-  `max_tokens`, and tool results are cut to the room that is left, so long
-  evidence is shortened rather than overflowing the window. Fetched pages are
-  summarized in chunks, then the chunk summaries are merged.
+- **Context budget.** Each stage's input is measured with the model's own
+  tokenizer and trimmed to fit `context_size` minus that stage's reply budget.
+  The original request is never trimmed unless it alone overflows the window;
+  earlier results are shortened first. Stage 1 and the critique reply in at most
+  1024 tokens, which leaves them more room for input. Tool results are cut to
+  the room that is left, and fetched pages are summarized in chunks, then the
+  chunk summaries are merged.
 - **Revise only what failed.** When every requirement is met and the critique
   finds no other issue, the revision is skipped and the draft is the answer.
   Otherwise the revision gets only the corrections, and the result is critiqued
@@ -208,7 +211,7 @@ Precedence, lowest first: built-in defaults, the settings file, the
 | `--settings PATH` | Use another settings file |
 | `--tui` | Open the terminal interface |
 
-`max_tokens` is reserved for the reply in every stage, so it must leave room
+`max_tokens` is reserved for the reply in most stages, so it must leave room
 for input within `context_size`.
 
 ## Tools and safety

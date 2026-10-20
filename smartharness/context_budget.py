@@ -1,10 +1,16 @@
 """Keep model input within the context window so no stage overflows it."""
 
-# A cautious characters-per-token estimate, so a budget errs towards fitting.
+from collections.abc import Callable
+from typing import Any
+
+# A cautious characters-per-token estimate, for models that cannot count tokens themselves.
 CHARS_PER_TOKEN = 3
 
 # Tokens kept free for the chat template and message framing.
 TEMPLATE_RESERVE_TOKENS = 128
+
+# Rounds of measuring and re-trimming before the last trim is accepted.
+MAX_FIT_ROUNDS = 4
 
 TRIMMED_MARKER = "\n[Trimmed to fit the context window.]"
 
@@ -16,10 +22,51 @@ def input_char_budget(context_size: int, max_tokens: int, *fixed_texts: str) -> 
     return max(500, free_tokens * CHARS_PER_TOKEN - fixed_chars)
 
 
-def fit_sections(sections: list[tuple[str, str]], char_budget: int) -> list[tuple[str, str]]:
-    """Trim the longest section texts evenly until the headings and texts fit the budget."""
+def token_counter(llm: Any) -> Callable[[str], int]:
+    """Count tokens with the model's own tokenizer, or estimate them when it has none."""
+    tokenize = getattr(llm, "tokenize", None)
+    if not callable(tokenize):
+        return lambda text: -(-len(text) // CHARS_PER_TOKEN)
+    return lambda text: len(tokenize(text.encode("utf-8"), add_bos=False, special=False))
+
+
+def input_token_budget(
+    context_size: int,
+    reply_tokens: int,
+    count_tokens: Callable[[str], int],
+    *fixed_texts: str,
+) -> int:
+    """Return how many tokens of input fit beside the reply and the fixed texts."""
+    fixed_tokens = sum(count_tokens(text) for text in fixed_texts)
+    return max(200, context_size - reply_tokens - TEMPLATE_RESERVE_TOKENS - fixed_tokens)
+
+
+def render_sections(sections: list[tuple[str, str]]) -> str:
+    return "\n\n".join(f"{heading}:\n{text}" for heading, text in sections)
+
+
+def fit_sections(
+    sections: list[tuple[str, str]],
+    char_budget: int,
+    pinned: int = 0,
+) -> list[tuple[str, str]]:
+    """Trim the longest section texts evenly until the headings and texts fit the budget.
+
+    The first `pinned` sections are trimmed only when they alone overflow the budget.
+    """
     overhead = sum(len(heading) + 4 for heading, _ in sections)
     available = max(0, char_budget - overhead)
+    lengths = [len(text) for _, text in sections]
+    if sum(lengths) <= available:
+        return sections
+
+    pinned_length = sum(lengths[:pinned])
+    if pinned_length >= available:
+        return _trim_evenly(sections, available)
+    return sections[:pinned] + _trim_evenly(sections[pinned:], available - pinned_length)
+
+
+def _trim_evenly(sections: list[tuple[str, str]], available: int) -> list[tuple[str, str]]:
     lengths = [len(text) for _, text in sections]
     if sum(lengths) <= available:
         return sections
@@ -40,4 +87,28 @@ def fit_sections(sections: list[tuple[str, str]], char_budget: int) -> list[tupl
         if len(text) > cap:
             text = text[:max(0, cap - len(TRIMMED_MARKER))] + TRIMMED_MARKER
         fitted.append((heading, text))
+    return fitted
+
+
+def fit_sections_to_tokens(
+    sections: list[tuple[str, str]],
+    token_budget: int,
+    count_tokens: Callable[[str], int],
+    pinned: int = 0,
+) -> list[tuple[str, str]]:
+    """Trim sections until their rendered text measures within the token budget."""
+    text = render_sections(sections)
+    tokens = count_tokens(text)
+    if tokens <= token_budget:
+        return sections
+
+    # Convert the token budget to characters at this text's own ratio, then correct by measuring.
+    char_budget = len(text) * token_budget // tokens
+    fitted = sections
+    for _ in range(MAX_FIT_ROUNDS):
+        fitted = fit_sections(sections, char_budget, pinned)
+        tokens = count_tokens(render_sections(fitted))
+        if tokens <= token_budget:
+            break
+        char_budget = char_budget * token_budget * 19 // (tokens * 20)
     return fitted

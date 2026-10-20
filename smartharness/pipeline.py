@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any
 
-from .context_budget import fit_sections, input_char_budget
+from .context_budget import fit_sections_to_tokens, input_token_budget, render_sections, token_counter
 from .knowledge import KnowledgeStore
 from .settings import CONTEXT_SIZE, DEFAULT_MODEL_PATH, MAX_TOKENS, TEMPERATURE
 from .tool_stage import run_tool_stage
@@ -28,6 +28,10 @@ _CODE_BLOCK = re.compile(r"```.*?(?:```|$)", re.DOTALL)
 MAX_SEARCH_QUERY_CHARS = 200
 
 TASK_TYPES = ("direct", "reasoning", "research", "action")
+
+# Replies that are short by design get a smaller budget, leaving more of the window for their input.
+TASK_ANALYSIS_MAX_TOKENS = 1024
+CRITIQUE_MAX_TOKENS = 1024
 MAX_SEARCH_QUERIES = 3
 
 # Fields come in this order so the model lists requirements before it picks a route.
@@ -321,7 +325,8 @@ def _stage_context(
     user_prompt: str,
     previous_results: list[tuple[str, str]],
     relevant_labels: set[str] | None = None,
-    char_budget: int | None = None,
+    token_budget: int | None = None,
+    count_tokens: Callable[[str], int] | None = None,
 ) -> str:
     sections = [("Original user request", user_prompt)]
     sections.extend(
@@ -329,9 +334,10 @@ def _stage_context(
         for label, result in previous_results
         if relevant_labels is None or label in relevant_labels
     )
-    if char_budget is not None:
-        sections = fit_sections(sections, char_budget)
-    return "\n\n".join(f"{label}:\n{text}" for label, text in sections)
+    if token_budget is not None and count_tokens is not None:
+        # The request is pinned: earlier results are trimmed before it is.
+        sections = fit_sections_to_tokens(sections, token_budget, count_tokens, pinned=1)
+    return render_sections(sections)
 
 
 def _extract_clarification(result: str) -> tuple[str, str | None]:
@@ -587,18 +593,16 @@ def execute_pipeline(
         else:
             print(f"[{label}]...")
 
-    def stage_input(system_prompt: str, relevant_labels: set[str]) -> str:
-        return _stage_context(
-            user_prompt,
-            previous_results,
-            relevant_labels,
-            char_budget=input_char_budget(context_size, max_tokens, system_prompt),
-        )
+    count_tokens = token_counter(llm)
+
+    def stage_input(system_prompt: str, relevant_labels: set[str], reply_tokens: int = max_tokens) -> str:
+        budget = input_token_budget(context_size, reply_tokens, count_tokens, system_prompt)
+        return _stage_context(user_prompt, previous_results, relevant_labels, budget, count_tokens)
 
     def tool_stage_input(system_prompt: str, relevant_labels: set[str]) -> str:
         # Half the room goes to the stage's input and half stays free for tool results.
-        budget = input_char_budget(context_size, max_tokens, system_prompt) // 2
-        return _stage_context(user_prompt, previous_results, relevant_labels, char_budget=budget)
+        budget = input_token_budget(context_size, max_tokens, count_tokens, system_prompt) // 2
+        return _stage_context(user_prompt, previous_results, relevant_labels, budget, count_tokens)
 
     def skip_stage(label: str) -> None:
         if progress_callback is not None:
@@ -609,11 +613,12 @@ def execute_pipeline(
     previous_results: list[tuple[str, str]] = []
     label, system_prompt = stages[0]
     report_stage(label)
+    analysis_tokens = min(max_tokens, TASK_ANALYSIS_MAX_TOKENS)
     result = run_stage(
         llm,
         system_prompt,
-        stage_input(system_prompt, set()),
-        max_tokens=max_tokens,
+        stage_input(system_prompt, set(), analysis_tokens),
+        max_tokens=analysis_tokens,
         temperature=temperature,
         on_token=token_callback_for(label),
         json_schema=TASK_ANALYSIS_SCHEMA,
@@ -779,13 +784,19 @@ def execute_pipeline(
     critique_label, critique_prompt = stages[4]
     revise_label, revise_prompt = stages[5]
 
-    def run_answer_stage(label: str, system_prompt: str, labels: set[str], **kwargs: Any) -> str:
+    def run_answer_stage(
+        label: str,
+        system_prompt: str,
+        labels: set[str],
+        reply_tokens: int = max_tokens,
+        **kwargs: Any,
+    ) -> str:
         report_stage(label)
         result = run_stage(
             llm,
             system_prompt + source_check,
-            stage_input(system_prompt + source_check, labels | EVIDENCE_LABELS | CLARIFICATION_LABELS),
-            max_tokens=max_tokens,
+            stage_input(system_prompt + source_check, labels | EVIDENCE_LABELS | CLARIFICATION_LABELS, reply_tokens),
+            max_tokens=reply_tokens,
             temperature=temperature,
             on_token=token_callback_for(label),
             **kwargs,
@@ -812,6 +823,7 @@ def execute_pipeline(
                 critique_label,
                 critique_prompt,
                 outline | {"Stage 1 result", "Stage 5 result", "Stage 6 result"},
+                reply_tokens=min(max_tokens, CRITIQUE_MAX_TOKENS),
                 json_schema=CRITIQUE_SCHEMA,
             )
         except (RuntimeError, ValueError) as error:
