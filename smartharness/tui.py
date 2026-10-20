@@ -29,7 +29,7 @@ from textual.widgets import (
 )
 
 from .pipeline import SKIPPED_PREFIX, ModelCache, execute_pipeline
-from .background import research_one_topic
+from .background import learn_from_episodes, research_one_topic
 from .knowledge import KnowledgeStore
 from .settings import default_settings_path, load_settings, save_settings, validate_settings
 
@@ -1028,17 +1028,20 @@ class SmartHarnessApp(App[None]):
                         settings["background_refresh_interval_hours"],
                         settings["background_max_pending_jobs"],
                     )
-                    worked = research_one_topic(
-                        settings,
-                        on_progress=lambda message: self.call_from_thread(
+                    worker_options = {
+                        "on_progress": lambda message: self.call_from_thread(
                             self._set_background_status, message
                         ),
-                        on_token=lambda token: self.call_from_thread(
+                        "on_token": lambda token: self.call_from_thread(
                             self._append_background_token, token
                         ),
-                        should_pause=lambda: self._request_running or self._worker_stop.is_set(),
-                        model_lock=self._model_lock,
-                        model_cache=self._model_cache,
+                        "should_pause": lambda: self._request_running or self._worker_stop.is_set(),
+                        "model_lock": self._model_lock,
+                        "model_cache": self._model_cache,
+                    }
+                    # Queued research comes first; with none left, the worker learns from past requests.
+                    worked = research_one_topic(settings, **worker_options) or learn_from_episodes(
+                        settings, **worker_options
                     )
                     self.call_from_thread(self._flush_background_output)
                     self.call_from_thread(self._refresh_queue)

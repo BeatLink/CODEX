@@ -123,15 +123,29 @@ can read your files.
 
 ### Background research
 
-While the TUI is open, a background worker researches queued topics whenever no
-prompt is running. For each job it searches the web, summarizes the results
-with the local model (citing each claim's URL), and stores the sources and
-summary. It also re-queues topics whose research is older than
+While the TUI is open, a background worker uses idle time to grow the store.
+For each queued topic it:
+
+1. Searches the web, then fetches and summarizes the first two result pages.
+2. Asks the model, through a JSON schema, for a topic summary, single facts with
+   their source URL and a confidence, relationships between named things, and
+   the broader topic this one belongs under. A fact citing a URL that was not
+   in the results is kept without a source.
+3. Stores the sources, page summaries, facts, and relationships, files the topic
+   under its parent, and rewrites the parent's summary from its children's.
+
+When a fact is recalled later, it comes with the chain of topics above it and
+their summaries, so the model gets the broader picture in a few lines.
+
+With no research queued, the worker reads recent requests that have not been
+processed yet and remembers what they show about the user: preferences,
+projects, and corrections. It is told to leave out secrets and personal
+identifiers. It also re-queues topics whose research is older than
 `background_refresh_interval_hours`.
 
-The worker yields to foreground work: it waits for the shared model lock,
-checks before every step and every generated token whether a prompt has
-started, and if so puts its job back in the queue.
+The worker yields to foreground work. It takes the shared model lock for one
+model call at a time, checks before every step and every generated token
+whether a prompt has started, and if so puts its job back in the queue.
 
 Topics reach the queue in two ways. A search during a request that finds
 nothing is queued, so the worker tries it again later. Otherwise, add topics on
@@ -307,10 +321,8 @@ Run the tests with `python -m unittest`.
 
 - One-shot CLI runs load the model for each run; the TUI keeps it loaded and
   shares it with the background worker.
-- The topic tree is flat in practice: topics are named after search queries,
-  nothing sets a parent, and nothing yet records entity relationships.
-- The knowledge store holds web evidence only, not facts about the user or
-  past tasks.
+- Topics found by searches during a request are named after the query and stay
+  at the top level until the background worker researches them.
 
 See `TODO.md` for planned work.
 

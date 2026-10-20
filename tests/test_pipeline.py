@@ -668,6 +668,28 @@ class MemoryTests(unittest.TestCase):
             ("How do I filter a list?", "direct", "Use a list comprehension.", "answered directly"),
         )
 
+    def test_recalled_fact_shows_its_topic_path_and_overview(self):
+        self.store.add_topic("SQLite", parent="Databases")
+        self.store.set_topic_summary("Databases", "Ways to store data.")
+        self.store.add_fact("SQLite", "SQLite stores a database in one file.", confidence=0.9)
+        stage_inputs = []
+        results = iter([task_json("direct"), "Answer"])
+
+        def fake_run_stage(llm, system_prompt, user_input, **kwargs):
+            stage_inputs.append(user_input)
+            return next(results)
+
+        with patch("smartharness.pipeline.run_stage", side_effect=fake_run_stage):
+            execute_pipeline(
+                "Does SQLite store a database in one file?",
+                llm=object(),
+                knowledge_db_path=self.database_path,
+                progress_callback=lambda label: None,
+            )
+
+        self.assertIn("- SQLite stores a database in one file. [Databases > SQLite; confidence 0.9]", stage_inputs[0])
+        self.assertIn("Broader topic overviews:\n- Databases: Ways to store data.", stage_inputs[0])
+
     def test_search_that_finds_nothing_is_queued_for_background_research(self):
         results = iter([task_json("direct", needs_research=True, queries=["obscure library 9.1 release"]), "Answer"])
 

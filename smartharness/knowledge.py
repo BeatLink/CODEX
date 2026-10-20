@@ -454,6 +454,38 @@ class KnowledgeStore:
         with self._connect() as connection:
             connection.execute("UPDATE topics SET summary = ? WHERE id = ?", (summary.strip()[:4000], topic_id))
 
+    def set_source_summary(self, url: str, summary: str) -> None:
+        """Store a summary of one fetched page on its source, and make it searchable."""
+        with self._connect() as connection:
+            row = connection.execute("SELECT id, title, snippet FROM sources WHERE url = ?", (url,)).fetchone()
+            if row is None:
+                return
+            summary = summary.strip()[:4000]
+            connection.execute("UPDATE sources SET summary = ? WHERE id = ?", (summary, row["id"]))
+            connection.execute("DELETE FROM knowledge_search WHERE rowid = ?", (row["id"],))
+            connection.execute(
+                "INSERT INTO knowledge_search(rowid, title, body, url) VALUES (?, ?, ?, ?)",
+                (row["id"], row["title"], f"{row['snippet']} {summary}", url),
+            )
+
+    def root_topics(self, limit: int = 50) -> list[str]:
+        """Return the names of top-level topics, most used first."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT name FROM topics WHERE parent_id IS NULL ORDER BY use_count DESC, name LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [row["name"] for row in rows]
+
+    def child_summaries(self, parent: str) -> list[tuple[str, str]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT c.name, c.summary FROM topics c JOIN topics p ON p.id = c.parent_id "
+                "WHERE p.name = ? COLLATE NOCASE AND c.summary != '' ORDER BY c.use_count DESC, c.name",
+                (parent,),
+            ).fetchall()
+        return [(row["name"], row["summary"]) for row in rows]
+
     def add_user_memory(self, kind: str, statement: str) -> int:
         """Remember a durable fact about the user: a preference, a project, or a correction."""
         if kind not in USER_MEMORY_KINDS:
@@ -531,7 +563,9 @@ class KnowledgeStore:
                             (row["item_id"],),
                         ).fetchone()
                         if fact:
-                            recalled["facts"].append(dict(fact))
+                            recalled["facts"].append(
+                                {**dict(fact), "topic_path": self._topic_path(connection, fact["topic_id"])}
+                            )
                     elif row["kind"] == "episode" and len(recalled["episodes"]) < min(limit, 3):
                         episode = connection.execute(
                             "SELECT id, prompt, task_type, outcome, created_at FROM episodes WHERE id = ?",
@@ -571,6 +605,25 @@ class KnowledgeStore:
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{name} must be a non-empty string.")
         return value.strip()[:maximum]
+
+    @staticmethod
+    def _topic_path(connection: sqlite3.Connection, topic_id: int) -> list[dict[str, str]]:
+        """Return a topic's ancestors from the root down, each with its summary."""
+        path = []
+        seen = {topic_id}
+        row = connection.execute("SELECT parent_id FROM topics WHERE id = ?", (topic_id,)).fetchone()
+        parent_id = row["parent_id"] if row else None
+        # The seen set stops a parent loop from walking forever.
+        while parent_id is not None and parent_id not in seen:
+            seen.add(parent_id)
+            parent = connection.execute(
+                "SELECT name, summary, parent_id FROM topics WHERE id = ?", (parent_id,)
+            ).fetchone()
+            if parent is None:
+                break
+            path.insert(0, {"name": parent["name"], "summary": parent["summary"]})
+            parent_id = parent["parent_id"]
+        return path
 
     @staticmethod
     def _index_memory(connection: sqlite3.Connection, kind: str, item_id: int, body: str) -> None:

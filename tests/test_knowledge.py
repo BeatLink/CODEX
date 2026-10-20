@@ -139,6 +139,20 @@ class KnowledgeStoreTests(unittest.TestCase):
         use_counts = {fact["topic"]: fact["use_count"] for fact in self.store.facts()}
         self.assertEqual(use_counts, {"SQLite": 1, "Rust": 0})
 
+    def test_recalled_fact_carries_its_chain_of_parent_summaries(self):
+        self.store.add_topic("SQLite", parent="Databases")
+        self.store.add_topic("SQLite FTS5", parent="SQLite")
+        self.store.set_topic_summary("Databases", "Ways to store data.")
+        self.store.set_topic_summary("SQLite", "An embedded database.")
+        self.store.add_fact("SQLite FTS5", "FTS5 supports bm25 ranking.")
+
+        fact = self.store.recall("FTS5 bm25 ranking")["facts"][0]
+
+        self.assertEqual(fact["topic_path"], [
+            {"name": "Databases", "summary": "Ways to store data."},
+            {"name": "SQLite", "summary": "An embedded database."},
+        ])
+
     def test_user_memory_rejects_unknown_kinds(self):
         with self.assertRaisesRegex(ValueError, "kind must be one of"):
             self.store.add_user_memory("secret", "anything")

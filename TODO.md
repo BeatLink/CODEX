@@ -29,18 +29,18 @@
 - [x] Give each stage its own reply token budget
 - [ ] Add an eval harness comparing the bare model with the pipeline on a fixed task set
 - [x] Add schema migrations to the knowledge store
-- [ ] Store atomic facts with source URL and confidence instead of one summary per topic
+- [x] Store atomic facts with source URL and confidence instead of one summary per topic
 - [x] Stop copying the topic summary onto every source row
-- [ ] Store user memory (preferences, projects, corrections) extracted from each run
+- [x] Store user memory (preferences, projects, corrections) extracted from each run
 - [x] Store episodic memory of past tasks, plans, and outcomes
 - [x] Retrieve user and episodic memory for every prompt, not only research prompts
-- [ ] Place new facts under a parent topic so the topic tree is a real hierarchy
-- [ ] Keep a summary on each parent topic built from its children
-- [ ] Return a matched fact with its chain of parent summaries during retrieval
-- [ ] Record entity relationships from extracted facts in the graph
+- [x] Place new facts under a parent topic so the topic tree is a real hierarchy
+- [x] Keep a summary on each parent topic built from its children
+- [x] Return a matched fact with its chain of parent summaries during retrieval
+- [x] Record entity relationships from extracted facts in the graph
 - [x] Queue background research from searches that found nothing
 - [ ] Queue background research from unsupported claims and recurring topics
-- [ ] Fetch full pages during background research, not snippets only
+- [x] Fetch full pages during background research, not snippets only
 - [ ] Merge duplicate facts, flag contradictions, and prune unused facts in the background
 - [x] Track memory usage counts
 - [ ] Refresh topics by usage and staleness

@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from smartharness.background import research_one_topic
+from smartharness.background import learn_from_episodes, research_one_topic
 from smartharness.knowledge import KnowledgeStore
 from smartharness.settings import DEFAULT_SETTINGS
 
@@ -41,7 +41,7 @@ class BackgroundResearchTests(unittest.TestCase):
 
             self.assertTrue(worked)
             self.assertEqual(streamed, ["Summary"])
-            self.assertIn("Summarizing retrieved evidence", progress)
+            self.assertIn("Extracting facts", progress)
             self.assertEqual(store.queue_status()[0]["status"], "done")
             self.assertEqual(store.search("full text search")[0]["summary"],
                              "SQLite includes full-text search. https://example.test/fts")
@@ -112,6 +112,75 @@ class BackgroundResearchTests(unittest.TestCase):
 
             self.assertEqual(store.queue_status()[0]["status"], "pending")
             self.assertEqual(store.search("database"), [])
+
+
+class ExtractionTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.settings = DEFAULT_SETTINGS.copy()
+        self.settings["knowledge_db_path"] = str(Path(directory.name) / "knowledge.db")
+        self.settings["filesystem_root"] = directory.name
+        self.store = KnowledgeStore(self.settings["knowledge_db_path"])
+
+    def test_worker_stores_page_summaries_facts_relationships_and_parent(self):
+        self.store.enqueue_topic("SQLite FTS5")
+        toolbox = unittest.mock.Mock()
+
+        def call(name, arguments):
+            if name == "web_search":
+                return json.dumps([{"title": "FTS5", "url": "https://example.test/fts", "snippet": "Full text."}])
+            return json.dumps({"url": arguments["url"], "title": "FTS5", "text": "FTS5 is an SQLite module."})
+
+        toolbox.call.side_effect = call
+        extraction = json.dumps({
+            "summary": "FTS5 adds full-text search to SQLite.",
+            "facts": [
+                {"statement": "FTS5 is an SQLite module.", "source_url": "https://example.test/fts", "confidence": "high"},
+                {"statement": "FTS5 is fast.", "source_url": "https://invented.example", "confidence": "low"},
+            ],
+            "relationships": [
+                {"subject": "FTS5", "relation": "extends", "object": "SQLite", "source_url": "https://example.test/fts"},
+            ],
+            "parent_topic": "Databases",
+        })
+        replies = iter([extraction, "Databases overview."])
+
+        with (
+            patch("smartharness.background.Toolbox", return_value=toolbox),
+            patch("smartharness.background._summarize_web_page", return_value="Page summary.") as summarize,
+            patch("smartharness.background.run_stage", side_effect=lambda *args, **kwargs: next(replies)) as run_stage,
+        ):
+            self.assertTrue(research_one_topic(self.settings, llm=object()))
+
+        self.assertEqual(summarize.call_count, 1)
+        self.assertIn("Page summary.", run_stage.call_args_list[0].args[2])
+        self.assertIsNotNone(run_stage.call_args_list[0].kwargs["json_schema"])
+        facts = {fact["statement"]: fact for fact in self.store.facts()}
+        self.assertEqual(facts["FTS5 is an SQLite module."]["confidence"], 0.9)
+        self.assertEqual(facts["FTS5 is an SQLite module."]["source_url"], "https://example.test/fts")
+        self.assertIsNone(facts["FTS5 is fast."]["source_url"])
+        self.assertIn(("FTS5", "extends", "SQLite"), [(e["source"], e["relation"], e["target"]) for e in self.store.graph()])
+        topics = {topic["name"]: topic for topic in self.store.topics()}
+        self.assertEqual(topics["SQLite FTS5"]["parent"], "Databases")
+        self.assertEqual(self.store.child_summaries("Databases"), [("SQLite FTS5", "FTS5 adds full-text search to SQLite.")])
+        self.assertEqual(self.store.sources()[0]["summary"], "Page summary.")
+        self.assertEqual(self.store.queue_status()[0]["status"], "done")
+
+    def test_learning_turns_past_requests_into_user_memory(self):
+        self.store.record_episode("Write my Rust CLI in clap", "action", "1. Use clap", "Done", "answered")
+        reply = json.dumps({"memories": [{"kind": "project", "statement": "Is building a Rust CLI with clap."}]})
+
+        with patch("smartharness.background.run_stage", return_value=reply) as run_stage:
+            self.assertTrue(learn_from_episodes(self.settings, llm=object()))
+
+        self.assertIn("Write my Rust CLI in clap", run_stage.call_args.args[2])
+        self.assertEqual(
+            [(memory["kind"], memory["statement"]) for memory in self.store.user_memories()],
+            [("project", "Is building a Rust CLI with clap.")],
+        )
+        self.assertEqual(self.store.episodes(unprocessed_only=True), [])
+        self.assertFalse(learn_from_episodes(self.settings, llm=object()))
 
 
 if __name__ == "__main__":

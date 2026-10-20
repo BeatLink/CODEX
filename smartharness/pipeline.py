@@ -229,10 +229,21 @@ def _format_recall(recalled: dict[str, list[dict[str, Any]]]) -> str:
         ))
     if recalled.get("facts"):
         parts.append("Stored facts (from earlier research; cite the URL when using one):\n" + "\n".join(
-            f"- {fact['statement']} [{fact['topic']}; confidence {fact['confidence']:.1f}"
+            f"- {fact['statement']} [{' > '.join([*(step['name'] for step in fact.get('topic_path', [])), fact['topic']])};"
+            f" confidence {fact['confidence']:.1f}"
             + (f"; {fact['source_url']}" if fact.get("source_url") else "") + "]"
             for fact in recalled["facts"]
         ))
+        overviews = {
+            step["name"]: step["summary"]
+            for fact in recalled["facts"]
+            for step in fact.get("topic_path", [])
+            if step["summary"]
+        }
+        if overviews:
+            parts.append("Broader topic overviews:\n" + "\n".join(
+                f"- {name}: {' '.join(summary.split())[:600]}" for name, summary in overviews.items()
+            ))
     if recalled.get("episodes"):
         parts.append("Similar past requests:\n" + "\n".join(
             f"- {' '.join(episode['prompt'].split())[:200]} ({episode['task_type']}; {episode['outcome']})"
