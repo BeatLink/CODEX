@@ -28,9 +28,9 @@
 - [ ] Summarize older stage output instead of cutting it
 - [x] Give each stage its own reply token budget
 - [ ] Add an eval harness comparing the bare model with the pipeline on a fixed task set
-- [ ] Add schema migrations to the knowledge store
+- [x] Add schema migrations to the knowledge store
 - [ ] Store atomic facts with source URL and confidence instead of one summary per topic
-- [ ] Stop copying the topic summary onto every source row
+- [x] Stop copying the topic summary onto every source row
 - [ ] Store user memory (preferences, projects, corrections) extracted from each run
 - [ ] Store episodic memory of past tasks, plans, and outcomes
 - [ ] Retrieve user and episodic memory for every prompt, not only research prompts
@@ -41,7 +41,8 @@
 - [ ] Queue background research from gaps: missed searches, unsupported claims, recurring topics
 - [ ] Fetch full pages during background research, not snippets only
 - [ ] Merge duplicate facts, flag contradictions, and prune unused facts in the background
-- [ ] Track memory usage counts and refresh by usage and staleness
+- [x] Track memory usage counts
+- [ ] Refresh topics by usage and staleness
 - [ ] Add embedding retrieval with sqlite-vec and combine it with FTS5 ranking
 - [x] Add SQLite-backed knowledge storage with schema initialization and version guard
 - [x] Add full-text knowledge retrieval and source provenance/freshness metadata
