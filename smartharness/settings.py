@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,9 @@ CONTEXT_SIZE = 4096
 MAX_TOKENS = 2048
 TEMPERATURE = 0.1
 DEFAULT_SETTINGS_PATH = Path(__file__).resolve().parent.parent / "settings.json"
+USER_SETTINGS_PATH = (
+    Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "smartharness" / "settings.json"
+)
 DEFAULT_KNOWLEDGE_DB_PATH = "~/.local/share/smartharness/knowledge.sqlite3"
 DEFAULT_SETTINGS = {
     "model_path": DEFAULT_MODEL_PATH,
@@ -32,13 +36,21 @@ DEFAULT_SETTINGS = {
 }
 
 
+def default_settings_path() -> Path:
+    local_settings_path = Path.cwd() / "settings.json"
+    for path in (local_settings_path, DEFAULT_SETTINGS_PATH):
+        if path.is_file():
+            return path
+    return USER_SETTINGS_PATH
+
+
 def load_settings(settings_path: str | Path) -> dict[str, Any]:
     settings_path = Path(settings_path)
     try:
         with settings_path.open(encoding="utf-8") as settings_file:
             settings = json.load(settings_file)
     except FileNotFoundError:
-        if settings_path.resolve() == DEFAULT_SETTINGS_PATH.resolve():
+        if settings_path.resolve() in (DEFAULT_SETTINGS_PATH.resolve(), USER_SETTINGS_PATH.resolve()):
             return DEFAULT_SETTINGS.copy()
         raise
     except json.JSONDecodeError as error:
@@ -122,7 +134,13 @@ def validate_mcp_servers(servers: Any) -> list[dict[str, Any]]:
         "command",
         "args",
         "env",
+        "url",
+        "headers",
         "allowed_tools",
+    }
+    transport_fields = {
+        "stdio": {"command", "args", "env"},
+        "http": {"url", "headers"},
     }
     for index, server in enumerate(servers):
         if not isinstance(server, dict):
@@ -145,15 +163,16 @@ def validate_mcp_servers(servers: Any) -> list[dict[str, Any]]:
         if not isinstance(enabled, bool):
             raise ValueError(f"MCP server '{name}' enabled must be a boolean.")
         transport = server.get("transport", "stdio")
-        if transport != "stdio":
+        if transport not in transport_fields:
             raise ValueError(f"MCP server '{name}' uses unsupported transport '{transport}'.")
-
-        command = server.get("command")
-        if not isinstance(command, str) or not command.strip():
-            raise ValueError(f"MCP server '{name}' command must be a non-empty string.")
-        args = server.get("args", [])
-        if not isinstance(args, list) or any(not isinstance(arg, str) for arg in args):
-            raise ValueError(f"MCP server '{name}' args must be a list of strings.")
+        other_fields = server.keys() & (
+            set().union(*transport_fields.values()) - transport_fields[transport]
+        )
+        if other_fields:
+            raise ValueError(
+                f"MCP server '{name}' uses {transport} transport and cannot set: "
+                f"{', '.join(sorted(other_fields))}."
+            )
 
         allowed_tools = server.get("allowed_tools", [])
         if (
@@ -165,24 +184,51 @@ def validate_mcp_servers(servers: Any) -> list[dict[str, Any]]:
         if enabled and not allowed_tools:
             raise ValueError(f"MCP server '{name}' must allow at least one tool when enabled.")
 
-        env = server.get("env", {})
-        if not isinstance(env, dict):
-            raise ValueError(f"MCP server '{name}' env must be an object of strings.")
-        for key, value in env.items():
-            if not isinstance(key, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
-                raise ValueError(f"MCP server '{name}' has an invalid environment variable name.")
-            if not isinstance(value, str):
-                raise ValueError(f"MCP server '{name}' environment values must be strings.")
+        if transport == "http":
+            connection = _validate_http_connection(name, server)
+        else:
+            connection = _validate_stdio_connection(name, server)
 
         validated.append(
             {
                 "name": name,
                 "enabled": enabled,
                 "transport": transport,
-                "command": command,
-                "args": args,
-                "env": env,
+                **connection,
                 "allowed_tools": allowed_tools,
             }
         )
     return validated
+
+
+def _validate_stdio_connection(name: str, server: dict[str, Any]) -> dict[str, Any]:
+    command = server.get("command")
+    if not isinstance(command, str) or not command.strip():
+        raise ValueError(f"MCP server '{name}' command must be a non-empty string.")
+    args = server.get("args", [])
+    if not isinstance(args, list) or any(not isinstance(arg, str) for arg in args):
+        raise ValueError(f"MCP server '{name}' args must be a list of strings.")
+    env = server.get("env", {})
+    if not isinstance(env, dict):
+        raise ValueError(f"MCP server '{name}' env must be an object of strings.")
+    for key, value in env.items():
+        if not isinstance(key, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+            raise ValueError(f"MCP server '{name}' has an invalid environment variable name.")
+        if not isinstance(value, str):
+            raise ValueError(f"MCP server '{name}' environment values must be strings.")
+    return {"command": command, "args": args, "env": env}
+
+
+def _validate_http_connection(name: str, server: dict[str, Any]) -> dict[str, Any]:
+    url = server.get("url")
+    if not isinstance(url, str) or not re.fullmatch(r"https?://[^\s/]+(/\S*)?", url):
+        raise ValueError(f"MCP server '{name}' url must be an http:// or https:// address.")
+    headers = server.get("headers", {})
+    if not isinstance(headers, dict):
+        raise ValueError(f"MCP server '{name}' headers must be an object of strings.")
+    for key, value in headers.items():
+        if not isinstance(key, str) or not re.fullmatch(r"[A-Za-z0-9-]+", key):
+            raise ValueError(f"MCP server '{name}' has an invalid header name.")
+        if not isinstance(value, str):
+            raise ValueError(f"MCP server '{name}' header values must be strings.")
+    return {"url": url, "headers": headers}

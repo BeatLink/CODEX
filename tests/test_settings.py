@@ -1,6 +1,11 @@
+import os
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
-from smartharness.settings import DEFAULT_SETTINGS, validate_settings
+from smartharness import settings as settings_module
+from smartharness.settings import DEFAULT_SETTINGS, default_settings_path, validate_settings
 
 
 class SettingsTests(unittest.TestCase):
@@ -62,14 +67,44 @@ class SettingsTests(unittest.TestCase):
         settings["mcp_servers"] = [
             {
                 "name": "remote",
-                "transport": "http",
-                "command": "server",
+                "transport": "sse",
+                "url": "http://127.0.0.1:8000/sse",
                 "allowed_tools": ["search"],
             }
         ]
 
         with self.assertRaisesRegex(ValueError, "unsupported transport"):
             validate_settings(settings)
+
+    def test_http_mcp_server_takes_a_url_and_headers(self):
+        settings = DEFAULT_SETTINGS.copy()
+        settings["mcp_servers"] = [
+            {
+                "name": "trilium",
+                "transport": "http",
+                "url": "http://127.0.0.1:37840/mcp",
+                "headers": {"Authorization": "Bearer ${TRILIUM_ETAPI_TOKEN}"},
+                "allowed_tools": ["search_notes"],
+            }
+        ]
+
+        validated = validate_settings(settings)["mcp_servers"][0]
+
+        self.assertEqual(validated["url"], "http://127.0.0.1:37840/mcp")
+        self.assertNotIn("command", validated)
+
+    def test_http_mcp_server_rejects_stdio_fields_and_bad_urls(self):
+        for server, message in (
+            ({"url": "http://127.0.0.1/mcp", "command": "server"}, "cannot set: command"),
+            ({"url": "file:///tmp/socket"}, "url must be"),
+            ({"url": "http://127.0.0.1/mcp", "headers": {"Bad Header": "x"}}, "header name"),
+        ):
+            settings = DEFAULT_SETTINGS.copy()
+            settings["mcp_servers"] = [
+                {"name": "remote", "transport": "http", "allowed_tools": ["search"], **server}
+            ]
+            with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
+                validate_settings(settings)
 
     def test_enabled_mcp_server_must_allow_tools(self):
         settings = DEFAULT_SETTINGS.copy()
@@ -79,6 +114,21 @@ class SettingsTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "at least one tool"):
             validate_settings(settings)
+
+    def test_settings_fall_back_to_the_user_config_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            current_directory = os.getcwd()
+            os.chdir(directory)
+            try:
+                user_path = Path(directory) / "config" / "settings.json"
+                with patch.object(
+                    settings_module, "DEFAULT_SETTINGS_PATH", Path(directory) / "missing.json"
+                ), patch.object(settings_module, "USER_SETTINGS_PATH", user_path):
+                    self.assertEqual(default_settings_path(), user_path)
+                    Path("settings.json").write_text("{}", encoding="utf-8")
+                    self.assertEqual(default_settings_path().resolve(), (Path(directory) / "settings.json").resolve())
+            finally:
+                os.chdir(current_directory)
 
 
 if __name__ == "__main__":

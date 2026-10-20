@@ -31,7 +31,7 @@ from textual.widgets import (
 from .pipeline import execute_pipeline
 from .background import research_one_topic
 from .knowledge import KnowledgeStore
-from .settings import DEFAULT_SETTINGS_PATH, load_settings, save_settings, validate_settings
+from .settings import default_settings_path, load_settings, save_settings, validate_settings
 
 
 STAGE_LABELS = (
@@ -638,7 +638,7 @@ class SmartHarnessApp(App[None]):
     def _save_settings(self) -> None:
         if not self._apply_settings():
             return
-        path = self.settings_path or DEFAULT_SETTINGS_PATH
+        path = self.settings_path or default_settings_path()
         try:
             self.settings = save_settings(path, self.settings)
         except (OSError, ValueError) as error:
@@ -1145,10 +1145,9 @@ class SmartHarnessApp(App[None]):
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Open the SmartHarness terminal interface.")
-    local_settings_path = Path.cwd() / "settings.json"
     parser.add_argument(
         "--settings",
-        default=str(local_settings_path if local_settings_path.is_file() else DEFAULT_SETTINGS_PATH),
+        default=str(default_settings_path()),
         help="Path to the JSON settings file.",
     )
     args = parser.parse_args(argv)

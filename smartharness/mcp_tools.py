@@ -18,8 +18,7 @@ class MCPToolbox:
             return self
 
         try:
-            from mcp import ClientSession, StdioServerParameters
-            from mcp.client.stdio import stdio_client
+            from mcp import ClientSession
         except ImportError as error:
             raise RuntimeError(
                 "MCP servers require the 'mcp' package; install the project dependencies."
@@ -29,7 +28,7 @@ class MCPToolbox:
         await self._stack.__aenter__()
         try:
             for server in self.servers:
-                await self._connect_server(server, ClientSession, StdioServerParameters, stdio_client)
+                await self._connect_server(server, ClientSession)
         except Exception as error:
             await self._stack.aclose()
             self._stack = None
@@ -67,50 +66,11 @@ class MCPToolbox:
             output = f"MCP tool error: {output}"
         return output[:MAX_TOOL_OUTPUT_CHARS]
 
-    async def _connect_server(
-        self,
-        server: dict[str, Any],
-        client_session_type: Any,
-        server_parameters_type: Any,
-        stdio_client: Any,
-    ) -> None:
-        inherited_variables = (
-            "PATH",
-            "HOME",
-            "TMPDIR",
-            "TEMP",
-            "TMP",
-            "LANG",
-            "LC_ALL",
-            "LC_CTYPE",
-            "SSL_CERT_FILE",
-            "SSL_CERT_DIR",
-        )
-        environment = {
-            key: os.environ[key]
-            for key in inherited_variables
-            if key in os.environ
-        }
-        for key, value in server["env"].items():
-            match = re.fullmatch(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", value)
-            if match:
-                variable_name = match.group(1)
-                if variable_name not in os.environ:
-                    raise ValueError(
-                        f"Environment variable '{variable_name}' required by MCP server "
-                        f"'{server['name']}' is not set."
-                    )
-                value = os.environ[variable_name]
-            environment[key] = value
-
-        parameters = server_parameters_type(
-            command=server["command"],
-            args=server["args"],
-            env=environment,
-        )
-        read_stream, write_stream = await self._stack.enter_async_context(
-            stdio_client(parameters)
-        )
+    async def _connect_server(self, server: dict[str, Any], client_session_type: Any) -> None:
+        if server["transport"] == "http":
+            read_stream, write_stream = await self._open_http_streams(server)
+        else:
+            read_stream, write_stream = await self._open_stdio_streams(server)
         session = await self._stack.enter_async_context(
             client_session_type(read_stream, write_stream)
         )
@@ -146,6 +106,53 @@ class MCPToolbox:
             )
             self._routes[function_name] = (session, tool_name)
 
+    async def _open_stdio_streams(self, server: dict[str, Any]) -> tuple[Any, Any]:
+        from mcp import StdioServerParameters
+        from mcp.client.stdio import stdio_client
+
+        inherited_variables = (
+            "PATH",
+            "HOME",
+            "TMPDIR",
+            "TEMP",
+            "TMP",
+            "LANG",
+            "LC_ALL",
+            "LC_CTYPE",
+            "SSL_CERT_FILE",
+            "SSL_CERT_DIR",
+        )
+        environment = {
+            key: os.environ[key]
+            for key in inherited_variables
+            if key in os.environ
+        }
+        for key, value in server["env"].items():
+            environment[key] = _resolve_placeholders(value, server["name"])
+
+        parameters = StdioServerParameters(
+            command=server["command"],
+            args=server["args"],
+            env=environment,
+        )
+        return await self._stack.enter_async_context(stdio_client(parameters))
+
+    async def _open_http_streams(self, server: dict[str, Any]) -> tuple[Any, Any]:
+        from mcp.client.streamable_http import streamable_http_client
+        from mcp.shared._httpx_utils import create_mcp_http_client
+
+        headers = {
+            key: _resolve_placeholders(value, server["name"])
+            for key, value in server["headers"].items()
+        }
+        http_client = await self._stack.enter_async_context(
+            create_mcp_http_client(headers=headers)
+        )
+        read_stream, write_stream, _ = await self._stack.enter_async_context(
+            streamable_http_client(server["url"], http_client=http_client)
+        )
+        return read_stream, write_stream
+
     @staticmethod
     def _function_name(server_name: str, tool_name: str) -> str:
         name = re.sub(r"[^A-Za-z0-9_-]", "_", f"mcp__{server_name}__{tool_name}")
@@ -154,3 +161,16 @@ class MCPToolbox:
                 f"MCP tool name '{server_name}/{tool_name}' exceeds the 64-character limit."
             )
         return name
+
+
+def _resolve_placeholders(value: str, server_name: str) -> str:
+    def substitute(match: re.Match) -> str:
+        variable_name = match.group(1)
+        if variable_name not in os.environ:
+            raise ValueError(
+                f"Environment variable '{variable_name}' required by MCP server "
+                f"'{server_name}' is not set."
+            )
+        return os.environ[variable_name]
+
+    return re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", substitute, value)

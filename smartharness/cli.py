@@ -1,13 +1,12 @@
 import argparse
 import os
 import sys
-from pathlib import Path
 
 from rich.console import Console
 from rich.markdown import Markdown
 
 from .pipeline import execute_pipeline
-from .settings import DEFAULT_SETTINGS_PATH, load_settings, validate_settings
+from .settings import default_settings_path, load_settings, validate_settings
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -16,7 +15,6 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] == "tui":
         argv = ["--tui", *argv[1:]]
     parser = argparse.ArgumentParser(description="Run a staged local LLM prompt harness.")
-    local_settings_path = Path.cwd() / "settings.json"
     parser.add_argument(
         "prompt",
         nargs="*",
@@ -24,7 +22,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--settings",
-        default=str(local_settings_path if local_settings_path.is_file() else DEFAULT_SETTINGS_PATH),
+        default=str(default_settings_path()),
         help="Path to the JSON settings file.",
     )
     parser.add_argument(

@@ -147,9 +147,10 @@ The TUI has four pages:
 
 ## Configuration
 
-Settings are read from `settings.json` in the current directory, or from the
-one beside the package if there is none. Use `--settings path/to/file.json` to
-pick another. Unknown keys are rejected.
+Settings are read from `settings.json` in the current directory, then from the
+one beside the package, then from `~/.config/smartharness/settings.json` (under
+`$XDG_CONFIG_HOME` when it is set). Use `--settings path/to/file.json` to pick
+another. Unknown keys are rejected.
 
 ```json
 {
@@ -206,29 +207,45 @@ make at most `max_tool_calls` calls (1 to 10).
 
 ### MCP servers
 
-Explicitly configured stdio MCP servers can provide extra tools to stage 5.
-Each enabled server must list `allowed_tools`; only those are exposed, named
-`mcp__<server>__<tool>`. The server command runs locally, so configure only
-servers you trust. It inherits basic variables such as `PATH` and `HOME`;
-anything else goes in `env`, which can reference process variables as
-`${NAME}` so secrets stay out of the file. Sessions open for the stage and close
-after it. Network transports are not supported.
+Explicitly configured MCP servers can provide extra tools to stage 5. Each
+enabled server must list `allowed_tools`; only those are exposed, named
+`mcp__<server>__<tool>`. Configure only servers you trust. Sessions open for the
+stage and close after it.
+
+Two transports are supported:
+
+- **`stdio`** runs `command` with `args` locally. It inherits basic variables
+  such as `PATH` and `HOME`; anything else goes in `env`.
+- **`http`** connects to a Streamable HTTP endpoint at `url` and sends `headers`
+  with every request.
+
+Values in `env` and `headers` can reference process variables as `${NAME}`, so
+secrets stay out of the file. A missing variable stops the stage with an error.
 
 ```json
 {
 	"mcp_servers": [
 		{
 			"name": "docs",
-			"enabled": true,
 			"transport": "stdio",
 			"command": "docs-mcp-server",
 			"args": [],
 			"env": {"DOCS_TOKEN": "${DOCS_TOKEN}"},
 			"allowed_tools": ["search_docs", "fetch_doc"]
+		},
+		{
+			"name": "trilium",
+			"transport": "http",
+			"url": "http://127.0.0.1:37840/mcp",
+			"headers": {"Authorization": "Bearer ${TRILIUM_ETAPI_TOKEN}"},
+			"allowed_tools": ["search_notes", "get_note", "get_note_content"]
 		}
 	]
 }
 ```
+
+Trilium serves MCP at `/mcp` once it is enabled in Options > AI / LLM, and
+accepts an ETAPI token from Options > ETAPI as a bearer token.
 
 ## Project layout
 
@@ -237,7 +254,7 @@ after it. Network transports are not supported.
 | `smartharness/pipeline.py` | The eight stages, model loading, and page summarization |
 | `smartharness/tool_stage.py` | The tool-calling loop used by stages 2 and 5 |
 | `smartharness/tools.py` | Built-in tools and their path and URL checks |
-| `smartharness/mcp_tools.py` | MCP stdio client |
+| `smartharness/mcp_tools.py` | MCP client for stdio and HTTP servers |
 | `smartharness/context_budget.py` | Fitting stage input into the context window |
 | `smartharness/knowledge.py` | SQLite knowledge store, queue, and graph |
 | `smartharness/background.py` | One background research job |

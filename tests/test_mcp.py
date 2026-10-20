@@ -67,16 +67,34 @@ def install_fake_mcp():
         launches.append(parameters)
         yield "read-stream", "write-stream"
 
+    @asynccontextmanager
+    async def fake_http_client(headers=None):
+        launches.append({"headers": headers})
+        yield "http-client"
+
+    @asynccontextmanager
+    async def fake_streamable_http_client(url, http_client=None):
+        launches.append({"url": url, "http_client": http_client})
+        yield "read-stream", "write-stream", lambda: "session-id"
+
     mcp_module = types.ModuleType("mcp")
     mcp_module.ClientSession = FakeSession
     mcp_module.StdioServerParameters = FakeServerParameters
     client_module = types.ModuleType("mcp.client")
     stdio_module = types.ModuleType("mcp.client.stdio")
     stdio_module.stdio_client = fake_stdio_client
+    streamable_http_module = types.ModuleType("mcp.client.streamable_http")
+    streamable_http_module.streamable_http_client = fake_streamable_http_client
+    shared_module = types.ModuleType("mcp.shared")
+    httpx_utils_module = types.ModuleType("mcp.shared._httpx_utils")
+    httpx_utils_module.create_mcp_http_client = fake_http_client
     return {
         "mcp": mcp_module,
         "mcp.client": client_module,
         "mcp.client.stdio": stdio_module,
+        "mcp.client.streamable_http": streamable_http_module,
+        "mcp.shared": shared_module,
+        "mcp.shared._httpx_utils": httpx_utils_module,
     }, launches
 
 
@@ -200,6 +218,33 @@ class MCPToolboxTests(unittest.TestCase):
 
         self.assertEqual(launches[0].env["DOCS_TOKEN"], "test-secret")
         self.assertNotIn("UNRELATED_SECRET", launches[0].env)
+
+    def test_http_server_sends_resolved_headers_to_its_url(self):
+        modules, launches = install_fake_mcp()
+        config = {
+            "name": "trilium",
+            "enabled": True,
+            "transport": "http",
+            "url": "http://127.0.0.1:37840/mcp",
+            "headers": {"Authorization": "Bearer ${SMART_HARNESS_TEST_TOKEN}"},
+            "allowed_tools": ["lookup"],
+        }
+
+        async def exercise():
+            async with MCPToolbox([config]) as toolbox:
+                return await toolbox.call("mcp__trilium__lookup", {"query": "notes"})
+
+        with patch.dict(sys.modules, modules), patch.dict(
+            "os.environ", {"SMART_HARNESS_TEST_TOKEN": "test-secret"}
+        ):
+            result = asyncio.run(exercise())
+
+        self.assertEqual(result, "document result")
+        self.assertEqual(launches[0], {"headers": {"Authorization": "Bearer test-secret"}})
+        self.assertEqual(
+            launches[1], {"url": "http://127.0.0.1:37840/mcp", "http_client": "http-client"}
+        )
+        self.assertTrue(FakeSession.instances[0].closed)
 
 
 if __name__ == "__main__":
