@@ -22,7 +22,7 @@ background research. Interfaces connect to it over a Unix socket at
 `$XDG_RUNTIME_DIR/smartharness/daemon.sock` and only show what it reports, so
 several can be open at once and all see the same run, queue, and settings.
 
-- The terminal interface starts the daemon if none is running. A daemon it
+- The terminal and GTK interfaces start the daemon if none is running. A daemon it
   starts keeps running after the interface closes; stop it with `SIGTERM`. Its
   output goes to `~/.local/state/smartharness/daemon.log`.
 - A one-shot CLI run uses the daemon when one is running, so the model is
@@ -218,6 +218,7 @@ echo "Summarize this design" | smartharness
 smartharness            # opens the TUI when run in a terminal
 smartharness --tui      # or: smartharness-tui
 python -m smartharness  # same as smartharness
+smartharness-gtk        # open the GTK interface
 smartharness-daemon     # run the daemon in the foreground
 ```
 
@@ -235,6 +236,15 @@ The TUI has four pages:
   background research. Changes can be saved back to the settings file.
 - **Knowledge**: browse topics, stored sources and summaries, and graph
   relationships with their supporting URLs.
+
+### GTK interface
+
+`smartharness-gtk` has the same four pages in a GTK 4 window that follows the
+desktop's GTK theme. On the Workbench page the pipeline list on the left shows
+each stage's state, and choosing a stage shows its output; the final answer's
+Markdown is shown with headings, emphasis, code, and lists styled. **Ctrl+R**
+or **Ctrl+Enter** runs the request. It needs PyGObject and GTK 4, which the Nix
+package and dev shell provide.
 
 ## Configuration
 
@@ -353,6 +363,8 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 | `smartharness/daemon.py` | The daemon: model, runs, background worker, and socket server |
 | `smartharness/client.py`, `smartharness/protocol.py` | Connecting to the daemon, starting it, and the message format |
 | `smartharness/cli.py`, `smartharness/tui.py` | Command line and Textual interface |
+| `smartharness/gtk_app.py` | GTK 4 interface |
+| `smartharness/stages.py` | Stage labels shared by the interfaces |
 
 Run the tests with `python -m unittest discover -s tests`.
 

@@ -30,17 +30,25 @@
         pyproject = true;
         src = self;
         build-system = [ pythonPackages.setuptools ];
+        nativeBuildInputs = [
+          pkgs.gobject-introspection
+          pkgs.wrapGAppsHook4
+        ];
+        buildInputs = gtkLibraries;
         dependencies = [
           pythonPackages."llama-cpp-python"
           pythonPackages.ddgs
           pythonPackages.mcp
+          pythonPackages.pygobject3
           pythonPackages.textual
         ];
       };
+      gtkLibraries = [ pkgs.gtk4 ];
       pythonEnv = python.withPackages (packages: [
         packages."llama-cpp-python"
         packages.ddgs
         packages.mcp
+        packages.pygobject3
         packages.textual
       ]);
     in
@@ -59,11 +67,12 @@
         packages = [
           app
           pythonEnv
+          pkgs.gobject-introspection
           pkgs.cmake
           pkgs.ninja
           pkgs.stdenv.cc
           pkgs.cudaPackages.cuda_nvcc
-        ];
+        ] ++ gtkLibraries;
       };
     };
 }

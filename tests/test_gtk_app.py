@@ -1,0 +1,122 @@
+import tempfile
+import time
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from daemon_harness import RunningDaemon
+
+from smartharness.settings import DEFAULT_SETTINGS
+from smartharness.stages import STAGE_LABELS
+
+try:
+    import gi
+
+    gi.require_version("Gdk", "4.0")
+    gi.require_version("Gtk", "4.0")
+    from gi.repository import Gdk, Gio, GLib, Gtk
+
+    from smartharness.gtk_app import SmartHarnessWindow, add_markdown_tags, render_markdown
+
+    # init_check reports success even without a display, so the display itself is checked.
+    DISPLAY_AVAILABLE = Gtk.init_check() and Gdk.Display.get_default() is not None
+except (ImportError, ValueError):
+    DISPLAY_AVAILABLE = False
+
+
+def wait_until(condition, timeout=5):
+    deadline = time.monotonic() + timeout
+    context = GLib.MainContext.default()
+    while time.monotonic() < deadline:
+        while context.pending():
+            context.iteration(False)
+        if condition():
+            return
+        time.sleep(0.01)
+    raise AssertionError("condition was not met in time")
+
+
+@unittest.skipUnless(DISPLAY_AVAILABLE, "GTK 4 needs a display")
+class MarkdownTests(unittest.TestCase):
+    def test_markdown_is_shown_with_styles_instead_of_markers(self):
+        buffer = Gtk.TextBuffer()
+        add_markdown_tags(buffer)
+
+        render_markdown(buffer, "# Title\n\nUse **bold** and `code`.\n\n- item\n\n```\nx = 1\n```")
+
+        text = buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), False)
+        self.assertEqual(text, "Title\n\nUse bold and code.\n\n• item\n\nx = 1\n")
+        bold_start = buffer.get_iter_at_offset(text.index("bold"))
+        self.assertIn("bold", [tag.props.name for tag in bold_start.get_tags()])
+
+
+@unittest.skipUnless(DISPLAY_AVAILABLE, "GTK 4 needs a display")
+class WindowTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # An application registers on the session bus once, so every test shares it.
+        cls.application = Gtk.Application(
+            application_id="org.smartharness.Tests", flags=Gio.ApplicationFlags.NON_UNIQUE
+        )
+        cls.application.register(None)
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.settings = DEFAULT_SETTINGS.copy()
+        self.settings["knowledge_db_path"] = str(Path(directory.name) / "knowledge.db")
+        self.settings["background_research_enabled"] = False
+        self.daemon = RunningDaemon(self.settings)
+        self.addCleanup(self.daemon.stop)
+        self.window = SmartHarnessWindow(self.application, self.settings, client=self.daemon.client())
+        self.addCleanup(self.window.destroy)
+        wait_until(lambda: self.window.status.get_label() == "Ready")
+
+    def test_run_shows_stage_progress_and_the_final_answer(self):
+        def routed_pipeline(prompt, **kwargs):
+            kwargs["progress_callback"](STAGE_LABELS[0])
+            kwargs["stage_output_callback"](STAGE_LABELS[0], "Phase output")
+            kwargs["progress_callback"]("Skipped: " + STAGE_LABELS[1])
+            return "# Done"
+
+        self.window.prompt.get_buffer().set_text("Draft a plan")
+        with patch("smartharness.daemon.execute_pipeline", side_effect=routed_pipeline):
+            self.window.run_button.emit("clicked")
+            wait_until(lambda: self.window.status.get_label() == "Complete")
+
+        self.assertEqual(self.window._last_answer, "# Done")
+        self.assertEqual(self.window.final_output.text, "Done\n")
+        self.assertEqual(self.window.stage_outputs[0].text, "Phase output")
+        self.assertEqual(self.window.stage_states[1].get_label(), "SKIP")
+        self.assertEqual(self.window.phase_pages.get_visible_child_name(), "final")
+        self.assertTrue(self.window.copy_button.get_sensitive())
+
+    def test_failed_run_marks_the_failing_stage(self):
+        def failing_pipeline(prompt, **kwargs):
+            kwargs["progress_callback"](STAGE_LABELS[3])
+            raise RuntimeError("tool exploded")
+
+        self.window.prompt.get_buffer().set_text("Draft a plan")
+        with patch("smartharness.daemon.execute_pipeline", side_effect=failing_pipeline):
+            self.window.run_button.emit("clicked")
+            wait_until(lambda: self.window.status.get_label() == "Run failed")
+
+        self.assertEqual(self.window.stage_states[3].get_label(), "FAIL")
+        self.assertEqual(self.window.stage_states[2].get_label(), "DONE")
+        self.assertTrue(self.window.run_button.get_sensitive())
+
+    def test_saving_options_writes_the_daemon_settings_file(self):
+        self.window.number_fields["max_tool_calls"].set_value(7)
+        self.window.switches["allow_file_writes"].set_active(True)
+
+        self.window._save_settings()
+        settings_path = self.daemon.harness.settings_path
+        wait_until(lambda: settings_path.exists() and '"max_tool_calls": 7' in settings_path.read_text())
+
+        saved = settings_path.read_text()
+        self.assertIn('"max_tool_calls": 7', saved)
+        self.assertIn('"allow_file_writes": true', saved)
+
+
+if __name__ == "__main__":
+    unittest.main()
