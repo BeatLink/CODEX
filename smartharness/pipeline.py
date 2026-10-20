@@ -62,6 +62,25 @@ def create_model(model_path: str, context_size: int, gpu_layers: int) -> Any:
     )
 
 
+class ModelCache:
+    """Keep one loaded model and reload it only when its load settings change."""
+
+    def __init__(self) -> None:
+        self._key: tuple[str, int, int] | None = None
+        self._model: Any = None
+
+    def has(self, model_path: str, context_size: int, gpu_layers: int) -> bool:
+        return self._model is not None and self._key == (model_path, context_size, gpu_layers)
+
+    def get(self, model_path: str, context_size: int, gpu_layers: int) -> Any:
+        if not self.has(model_path, context_size, gpu_layers):
+            # Drop the old model first so two never sit in memory together.
+            self._model = None
+            self._model = create_model(model_path, context_size, gpu_layers)
+            self._key = (model_path, context_size, gpu_layers)
+        return self._model
+
+
 def run_stage(
     llm: Any,
     system_prompt: str,
@@ -239,6 +258,7 @@ def execute_pipeline(
     stage_output_callback: Callable[[str, str], None] | None = None,
     knowledge_db_path: str | None = None,
     llm: Any = None,
+    model_cache: ModelCache | None = None,
 ) -> str:
     if not user_prompt.strip():
         raise ValueError("The prompt cannot be empty.")
@@ -259,11 +279,13 @@ def execute_pipeline(
         ),
     )
     if llm is None:
-        if progress_callback is not None:
-            progress_callback("Loading model")
-        else:
-            print(f"Loading model from {model_path}...")
-        llm = create_model(model_path, context_size, gpu_layers)
+        if model_cache is None or not model_cache.has(model_path, context_size, gpu_layers):
+            if progress_callback is not None:
+                progress_callback("Loading model")
+            else:
+                print(f"Loading model from {model_path}...")
+        load = model_cache.get if model_cache is not None else create_model
+        llm = load(model_path, context_size, gpu_layers)
 
     filesystem_note = (
         f" The filesystem root is {toolbox.root}; give file tool paths relative"

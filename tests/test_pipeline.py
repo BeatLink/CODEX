@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from smartharness.knowledge import KnowledgeStore
 from smartharness.pipeline import (
+    ModelCache,
     _requires_web_research,
     _search_query,
     _summarize_web_page,
@@ -463,6 +464,20 @@ class PipelineTests(unittest.TestCase):
             self.assertIn("Local knowledge result", tool_inputs[0])
             self.assertIn("https://example.test/sqlite", stage_calls[3][1])
             self.assertIn("captured search evidence", stage_calls[4][0])
+
+
+class ModelCacheTests(unittest.TestCase):
+    def test_cache_reuses_the_model_until_load_settings_change(self):
+        with patch("smartharness.pipeline.create_model", side_effect=lambda *args: object()) as create_model:
+            cache = ModelCache()
+            self.assertFalse(cache.has("model.gguf", 4096, -1))
+            first = cache.get("model.gguf", 4096, -1)
+            self.assertIs(cache.get("model.gguf", 4096, -1), first)
+            self.assertTrue(cache.has("model.gguf", 4096, -1))
+            second = cache.get("model.gguf", 8192, -1)
+
+        self.assertIsNot(second, first)
+        self.assertEqual(create_model.call_count, 2)
 
 
 if __name__ == "__main__":

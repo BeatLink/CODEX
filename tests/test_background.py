@@ -46,6 +46,29 @@ class BackgroundResearchTests(unittest.TestCase):
             self.assertEqual(store.search("full text search")[0]["summary"],
                              "SQLite includes full-text search. https://example.test/fts")
 
+    def test_worker_loads_its_model_through_the_shared_cache(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = DEFAULT_SETTINGS.copy()
+            settings["knowledge_db_path"] = str(Path(directory) / "knowledge.db")
+            settings["filesystem_root"] = directory
+            KnowledgeStore(settings["knowledge_db_path"]).enqueue_topic("SQLite FTS5")
+            toolbox = unittest.mock.Mock()
+            toolbox.call.return_value = json.dumps(
+                [{"title": "SQLite FTS5", "url": "https://example.test/fts", "snippet": "Full text search."}]
+            )
+            cache = unittest.mock.Mock()
+            cache.get.return_value = "shared model"
+
+            with (
+                patch("smartharness.background.Toolbox", return_value=toolbox),
+                patch("smartharness.background.run_stage", return_value="Summary") as run_stage,
+                patch("smartharness.background.create_model") as create_model,
+            ):
+                research_one_topic(settings, model_cache=cache)
+
+            create_model.assert_not_called()
+            self.assertEqual(run_stage.call_args.args[0], "shared model")
+
     def test_worker_does_not_load_model_when_queue_is_empty(self):
         with tempfile.TemporaryDirectory() as directory:
             settings = DEFAULT_SETTINGS.copy()

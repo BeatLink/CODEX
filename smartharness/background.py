@@ -3,7 +3,7 @@ from collections.abc import Callable
 from typing import Any
 
 from .knowledge import KnowledgeStore
-from .pipeline import create_model, run_stage
+from .pipeline import ModelCache, create_model, run_stage
 from .settings import MAX_TOKENS, TEMPERATURE
 from .tools import Toolbox
 
@@ -19,6 +19,7 @@ def research_one_topic(
     should_pause: Callable[[], bool] | None = None,
     llm: Any = None,
     model_lock: Any = None,
+    model_cache: ModelCache | None = None,
 ) -> bool:
     store = KnowledgeStore(settings["knowledge_db_path"])
     job = store.claim_job()
@@ -53,9 +54,8 @@ def research_one_topic(
                 store.defer_job(job["id"])
                 return True
             if llm is None:
-                llm = create_model(
-                    settings["model_path"], settings["context_size"], settings["gpu_layers"]
-                )
+                load = model_cache.get if model_cache is not None else create_model
+                llm = load(settings["model_path"], settings["context_size"], settings["gpu_layers"])
             def stream_token(token: str) -> None:
                 if should_pause is not None and should_pause():
                     raise _BackgroundPaused

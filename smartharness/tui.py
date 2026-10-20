@@ -28,7 +28,7 @@ from textual.widgets import (
     Tree,
 )
 
-from .pipeline import execute_pipeline
+from .pipeline import ModelCache, execute_pipeline
 from .background import research_one_topic
 from .knowledge import KnowledgeStore
 from .settings import default_settings_path, load_settings, save_settings, validate_settings
@@ -380,6 +380,7 @@ class SmartHarnessApp(App[None]):
         self._background_run_requested = Event()
         self._cancel_requested = Event()
         self._model_lock = Lock()
+        self._model_cache = ModelCache()
 
     # ==========================================================================
     # Layout
@@ -887,6 +888,7 @@ class SmartHarnessApp(App[None]):
                     clarification_callback=self._request_clarification,
                     progress_callback=report_progress,
                     stage_output_callback=report_token,
+                    model_cache=self._model_cache,
                 )
         except RunCancelled:
             if not self._worker_stop.is_set():
@@ -1024,6 +1026,7 @@ class SmartHarnessApp(App[None]):
                         ),
                         should_pause=lambda: self._request_running or self._worker_stop.is_set(),
                         model_lock=self._model_lock,
+                        model_cache=self._model_cache,
                     )
                     self.call_from_thread(self._flush_background_output)
                     self.call_from_thread(self._refresh_queue)

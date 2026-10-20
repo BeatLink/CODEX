@@ -15,7 +15,7 @@
 - [ ] Iterate code changes from verification failures
 - [ ] Add approval gates for consequential actions
 - [ ] Benchmark on real maintenance tasks
-- [ ] Keep the loaded model between requests and share it with the background worker
+- [x] Keep the loaded model between requests and share it with the background worker
 - [ ] Return structured JSON from stages using llama.cpp schema-constrained output
 - [ ] Route each request by task type so simple requests skip stages they do not need
 - [ ] Let stage 1 decide whether research is needed instead of keyword regexes
