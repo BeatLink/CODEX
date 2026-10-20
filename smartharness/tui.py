@@ -266,6 +266,7 @@ class SmartHarnessApp(App[None]):
         self._knowledge_graph: list[dict[str, Any]] = []
         self._worker_stop = Event()
         self._worker_wakeup = Event()
+        self._background_run_requested = Event()
         self._model_lock = Lock()
         self._pending_stage_output = [[] for _ in STAGE_LABELS]
 
@@ -372,6 +373,8 @@ class SmartHarnessApp(App[None]):
                             yield Input(placeholder="Research topic", id="research-topic")
                             yield Input(value="0", placeholder="Priority", id="research-priority")
                             yield Button("Queue topic", id="queue-topic")
+                        with Horizontal(classes="button-row"):
+                            yield Button("Research now", id="research-now", variant="primary")
                         yield Static("QUEUE", classes="eyebrow")
                         yield Static("No research jobs", id="background-queue")
                         yield Static("MODEL OUTPUT", classes="eyebrow")
@@ -424,6 +427,8 @@ class SmartHarnessApp(App[None]):
             self._save_settings()
         elif event.button.id == "queue-topic":
             self._queue_topic()
+        elif event.button.id == "research-now":
+            self._trigger_background_research()
         elif event.button.id == "search-knowledge":
             self._refresh_knowledge(query=self.query_one("#knowledge-search", Input).value)
         elif event.button.id == "refresh-knowledge":
@@ -497,11 +502,11 @@ class SmartHarnessApp(App[None]):
             return
         self.notify(f"Settings saved to {path}.", title="SmartHarness")
 
-    def _queue_topic(self) -> None:
+    def _queue_topic(self) -> bool:
         topic = self.query_one("#research-topic", Input).value.strip()
         if not topic:
             self.notify("Enter a topic to research.", title="Topic required", severity="warning")
-            return
+            return False
         try:
             priority = int(self.query_one("#research-priority", Input).value)
             settings = self._collect_settings()
@@ -513,10 +518,26 @@ class SmartHarnessApp(App[None]):
             )
         except (OSError, ValueError) as error:
             self.notify(str(error), title="Could not queue topic", severity="error")
-            return
+            return False
         self.settings = settings
         self.query_one("#research-topic", Input).value = ""
         self._refresh_queue()
+        self._worker_wakeup.set()
+        return True
+
+    def _trigger_background_research(self) -> None:
+        topic = self.query_one("#research-topic", Input).value.strip()
+        if topic and not self._queue_topic():
+            return
+        try:
+            jobs = KnowledgeStore(self.settings["knowledge_db_path"]).queue_status()
+        except (OSError, ValueError, KeyError) as error:
+            self.notify(str(error), title="Could not start research", severity="error")
+            return
+        if not any(job["status"] == "pending" for job in jobs):
+            self.notify("Queue a topic before starting research.", title="No pending research", severity="warning")
+            return
+        self._background_run_requested.set()
         self._worker_wakeup.set()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
@@ -677,13 +698,16 @@ class SmartHarnessApp(App[None]):
     def run_background_worker(self) -> None:
         while not self._worker_stop.is_set():
             settings = self.settings.copy()
-            if not settings.get("background_research_enabled"):
+            manual_run_requested = self._background_run_requested.is_set()
+            if not settings.get("background_research_enabled") and not manual_run_requested:
                 self.call_from_thread(self._set_background_status, "Paused")
                 wait_seconds = settings.get("background_poll_interval_seconds", 10)
             elif self._request_running:
                 self.call_from_thread(self._set_background_status, "Foreground prompt active")
                 wait_seconds = 1
             else:
+                if manual_run_requested:
+                    self._background_run_requested.clear()
                 try:
                     store = KnowledgeStore(settings["knowledge_db_path"])
                     store.enqueue_due_topics(

@@ -72,21 +72,27 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             settings_path = Path(directory) / "settings.json"
             app = SmartHarnessApp(settings, settings_path=settings_path)
 
-            async with app.run_test(size=(140, 48)) as pilot:
-                app.query_one("#main-tabs").active = "background-page"
-                await pilot.pause()
-                app.query_one("#research-topic", Input).value = "Local model RAG"
-                app.query_one("#research-priority", Input).value = "4"
-                app._queue_topic()
+            with patch("smartharness.tui.research_one_topic", return_value=False) as research:
+                async with app.run_test(size=(140, 48)) as pilot:
+                    app.query_one("#main-tabs").active = "background-page"
+                    await pilot.pause()
+                    app.query_one("#research-topic", Input).value = "Local model RAG"
+                    app.query_one("#research-priority", Input).value = "4"
+                    await pilot.click("#research-now")
+                    for _ in range(20):
+                        await pilot.pause(0.05)
+                        if research.called:
+                            break
 
-                job = KnowledgeStore(settings["knowledge_db_path"]).queue_status()[0]
-                self.assertEqual((job["topic"], job["status"]), ("Local model RAG", "pending"))
-                app.query_one("#background-poll-seconds", Input).value = "12"
-                app._save_settings()
+                    job = KnowledgeStore(settings["knowledge_db_path"]).queue_status()[0]
+                    self.assertEqual((job["topic"], job["status"]), ("Local model RAG", "pending"))
+                    research.assert_called_once()
+                    app.query_one("#background-poll-seconds", Input).value = "12"
+                    app._save_settings()
 
-                saved = load_settings(settings_path)
-                self.assertEqual(saved["background_poll_interval_seconds"], 12)
-                self.assertFalse(saved["background_research_enabled"])
+                    saved = load_settings(settings_path)
+                    self.assertEqual(saved["background_poll_interval_seconds"], 12)
+                    self.assertFalse(saved["background_research_enabled"])
 
     async def test_knowledge_page_browses_topics_sources_and_graph(self):
         with tempfile.TemporaryDirectory() as directory:

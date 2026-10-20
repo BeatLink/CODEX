@@ -62,7 +62,9 @@ search. Search results contain snippets only; pages are not fetched or
 independently verified.
 
 When the TUI is open, its Background page can queue research topics and control
-the idle worker. The worker refreshes previously researched topics after
+the idle worker. Enter a topic and choose **Research now** to start a queued
+job immediately, even when idle research is paused; **Queue topic** adds work
+without starting it manually. The worker refreshes previously researched topics after
 `background_refresh_interval_hours`, summarizes search snippets with the local
 model, and pauses when a foreground prompt starts. Its model output and queue
 state are visible in the TUI. The worker stops when the TUI exits; one-shot CLI
