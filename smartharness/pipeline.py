@@ -515,8 +515,11 @@ def execute_pipeline(
         raise ValueError("max_tool_calls must be an integer from 1 to 10.")
     knowledge_store = KnowledgeStore(knowledge_db_path) if knowledge_db_path else None
 
+    found_urls: set[str] = set()
+
     def remember_search(query: str, results: list[dict[str, str]]) -> None:
         """Save a search's results, and queue its topic so the background worker turns them into facts."""
+        found_urls.update(result.get("url", "") for result in results if result.get("url"))
         if knowledge_store is None:
             return
         topic = query[:200]
@@ -683,8 +686,11 @@ def execute_pipeline(
             print(f"[{label}] skipped")
 
     previous_results: list[tuple[str, str]] = []
+    recalled_facts = False
     if knowledge_store is not None:
-        remembered = _format_recall(knowledge_store.recall(user_prompt))
+        recalled = knowledge_store.recall(user_prompt)
+        recalled_facts = bool(recalled["facts"])
+        remembered = _format_recall(recalled)
         if remembered:
             previous_results.append((MEMORY_LABEL, remembered))
 
@@ -736,7 +742,9 @@ def execute_pipeline(
         # Memory answers on its own only when every query matches a stored summary, not just search snippets.
         answered_from_memory = analysis.needs_research and not analysis.needs_files
         if analysis.needs_research:
-            for search_query in analysis.search_queries or [_search_query(user_prompt)]:
+            # The request's own words always come first, so a query the model made up is never the only search.
+            search_queries = list(dict.fromkeys([_search_query(user_prompt), *analysis.search_queries]))
+            for search_query in search_queries[:MAX_SEARCH_QUERIES]:
                 cached = knowledge_store.search(search_query) if knowledge_store else []
                 if cached:
                     previous_results.append(
@@ -821,6 +829,21 @@ def execute_pipeline(
             " search failed or returned no useful evidence, say that the claims"
             " could not be verified; do not imply that a page was read unless a"
             " web_fetch summary of it appears in the evidence."
+        )
+    evidence_found = (
+        bool(found_urls)
+        or recalled_facts
+        or "web_fetch" in toolbox.used_tools
+        or any(label == "Local knowledge result" for label, _ in previous_results)
+    )
+    if analysis.needs_research and not analysis.needs_files and not evidence_found:
+        source_check += (
+            " Every search failed or found nothing, so there is no evidence."
+            " Do not describe, define, or give details of any product, device,"
+            " project, person, or term the request names: say plainly that you"
+            " could not look it up, and suggest checking the spelling or trying"
+            " again later. Widely known programming or everyday knowledge may"
+            " still be used."
         )
 
     for index, (label, system_prompt) in zip((3, 4), stages[1:3]):

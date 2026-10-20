@@ -539,7 +539,7 @@ class RoutingTests(unittest.TestCase):
         ):
             execute_pipeline("What is a PineTime?", llm=object(), progress_callback=lambda label: None)
 
-        self.assertEqual(searches, ["PineTime"])
+        self.assertEqual(searches, ["What is a PineTime?", "PineTime"])
 
     def test_direct_answer_gets_one_quick_search_without_the_tool_loop(self):
         searches = []
@@ -557,6 +557,33 @@ class RoutingTests(unittest.TestCase):
             execute_pipeline("What is a PineTime?", llm=object(), progress_callback=lambda label: None)
 
         self.assertEqual(searches, ["What is a PineTime?"])
+
+    def run_quick_search(self, search_reply):
+        stage_calls = []
+        results = iter([task_json("direct"), "Answer"])
+
+        def fake_run_stage(llm, system_prompt, user_input, **kwargs):
+            stage_calls.append(system_prompt)
+            return next(results)
+
+        class FakeDDGS:
+            def text(self, query, max_results):
+                return search_reply
+
+        with (
+            patch("smartharness.pipeline.run_stage", side_effect=fake_run_stage),
+            patch.dict(sys.modules, {"ddgs": types.SimpleNamespace(DDGS=FakeDDGS)}),
+        ):
+            execute_pipeline("What is a PineTime?", llm=object(), progress_callback=lambda label: None)
+        return stage_calls[1]
+
+    def test_draft_with_no_evidence_is_told_to_say_it_could_not_look_it_up(self):
+        self.assertIn("could not look it up", self.run_quick_search([]))
+
+    def test_draft_with_search_results_is_not_told_to_refuse(self):
+        reply = [{"title": "PineTime", "href": "https://pine64.example/pinetime", "body": "A smartwatch."}]
+
+        self.assertNotIn("could not look it up", self.run_quick_search(reply))
 
     def test_self_contained_requests_need_no_search(self):
         self.assertTrue(_is_self_contained("What is 2 + 2?"))
@@ -601,7 +628,7 @@ class RoutingTests(unittest.TestCase):
             result = execute_pipeline("Was distutils removed?", llm=object(), progress_callback=lambda label: None)
 
         self.assertEqual(result, "Final")
-        self.assertEqual(searches, ["python 3.13 distutils", "pep 632"])
+        self.assertEqual(searches, ["Was distutils removed?", "python 3.13 distutils", "pep 632"])
         self.assertEqual(len(tool_stages), 1)
         self.assertTrue(tool_stages[0].startswith("Gather evidence"))
 
@@ -770,7 +797,7 @@ class MemoryTests(unittest.TestCase):
 
         self.assertEqual(
             [(job["topic"], job["status"]) for job in self.store.queue_status()],
-            [("obscure library 9.1 release", "pending")],
+            [("obscure library 9.1 release", "pending"), ("When was obscure library 9.1 released?", "pending")],
         )
 
 
@@ -811,7 +838,8 @@ class MemoryTests(unittest.TestCase):
 
         self.assertEqual(self.store.search("PineTime")[0]["summary"], "An open source smartwatch.")
         self.assertEqual(
-            [(job["topic"], job["status"]) for job in self.store.queue_status()], [("PineTime", "pending")]
+            [(job["topic"], job["status"]) for job in self.store.queue_status()],
+            [("What is a PineTime?", "pending")],
         )
 
     def test_stored_page_summary_answers_without_searching_again(self):

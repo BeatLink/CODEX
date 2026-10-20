@@ -74,7 +74,12 @@ picks the route:
 | `action`: files must change or tests run | all eight |
 
 Stage 2 also runs on any route when stage 1 lists outside facts to check or
-says file reading is needed. Stage 2 checks the knowledge store first, and
+says file reading is needed. A `direct` answer gets one quick web search even
+when stage 1 lists nothing, unless the request is plain arithmetic or rewriting
+pasted text, because a small model cannot tell when it does not know something.
+The request's own words are always one of the search queries. When every search
+finds nothing, the draft says it could not look the subject up rather than
+describing it. Stage 2 checks the knowledge store first, and
 skips its own web searches when every query matches a stored page or topic
 summary. Skipped stages are marked SKIP in the TUI. If stage 1's reply is not
 valid JSON, every stage runs and research is decided by keywords in the prompt.
