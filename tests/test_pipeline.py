@@ -12,6 +12,7 @@ from smartharness.knowledge import KnowledgeStore
 from smartharness.pipeline import (
     TASK_ANALYSIS_SCHEMA,
     ModelCache,
+    _is_self_contained,
     _parse_task_analysis,
     _uncited_urls,
     _requires_web_research,
@@ -540,6 +541,29 @@ class RoutingTests(unittest.TestCase):
 
         self.assertEqual(searches, ["PineTime"])
 
+    def test_direct_answer_gets_one_quick_search_without_the_tool_loop(self):
+        searches = []
+        results = iter([task_json("direct"), "Answer"])
+
+        def fake_search(toolbox, name, arguments):
+            searches.append(arguments["query"])
+            return "[]"
+
+        with (
+            patch("smartharness.pipeline.run_stage", side_effect=lambda *args, **kwargs: next(results)),
+            patch("smartharness.pipeline.run_tool_stage", side_effect=AssertionError("tool stage")),
+            patch("smartharness.pipeline.Toolbox.call", new=fake_search),
+        ):
+            execute_pipeline("What is a PineTime?", llm=object(), progress_callback=lambda label: None)
+
+        self.assertEqual(searches, ["What is a PineTime?"])
+
+    def test_self_contained_requests_need_no_search(self):
+        self.assertTrue(_is_self_contained("What is 2 + 2?"))
+        self.assertTrue(_is_self_contained("Rewrite this:\n```\nteh cat sat\n```"))
+        self.assertFalse(_is_self_contained("What is a PineTime?"))
+        self.assertFalse(_is_self_contained("Summarize the PineTime's features"))
+
     def test_draft_without_research_is_told_not_to_guess(self):
         stage_calls = []
         results = iter([task_json("direct"), "Answer"])
@@ -588,6 +612,7 @@ class RoutingTests(unittest.TestCase):
         with (
             patch("smartharness.pipeline.run_stage", side_effect=lambda *args, **kwargs: next(results)),
             patch("smartharness.pipeline.run_tool_stage", side_effect=AssertionError("tool stage")),
+            patch("smartharness.pipeline.Toolbox.call", return_value="[]"),
         ):
             execute_pipeline(
                 "Write a parser",
@@ -684,7 +709,10 @@ class MemoryTests(unittest.TestCase):
             stage_inputs.append(user_input)
             return next(results)
 
-        with patch("smartharness.pipeline.run_stage", side_effect=fake_run_stage):
+        with (
+            patch("smartharness.pipeline.run_stage", side_effect=fake_run_stage),
+            patch("smartharness.pipeline.Toolbox.call", return_value="[]"),
+        ):
             execute_pipeline(
                 "How do I filter a list?",
                 llm=object(),
@@ -711,7 +739,10 @@ class MemoryTests(unittest.TestCase):
             stage_inputs.append(user_input)
             return next(results)
 
-        with patch("smartharness.pipeline.run_stage", side_effect=fake_run_stage):
+        with (
+            patch("smartharness.pipeline.run_stage", side_effect=fake_run_stage),
+            patch("smartharness.pipeline.Toolbox.call", return_value="[]"),
+        ):
             execute_pipeline(
                 "Does SQLite store a database in one file?",
                 llm=object(),

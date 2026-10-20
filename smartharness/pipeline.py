@@ -26,6 +26,12 @@ _TECHNICAL_TARGET = re.compile(
     re.IGNORECASE,
 )
 _CODE_BLOCK = re.compile(r"```.*?(?:```|$)", re.DOTALL)
+_ARITHMETIC = re.compile(r"[\s\d.,+\-*/x×÷^%()=?]*")
+_ARITHMETIC_WORDS = re.compile(r"\b(what'?s|what|is|are|calculate|compute|solve|equals?)\b", re.IGNORECASE)
+_REWRITE_TASK = re.compile(
+    r"\b(rewrite|reword|rephrase|translate|summari[sz]e|proofread|shorten|reformat)\b", re.IGNORECASE
+)
+MIN_PASTED_TEXT_CHARS = 300
 MAX_SEARCH_QUERY_CHARS = 200
 
 TASK_TYPES = ("direct", "reasoning", "research", "action")
@@ -261,6 +267,16 @@ def _search_found_nothing(search_result: str) -> bool:
         return json.loads(search_result) == []
     except json.JSONDecodeError:
         return False
+
+
+def _is_self_contained(user_prompt: str) -> bool:
+    """Say whether a request needs no outside facts: plain arithmetic, or rewriting text the user pasted."""
+    if _ARITHMETIC.fullmatch(_ARITHMETIC_WORDS.sub(" ", user_prompt)):
+        return True
+    return bool(
+        _REWRITE_TASK.search(user_prompt)
+        and (_CODE_BLOCK.search(user_prompt) or len(user_prompt) >= MIN_PASTED_TEXT_CHARS)
+    )
 
 
 def _search_query(user_prompt: str) -> str:
@@ -707,6 +723,13 @@ def execute_pipeline(
         print()
     previous_results.append(("Stage 1 result", analysis.checklist))
 
+    # The model cannot tell when it does not know something, so a direct answer gets one quick search anyway.
+    quick_search = (
+        analysis.task_type == "direct" and not analysis.runs_research and not _is_self_contained(user_prompt)
+    )
+    if quick_search:
+        analysis.needs_research = True
+
     research_label = "Stage 2/8: Researching and inspecting relevant files"
     if analysis.runs_research:
         report_stage(research_label)
@@ -731,7 +754,7 @@ def execute_pipeline(
                         except ValueError:
                             pass
 
-        if not answered_from_memory:
+        if not (quick_search or answered_from_memory):
             def summarize_page(page_json: str, focus: str, request_context: str) -> str:
                 summary = _summarize_web_page(
                     llm,
