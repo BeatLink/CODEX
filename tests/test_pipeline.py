@@ -591,7 +591,7 @@ class RoutingTests(unittest.TestCase):
         self.assertFalse(_is_self_contained("What is a PineTime?"))
         self.assertFalse(_is_self_contained("Summarize the PineTime's features"))
 
-    def test_draft_without_research_is_told_not_to_guess(self):
+    def test_draft_without_research_is_told_not_to_use_training_data(self):
         stage_calls = []
         results = iter([task_json("direct"), "Answer"])
 
@@ -602,7 +602,24 @@ class RoutingTests(unittest.TestCase):
         with patch("smartharness.pipeline.run_stage", side_effect=fake_run_stage):
             execute_pipeline("What is 2 + 2?", llm=object(), progress_callback=lambda label: None)
 
-        self.assertIn("instead of guessing", stage_calls[1])
+        self.assertIn("training data", stage_calls[1])
+
+    def test_reasoning_request_is_searched_even_without_facts_to_check(self):
+        searches = []
+        results = iter([task_json("reasoning"), "Plan", "Outline", "Draft", critique_json("met")])
+
+        def fake_search(toolbox, name, arguments):
+            searches.append(arguments["query"])
+            return "[]"
+
+        with (
+            patch("smartharness.pipeline.run_stage", side_effect=lambda *args, **kwargs: next(results)),
+            patch("smartharness.pipeline.Toolbox.call", new=fake_search),
+            patch("smartharness.pipeline.run_tool_stage", return_value="Research findings"),
+        ):
+            execute_pipeline("Compare two designs", llm=object(), progress_callback=lambda label: None)
+
+        self.assertEqual(searches, ["Compare two designs"])
 
     def test_research_request_searches_each_written_query_and_skips_actions(self):
         searches = []
@@ -673,7 +690,8 @@ class CritiqueTests(unittest.TestCase):
 
         with (
             patch("smartharness.pipeline.run_stage", side_effect=fake_run_stage),
-            patch("smartharness.pipeline.run_tool_stage", side_effect=AssertionError("tool stage")),
+            patch("smartharness.pipeline.Toolbox.call", return_value=json.dumps(evidence_search or [])),
+            patch("smartharness.pipeline.run_tool_stage", return_value="Research findings"),
         ):
             result = execute_pipeline("Compare two designs", llm=object(), progress_callback=progress.append)
         return result, stage_calls[3:], progress
