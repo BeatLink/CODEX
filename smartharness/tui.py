@@ -310,6 +310,9 @@ class SmartHarnessApp(App[None]):
     .stage-output {
         padding: 1 2;
     }
+    ClarificationScreen {
+        align: center middle;
+    }
     #clarification-dialog {
         width: 70;
         max-width: 90%;
