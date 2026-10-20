@@ -175,6 +175,28 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual((saved["max_tool_calls"], saved["max_search_results"]), (7, 3))
                 self.assertEqual(saved["mcp_servers"][0]["name"], "docs")
 
+    async def test_auto_size_fills_context_and_token_limits(self):
+        from smartharness.auto_size import SizeChoice
+
+        settings = DEFAULT_SETTINGS.copy()
+        settings["background_research_enabled"] = False
+        app = self.app(settings)
+        choice = SizeChoice(14336, 3584, 1792, "Tiny: 2.1 GiB of weights")
+
+        async with app.run_test(size=(140, 48)) as pilot:
+            await connected(pilot, app)
+            await pilot.click("#--content-tab-options-page")
+            await pilot.pause()
+            with patch("smartharness.daemon.auto_size", return_value=choice) as sizer:
+                app.query_one("#auto-size", Button).press()
+                await pilot.pause()
+
+            self.assertEqual(sizer.call_args.args, (settings["model_path"], -1, None))
+            self.assertEqual(app.query_one("#context-size", Input).value, "14336")
+            self.assertEqual(app.query_one("#max-tokens", Input).value, "3584")
+            self.assertEqual(app.query_one("#background-max-tokens", Input).value, "1792")
+            self.assertEqual(app.settings["context_size"], DEFAULT_SETTINGS["context_size"])
+
     async def test_knowledge_page_browses_topics_sources_and_graph(self):
         with tempfile.TemporaryDirectory() as directory:
             settings = DEFAULT_SETTINGS.copy()

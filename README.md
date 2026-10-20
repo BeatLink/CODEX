@@ -168,10 +168,13 @@ While the daemon runs, a background worker uses idle time to grow the store.
 For each queued topic it:
 
 1. Searches the web, then fetches and summarizes the first two result pages.
-2. Asks the model, through a JSON schema, for a topic summary, single facts with
-   their source URL and a confidence, relationships between named things, and
-   the broader topic this one belongs under. A fact citing a URL that was not
-   in the results is kept without a source.
+2. Numbers every page summary and search snippet, then asks the model, through
+   small JSON schemas, for facts from each page on its own and from the
+   snippets together, each citing its source number and a confidence. A last
+   call writes the topic summary, relationships between named things, and the
+   broader topic this one belongs under. Each call's reply stays short, and a
+   call that fails loses only its own part. A fact citing a number that is not
+   a source is kept without one.
 3. Stores the sources, page summaries, facts, and relationships, files the topic
    under its parent, and rewrites the parent's summary from its children's.
 
@@ -242,7 +245,9 @@ The TUI has four pages:
   and watch its output and queue.
 - **Options**: every setting, including model, folder access, tool limits,
   background research, and the MCP server list, edited as JSON. Changes can be
-  saved back to the settings file.
+  saved back to the settings file. **Auto size** reads the model file and free
+  GPU memory (or RAM without a GPU) and fills in the context size and both token
+  limits; apply or save them.
 - **Knowledge**: browse topics, stored sources and summaries, and graph
   relationships with their supporting URLs.
 
@@ -299,7 +304,9 @@ Precedence, lowest first: built-in defaults, the settings file, the
 | `--tui` | Open the terminal interface; the other options are applied to the daemon it connects to |
 
 `max_tokens` is reserved for the reply in most stages, so it must leave room
-for input within `context_size`.
+for input within `context_size`. **Auto size** in Options picks the largest
+context that fits in memory, up to 32768 tokens, then gives a quarter of it to
+`max_tokens` and an eighth to `background_max_tokens`.
 
 ## Tools and safety
 

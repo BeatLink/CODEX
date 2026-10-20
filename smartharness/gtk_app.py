@@ -524,8 +524,11 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         apply_button.connect("clicked", lambda _button: self._apply_settings())
         save_button = Gtk.Button(label="Save settings")
         save_button.connect("clicked", lambda _button: self._save_settings())
+        auto_size_button = Gtk.Button(label="Auto size")
+        auto_size_button.connect("clicked", lambda _button: self._auto_size())
         buttons.append(apply_button)
         buttons.append(save_button)
+        buttons.append(auto_size_button)
         page.append(buttons)
         return Gtk.ScrolledWindow(child=page, hscrollbar_policy=Gtk.PolicyType.NEVER)
 
@@ -766,6 +769,24 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
             self.notify_user(f"Settings saved to {result['path']}.")
 
         self._call_daemon("save_settings", saved, settings=settings)
+
+    def _auto_size(self) -> None:
+        """Fill the context and token limits from the model file and free memory, ready to apply or save."""
+
+        def fill(choice: dict[str, Any]) -> None:
+            for name in ("context_size", "max_tokens", "background_max_tokens"):
+                self.number_fields[name].set_value(choice[name])
+            self.notify_user(
+                f"{choice['explanation']}. Context {choice['context_size']}, max tokens {choice['max_tokens']},"
+                f" background max tokens {choice['background_max_tokens']}. Apply or save to use them."
+            )
+
+        self._call_daemon(
+            "auto_size",
+            fill,
+            model_path=self.path_entries["model_path"].get_text().strip(),
+            gpu_layers=self.number_fields["gpu_layers"].get_value_as_int(),
+        )
 
     def _set_background_switch(self, active: bool) -> None:
         self._updating_background_switch = True

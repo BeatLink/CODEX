@@ -6,9 +6,11 @@ import socket
 import socketserver
 import sys
 import threading
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Callable
 
+from .auto_size import auto_size
 from .background import learn_from_episodes, research_one_topic
 from .knowledge import KnowledgeStore
 from .pipeline import ModelCache, execute_pipeline
@@ -109,6 +111,7 @@ class HarnessDaemon:
             "get_settings": self.get_settings,
             "apply_settings": self.apply_settings,
             "save_settings": self.save_settings,
+            "auto_size": self.auto_size,
             "set_background_enabled": self.set_background_enabled,
             "run": self.start_run,
             "cancel": self.cancel_run,
@@ -267,6 +270,15 @@ class HarnessDaemon:
         validated = self.apply_settings(connection, settings)
         saved = save_settings(self.settings_path, validated)
         return {"settings": saved, "path": str(self.settings_path)}
+
+    def auto_size(
+        self, connection: ClientConnection | None = None, model_path: str = "", gpu_layers: int = -1
+    ) -> dict[str, Any]:
+        """Suggest a context size and token limits for a model on this machine, without applying them."""
+        settings = self.get_settings()
+        model_path = model_path or settings["model_path"]
+        loaded = self._model_cache.has(model_path, settings["context_size"], gpu_layers)
+        return asdict(auto_size(model_path, gpu_layers, settings["context_size"] if loaded else None))
 
     def set_background_enabled(self, connection: ClientConnection | None = None, enabled: bool = True) -> dict[str, Any]:
         return self.apply_settings(connection, {"background_research_enabled": bool(enabled)})

@@ -528,6 +528,7 @@ class SmartHarnessApp(App[None]):
             with Horizontal(classes="button-row"):
                 yield Button("Apply", id="apply-options", variant="primary")
                 yield Button("Save settings", id="save-options")
+                yield Button("Auto size", id="auto-size")
 
     def _compose_knowledge_page(self) -> ComposeResult:
         with Vertical(id="knowledge-page-content"):
@@ -587,6 +588,8 @@ class SmartHarnessApp(App[None]):
             self._apply_settings()
         elif event.button.id == "save-options":
             self._save_settings()
+        elif event.button.id == "auto-size":
+            self._auto_size()
         elif event.button.id == "queue-topic":
             self._queue_topic()
         elif event.button.id == "research-now":
@@ -706,6 +709,30 @@ class SmartHarnessApp(App[None]):
         ):
             self.query_one(f"#{selector}", Checkbox).value = settings[name]
         self.query_one("#mcp-servers", TextArea).text = mcp_servers_to_json(settings["mcp_servers"])
+
+    def _auto_size(self) -> None:
+        """Fill the context and token limits from the model file and free memory, ready to apply or save."""
+        try:
+            gpu_layers = self._int_setting("gpu-layers")
+        except ValueError as error:
+            self.notify(str(error), title="Invalid settings", severity="error")
+            return
+        choice = self._call_daemon(
+            "auto_size",
+            model_path=self.query_one("#model-path", TextArea).text.strip(),
+            gpu_layers=gpu_layers,
+        )
+        if choice is None:
+            return
+        self.query_one("#context-size", Input).value = str(choice["context_size"])
+        self.query_one("#max-tokens", Input).value = str(choice["max_tokens"])
+        self.query_one("#background-max-tokens", Input).value = str(choice["background_max_tokens"])
+        self.notify(
+            f"{choice['explanation']}. Context {choice['context_size']}, max tokens {choice['max_tokens']},"
+            f" background max tokens {choice['background_max_tokens']}. Apply or save to use them.",
+            title="Auto size",
+            timeout=15,
+        )
 
     def _int_setting(self, selector: str) -> int:
         value = self.query_one(f"#{selector}", Input).value

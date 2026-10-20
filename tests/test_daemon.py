@@ -129,6 +129,23 @@ class DaemonTests(unittest.TestCase):
         with self.assertRaisesRegex(DaemonError, "max_tool_calls"):
             client.call("apply_settings", settings={"max_tool_calls": 50})
 
+    def test_auto_size_counts_the_loaded_model_and_leaves_settings_alone(self):
+        from smartharness.auto_size import SizeChoice
+
+        daemon = self.start()
+        client = daemon.client()
+        choice = SizeChoice(14336, 3584, 1792, "Tiny")
+
+        with (
+            patch("smartharness.daemon.auto_size", return_value=choice) as sizer,
+            patch.object(daemon.harness._model_cache, "has", return_value=True),
+        ):
+            result = client.call("auto_size", model_path="tiny.gguf", gpu_layers=-1)
+
+        self.assertEqual(result["context_size"], 14336)
+        self.assertEqual(sizer.call_args.args, ("tiny.gguf", -1, self.settings["context_size"]))
+        self.assertEqual(client.call("get_settings")["context_size"], self.settings["context_size"])
+
     def test_research_now_runs_a_queued_topic_while_idle_research_is_paused(self):
         researched = threading.Event()
 

@@ -160,7 +160,7 @@ async def _run_tool_stage(
             choice = choices[0]
             if choice.get("finish_reason") == "length":
                 raise RuntimeError(
-                    "The tool stage reached the token limit; increase --max-tokens or --context-size."
+                    "The tool stage reached the token limit; raise max_tokens (background_max_tokens for background research) or context_size, or use Auto size in Options."
                 )
             assistant_message = choice.get("message", {})
             tool_calls = assistant_message.get("tool_calls") or []

@@ -40,7 +40,8 @@ class BackgroundResearchTests(unittest.TestCase):
                 )
 
             self.assertTrue(worked)
-            self.assertEqual(streamed, ["Summary"])
+            self.assertTrue(streamed)
+            self.assertEqual(set(streamed), {"Summary"})
             self.assertIn("Extracting facts", progress)
             self.assertEqual(store.queue_status()[0]["status"], "done")
             self.assertEqual(store.search("full text search")[0]["summary"],
@@ -133,18 +134,14 @@ class ExtractionTests(unittest.TestCase):
             return json.dumps({"url": arguments["url"], "title": "FTS5", "text": "FTS5 is an SQLite module."})
 
         toolbox.call.side_effect = call
-        extraction = json.dumps({
+        page_facts = json.dumps({"facts": [{"statement": "FTS5 is an SQLite module.", "source": 1, "confidence": "high"}]})
+        snippet_facts = json.dumps({"facts": [{"statement": "FTS5 is fast.", "source": 99, "confidence": "low"}]})
+        overview = json.dumps({
             "summary": "FTS5 adds full-text search to SQLite.",
-            "facts": [
-                {"statement": "FTS5 is an SQLite module.", "source_url": "https://example.test/fts", "confidence": "high"},
-                {"statement": "FTS5 is fast.", "source_url": "https://invented.example", "confidence": "low"},
-            ],
-            "relationships": [
-                {"subject": "FTS5", "relation": "extends", "object": "SQLite", "source_url": "https://example.test/fts"},
-            ],
+            "relationships": [{"subject": "FTS5", "relation": "extends", "object": "SQLite", "source": 2}],
             "parent_topic": "Databases",
         })
-        replies = iter([extraction, "Databases overview."])
+        replies = iter([page_facts, snippet_facts, overview, "Databases overview."])
 
         with (
             patch("smartharness.background.Toolbox", return_value=toolbox),
@@ -155,7 +152,10 @@ class ExtractionTests(unittest.TestCase):
 
         self.assertEqual(summarize.call_count, 1)
         self.assertIn("Page summary.", run_stage.call_args_list[0].args[2])
-        self.assertIsNotNone(run_stage.call_args_list[0].kwargs["json_schema"])
+        self.assertNotIn("Full text.", run_stage.call_args_list[0].args[2])
+        self.assertIn("Full text.", run_stage.call_args_list[1].args[2])
+        for call in run_stage.call_args_list[:3]:
+            self.assertIsNotNone(call.kwargs["json_schema"])
         facts = {fact["statement"]: fact for fact in self.store.facts()}
         self.assertEqual(facts["FTS5 is an SQLite module."]["confidence"], 0.9)
         self.assertEqual(facts["FTS5 is an SQLite module."]["source_url"], "https://example.test/fts")

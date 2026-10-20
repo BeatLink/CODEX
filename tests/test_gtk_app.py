@@ -118,6 +118,16 @@ class WindowTests(unittest.TestCase):
         self.assertEqual(self.window.stage_states[2].get_label(), "DONE")
         self.assertTrue(self.window.run_button.get_sensitive())
 
+    def test_auto_size_fills_the_context_and_token_fields(self):
+        from smartharness.auto_size import SizeChoice
+
+        with patch("smartharness.daemon.auto_size", return_value=SizeChoice(14336, 3584, 1792, "Tiny")):
+            self.window._auto_size()
+            wait_until(lambda: self.window.number_fields["context_size"].get_value_as_int() == 14336)
+
+        self.assertEqual(self.window.number_fields["max_tokens"].get_value_as_int(), 3584)
+        self.assertEqual(self.window.number_fields["background_max_tokens"].get_value_as_int(), 1792)
+
     def test_saving_options_writes_the_daemon_settings_file(self):
         self.window.number_fields["max_tool_calls"].set_value(7)
         self.window.switches["allow_file_writes"].set_active(True)

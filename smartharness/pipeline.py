@@ -385,7 +385,7 @@ def run_stage(
     choice = choices[0]
     if choice.get("finish_reason") == "length":
         raise RuntimeError(
-            "A pipeline stage reached the token limit; increase --max-tokens or --context-size."
+            "A pipeline stage reached the token limit; raise max_tokens (background_max_tokens for background research) or context_size, or use Auto size in Options."
         )
     content = choice.get("message", {}).get("content")
     if not isinstance(content, str) or not content.strip():
