@@ -18,6 +18,12 @@ Runtime options are read from `settings.json` in the project root:
 	"max_search_results": 5,
 	"enable_test_execution": false,
 	"show_thinking": true,
+	"knowledge_db_path": "~/.local/share/smartharness/knowledge.sqlite3",
+	"background_research_enabled": true,
+	"background_poll_interval_seconds": 10,
+	"background_refresh_interval_hours": 168,
+	"background_max_tokens": 512,
+	"background_max_pending_jobs": 100,
 	"mcp_servers": []
 }
 ```
@@ -43,6 +49,34 @@ or returns no useful evidence, the harness instructs the model to say that the
 claims could not be verified. The model asks one concise clarification question in interactive
 terminal sessions when it finds a material ambiguity; otherwise it proceeds
 with an explicit assumption.
+
+## Knowledge Store and Background Research
+
+Search results are stored in a local SQLite database at `knowledge_db_path`.
+The database keeps source URLs, titles, snippets, summaries, search queries,
+retrieval timestamps, and expiry times. SQLite FTS5 is used for retrieval;
+topic hierarchy and evidence-linked relationships are stored as graph nodes
+and edges in the same database. Fresh local evidence is used before live search
+for research-intent prompts. Expired or missing evidence falls back to web
+search. Search results contain snippets only; pages are not fetched or
+independently verified.
+
+When the TUI is open, its Background page can queue research topics and control
+the idle worker. The worker refreshes previously researched topics after
+`background_refresh_interval_hours`, summarizes search snippets with the local
+model, and pauses when a foreground prompt starts. Its model output and queue
+state are visible in the TUI. The worker stops when the TUI exits; one-shot CLI
+runs can read and write the knowledge store but do not start a persistent
+background process. No topics are invented automatically: add a topic in the
+Background page to queue it. Research can perform network searches, and
+research-intent prompts may store their search query and returned evidence in
+the configured database. Disable `background_research_enabled` to pause idle
+research. Poll interval and generation token limit bound background resource
+use; `background_max_pending_jobs` bounds the queued backlog.
+
+The Knowledge page browses topics, stored sources, summaries, and graph
+relationships with their supporting URLs. The database is local and is not
+encrypted; choose a private path if local filesystem access is shared.
 
 Test execution is disabled by default. When enabled through
 `enable_test_execution` or `--enable-test-execution`, the model can run Python
@@ -91,5 +125,7 @@ In a terminal, launch `smartharness` without a prompt to open the interactive
 Textual interface. You can also launch it explicitly with `smartharness --tui`
 or `smartharness-tui`; the TUI lets you edit runtime settings, follow pipeline
 stage progress, inspect each phase's streamed output in its own tab, answer
-clarification questions, and read or copy the final Markdown response. Use
-`--settings path/to/settings.json` to select a settings file.
+clarification questions, configure background research, browse stored
+knowledge, and read or copy the final Markdown response. Use
+`--settings path/to/settings.json` to select a settings file; TUI changes can
+be saved back to that file.
