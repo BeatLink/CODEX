@@ -42,7 +42,7 @@ class ToolboxTests(unittest.TestCase):
 
     def test_filesystem_tools_read_write_and_list_within_root(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            toolbox = Toolbox(temp_dir)
+            toolbox = Toolbox(temp_dir, allow_file_writes=True)
             write_result = toolbox.call(
                 "write_file", {"path": "notes/answer.txt", "content": "hello"}
             )
@@ -56,10 +56,37 @@ class ToolboxTests(unittest.TestCase):
             )
             self.assertEqual(entries, [{"name": "answer.txt", "type": "file"}])
 
+    def test_file_access_is_read_only_by_default(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            toolbox = Toolbox(temp_dir)
+            result = toolbox.call("write_file", {"path": "notes.txt", "content": "hello"})
+
+            self.assertIn("read-only", result)
+            self.assertFalse((Path(temp_dir) / "notes.txt").exists())
+            self.assertNotIn(
+                "write_file",
+                {tool["function"]["name"] for tool in toolbox.tool_definitions},
+            )
+
+    def test_root_and_absolute_paths_inside_root_are_accepted(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "readme.txt").write_text("hi", encoding="utf-8")
+            toolbox = Toolbox(root)
+
+            for path in ("", ".", "./", str(root)):
+                entries = json.loads(toolbox.call("list_directory", {"path": path}))
+                self.assertEqual(entries, [{"name": "readme.txt", "type": "file"}])
+            self.assertEqual(
+                toolbox.call("read_file", {"path": str(root / "readme.txt")}), "hi"
+            )
+            self.assertIn("list_directory", toolbox.call("read_file", {"path": "."}))
+            self.assertIn("escapes", toolbox.call("read_file", {"path": "/etc/hostname"}))
+
     def test_filesystem_tools_reject_paths_outside_root(self):
         with tempfile.TemporaryDirectory() as temp_dir, tempfile.TemporaryDirectory() as outside:
             root = Path(temp_dir)
-            toolbox = Toolbox(root)
+            toolbox = Toolbox(root, allow_file_writes=True)
             traversal = toolbox.call("read_file", {"path": "../outside.txt"})
             self.assertIn("escapes", traversal)
 

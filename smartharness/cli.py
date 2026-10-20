@@ -46,6 +46,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Allow the model to run unittest discovery under filesystem_root.",
     )
     parser.add_argument(
+        "--allow-file-writes",
+        action="store_true",
+        help="Let the model create or replace files under filesystem_root (read-only by default).",
+    )
+    parser.add_argument(
         "--show-thinking",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -67,6 +72,8 @@ def main(argv: list[str] | None = None) -> int:
             settings[name] = argument
     if args.enable_test_execution:
         settings["enable_test_execution"] = True
+    if args.allow_file_writes:
+        settings["allow_file_writes"] = True
     if args.show_thinking is not None:
         settings["show_thinking"] = args.show_thinking
     try:
@@ -103,6 +110,7 @@ def main(argv: list[str] | None = None) -> int:
             max_tool_calls=settings["max_tool_calls"],
             max_search_results=settings["max_search_results"],
             enable_test_execution=settings["enable_test_execution"],
+            allow_file_writes=settings["allow_file_writes"],
             mcp_servers=settings["mcp_servers"],
             knowledge_db_path=settings["knowledge_db_path"],
             show_thinking=settings["show_thinking"],

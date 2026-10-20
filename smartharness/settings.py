@@ -17,6 +17,7 @@ DEFAULT_SETTINGS = {
     "max_tokens": MAX_TOKENS,
     "temperature": TEMPERATURE,
     "filesystem_root": ".",
+    "allow_file_writes": False,
     "max_tool_calls": 5,
     "max_search_results": 5,
     "enable_test_execution": False,
@@ -81,6 +82,8 @@ def validate_settings(values: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("temperature must be a non-negative number.")
     if not isinstance(values["filesystem_root"], str) or not values["filesystem_root"].strip():
         raise ValueError("filesystem_root must be a non-empty path string.")
+    if not isinstance(values["allow_file_writes"], bool):
+        raise ValueError("allow_file_writes must be a boolean.")
     if not isinstance(values["enable_test_execution"], bool):
         raise ValueError("enable_test_execution must be a boolean.")
     if not isinstance(values["show_thinking"], bool):

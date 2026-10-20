@@ -21,6 +21,8 @@ TEST_TIMEOUT_SECONDS = 120
 WEB_FETCH_TIMEOUT_SECONDS = 15
 SENSITIVE_NAMES = {".env", "credentials", "id_rsa", "id_ed25519", "private_key", "secrets"}
 
+READ_ONLY_TOOL_NAMES = {"web_search", "web_fetch", "list_directory", "read_file"}
+
 TOOL_DEFINITIONS = [
     {
         "type": "function",
@@ -61,7 +63,7 @@ TOOL_DEFINITIONS = [
             "description": "List entries in a directory under the configured filesystem root.",
             "parameters": {
                 "type": "object",
-                "properties": {"path": {"type": "string"}},
+                "properties": {"path": {"type": "string", "description": "Path relative to the filesystem root; omit it or use '.' for the root itself."}},
                 "additionalProperties": False,
             },
         },
@@ -190,6 +192,7 @@ class Toolbox:
         filesystem_root: str | Path,
         max_search_results: int = 5,
         enable_test_execution: bool = False,
+        allow_file_writes: bool = False,
         search_callback: Callable[[str, list[dict[str, str]]], None] | None = None,
     ):
         self.root = Path(filesystem_root).expanduser().resolve()
@@ -203,11 +206,18 @@ class Toolbox:
             raise ValueError("max_search_results must be between 1 and 10.")
         if not isinstance(enable_test_execution, bool):
             raise ValueError("enable_test_execution must be a boolean.")
+        if not isinstance(allow_file_writes, bool):
+            raise ValueError("allow_file_writes must be a boolean.")
         self.max_search_results = max_search_results
         self.enable_test_execution = enable_test_execution
+        self.allow_file_writes = allow_file_writes
         self.search_callback = search_callback
         self.used_tools: set[str] = set()
-        self.tool_definitions = [*TOOL_DEFINITIONS]
+        self.tool_definitions = [
+            definition
+            for definition in TOOL_DEFINITIONS
+            if allow_file_writes or definition["function"]["name"] in READ_ONLY_TOOL_NAMES
+        ]
         if enable_test_execution:
             self.tool_definitions.append(RUN_TESTS_DEFINITION)
 
@@ -222,6 +232,8 @@ class Toolbox:
             "write_file": self._write_file,
         }
         handler = handlers.get(name)
+        if name == "write_file" and not self.allow_file_writes:
+            return "Tool error: file access is read-only; writing files is disabled in the settings."
         if name == "run_tests" and self.enable_test_execution:
             handler = self._run_tests
         if handler is None:
@@ -316,17 +328,17 @@ class Toolbox:
             text += "\n[Page text truncated at the configured fetch limit.]"
         return {"url": final_url, "title": title, "text": text, "truncated": truncated}
 
-    def _resolve_path(self, relative_path: str) -> Path:
-        if not isinstance(relative_path, str) or not relative_path.strip():
-            raise ValueError("path must be a non-empty relative path.")
-        candidate_path = Path(relative_path)
-        if candidate_path.is_absolute():
-            raise ValueError("absolute paths are not allowed; use a path under the configured root.")
-        resolved = (self.root / candidate_path).resolve()
+    def _resolve_path(self, requested_path: str) -> Path:
+        if not isinstance(requested_path, str):
+            raise ValueError("path must be a string.")
+        # An absolute path is only accepted when it already points inside the root.
+        resolved = (self.root / Path(requested_path.strip() or ".").expanduser()).resolve()
         try:
             resolved.relative_to(self.root)
         except ValueError as error:
-            raise ValueError("path escapes the configured filesystem root.") from error
+            raise ValueError(
+                f"path escapes the configured filesystem root ({self.root}); use a path relative to it."
+            ) from error
         return resolved
 
     def _list_directory(self, arguments: dict[str, Any]) -> str:
@@ -354,6 +366,8 @@ class Toolbox:
         self._check_arguments(arguments, {"path"}, set())
         path = self._resolve_path(arguments["path"])
         self._reject_sensitive_path(path)
+        if path.is_dir():
+            raise ValueError("path is a directory; use list_directory to see its entries.")
         if not path.is_file():
             raise ValueError("path is not a file.")
         if path.stat().st_size > MAX_FILE_BYTES:
@@ -367,6 +381,8 @@ class Toolbox:
         self._check_arguments(arguments, {"path", "content"}, set())
         path = self._resolve_path(arguments["path"])
         self._reject_sensitive_path(path)
+        if path.is_dir():
+            raise ValueError("path is a directory; give a file path to write.")
         content = arguments["content"]
         if not isinstance(content, str):
             raise ValueError("content must be a string.")

@@ -14,6 +14,7 @@ Runtime options are read from `settings.json` in the project root:
 	"max_tokens": 2048,
 	"temperature": 0.1,
 	"filesystem_root": ".",
+	"allow_file_writes": false,
 	"max_tool_calls": 5,
 	"max_search_results": 5,
 	"enable_test_execution": false,
@@ -41,8 +42,11 @@ The tool stage can search the web using DDGS and list, read, or write files.
 Prompts asking to verify/research facts or configure a technical integration
 automatically run a web search before the model-controlled tool stage.
 `filesystem_root` is resolved from the current working directory; file tools
-cannot access paths outside that root. Writes can create or replace files but
-cannot delete them. Tool calls and search results are capped by the settings.
+cannot access paths outside that root. Paths are relative to the root, and an
+absolute path is accepted only when it points inside it. File access is
+read-only by default: set `allow_file_writes` to `true`, pass
+`--allow-file-writes`, or tick the box on the TUI Options page to let the
+model create or replace files. Writes cannot delete files. Tool calls and search results are capped by the settings.
 Later stages ground researched claims only in captured titles, URLs, and
 snippets; pages are not fetched for independent verification. If search fails
 or returns no useful evidence, the harness instructs the model to say that the
@@ -126,7 +130,8 @@ echo "Summarize this design" | python -m smartharness
 In a terminal, launch `smartharness` without a prompt to open the interactive
 Textual interface. You can also launch it explicitly with `smartharness --tui`
 or `smartharness-tui`; the TUI lets you edit runtime settings, follow pipeline
-stage progress, inspect each phase's streamed output in its own tab, answer
+stage progress, inspect each phase's streamed output in its own tab, set
+folder access and tool limits on the Options page, answer
 clarification questions, configure background research, browse stored
 knowledge, and read or copy the final Markdown response. Use
 `--settings path/to/settings.json` to select a settings file; TUI changes can

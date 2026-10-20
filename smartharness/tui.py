@@ -223,6 +223,12 @@ class SmartHarnessApp(App[None]):
     #knowledge-graph {
         height: 10;
     }
+    #tool-limits-heading {
+        margin-top: 2;
+    }
+    #tool-limits-row {
+        height: 5;
+    }
     #background-settings, #knowledge-search-row, #topic-row, #knowledge-browser {
         height: auto;
         min-height: 3;
@@ -313,18 +319,6 @@ class SmartHarnessApp(App[None]):
                             yield Label(label, classes="field-label")
                             value = self.settings["max_tokens"] if key == "max-tokens" else self.settings["temperature"]
                             yield Input(value=str(value), id=key)
-                yield Label("Filesystem root", classes="field-label")
-                yield TextArea(
-                    self.settings["filesystem_root"],
-                    soft_wrap=True,
-                    classes="wrapped-field",
-                    id="filesystem-root",
-                )
-                yield Checkbox(
-                    "Allow model to run project tests",
-                    value=self.settings["enable_test_execution"],
-                    id="enable-test-execution",
-                )
                 yield Static("PIPELINE", classes="eyebrow", id="stage-heading")
                 for index, label in enumerate(STAGE_LABELS, start=1):
                     yield Static(f"WAIT  {label}", classes="stage-row", id=f"stage-{index}")
@@ -421,6 +415,38 @@ class SmartHarnessApp(App[None]):
                         yield AutoScrollMarkdown(
                             "_Waiting for background work..._", id="background-output"
                         )
+                with TabPane("Options", id="options-page"):
+                    with VerticalScroll():
+                        yield Static("FOLDER ACCESS", classes="eyebrow")
+                        yield Label("Filesystem root", classes="field-label")
+                        yield TextArea(
+                            self.settings["filesystem_root"],
+                            soft_wrap=True,
+                            classes="wrapped-field",
+                            id="filesystem-root",
+                        )
+                        yield Checkbox(
+                            "Allow model to create and replace files (read-only when off)",
+                            value=self.settings["allow_file_writes"],
+                            id="allow-file-writes",
+                        )
+                        yield Checkbox(
+                            "Allow model to run project tests",
+                            value=self.settings["enable_test_execution"],
+                            id="enable-test-execution",
+                        )
+                        yield Static("TOOL LIMITS", classes="eyebrow", id="tool-limits-heading")
+                        with Horizontal(id="tool-limits-row"):
+                            for label, key, setting in (
+                                ("Max tool calls (1-10)", "max-tool-calls", "max_tool_calls"),
+                                ("Max search results (1-10)", "max-search-results", "max_search_results"),
+                            ):
+                                with Vertical(classes="numeric-field"):
+                                    yield Label(label, classes="field-label")
+                                    yield Input(value=str(self.settings[setting]), id=key)
+                        with Horizontal(classes="button-row"):
+                            yield Button("Apply", id="apply-options", variant="primary")
+                            yield Button("Save settings", id="save-options")
                 with TabPane("Knowledge", id="knowledge-page"):
                     with Vertical(id="knowledge-page-content"):
                         yield Static("KNOWLEDGE STORE", classes="eyebrow")
@@ -468,9 +494,9 @@ class SmartHarnessApp(App[None]):
             if self._last_answer:
                 self.copy_to_clipboard(self._last_answer)
                 self.notify("Answer copied to clipboard.", title="SmartHarness")
-        elif event.button.id == "apply-background":
-            self._apply_background_settings()
-        elif event.button.id == "save-settings":
+        elif event.button.id in ("apply-background", "apply-options"):
+            self._apply_settings()
+        elif event.button.id in ("save-settings", "save-options"):
             self._save_settings()
         elif event.button.id == "queue-topic":
             self._queue_topic()
@@ -517,7 +543,10 @@ class SmartHarnessApp(App[None]):
                 "max_tokens": self._int_setting("max-tokens"),
                 "temperature": self._float_setting("temperature"),
                 "filesystem_root": self.query_one("#filesystem-root", TextArea).text,
+                "allow_file_writes": self.query_one("#allow-file-writes", Checkbox).value,
                 "enable_test_execution": self.query_one("#enable-test-execution", Checkbox).value,
+                "max_tool_calls": self._int_setting("max-tool-calls"),
+                "max_search_results": self._int_setting("max-search-results"),
                 "knowledge_db_path": self.query_one("#knowledge-db-path", TextArea).text,
                 "background_research_enabled": self.query_one("#background-enabled", Checkbox).value,
                 "background_poll_interval_seconds": self._int_setting("background-poll-seconds"),
@@ -528,7 +557,7 @@ class SmartHarnessApp(App[None]):
         )
         return validate_settings(settings)
 
-    def _apply_background_settings(self) -> bool:
+    def _apply_settings(self) -> bool:
         try:
             self.settings = self._collect_settings()
         except ValueError as error:
@@ -540,7 +569,7 @@ class SmartHarnessApp(App[None]):
         return True
 
     def _save_settings(self) -> None:
-        if not self._apply_background_settings():
+        if not self._apply_settings():
             return
         path = self.settings_path or DEFAULT_SETTINGS_PATH
         try:
@@ -824,7 +853,7 @@ class SmartHarnessApp(App[None]):
             self.query_one(f"#stage-{index + 1}", Static).update(f"{state}  {stage_label}")
         self.query_one("#phase-tabs", TabbedContent).active = f"stage-{active + 1}"
         self.query_one("#workbench-tabs", TabbedContent).active = "output-pane"
-        self.query_one("#status", Static).update(f"Stage {active + 1} of 7")
+        self.query_one("#status", Static).update(f"Stage {active + 1} of {len(STAGE_LABELS)}")
 
     def _finish_run(self, result: str) -> None:
         self._flush_stage_output()
@@ -881,6 +910,7 @@ class SmartHarnessApp(App[None]):
                     max_tool_calls=settings["max_tool_calls"],
                     max_search_results=settings["max_search_results"],
                     enable_test_execution=settings["enable_test_execution"],
+                    allow_file_writes=settings["allow_file_writes"],
                     mcp_servers=settings["mcp_servers"],
                     knowledge_db_path=settings["knowledge_db_path"],
                     show_thinking=False,
@@ -909,5 +939,5 @@ def main(argv: list[str] | None = None) -> int:
         settings = load_settings(args.settings)
     except (OSError, ValueError) as error:
         parser.error(str(error))
-    SmartHarnessApp(settings).run()
+    SmartHarnessApp(settings, settings_path=args.settings).run()
     return 0

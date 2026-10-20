@@ -20,6 +20,15 @@ class SettingsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "enable_test_execution"):
             validate_settings(settings)
 
+    def test_file_writes_default_to_disabled_and_must_be_boolean(self):
+        self.assertIs(DEFAULT_SETTINGS["allow_file_writes"], False)
+
+        settings = DEFAULT_SETTINGS.copy()
+        settings["allow_file_writes"] = "yes"
+
+        with self.assertRaisesRegex(ValueError, "allow_file_writes"):
+            validate_settings(settings)
+
     def test_background_settings_are_bounded_and_boolean(self):
         settings = DEFAULT_SETTINGS.copy()
         settings["background_poll_interval_seconds"] = 0

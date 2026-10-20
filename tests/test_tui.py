@@ -3,7 +3,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from textual.widgets import Button, Input, Markdown, TabPane, TextArea, Tree
+from textual.widgets import Button, Checkbox, Input, Markdown, TabPane, TextArea, Tree
 
 from smartharness.knowledge import KnowledgeStore
 from smartharness.settings import DEFAULT_SETTINGS, load_settings
@@ -117,6 +117,30 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                     saved = load_settings(settings_path)
                     self.assertEqual(saved["background_poll_interval_seconds"], 12)
                     self.assertFalse(saved["background_research_enabled"])
+
+    async def test_options_page_saves_folder_access_and_tool_limits(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = DEFAULT_SETTINGS.copy()
+            settings["knowledge_db_path"] = str(Path(directory) / "knowledge.db")
+            settings["background_research_enabled"] = False
+            settings_path = Path(directory) / "settings.json"
+            app = SmartHarnessApp(settings, settings_path=settings_path)
+
+            async with app.run_test(size=(140, 48)) as pilot:
+                app.query_one("#main-tabs").active = "options-page"
+                await pilot.pause()
+                self.assertFalse(app.query_one("#allow-file-writes", Checkbox).value)
+                app.query_one("#filesystem-root", TextArea).text = directory
+                app.query_one("#allow-file-writes", Checkbox).value = True
+                app.query_one("#max-tool-calls", Input).value = "7"
+                app.query_one("#max-search-results", Input).value = "3"
+                app.query_one("#save-options", Button).press()
+                await pilot.pause()
+
+                saved = load_settings(settings_path)
+                self.assertEqual(saved["filesystem_root"], directory)
+                self.assertTrue(saved["allow_file_writes"])
+                self.assertEqual((saved["max_tool_calls"], saved["max_search_results"]), (7, 3))
 
     async def test_knowledge_page_browses_topics_sources_and_graph(self):
         with tempfile.TemporaryDirectory() as directory:
