@@ -98,7 +98,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
 
             with patch("smartharness.tui.research_one_topic", return_value=False) as research:
                 async with app.run_test(size=(140, 48)) as pilot:
-                    app.query_one("#main-tabs").active = "background-page"
+                    await pilot.click("#--content-tab-background-page")
                     await pilot.pause()
                     app.query_one("#research-topic", TextArea).text = "Local model RAG"
                     app.query_one("#research-priority", Input).value = "4"
@@ -127,7 +127,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             app = SmartHarnessApp(settings, settings_path=settings_path)
 
             async with app.run_test(size=(140, 48)) as pilot:
-                app.query_one("#main-tabs").active = "options-page"
+                await pilot.click("#--content-tab-options-page")
                 await pilot.pause()
                 self.assertFalse(app.query_one("#allow-file-writes", Checkbox).value)
                 app.query_one("#filesystem-root", TextArea).text = directory
@@ -156,7 +156,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             app = SmartHarnessApp(settings)
 
             async with app.run_test(size=(140, 48)) as pilot:
-                app.query_one("#main-tabs").active = "knowledge-page"
+                await pilot.click("#--content-tab-knowledge-page")
                 await pilot.pause()
                 app._refresh_knowledge(query="Docker builds")
 

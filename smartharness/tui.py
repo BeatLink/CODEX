@@ -21,6 +21,7 @@ from textual.widgets import (
     Static,
     TabbedContent,
     TabPane,
+    Tabs,
     TextArea,
     Tree,
 )
@@ -524,7 +525,7 @@ class SmartHarnessApp(App[None]):
 
         self._reset_stages()
         self.query_one("#final-output", Markdown).update("_Working on your request..._")
-        self.query_one("#workbench-tabs", TabbedContent).active = "output-pane"
+        self._show_output_pane()
         self.query_one("#copy", Button).disabled = True
         self.query_one("#run", Button).disabled = True
         self.query_one("#status", Static).update("Starting local model...")
@@ -813,6 +814,11 @@ class SmartHarnessApp(App[None]):
             self._worker_wakeup.wait(wait_seconds)
             self._worker_wakeup.clear()
 
+    def _show_output_pane(self) -> None:
+        # Focus moves too, or Textual switches back to the tab holding the focused prompt.
+        self.query_one("#workbench-tabs", TabbedContent).active = "output-pane"
+        self.query_one("#phase-tabs", TabbedContent).query_one(Tabs).focus()
+
     def _reset_stages(self) -> None:
         for index, label in enumerate(STAGE_LABELS, start=1):
             self.query_one(f"#stage-{index}", Static).update(f"WAIT  {label}")
@@ -852,7 +858,7 @@ class SmartHarnessApp(App[None]):
             state = "DONE" if index < active else "NOW " if index == active else "WAIT"
             self.query_one(f"#stage-{index + 1}", Static).update(f"{state}  {stage_label}")
         self.query_one("#phase-tabs", TabbedContent).active = f"stage-{active + 1}"
-        self.query_one("#workbench-tabs", TabbedContent).active = "output-pane"
+        self._show_output_pane()
         self.query_one("#status", Static).update(f"Stage {active + 1} of {len(STAGE_LABELS)}")
 
     def _finish_run(self, result: str) -> None:
