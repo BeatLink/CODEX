@@ -162,6 +162,10 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 app.query_one("#allow-file-writes", Checkbox).value = True
                 app.query_one("#max-tool-calls", Input).value = "7"
                 app.query_one("#max-search-results", Input).value = "3"
+                app.query_one("#mcp-servers", TextArea).text = (
+                    '[{"name": "docs", "transport": "stdio", "command": "docs-mcp-server",'
+                    ' "allowed_tools": ["search_docs"]}]'
+                )
                 app.query_one("#save-options", Button).press()
                 await pilot.pause()
 
@@ -169,6 +173,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(saved["filesystem_root"], directory)
                 self.assertTrue(saved["allow_file_writes"])
                 self.assertEqual((saved["max_tool_calls"], saved["max_search_results"]), (7, 3))
+                self.assertEqual(saved["mcp_servers"][0]["name"], "docs")
 
     async def test_knowledge_page_browses_topics_sources_and_graph(self):
         with tempfile.TemporaryDirectory() as directory:

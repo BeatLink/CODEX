@@ -16,7 +16,7 @@ try:
     gi.require_version("Gtk", "4.0")
     from gi.repository import Gdk, Gio, GLib, Gtk
 
-    from smartharness.gtk_app import SmartHarnessWindow, add_markdown_tags, render_markdown
+    from smartharness.gtk_app import LINK_TAG_PREFIX, SmartHarnessWindow, add_markdown_tags, render_markdown
 
     # init_check reports success even without a display, so the display itself is checked.
     DISPLAY_AVAILABLE = Gtk.init_check() and Gdk.Display.get_default() is not None
@@ -48,6 +48,19 @@ class MarkdownTests(unittest.TestCase):
         self.assertEqual(text, "Title\n\nUse bold and code.\n\n• item\n\nx = 1\n")
         bold_start = buffer.get_iter_at_offset(text.index("bold"))
         self.assertIn("bold", [tag.props.name for tag in bold_start.get_tags()])
+
+
+    def test_web_links_carry_their_url_and_other_links_stay_text(self):
+        buffer = Gtk.TextBuffer()
+        add_markdown_tags(buffer)
+
+        render_markdown(buffer, "See [guide](https://example.test/guide) and [secret](file:///etc/passwd).")
+
+        text = buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), False)
+        self.assertEqual(text, "See guide and secret (file:///etc/passwd).\n")
+        guide_tags = [tag.props.name for tag in buffer.get_iter_at_offset(text.index("guide")).get_tags()]
+        self.assertEqual(guide_tags, [LINK_TAG_PREFIX + "https://example.test/guide"])
+        self.assertEqual(buffer.get_iter_at_offset(text.index("secret")).get_tags(), [])
 
 
 @unittest.skipUnless(DISPLAY_AVAILABLE, "GTK 4 needs a display")
@@ -108,6 +121,9 @@ class WindowTests(unittest.TestCase):
     def test_saving_options_writes_the_daemon_settings_file(self):
         self.window.number_fields["max_tool_calls"].set_value(7)
         self.window.switches["allow_file_writes"].set_active(True)
+        self.window.mcp_servers.get_buffer().set_text(
+            '[{"name": "docs", "transport": "stdio", "command": "docs-mcp-server", "allowed_tools": ["search_docs"]}]'
+        )
 
         self.window._save_settings()
         settings_path = self.daemon.harness.settings_path
@@ -115,6 +131,7 @@ class WindowTests(unittest.TestCase):
 
         saved = settings_path.read_text()
         self.assertIn('"max_tool_calls": 7', saved)
+        self.assertIn('"name": "docs"', saved)
         self.assertIn('"allow_file_writes": true', saved)
 
 

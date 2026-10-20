@@ -121,6 +121,19 @@ def validate_settings(values: dict[str, Any]) -> dict[str, Any]:
     return values
 
 
+def mcp_servers_to_json(servers: list[dict[str, Any]]) -> str:
+    return json.dumps(servers, indent=2)
+
+
+def mcp_servers_from_json(text: str) -> list[dict[str, Any]]:
+    """Read the MCP server list an interface lets the user edit as JSON."""
+    try:
+        servers = json.loads(text.strip() or "[]")
+    except json.JSONDecodeError as error:
+        raise ValueError(f"MCP servers must be valid JSON: {error}") from error
+    return validate_mcp_servers(servers)
+
+
 def validate_mcp_servers(servers: Any) -> list[dict[str, Any]]:
     if not isinstance(servers, list):
         raise ValueError("mcp_servers must be a list.")

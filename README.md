@@ -22,9 +22,12 @@ background research. Interfaces connect to it over a Unix socket at
 `$XDG_RUNTIME_DIR/smartharness/daemon.sock` and only show what it reports, so
 several can be open at once and all see the same run, queue, and settings.
 
-- The terminal and GTK interfaces start the daemon if none is running. A daemon it
-  starts keeps running after the interface closes; stop it with `SIGTERM`. Its
-  output goes to `~/.local/state/smartharness/daemon.log`.
+- The terminal and GTK interfaces start the daemon if none is running. A daemon
+  started this way exits 30 seconds after the last interface disconnects, which
+  also frees the model's memory; its output goes to
+  `~/.local/state/smartharness/daemon.log`. Run `smartharness-daemon` yourself
+  to keep one running, and background research with it, until it gets
+  `SIGTERM`. `--exit-when-unused SECONDS` gives it the same timeout.
 - A one-shot CLI run uses the daemon when one is running, so the model is
   already loaded, and otherwise runs the pipeline in its own process.
 - One request runs at a time. A run belongs to the interface that started it:
@@ -237,8 +240,9 @@ The TUI has four pages:
   Clarification questions appear as a dialog.
 - **Background**: queue topics, start research now, pause or resume the worker,
   and watch its output and queue.
-- **Options**: every setting, including model, folder access, tool limits, and
-  background research. Changes can be saved back to the settings file.
+- **Options**: every setting, including model, folder access, tool limits,
+  background research, and the MCP server list, edited as JSON. Changes can be
+  saved back to the settings file.
 - **Knowledge**: browse topics, stored sources and summaries, and graph
   relationships with their supporting URLs.
 
@@ -247,7 +251,8 @@ The TUI has four pages:
 `smartharness-gtk` has the same four pages in a GTK 4 window that follows the
 desktop's GTK theme. On the Workbench page the pipeline list on the left shows
 each stage's state, and choosing a stage shows its output; the final answer's
-Markdown is shown with headings, emphasis, code, and lists styled. **Ctrl+R**
+Markdown is shown with headings, emphasis, code, and lists styled, and web
+links open in the browser when clicked. **Ctrl+R**
 or **Ctrl+Enter** runs the request. It needs PyGObject and GTK 4, which the Nix
 package and dev shell provide.
 

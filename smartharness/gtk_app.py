@@ -13,7 +13,13 @@ from gi.repository import Gio, GLib, Gtk, Pango  # noqa: E402
 
 from .client import DISCONNECTED_EVENT, DaemonClient, DaemonError, connect_to_daemon  # noqa: E402
 from .pipeline import SKIPPED_PREFIX  # noqa: E402
-from .settings import default_settings_path, load_settings, validate_settings  # noqa: E402
+from .settings import (  # noqa: E402
+    default_settings_path,
+    load_settings,
+    mcp_servers_from_json,
+    mcp_servers_to_json,
+    validate_settings,
+)
 from .stages import STAGE_LABELS, STAGE_TAB_TITLES  # noqa: E402
 
 
@@ -63,6 +69,8 @@ _INLINE_MARKDOWN = re.compile(
 _HEADING = re.compile(r"(#{1,6})\s+(.*)")
 _LIST_ITEM = re.compile(r"(\s*)([-*+]|\d+[.)])\s+(.*)")
 _RULE = re.compile(r"\s*([-*_])(\s*\1){2,}\s*")
+LINK_TAG_PREFIX = "link:"
+LINK_SCHEMES = ("http://", "https://")
 _LINK = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
 
 
@@ -76,7 +84,6 @@ def add_markdown_tags(buffer: Gtk.TextBuffer) -> None:
     buffer.create_tag("code-block", family="monospace", left_margin=28, wrap_mode=Gtk.WrapMode.NONE)
     buffer.create_tag("list-item", left_margin=28, indent=-14)
     buffer.create_tag("quote", left_margin=28, style=Pango.Style.ITALIC)
-    buffer.create_tag("link", underline=Pango.Underline.SINGLE)
 
 
 def render_markdown(buffer: Gtk.TextBuffer, text: str) -> None:
@@ -111,9 +118,10 @@ def _insert_inline(buffer: Gtk.TextBuffer, text: str, *line_tags: str) -> None:
         if not part:
             continue
         link = _LINK.fullmatch(part)
-        if link:
-            _insert(buffer, link.group(1), *line_tags, "link")
-            _insert(buffer, f" ({link.group(2)})", *line_tags)
+        if link and link.group(2).startswith(LINK_SCHEMES):
+            _insert(buffer, link.group(1), *line_tags, _link_tag(buffer, link.group(2)))
+        elif link:
+            _insert(buffer, f"{link.group(1)} ({link.group(2)})", *line_tags)
         elif part.startswith("**") and part.endswith("**") and len(part) > 4:
             _insert(buffer, part[2:-2], *line_tags, "bold")
         elif part.startswith("`") and part.endswith("`") and len(part) > 2:
@@ -122,6 +130,25 @@ def _insert_inline(buffer: Gtk.TextBuffer, text: str, *line_tags: str) -> None:
             _insert(buffer, part[1:-1], *line_tags, "italic")
         else:
             _insert(buffer, part, *line_tags)
+
+
+def _link_tag(buffer: Gtk.TextBuffer, url: str) -> str:
+    # Each link gets its own tag named after its URL, so a click can find where it leads.
+    name = LINK_TAG_PREFIX + url
+    if buffer.get_tag_table().lookup(name) is None:
+        buffer.create_tag(name, underline=Pango.Underline.SINGLE)
+    return name
+
+
+def link_at(view: Gtk.TextView, x: float, y: float) -> str | None:
+    buffer_x, buffer_y = view.window_to_buffer_coords(Gtk.TextWindowType.WIDGET, int(x), int(y))
+    found, position = view.get_iter_at_location(buffer_x, buffer_y)
+    if not found:
+        return None
+    for tag in position.get_tags():
+        if tag.props.name and tag.props.name.startswith(LINK_TAG_PREFIX):
+            return tag.props.name.removeprefix(LINK_TAG_PREFIX)
+    return None
 
 
 def _insert(buffer: Gtk.TextBuffer, text: str, *tags: str) -> None:
@@ -158,6 +185,12 @@ class OutputView:
         adjustment = self.widget.get_vadjustment()
         adjustment.connect("value-changed", self._on_scrolled)
         adjustment.connect("notify::upper", self._on_grown)
+        click = Gtk.GestureClick()
+        click.connect("released", self._on_clicked)
+        self.view.add_controller(click)
+        motion = Gtk.EventControllerMotion()
+        motion.connect("motion", self._on_pointer_moved)
+        self.view.add_controller(motion)
 
     @property
     def text(self) -> str:
@@ -172,6 +205,17 @@ class OutputView:
 
     def set_markdown(self, text: str) -> None:
         render_markdown(self.view.get_buffer(), text)
+
+    def _on_clicked(self, _gesture: Gtk.GestureClick, _presses: int, x: float, y: float) -> None:
+        # A drag that selected text is not a click on a link.
+        if self.view.get_buffer().get_has_selection():
+            return
+        url = link_at(self.view, x, y)
+        if url is not None:
+            Gtk.UriLauncher.new(url).launch(self.view.get_root(), None, None, None)
+
+    def _on_pointer_moved(self, _controller: Gtk.EventControllerMotion, x: float, y: float) -> None:
+        self.view.set_cursor_from_name("pointer" if link_at(self.view, x, y) else "text")
 
     def _on_scrolled(self, adjustment: Gtk.Adjustment) -> None:
         self.following = adjustment.get_value() >= adjustment.get_upper() - adjustment.get_page_size() - 1
@@ -466,6 +510,13 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         page.append(section_heading("Background research"))
         page.append(self._number_grid(BACKGROUND_NUMBER_FIELDS))
         page.append(self._path_field("knowledge_db_path"))
+        page.append(section_heading("MCP servers"))
+        page.append(field_label("A JSON list of servers; see the README for the fields each one needs."))
+        self.mcp_servers = Gtk.TextView(monospace=True, wrap_mode=Gtk.WrapMode.WORD_CHAR, top_margin=8, bottom_margin=8, left_margin=8, right_margin=8)
+        self.mcp_servers.get_buffer().set_text(mcp_servers_to_json(self.settings["mcp_servers"]))
+        mcp_scroller = Gtk.ScrolledWindow(child=self.mcp_servers, min_content_height=160)
+        mcp_scroller.add_css_class("frame")
+        page.append(mcp_scroller)
 
         buttons = Gtk.Box(spacing=6, margin_top=18)
         apply_button = Gtk.Button(label="Apply")
@@ -680,6 +731,8 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         for name, switch in self.switches.items():
             settings[name] = switch.get_active()
         settings["background_research_enabled"] = self.background_switch.get_active()
+        buffer = self.mcp_servers.get_buffer()
+        settings["mcp_servers"] = mcp_servers_from_json(buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), False))
         return validate_settings(settings)
 
     def _show_settings(self, settings: dict[str, Any]) -> None:
@@ -690,6 +743,7 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
             spin.set_value(settings[name])
         for name, switch in self.switches.items():
             switch.set_active(settings[name])
+        self.mcp_servers.get_buffer().set_text(mcp_servers_to_json(settings["mcp_servers"]))
         self._set_background_switch(settings["background_research_enabled"])
 
     def _apply_settings(self) -> None:

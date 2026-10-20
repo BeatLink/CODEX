@@ -29,7 +29,13 @@ from textual.widgets import (
 
 from .client import DISCONNECTED_EVENT, DaemonClient, DaemonError, connect_to_daemon
 from .pipeline import SKIPPED_PREFIX
-from .settings import default_settings_path, load_settings, validate_settings
+from .settings import (
+    default_settings_path,
+    load_settings,
+    mcp_servers_from_json,
+    mcp_servers_to_json,
+    validate_settings,
+)
 from .stages import STAGE_LABELS, STAGE_TAB_TITLES
 
 
@@ -278,6 +284,11 @@ class SmartHarnessApp(App[None]):
         width: 2fr;
         height: 1fr;
     }
+    #mcp-servers {
+        height: 12;
+        border: tall $field-border;
+        background: $surface;
+    }
     #knowledge-graph-scroll {
         height: 10;
     }
@@ -507,6 +518,13 @@ class SmartHarnessApp(App[None]):
                 id="knowledge-db-path",
             )
 
+            yield Static("MCP SERVERS", classes="eyebrow section-heading")
+            yield Label("A JSON list of servers; see the README for the fields each one needs.", classes="field-label")
+            yield TextArea(
+                mcp_servers_to_json(self.settings["mcp_servers"]),
+                id="mcp-servers",
+            )
+
             with Horizontal(classes="button-row"):
                 yield Button("Apply", id="apply-options", variant="primary")
                 yield Button("Save settings", id="save-options")
@@ -631,6 +649,7 @@ class SmartHarnessApp(App[None]):
                 "background_refresh_interval_hours": self._int_setting("background-refresh-hours"),
                 "background_max_tokens": self._int_setting("background-max-tokens"),
                 "background_max_pending_jobs": self._int_setting("background-queue-cap"),
+                "mcp_servers": mcp_servers_from_json(self.query_one("#mcp-servers", TextArea).text),
             }
         )
         return validate_settings(settings)
@@ -686,6 +705,7 @@ class SmartHarnessApp(App[None]):
             ("background-enabled", "background_research_enabled"),
         ):
             self.query_one(f"#{selector}", Checkbox).value = settings[name]
+        self.query_one("#mcp-servers", TextArea).text = mcp_servers_to_json(settings["mcp_servers"])
 
     def _int_setting(self, selector: str) -> int:
         value = self.query_one(f"#{selector}", Input).value

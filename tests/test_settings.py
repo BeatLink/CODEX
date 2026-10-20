@@ -5,7 +5,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 from smartharness import settings as settings_module
-from smartharness.settings import DEFAULT_SETTINGS, default_settings_path, validate_settings
+from smartharness.settings import (
+    DEFAULT_SETTINGS,
+    default_settings_path,
+    mcp_servers_from_json,
+    mcp_servers_to_json,
+    validate_settings,
+)
 
 
 class SettingsTests(unittest.TestCase):
@@ -129,6 +135,25 @@ class SettingsTests(unittest.TestCase):
                     self.assertEqual(default_settings_path().resolve(), (Path(directory) / "settings.json").resolve())
             finally:
                 os.chdir(current_directory)
+
+
+class McpServersJsonTests(unittest.TestCase):
+    def test_edited_json_is_read_back_and_checked(self):
+        servers = [
+            {
+                "name": "docs",
+                "transport": "stdio",
+                "command": "docs-mcp-server",
+                "allowed_tools": ["search_docs"],
+            }
+        ]
+
+        read_back = mcp_servers_from_json(mcp_servers_to_json(servers))
+
+        self.assertEqual(read_back[0]["allowed_tools"], ["search_docs"])
+        self.assertEqual(mcp_servers_from_json("  "), [])
+        with self.assertRaisesRegex(ValueError, "valid JSON"):
+            mcp_servers_from_json("[{")
 
 
 if __name__ == "__main__":

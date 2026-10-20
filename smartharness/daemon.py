@@ -79,8 +79,15 @@ class ActiveRun:
 class HarnessDaemon:
     """Owns the model, runs requests and background research, and serves interfaces over a socket."""
 
-    def __init__(self, settings: dict[str, Any], settings_path: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        settings: dict[str, Any],
+        settings_path: str | Path | None = None,
+        exit_when_unused_seconds: float | None = None,
+    ) -> None:
         self.settings = validate_settings(settings.copy())
+        self.exit_when_unused_seconds = exit_when_unused_seconds
+        self._unused_timer: threading.Timer | None = None
         self.settings_path = Path(settings_path).expanduser() if settings_path else default_settings_path()
         self._lock = threading.RLock()
         self._clients: set[ClientConnection] = set()
@@ -130,6 +137,7 @@ class HarnessDaemon:
             path.unlink()
         self._server = _SocketServer(str(path), self)
         os.chmod(path, 0o600)
+        self._schedule_unused_exit()
         return self._server
 
     def shutdown(self, connection: ClientConnection | None = None) -> dict[str, Any]:
@@ -142,6 +150,24 @@ class HarnessDaemon:
             # serve_forever waits for shutdown(), so it must be called from another thread.
             threading.Thread(target=self._server.shutdown, daemon=True).start()
         return {}
+
+    def _schedule_unused_exit(self) -> None:
+        """Start the countdown to exit, when this daemon exits once no interface is connected."""
+        if self.exit_when_unused_seconds is None:
+            return
+        with self._lock:
+            if self._clients or self._unused_timer is not None:
+                return
+            self._unused_timer = threading.Timer(self.exit_when_unused_seconds, self._exit_if_unused)
+            self._unused_timer.daemon = True
+            self._unused_timer.start()
+
+    def _exit_if_unused(self) -> None:
+        with self._lock:
+            self._unused_timer = None
+            if self._clients:
+                return
+        self.shutdown()
 
     def close(self) -> None:
         self._stop.set()
@@ -166,6 +192,9 @@ class HarnessDaemon:
         connection = ClientConnection(client_socket)
         with self._lock:
             self._clients.add(connection)
+            if self._unused_timer is not None:
+                self._unused_timer.cancel()
+                self._unused_timer = None
         try:
             for line in reader:
                 if not line.strip():
@@ -181,6 +210,7 @@ class HarnessDaemon:
             # A run belongs to the interface that started it, so it stops when that interface leaves.
             if run is not None and run.owner is connection:
                 run.cancel_requested.set()
+            self._schedule_unused_exit()
 
     def _dispatch(self, connection: ClientConnection, line: bytes) -> None:
         try:
@@ -525,12 +555,18 @@ def main(argv: list[str] | None = None) -> int:
         default=str(default_socket_path()),
         help="Path of the Unix socket to listen on.",
     )
+    parser.add_argument(
+        "--exit-when-unused",
+        type=float,
+        metavar="SECONDS",
+        help="Exit once no interface has been connected for this long.",
+    )
     args = parser.parse_args(argv)
     try:
         settings = load_settings(args.settings)
         if os.getenv("MODEL_PATH"):
             settings["model_path"] = os.environ["MODEL_PATH"]
-        harness = HarnessDaemon(settings, args.settings)
+        harness = HarnessDaemon(settings, args.settings, args.exit_when_unused)
         server = harness.bind(args.socket)
     except (OSError, RuntimeError, ValueError) as error:
         print(f"Error: {error}", file=sys.stderr)

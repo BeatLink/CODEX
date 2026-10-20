@@ -15,11 +15,16 @@ class RunningDaemon:
         settings: dict[str, Any],
         settings_path: str | Path | None = None,
         start_worker: bool = False,
+        exit_when_unused_seconds: float | None = None,
     ) -> None:
         # Unix socket paths are limited to about 100 characters, so this stays short.
         self.directory = tempfile.TemporaryDirectory(prefix="sh-", dir="/tmp")
         self.socket_path = Path(self.directory.name) / "daemon.sock"
-        self.harness = HarnessDaemon(settings, settings_path or Path(self.directory.name) / "settings.json")
+        self.harness = HarnessDaemon(
+            settings,
+            settings_path or Path(self.directory.name) / "settings.json",
+            exit_when_unused_seconds,
+        )
         server = self.harness.bind(self.socket_path)
         self.thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
         self.thread.start()

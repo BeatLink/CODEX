@@ -12,6 +12,8 @@ from .protocol import decode_message, default_log_path, default_socket_path, enc
 
 
 DAEMON_START_TIMEOUT_SECONDS = 30
+# A daemon an interface starts exits this long after its last interface disconnects.
+STARTED_DAEMON_EXIT_SECONDS = 30
 CALL_TIMEOUT_SECONDS = 30
 DISCONNECTED_EVENT = "daemon.disconnected"
 
@@ -154,7 +156,15 @@ def connect_to_daemon(
 
 
 def spawn_daemon(socket_path: Path, settings_path: str | Path | None = None) -> subprocess.Popen:
-    command = [sys.executable, "-m", "smartharness.daemon", "--socket", str(socket_path)]
+    command = [
+        sys.executable,
+        "-m",
+        "smartharness.daemon",
+        "--socket",
+        str(socket_path),
+        "--exit-when-unused",
+        str(STARTED_DAEMON_EXIT_SECONDS),
+    ]
     if settings_path is not None:
         command += ["--settings", str(Path(settings_path).resolve())]
     # The child gets this interpreter's import path, since wrapped installs set it inside the script.

@@ -175,6 +175,19 @@ class DaemonTests(unittest.TestCase):
         replacement.close()
         self.assertFalse(stale_path.exists())
 
+    def test_daemon_exits_once_no_interface_stays_connected(self):
+        daemon = RunningDaemon(self.settings, self.settings_path, exit_when_unused_seconds=0.3)
+        self.addCleanup(daemon.stop)
+        client = daemon.client()
+        time.sleep(0.6)
+        self.assertEqual(client.call("status")["run"], None)
+
+        client.close()
+        daemon.thread.join(timeout=5)
+
+        self.assertFalse(daemon.thread.is_alive())
+        self.assertTrue(daemon.harness._stop.is_set())
+
     def test_unknown_method_is_an_error(self):
         with self.assertRaisesRegex(DaemonError, "Unknown method"):
             self.start().client().call("explode")
