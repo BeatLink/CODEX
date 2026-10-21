@@ -20,6 +20,12 @@
           anyio = pythonPrev.anyio.overridePythonAttrs (_: {
             doCheck = false;
           });
+          # Its tests pull in openai and others, which would all build from source.
+          sqlite-vec = pythonPrev.sqlite-vec.overridePythonAttrs (old: {
+            doCheck = false;
+            nativeCheckInputs = [ ];
+            dependencies = (old.dependencies or [ ]) ++ [ pythonFinal.numpy ];
+          });
         };
       };
       pythonPackages = python.pkgs;
@@ -40,6 +46,7 @@
           pythonPackages.ddgs
           pythonPackages.mcp
           pythonPackages.pygobject3
+          pythonPackages.sqlite-vec
           pythonPackages.textual
         ];
       };
@@ -49,6 +56,7 @@
         packages.ddgs
         packages.mcp
         packages.pygobject3
+        packages.sqlite-vec
         packages.textual
       ]);
     in
