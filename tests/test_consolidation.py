@@ -243,6 +243,25 @@ class ModelCheckTests(ConsolidationTestCase):
 
         self.assertEqual(self.topic_names(), {})
 
+    def test_a_title_about_checking_a_claim_counts_as_no_subject(self):
+        sentence = "Therefore, the claim about the 5.7-inch screen should be omitted as unverified."
+        self.store.store_search_results(sentence, [{"title": "Checks", "url": "https://example.test/check", "snippet": "Checks."}], topic=sentence, summary="Fact checking.")
+        self.store.rename_topic(self.store.add_topic(sentence), "5.7 inch screen verification")
+        self.place_every_topic()
+
+        self.consolidate(json.dumps({"reason": "It is about a screen claim.", "name": "5.7-inch screen claim"}))
+
+        self.assertEqual(self.topic_names(), {})
+
+    def test_a_grounded_title_found_by_a_sentence_is_kept_when_the_model_finds_no_subject(self):
+        query = "can you search the internet for information about the pinetime smartwatch"
+        self.store.store_search_results(query, [{"title": "Watch", "url": "https://example.test/watch", "snippet": "A watch."}], topic="pinetime")
+        self.place_every_topic()
+
+        self.consolidate(json.dumps({"reason": "Unclear.", "name": ""}))
+
+        self.assertEqual(list(self.topic_names()), ["pinetime"])
+
     def test_a_title_may_take_its_words_from_the_search_that_found_the_topic(self):
         self.store.store_search_results("what is the pinephone", [{"title": "Phone", "url": "https://example.test/phone", "snippet": "A phone."}], topic="Phone notes", summary="A Linux phone.")
         self.place_every_topic()

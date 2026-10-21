@@ -380,8 +380,10 @@ A renamed topic is researched again under its new name, and it and its
 subtopics are placed again, since they were placed under the old name. A topic
 that names no subject, such as a sentence copied from an answer that gives a
 screen size but never says which product it means, is removed when it holds no
-facts and only sentence-length searches found it; its subtopics take its place
-and its sources stay.
+facts, only sentence-length searches found it, and its own name is not a title
+drawn from those searches; its subtopics take its place and its sources stay. A
+title about checking a claim, with a word such as "claim" or "verification",
+counts as naming no subject.
 
 The model then compares pairs that share at least half their words, one pair
 per call, with a schema that lets it reply only with a short reason and one

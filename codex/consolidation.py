@@ -47,6 +47,14 @@ def _is_title(name: str) -> bool:
     return 0 < len(name) <= MAX_TOPIC_NAME_CHARS and len(name.split()) <= MAX_TOPIC_NAME_WORDS
 
 
+# Words that make a name about checking a claim rather than about a subject.
+CLAIM_WORDS = frozenset({"claim", "claims", "verification", "unverified", "fact-checking", "fact-check"})
+
+
+def _is_about_a_claim(name: str) -> bool:
+    return bool(CLAIM_WORDS & set(name.casefold().replace(",", " ").split()))
+
+
 TOPIC_PAIR_PROMPT = (
     "Compare two topics from a knowledge base, replying with JSON only. Say 'same subject' when"
     " both names mean one subject, such as an abbreviation and its full name; 'first is broader'"
@@ -162,13 +170,16 @@ def _name_topic(store: KnowledgeStore, model: _BackgroundModel, settings: dict[s
     except (RuntimeError, ValueError) as error:
         report(f"Naming failed: {error}")
         name = None
+    searches = topic["queries"] or [topic["name"]]
     # A title sharing no word with the searches that found the topic came from the summary or facts, which may be about something else.
-    if name and not _comparison_terms(name) & _comparison_terms(" ".join(topic["queries"] or [topic["name"]])):
+    if name and (not _grounded(name, searches) or _is_about_a_claim(name)):
         name = ""
     store.record_check("title", topic["id"], topic["id"], name or UNCLEAR)
     if name == "":
-        # Only a topic found by queries or sentences can fail to name a subject; one a title found keeps it.
-        if not any(_is_title(text) for text in (topic["queries"] or [topic["name"]])) and store.remove_unsupported_topic(topic["id"]):
+        # A topic found by a title, or whose own name is a title drawn from its searches, keeps it whatever the model says.
+        current_is_sound = _is_title(topic["name"]) and _grounded(topic["name"], searches) and not _is_about_a_claim(topic["name"])
+        found_by_a_title = any(_is_title(search) for search in searches)
+        if not current_is_sound and not found_by_a_title and store.remove_unsupported_topic(topic["id"]):
             report(f"Removed {topic['name']}, which names no subject")
         return True
     if name and _is_title(name) and name != topic["name"]:
@@ -180,6 +191,10 @@ def _name_topic(store: KnowledgeStore, model: _BackgroundModel, settings: dict[s
         except ValueError:
             pass
     return True
+
+
+def _grounded(name: str, searches: list[str]) -> bool:
+    return bool(_comparison_terms(name) & _comparison_terms(" ".join(searches)))
 
 
 def _compare_topics(store: KnowledgeStore, model: _BackgroundModel, settings: dict[str, Any], report: Callable[[str], None]) -> bool:
