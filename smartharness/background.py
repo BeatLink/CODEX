@@ -6,7 +6,7 @@ from typing import Any
 
 from .context_budget import fit_sections_to_tokens, input_token_budget, render_sections, token_counter
 from .knowledge import USER_MEMORY_KINDS, KnowledgeStore, _search_terms, _shares_half_the_terms
-from .pipeline import ModelCache, _summarize_web_page, _unsupported_values, create_model, run_stage
+from .pipeline import ModelCache, _summarize_web_page, _unsupported_values, create_model, queue_research_topic, run_stage
 from .settings import MAX_TOKENS, TEMPERATURE
 from .tools import Toolbox
 
@@ -80,8 +80,9 @@ USER_MEMORY_SCHEMA = {
             },
             "maxItems": 5,
         },
+        "research_topics": {"type": "array", "items": {"type": "string", "maxLength": 100}, "maxItems": 3},
     },
-    "required": ["memories"],
+    "required": ["memories", "research_topics"],
 }
 
 
@@ -467,7 +468,10 @@ def learn_from_episodes(
             " styles they use; 'project' for ongoing work they mention; 'correction' for something"
             " they corrected. Include only what the requests clearly show, as one short sentence"
             " each; an empty list is the right reply when nothing durable appears. Never include"
-            " secrets, passwords, keys, or personal identifiers such as names or email addresses.",
+            " secrets, passwords, keys, or personal identifiers such as names or email addresses."
+            " In 'research_topics', name up to three general subjects, such as a library or a"
+            " technique, that looking up in advance would help with the ongoing work the requests"
+            " show; leave it empty when there is none.",
             "\n\n".join(
                 f"Request: {episode['prompt']}\n{episode['checklist']}" for episode in episodes
             ),
@@ -484,15 +488,24 @@ def learn_from_episodes(
         return True
 
     try:
-        memories = json.loads(reply).get("memories") or []
+        data = json.loads(reply)
+        memories = data.get("memories") or []
+        topics = data.get("research_topics") or []
     except (json.JSONDecodeError, AttributeError):
-        memories = []
+        memories, topics = [], []
     learned = 0
     for memory in memories:
         if isinstance(memory, dict) and memory.get("kind") in USER_MEMORY_KINDS and str(memory.get("statement", "")).strip():
             store.add_user_memory(memory["kind"], memory["statement"])
             learned += 1
+    # Researching what the user works on ahead of time lets later requests answer from memory.
+    queued = 0
+    for topic in topics if isinstance(topics, list) else []:
+        topic = " ".join(str(topic).split())
+        if topic and not store.has_facts(topic):
+            queue_research_topic(store, topic, settings["background_max_pending_jobs"])
+            queued += 1
     for episode in episodes:
         store.mark_episode_processed(episode["id"])
-    report(f"Learned {learned} thing(s) about the user")
+    report(f"Learned {learned} thing(s) about the user and queued {queued} topic(s) for research")
     return True

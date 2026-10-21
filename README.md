@@ -283,7 +283,9 @@ up to five stored relationships of the named things it mentions.
 With no research queued, the worker reads recent requests that have not been
 processed yet and remembers what they show about the user: preferences,
 projects, and corrections. It is told to leave out secrets and personal
-identifiers. It also re-queues topics whose research is older than
+identifiers. The same call names up to three general subjects that would help
+with the ongoing work the requests show, and each one with no facts yet is
+queued for research. It also re-queues topics whose research is older than
 `background_refresh_interval_hours`.
 
 The worker yields to foreground work. It takes the shared model lock for one

@@ -243,7 +243,8 @@ A paused job goes back to `pending`; any other error marks it `failed` with the 
 
 `learn_from_episodes` reads up to five unprocessed episodes and asks for durable preferences,
 projects and corrections, with an instruction to leave out secrets and personal identifiers. The
-episodes are marked processed even when the call fails, so one bad batch cannot block the worker.
+same reply names up to three general subjects worth researching for the user's ongoing work, and
+each that has no facts yet is queued. The episodes are marked processed even when the call fails, so one bad batch cannot block the worker.
 
 ### Consolidation
 
@@ -305,5 +306,5 @@ These are properties of the code as it stands, recorded so changes can be measur
   and dates, so a paraphrase that changes a claim's meaning but keeps its words still passes.
 - **Topics are named after raw search queries.** Consolidation merges and re-files them, but only
   pairs that share half their words are ever compared, so differently worded duplicates stay apart.
-- **Refresh ignores use.** Re-queueing is by age and priority alone, and the worker does not seed
-  topics from the user's recorded projects or from claims a check rejected.
+- **Refresh is by age and recall.** Topics are re-queued when their research is old or a recalled
+  fact's source has expired, but not from claims a check rejected.

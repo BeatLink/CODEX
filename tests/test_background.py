@@ -191,7 +191,11 @@ class ExtractionTests(unittest.TestCase):
 
     def test_learning_turns_past_requests_into_user_memory(self):
         self.store.record_episode("Write my Rust CLI in clap", "action", "1. Use clap", "Done", "answered")
-        reply = json.dumps({"memories": [{"kind": "project", "statement": "Is building a Rust CLI with clap."}]})
+        self.store.add_fact("Rust", "Rust is a systems language.")
+        reply = json.dumps({
+            "memories": [{"kind": "project", "statement": "Is building a Rust CLI with clap."}],
+            "research_topics": ["clap argument parsing", "Rust"],
+        })
 
         with patch("smartharness.background.run_stage", return_value=reply) as run_stage:
             self.assertTrue(learn_from_episodes(self.settings, llm=object()))
@@ -201,6 +205,7 @@ class ExtractionTests(unittest.TestCase):
             [(memory["kind"], memory["statement"]) for memory in self.store.user_memories()],
             [("project", "Is building a Rust CLI with clap.")],
         )
+        self.assertEqual([job["topic"] for job in self.store.queue_status()], ["clap argument parsing"])
         self.assertEqual(self.store.episodes(unprocessed_only=True), [])
         self.assertFalse(learn_from_episodes(self.settings, llm=object()))
 
