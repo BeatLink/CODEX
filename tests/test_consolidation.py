@@ -233,6 +233,16 @@ class ModelCheckTests(ConsolidationTestCase):
         self.assertIn("Searches that found it:\n- * **Hardware**", calls[0].args[2])
         self.assertEqual(self.topic_names(), {})
 
+    def test_a_kept_name_sharing_no_word_with_its_searches_counts_as_no_subject(self):
+        sentence = "* **Hardware**: It features a 5.7-inch touchscreen and a 13-megapixel rear camera."
+        self.store.store_search_results(sentence, [{"title": "Scanner", "url": "https://example.test/scan", "snippet": "A scanner."}], topic=sentence, summary="A rugged scanner.")
+        self.store.rename_topic(self.store.add_topic(sentence), "Honeywell ScanPal EDA52")
+        self.place_every_topic()
+
+        self.consolidate(json.dumps({"reason": "It already reads as a title.", "name": "Honeywell ScanPal EDA52"}))
+
+        self.assertEqual(self.topic_names(), {})
+
     def test_a_title_may_take_its_words_from_the_search_that_found_the_topic(self):
         self.store.store_search_results("what is the pinephone", [{"title": "Phone", "url": "https://example.test/phone", "snippet": "A phone."}], topic="Phone notes", summary="A Linux phone.")
         self.place_every_topic()
