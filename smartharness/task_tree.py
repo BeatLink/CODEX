@@ -6,9 +6,11 @@ import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 from .context_budget import condense_sections, input_token_budget, render_sections, token_counter
+from .commands import expand_command, is_memory_command, run_memory_command
 from .embeddings import get_embedder
 from .instructions import INSTRUCTIONS_LABEL, load_instructions
 from .knowledge import MAX_RECALLED_RELATIONSHIPS, KnowledgeStore
@@ -1179,6 +1181,14 @@ def split_mode_prefix(user_prompt: str) -> tuple[str | None, str]:
     return None, user_prompt
 
 
+def prepare_prompt(user_prompt: str, filesystem_root: str, allow_file_writes: bool) -> tuple[str | None, str]:
+    """Return the mode a leading /plan, /init, or user command picks, or None, and the prompt to work."""
+    prefix_mode, user_prompt = split_mode_prefix(user_prompt)
+    if prefix_mode is not None:
+        return prefix_mode, user_prompt
+    return expand_command(user_prompt, filesystem_root, allow_file_writes)
+
+
 def execute_task_tree(
     user_prompt: str,
     model_path: str = DEFAULT_MODEL_PATH,
@@ -1214,8 +1224,14 @@ def execute_task_tree(
     options = {name: value for name, value in locals().items() if name in RESUMABLE_OPTIONS}
     if mode not in MODE_CHOICES:
         raise ValueError(f"mode must be one of: {', '.join(MODE_CHOICES)}.")
-    # A leading word such as /plan picks the mode.
-    prefix_mode, user_prompt = split_mode_prefix(user_prompt)
+    if resume_run_id is None and is_memory_command(user_prompt):
+        # Memory commands change the store directly, so no model is loaded for them.
+        store = KnowledgeStore(knowledge_db_path) if knowledge_db_path else None
+        return run_memory_command(user_prompt, store, str(Path(filesystem_root).expanduser().resolve()))
+    # A leading word such as /plan, /init, or a user command picks the mode.
+    prefix_mode, user_prompt = (None, user_prompt) if resume_run_id is not None else prepare_prompt(
+        user_prompt, filesystem_root, allow_file_writes
+    )
     mode = prefix_mode or mode
     if not user_prompt.strip():
         raise ValueError("The prompt cannot be empty.")

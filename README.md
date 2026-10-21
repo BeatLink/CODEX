@@ -166,6 +166,37 @@ Together they are cut at 4000 characters, since a small model's window has
 little room to spare. Keep each rule short and plain; a small model follows a
 written rule far more reliably than one it has to work out.
 
+## Commands
+
+A prompt may start with a command. Besides the mode prefixes (`/ask`, `/plan`,
+`/do`, and the rest), these work in every interface:
+
+| Command | What it does |
+| --- | --- |
+| `/remember [kind] statement [Why: reason]` | Stores a memory you state yourself, without the model. The kind is `preference` (the default), `project`, `correction`, or `reference`. A `project` memory belongs to the current folder; the others hold everywhere. A stated memory outlasts a learned one it contradicts |
+| `/memories` | Lists the memories for the current folder, with their numbers |
+| `/forget number` or `/forget words` | Deletes one memory, by its number or by words from it; when several match, they are listed instead |
+| `/init` | Reads the folder and writes its `SMARTHARNESS.md`, or improves the one there. With file writes off, it replies with the text instead |
+
+Define your own commands as Markdown files named after the command, in
+`~/.config/smartharness/commands/` or the folder's `.smartharness/commands/`
+(which wins when both have one of the same name). `/review parser.py` runs
+`review.md`:
+
+```markdown
+---
+description: Review code for bugs
+mode: draft
+---
+Review $ARGUMENTS for bugs and list each with the line it is on.
+```
+
+`$ARGUMENTS` is replaced by the words after the command, which otherwise
+follow the template. `mode` (`answer`, `draft`, or `execute`) is optional; a
+command in `answer` or `draft` mode never changes a file. A prompt starting
+with an unknown command, or with a path such as `/etc/hosts`, is left as it
+is.
+
 ## Long-term memory
 
 ### Knowledge store
