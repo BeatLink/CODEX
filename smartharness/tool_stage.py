@@ -3,7 +3,7 @@ import json
 from collections.abc import Callable
 from typing import Any
 
-from .context_budget import input_char_budget
+from .context_budget import input_char_budget, untrusted_block
 from .mcp_tools import MCPToolbox
 from .tools import Toolbox
 
@@ -234,6 +234,6 @@ async def _run_tool_stage(
                 tool_output_chars += len(result)
 
                 messages.append(
-                    {"role": "tool", "tool_call_id": call_id, "content": result}
+                    {"role": "tool", "tool_call_id": call_id, "content": untrusted_block(result)}
                 )
                 tool_history.append(f"{name}: {result}")

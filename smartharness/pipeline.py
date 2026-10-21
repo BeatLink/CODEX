@@ -12,8 +12,10 @@ from .context_budget import (
     condense_sections,
     fit_sections_to_tokens,
     input_token_budget,
+    UNTRUSTED_NOTE,
     render_sections,
     token_counter,
+    untrusted_block,
 )
 from .embeddings import get_embedder
 from .gpu_lock import GPU_LOCK
@@ -718,7 +720,7 @@ def _summarize_web_page(
             f"User request and context:\n{request_context}\n\n"
             f"Specific focus:\n{focus}\n\n"
             f"Source URL: {url}\nPage title: {title}\n{part_description}\n"
-            f"Webpage material:\n{material}",
+            f"Webpage material ({UNTRUSTED_NOTE}):\n{untrusted_block(material)}",
             max_tokens=summary_tokens,
             temperature=temperature,
             # A summary cut short still holds what it covered, which beats losing the page.

@@ -235,7 +235,10 @@ class ToolStageTests(unittest.TestCase):
 
         self.assertEqual(toolbox.calls, [("read_file", {"path": "notes.txt"})])
         self.assertEqual(model.requests[1]["messages"][-1]["role"], "tool")
-        self.assertEqual(model.requests[1]["messages"][-1]["content"], "sample tool output")
+        # Tool output reaches the model fenced as untrusted data.
+        self.assertEqual(
+            model.requests[1]["messages"][-1]["content"], "<untrusted-data>\nsample tool output\n</untrusted-data>"
+        )
         self.assertIn("sample tool output", result)
 
     def test_stops_after_tool_call_limit_and_keeps_results(self):

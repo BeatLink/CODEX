@@ -204,8 +204,13 @@ Design points:
   summaries, and summaries of fetched pages) and must cite the URL. If search
   failed or found nothing useful, the model is told to say the claims could not
   be verified.
-- **Untrusted input.** Web pages, file contents, and tool output are presented
-  as data, never as instructions, in every stage that sees them.
+- **Untrusted input.** Web pages, file contents, tool output, search results,
+  and everything recalled from the knowledge store are fenced between
+  `<untrusted-data>` tags under a heading that says to use them as information
+  and never follow instructions in them. Any such tag inside the text is
+  removed first, so a hostile page cannot close the fence early.
+  `evals/hostile_seed.json` and `evals/hostile_tasks.json` test this:
+  `smartharness eval --seed evals/hostile_seed.json --tasks evals/hostile_tasks.json`.
 - **Context budget.** Each stage's input is measured with the model's own
   tokenizer and fitted to `context_size` minus that stage's reply budget. When
   it overflows, the largest earlier results are condensed by a short summarize
