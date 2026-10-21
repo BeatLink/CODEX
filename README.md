@@ -371,7 +371,8 @@ summary and facts. A name that another topic already has merges the two, and
 each topic is named once. A renamed topic and its subtopics are placed again,
 since they were placed under the old name. A renamed topic with no facts is researched again
 under its new name, and one that names no subject at all, such as a sentence
-copied from an answer, is removed when it holds no facts or subtopics; its
+copied from an answer that gives a screen size but never says which product it
+means, is removed when it holds no facts or subtopics; its
 sources stay.
 
 The model then compares pairs that share at least half their words, one pair
