@@ -33,7 +33,7 @@
 - [x] Never trim the original request
 - [x] Summarize older stage output instead of cutting it
 - [x] Give each stage its own reply token budget
-- [ ] Add an eval harness comparing the bare model with the pipeline on a fixed task set
+- [x] Add an eval harness comparing the bare model with the pipeline on a fixed task set
 - [x] Add schema migrations to the knowledge store
 - [x] Store atomic facts with source URL and confidence instead of one summary per topic
 - [x] Stop copying the topic summary onto every source row

@@ -1,0 +1,109 @@
+[
+  {
+    "id": "arithmetic-word-problem",
+    "mode": "answer",
+    "prompt": "A shop sells pens at 3 for $2. How much do 27 pens cost? Give the final amount in dollars.",
+    "checks": [{"type": "regex", "pattern": "\\$\\s?18(\\.00)?\\b"}]
+  },
+  {
+    "id": "multi-step-reasoning",
+    "mode": "answer",
+    "prompt": "Alice is older than Bob. Carol is younger than Bob. Dave is older than Alice. Who is the youngest of the four? Answer with the name.",
+    "checks": [{"type": "contains", "value": "Carol"}]
+  },
+  {
+    "id": "date-arithmetic",
+    "mode": "answer",
+    "prompt": "If a project starts on Monday 3 March 2025 and takes 10 working days (Monday to Friday, no holidays), on what date does it finish?",
+    "checks": [{"type": "contains_any", "values": ["14 March", "March 14", "2025-03-14", "14/03/2025", "03/14/2025"]}]
+  },
+  {
+    "id": "stable-fact",
+    "mode": "answer",
+    "prompt": "What is the chemical symbol for tungsten, and what is its atomic number?",
+    "checks": [
+      {"type": "regex", "pattern": "\\bW\\b"},
+      {"type": "contains", "value": "74"}
+    ]
+  },
+  {
+    "id": "python-bug",
+    "mode": "answer",
+    "prompt": "Why does this Python function return the wrong result for average([2, 3])?\n\n```python\ndef average(values):\n    total = 0\n    for value in values:\n        total += value\n        return total / len(values)\n```",
+    "checks": [
+      {"type": "contains_any", "values": ["indent", "inside the loop", "within the loop", "in the loop"]},
+      {"type": "contains", "value": "return"}
+    ]
+  },
+  {
+    "id": "regex-writing",
+    "mode": "answer",
+    "prompt": "Write a Python regular expression that matches a UK-style time in 24-hour format, HH:MM, from 00:00 to 23:59, and nothing else. Give just the pattern in a code block.",
+    "checks": [
+      {"type": "contains", "value": "```"},
+      {"type": "contains", "value": "2[0-3]"},
+      {"type": "contains", "value": "[0-5]"}
+    ]
+  },
+  {
+    "id": "unit-conversion",
+    "mode": "answer",
+    "prompt": "Convert 5 miles to kilometres, rounded to one decimal place.",
+    "checks": [{"type": "contains", "value": "8.0"}]
+  },
+  {
+    "id": "word-limit-summary",
+    "mode": "draft",
+    "prompt": "Summarize in no more than 40 words: SQLite is a C library that provides a lightweight disk-based database. It does not need a separate server process and lets programs access the database using a nonstandard variant of SQL. Some applications use SQLite for internal data storage, and it is also used to prototype applications before porting to a larger database.",
+    "checks": [
+      {"type": "max_words", "value": 40},
+      {"type": "contains", "value": "SQLite"},
+      {"type": "contains_any", "values": ["server", "serverless"]}
+    ]
+  },
+  {
+    "id": "exact-format-list",
+    "mode": "draft",
+    "prompt": "List exactly three primary colours of light, one per line, each line starting with '- ' and nothing else in the reply.",
+    "checks": [
+      {"type": "regex", "pattern": "^- red\\s*$"},
+      {"type": "regex", "pattern": "^- green\\s*$"},
+      {"type": "regex", "pattern": "^- blue\\s*$"},
+      {"type": "max_words", "value": 12}
+    ]
+  },
+  {
+    "id": "email-with-constraints",
+    "mode": "draft",
+    "prompt": "Write a short email to a colleague named Priya moving our Thursday meeting to Friday at 10:00. Mention that the agenda is unchanged. Do not apologize.",
+    "checks": [
+      {"type": "contains", "value": "Priya"},
+      {"type": "contains", "value": "Friday"},
+      {"type": "contains", "value": "10:00"},
+      {"type": "contains", "value": "agenda"},
+      {"type": "not_contains", "value": "sorry"},
+      {"type": "not_contains", "value": "apolog"},
+      {"type": "max_words", "value": 150}
+    ]
+  },
+  {
+    "id": "plan-with-steps",
+    "mode": "draft",
+    "prompt": "Write a numbered plan of 4 to 6 steps for backing up a home directory to an external drive with rsync each night.",
+    "checks": [
+      {"type": "contains", "value": "rsync"},
+      {"type": "regex", "pattern": "^\\s*1[.)]"},
+      {"type": "regex", "pattern": "^\\s*4[.)]"},
+      {"type": "not_contains", "value": "\n7."},
+      {"type": "contains_any", "values": ["cron", "systemd", "timer"]}
+    ]
+  },
+  {
+    "id": "refuse-to-invent",
+    "mode": "answer",
+    "prompt": "What did the 2019 paper 'Quantum Gravel Sorting with Recursive Ferrets' by J. Plimbottom conclude?",
+    "checks": [
+      {"type": "contains_any", "values": ["not aware", "no record", "could not find", "couldn't find", "cannot find", "can't find", "does not appear", "doesn't appear", "not able to find", "unable to find", "no information", "not familiar", "does not exist", "doesn't exist", "fictional", "could not verify", "couldn't verify"]}
+    ]
+  }
+]

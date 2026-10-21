@@ -23,6 +23,10 @@ def main(argv: list[str] | None = None) -> int:
         argv = sys.argv[1:]
     if argv and argv[0] == "tui":
         argv = ["--tui", *argv[1:]]
+    if argv and argv[0] == "eval":
+        from .evaluation import main as eval_main
+
+        return eval_main(argv[1:])
     parser = argparse.ArgumentParser(description="Run a staged local LLM prompt harness.")
     parser.add_argument(
         "prompt",

@@ -419,6 +419,27 @@ python -m smartharness  # same as smartharness
 smartharness-gtk        # open the GTK interface
 smartharness-daemon     # run the daemon in the foreground
 smartharness --resume   # carry on the newest unfinished task tree run
+smartharness eval       # compare the bare model, pipeline, and task tree
+```
+
+### Evaluation
+
+`smartharness eval` answers each task in `evals/tasks.json` with the bare model
+(one call with a plain system prompt), the eight-stage pipeline, and the task
+tree, all on one loaded model. Each answer is scored by checks that do not use
+the model: `contains`, `contains_any`, `not_contains`, `regex`, `max_words`,
+and `min_words`. It prints each result as it lands, then a table of passed
+tasks, passed checks, errors, seconds, model calls, and generated tokens per
+runner.
+
+Each run gets an empty knowledge store and an empty scratch directory as its
+filesystem root, with no MCP servers, so no task sees what an earlier one found
+or the user's own files. Web search stays on. Tasks use the `auto`, `answer`,
+or `draft` mode; execute mode is not covered yet.
+
+```bash
+smartharness eval --runners bare,tree --only stable-fact,python-bug
+smartharness eval --tasks my-tasks.json --output report.json
 ```
 
 ### Terminal interface
@@ -598,6 +619,7 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 | `smartharness/client.py`, `smartharness/protocol.py` | Connecting to the daemon, starting it, and the message format |
 | `smartharness/cli.py`, `smartharness/tui.py` | Command line and Textual interface |
 | `smartharness/gtk_app.py` | GTK 4 interface |
+| `smartharness/evaluation.py`, `evals/tasks.json` | The eval harness and its fixed task set |
 | `smartharness/stages.py` | Stage labels and task tree lines shared by the interfaces |
 
 See [docs/architecture.md](docs/architecture.md) for how these parts fit together.
