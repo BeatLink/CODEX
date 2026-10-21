@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -19,6 +20,7 @@ from textual.widgets import (
     Input,
     Label,
     Markdown,
+    OptionList,
     Select,
     Static,
     TabbedContent,
@@ -37,7 +39,7 @@ from .settings import (
     mcp_servers_to_json,
     validate_settings,
 )
-from .stages import STAGE_LABELS, STAGE_TAB_TITLES, TASK_STEP_PREFIX, task_tree_lines
+from .stages import STAGE_LABELS, STAGE_TAB_TITLES, TASK_STEP_PREFIX, task_detail_markdown, task_tree_lines
 
 
 PHASE_WAITING_TEXT = "_Waiting for this phase..._"
@@ -50,6 +52,7 @@ MODE_OPTIONS = (
     ("Execute mode", "execute"),
 )
 STEPS_WAITING_TEXT = "_Each step of each task will appear here as it runs._"
+TASK_DETAIL_WAITING_TEXT = "_Choose a task in the tree to see what it asks for and its result._"
 BACKGROUND_WAITING_TEXT = "_Waiting for background work..._"
 
 # Colours come from the dark and light token sets in the Halon theme's tokens.json.
@@ -232,6 +235,9 @@ class SmartHarnessApp(App[None]):
     }
     #task-tree {
         height: auto;
+        max-height: 24;
+        border: none;
+        background: $background;
         color: $stage-text;
     }
     #status {
@@ -407,6 +413,8 @@ class SmartHarnessApp(App[None]):
         self._pending_stage_output: list[list[str]] = [[] for _ in STAGE_LABELS]
         self._runner = self.settings["runner"]
         self._unfinished_runs: list[dict[str, Any]] = []
+        self._task_nodes: list[dict[str, Any]] = []
+        self._chosen_task_id: str | None = None
         self._steps_output = ""
         self._pending_steps_output: list[str] = []
         self._last_step_label = ""
@@ -444,7 +452,7 @@ class SmartHarnessApp(App[None]):
                 yield Static("PIPELINE", classes="eyebrow", id="sidebar-title")
                 for index, label in enumerate(STAGE_LABELS, start=1):
                     yield Static(f"WAIT  {label}", classes="stage-row", id=f"stage-row-{index}")
-                yield Static("", id="task-tree", markup=False)
+                yield OptionList(id="task-tree")
                 yield Static("Ready", id="status")
             with TabbedContent(initial="request-pane", id="workbench-tabs"):
                 with TabPane("Request", id="request-pane"):
@@ -474,6 +482,9 @@ class SmartHarnessApp(App[None]):
                         with TabPane("Steps", id="steps"):
                             with FollowingScroll(classes="stage-output-scroll"):
                                 yield Markdown(STEPS_WAITING_TEXT, classes="stage-output", id="steps-output")
+                        with TabPane("Task", id="task-detail"):
+                            with VerticalScroll(classes="stage-output-scroll"):
+                                yield Markdown(TASK_DETAIL_WAITING_TEXT, classes="stage-output", id="task-detail-output")
                         with TabPane("Final", id="final"):
                             with FollowingScroll(classes="stage-output-scroll"):
                                 yield Markdown(FINAL_WAITING_TEXT, classes="stage-output", id="final-output")
@@ -1062,14 +1073,40 @@ class SmartHarnessApp(App[None]):
         self.query_one("#sidebar-title", Static).update("TASK TREE" if tree_mode else "PIPELINE")
         for row in self.query(".stage-row"):
             row.display = not tree_mode
-        self.query_one("#task-tree", Static).display = tree_mode
+        self.query_one("#task-tree", OptionList).display = tree_mode
         tabs = self.query_one("#phase-tabs", TabbedContent)
         for index in range(1, len(STAGE_LABELS) + 1):
             (tabs.hide_tab if tree_mode else tabs.show_tab)(f"phase-{index}")
-        (tabs.show_tab if tree_mode else tabs.hide_tab)("steps")
+        for pane_id in ("steps", "task-detail"):
+            (tabs.show_tab if tree_mode else tabs.hide_tab)(pane_id)
 
     def _show_task_tree(self, nodes: list[dict[str, Any]]) -> None:
-        self.query_one("#task-tree", Static).update("\n".join(task_tree_lines(nodes)))
+        self._task_nodes = nodes
+        tree = self.query_one("#task-tree", OptionList)
+        highlighted = tree.highlighted
+        tree.clear_options()
+        # Plain Text keeps brackets in a task's prompt from being read as markup.
+        tree.add_options([Text(line) for line in task_tree_lines(nodes)])
+        if highlighted is not None and highlighted < len(nodes):
+            tree.highlighted = highlighted
+        self._show_task_detail()
+
+    def _show_task_detail(self) -> None:
+        """Show the chosen task's details, refreshed as the tree changes."""
+        node = next((node for node in self._task_nodes if node["id"] == self._chosen_task_id), None)
+        self.query_one("#task-detail-output", Markdown).update(
+            task_detail_markdown(node) if node is not None else TASK_DETAIL_WAITING_TEXT
+        )
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        if event.option_list.id != "task-tree" or event.option_index >= len(self._task_nodes):
+            return
+        self._chosen_task_id = self._task_nodes[event.option_index]["id"]
+        self._show_task_detail()
+        # Choosing a task is the user's own pick, so the view stops following the running step.
+        if self._request_running:
+            self._follow_stages = False
+        self._show_phase_tab("task-detail")
 
     def _note_step(self, label: str) -> None:
         """Start a new heading in the steps view whenever the step changes."""
@@ -1094,7 +1131,8 @@ class SmartHarnessApp(App[None]):
         self._pending_steps_output.clear()
         self._last_step_label = ""
         self.query_one("#steps-output", Markdown).update(STEPS_WAITING_TEXT)
-        self.query_one("#task-tree", Static).update("")
+        self._chosen_task_id = None
+        self._show_task_tree([])
         self._show_phase_tab("final")
 
     def _append_stage_output(self, label: str, token: str) -> None:

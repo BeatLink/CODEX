@@ -21,7 +21,13 @@ from .settings import (  # noqa: E402
     mcp_servers_to_json,
     validate_settings,
 )
-from .stages import STAGE_LABELS, STAGE_TAB_TITLES, TASK_STEP_PREFIX, task_tree_lines  # noqa: E402
+from .stages import (  # noqa: E402
+    STAGE_LABELS,
+    STAGE_TAB_TITLES,
+    TASK_STEP_PREFIX,
+    task_detail_markdown,
+    task_tree_lines,
+)
 
 
 APPLICATION_ID = "org.smartharness.SmartHarness"
@@ -30,6 +36,7 @@ PHASE_SKIPPED_TEXT = "Skipped: this request does not need this phase."
 FINAL_WAITING_TEXT = "Your final response will appear here."
 MODE_NAMES = {"auto": "Auto mode", "answer": "Answer mode", "draft": "Draft mode", "execute": "Execute mode"}
 STEPS_WAITING_TEXT = "Each step of each task will appear here as it runs."
+TASK_DETAIL_WAITING_TEXT = "Choose a task in the tree to see what it asks for and its result."
 BACKGROUND_WAITING_TEXT = "Waiting for background work..."
 OUTPUT_FLUSH_MILLISECONDS = 150
 NOTICE_SECONDS = 8
@@ -261,6 +268,15 @@ class PhaseRow(Gtk.ListBoxRow):
         self.set_child(box)
 
 
+class TaskRow(Gtk.ListBoxRow):
+    def __init__(self, task_id: str, line: str) -> None:
+        super().__init__()
+        self.task_id = task_id
+        label = Gtk.Label(label=line, xalign=0, wrap=True, margin_top=2, margin_bottom=2, margin_start=4, margin_end=4)
+        label.add_css_class("monospace")
+        self.set_child(label)
+
+
 class TopicRow(Gtk.ListBoxRow):
     def __init__(self, text: str, topic_id: int | None, depth: int) -> None:
         super().__init__()
@@ -353,6 +369,9 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         self._stage_output_started = [False] * len(STAGE_LABELS)
         self._runner = self.settings["runner"]
         self._unfinished_runs: list[dict[str, Any]] = []
+        self._task_nodes: list[dict[str, Any]] = []
+        self._chosen_task_id: str | None = None
+        self._rebuilding_task_list = False
         self._pending_steps_output: list[str] = []
         self._steps_output_started = False
         self._last_step_label = ""
@@ -424,9 +443,10 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         final_state = Gtk.Label(label="", width_chars=5, xalign=0)
         self.phase_list.append(PhaseRow("final", final_state, "Final answer"))
         sidebar.append(self.phase_list)
-        self.task_tree = Gtk.Label(xalign=0, yalign=0, wrap=True, selectable=True, margin_top=12)
-        self.task_tree.add_css_class("monospace")
-        sidebar.append(self.task_tree)
+        # Each row is one task; choosing it shows that task's deliverable, state, and result.
+        self.task_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE, margin_top=12)
+        self.task_list.connect("row-selected", self._on_task_selected)
+        sidebar.append(self.task_list)
         self.status = Gtk.Label(label="Ready", xalign=0, wrap=True, margin_top=12)
         sidebar.append(self.status)
 
@@ -464,6 +484,8 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
             self.phase_pages.add_titled(output.widget, f"phase-{index}", f"{index} {title}")
         self.steps_output = OutputView(STEPS_WAITING_TEXT)
         self.phase_pages.add_titled(self.steps_output.widget, "steps", "Steps")
+        self.task_detail = OutputView(TASK_DETAIL_WAITING_TEXT)
+        self.phase_pages.add_titled(self.task_detail.widget, "task", "Task")
         self.final_output = OutputView(FINAL_WAITING_TEXT)
         self.phase_pages.add_titled(self.final_output.widget, "final", "Final")
         self.phase_title = section_heading("Final answer")
@@ -654,6 +676,11 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
     def _on_phase_selected(self, _list: Gtk.ListBox, row: "PhaseRow | None") -> None:
         if row is None:
             return
+        if not self._rebuilding_task_list:
+            # A stage or step page replaces the task view, so no task stays chosen.
+            self._rebuilding_task_list = True
+            self.task_list.unselect_all()
+            self._rebuilding_task_list = False
         self.phase_pages.set_visible_child_name(row.page_name)
         self.phase_title.set_markup(f"<b>{GLib.markup_escape_text(row.title)}</b>")
         if not self._showing_phase_programmatically and self._request_running:
@@ -986,6 +1013,14 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         self.phase_list.select_row(row)
         self._showing_phase_programmatically = False
 
+    def _task_rows(self) -> list["TaskRow"]:
+        rows = []
+        child = self.task_list.get_first_child()
+        while child is not None:
+            rows.append(child)
+            child = child.get_next_sibling()
+        return rows
+
     def _phase_rows(self) -> list["PhaseRow"]:
         rows = []
         child = self.phase_list.get_first_child()
@@ -1005,10 +1040,41 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
                 row.set_visible(not tree_mode)
             elif row.page_name == "steps":
                 row.set_visible(tree_mode)
-        self.task_tree.set_visible(tree_mode)
+        self.task_list.set_visible(tree_mode)
 
     def _show_task_tree(self, nodes: list[dict[str, Any]]) -> None:
-        self.task_tree.set_label("\n".join(task_tree_lines(nodes)))
+        self._task_nodes = nodes
+        # Rows are rebuilt on every change, so the chosen task is selected again without counting as a new pick.
+        self._rebuilding_task_list = True
+        self.task_list.remove_all()
+        for node, line in zip(nodes, task_tree_lines(nodes)):
+            row = TaskRow(node["id"], line)
+            self.task_list.append(row)
+            if node["id"] == self._chosen_task_id:
+                self.task_list.select_row(row)
+        self._rebuilding_task_list = False
+        self._show_task_detail()
+
+    def _show_task_detail(self) -> None:
+        node = next((node for node in self._task_nodes if node["id"] == self._chosen_task_id), None)
+        if node is None:
+            self.task_detail.set_text(TASK_DETAIL_WAITING_TEXT)
+        else:
+            self.task_detail.set_markdown(task_detail_markdown(node))
+
+    def _on_task_selected(self, _list: Gtk.ListBox, row: "TaskRow | None") -> None:
+        if row is None or self._rebuilding_task_list:
+            return
+        self._chosen_task_id = row.task_id
+        self._show_task_detail()
+        self._rebuilding_task_list = True
+        self.phase_list.unselect_all()
+        self._rebuilding_task_list = False
+        self.phase_pages.set_visible_child_name("task")
+        self.phase_title.set_markup(f"<b>Task {GLib.markup_escape_text(row.task_id)}</b>")
+        # Choosing a task is the user's own pick, so the view stops following the running step.
+        if self._request_running:
+            self._follow_stages = False
 
     def _note_step(self, label: str) -> None:
         """Start a new heading in the steps view whenever the step changes."""
@@ -1033,7 +1099,8 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         self._steps_output_started = False
         self._last_step_label = ""
         self.steps_output.set_text(STEPS_WAITING_TEXT)
-        self.task_tree.set_label("")
+        self._chosen_task_id = None
+        self._show_task_tree([])
         self._show_phase("final")
 
     def _append_stage_output(self, label: str, token: str) -> None:

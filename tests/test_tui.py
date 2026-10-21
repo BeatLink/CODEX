@@ -5,7 +5,19 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from textual.widgets import Button, Checkbox, Input, Markdown, Select, Static, TabbedContent, TabPane, TextArea, Tree
+from textual.widgets import (
+    Button,
+    Checkbox,
+    Input,
+    Markdown,
+    OptionList,
+    Select,
+    Static,
+    TabbedContent,
+    TabPane,
+    TextArea,
+    Tree,
+)
 
 from daemon_harness import RunningDaemon
 
@@ -37,7 +49,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(app.query_one("#model-path", TextArea).soft_wrap)
             self.assertEqual(len(app.query(".stage-row")), len(STAGE_LABELS))
             self.assertEqual(
-                len(app.query_one("#phase-tabs").query(TabPane)), len(STAGE_LABELS) + 2
+                len(app.query_one("#phase-tabs").query(TabPane)), len(STAGE_LABELS) + 3
             )
             self.assertIsInstance(app.query_one("#request-pane", TabPane), TabPane)
             self.assertIsInstance(app.query_one("#output-pane", TabPane), TabPane)
@@ -377,7 +389,10 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
         app = self.app(settings=DEFAULT_SETTINGS, initial_prompt="Compare two designs")
         tree = [
             {"id": "1", "prompt": "Compare two designs", "status": "running"},
-            {"id": "1.1", "prompt": "Describe design A", "status": "done"},
+            {
+                "id": "1.1", "prompt": "Describe design A [v2]", "status": "done", "approach": "answer",
+                "deliverable": "A paragraph on A", "depends_on": [], "note": "", "result": "Design A is simple.",
+            },
             {"id": "1.2", "prompt": "Describe design B", "status": "pending"},
         ]
 
@@ -398,9 +413,10 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(app._last_answer, "Pick A.")
                 self.assertEqual(str(app.query_one("#sidebar-title").render()), "TASK TREE")
                 self.assertFalse(app.query_one("#stage-row-1").display)
+                task_list = app.query_one("#task-tree", OptionList)
                 self.assertEqual(
-                    str(app.query_one("#task-tree").render()).splitlines(),
-                    ["NOW   1 Compare two designs", "DONE    1.1 Describe design A", "WAIT    1.2 Describe design B"],
+                    [str(task_list.get_option_at_index(index).prompt) for index in range(task_list.option_count)],
+                    ["NOW   1 Compare two designs", "DONE    1.1 Describe design A [v2]", "WAIT    1.2 Describe design B"],
                 )
                 self.assertEqual(
                     app._steps_output,
@@ -409,6 +425,16 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 tabs = app.query_one("#phase-tabs", TabbedContent)
                 self.assertTrue(tabs.get_tab("steps").display)
                 self.assertFalse(tabs.get_tab("phase-1").display)
+
+                task_list.highlighted = 1
+                task_list.action_select()
+                await pilot.pause()
+                detail = app.query_one("#task-detail-output", Markdown).source
+                self.assertEqual(tabs.active, "task-detail")
+                self.assertIn("### Task 1.1", detail)
+                self.assertIn("**Deliverable:** A paragraph on A", detail)
+                self.assertIn("**State:** done, answer", detail)
+                self.assertIn("Design A is simple.", detail)
 
     async def test_an_unfinished_tree_run_can_be_resumed_or_discarded(self):
         with tempfile.TemporaryDirectory() as directory:

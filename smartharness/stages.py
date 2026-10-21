@@ -27,3 +27,17 @@ def task_tree_lines(nodes: list[dict]) -> list[str]:
         indent = "  " * node["id"].count(".")
         lines.append(f"{TASK_STATE_WORDS.get(node['status'], 'WAIT')}  {indent}{node['id']} {prompt}")
     return lines
+
+
+def task_detail_markdown(node: dict) -> str:
+    """Describe one task for the interfaces: what it asks, what finished looks like, how it went, and its result."""
+    state = node["status"] + (f", {node['approach']}" if node.get("approach") else "")
+    parts = [f"### Task {node['id']}", node["prompt"], f"**Deliverable:** {node['deliverable']}", f"**State:** {state}"]
+    if node.get("depends_on"):
+        parts.append(f"**Builds on:** {', '.join(node['depends_on'])}")
+    if node.get("note"):
+        parts.append(f"**Note:** {node['note']}")
+    parts.append(node.get("result") or "_No result yet._")
+    if node.get("result_shortened"):
+        parts.append("_The result is shortened here; the Steps tab has all of it._")
+    return "\n\n".join(parts)

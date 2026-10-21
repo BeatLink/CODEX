@@ -131,7 +131,10 @@ class WindowTests(unittest.TestCase):
         def fake_task_tree(prompt, **kwargs):
             kwargs["tree_callback"]([
                 {"id": "1", "prompt": "Compare two designs", "status": "done"},
-                {"id": "1.1", "prompt": "Describe design A", "status": "unverified"},
+                {
+                    "id": "1.1", "prompt": "Describe design A", "status": "unverified", "approach": "answer",
+                    "deliverable": "A paragraph on A", "depends_on": [], "note": "", "result": "Design A is simple.",
+                },
             ])
             kwargs["progress_callback"]("Task 1.1 · Writing")
             kwargs["stage_output_callback"]("Task 1.1 · Writing", "Design A is simple.")
@@ -147,9 +150,18 @@ class WindowTests(unittest.TestCase):
         self.assertFalse(rows["phase-1"].get_visible())
         self.assertTrue(rows["steps"].get_visible())
         self.assertEqual(
-            self.window.task_tree.get_label(),
-            "DONE  1 Compare two designs\nWARN    1.1 Describe design A",
+            [row.get_child().get_label() for row in self.window._task_rows()],
+            ["DONE  1 Compare two designs", "WARN    1.1 Describe design A"],
         )
+        self.window.task_list.select_row(self.window._task_rows()[1])
+        self.assertEqual(self.window.phase_pages.get_visible_child_name(), "task")
+        self.assertIn("Task 1.1", self.window.task_detail.text)
+        self.assertIn("Deliverable: A paragraph on A", self.window.task_detail.text)
+        self.assertIn("State: unverified, answer", self.window.task_detail.text)
+        self.assertIn("Design A is simple.", self.window.task_detail.text)
+        self.window.task_list.select_row(self.window._task_rows()[1])
+        self.window._show_task_tree(self.window._task_nodes)
+        self.assertEqual(self.window.task_list.get_selected_row().task_id, "1.1")
         self.assertEqual(self.window.steps_output.text, "▸ Task 1.1 · Writing\n\nDesign A is simple.")
         self.assertEqual(self.window._last_answer, "Pick A.")
 

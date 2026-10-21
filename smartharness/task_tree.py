@@ -325,6 +325,7 @@ class TaskNode:
             "status": self.status,
             "approach": self.approach,
             "result": self.result[:SNAPSHOT_RESULT_CHARS],
+            "result_shortened": len(self.result) > SNAPSHOT_RESULT_CHARS,
             "note": self.note,
         }
 
