@@ -84,7 +84,7 @@
 - [x] Add visual TUI browser for stored topics, facts, sources, and graph relationships
 - [x] Add focused tests for SQLite storage, graph queries, retrieval, worker scheduling, and TUI views
 - [x] Document storage, background worker, configuration, and privacy/resource behavior
-- [ ] Run the eval harness with the knowledge store empty and filled to measure what recall adds
+- [x] Run the eval harness with the knowledge store empty and filled to measure what recall adds
 - [x] Score recall against a fixed set of questions with known relevant facts
 - [ ] Cap the knowledge store's size and evict the least used facts, pages, and episodes
 - [ ] Mark recalled and fetched text as untrusted in every prompt and test it against hostile pages
