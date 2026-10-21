@@ -17,6 +17,8 @@
 - [ ] Add patch-based edits and Git diff/status tools
 - [ ] Add a bounded command runner for targeted checks
 - [ ] Iterate code changes from verification failures
+- [ ] Let an acting task write a whole file without its tool call running past `max_tokens` (implement-parse-duration fails at the token limit)
+- [ ] Get the working written as equations with "=" so the recompute check can read it, and measure what the check adds on the hard set
 - [x] Add approval gates for consequential actions
 - [x] Read standing instructions from SMARTHARNESS.md or AGENTS.md, global and per folder, into every model call
 - [x] Let the user remember, list, and forget memories with /remember, /memories, and /forget
