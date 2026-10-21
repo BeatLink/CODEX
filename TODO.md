@@ -18,6 +18,10 @@
 - [ ] Add a bounded command runner for targeted checks
 - [ ] Iterate code changes from verification failures
 - [x] Add approval gates for consequential actions
+- [x] Read standing instructions from SMARTHARNESS.md or AGENTS.md, global and per folder, into every model call
+- [x] Let the user remember, list, and forget memories with /remember, /memories, and /forget
+- [x] Let the user define slash commands as Markdown files, and add /init to write a folder's SMARTHARNESS.md
+- [x] Recall user memories by relevance and recency, keep project memories to their folder, and record why each holds
 - [ ] Benchmark on real maintenance tasks
 - [x] Keep the loaded model between requests and share it with the background worker
 - [x] Return structured JSON from stages using llama.cpp schema-constrained output
