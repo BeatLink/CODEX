@@ -5,8 +5,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .context_budget import fit_sections_to_tokens, input_token_budget, render_sections, token_counter
-from .knowledge import USER_MEMORY_KINDS, KnowledgeStore
-from .pipeline import ModelCache, _summarize_web_page, create_model, run_stage
+from .knowledge import USER_MEMORY_KINDS, KnowledgeStore, _search_terms, _shares_half_the_terms
+from .pipeline import ModelCache, _summarize_web_page, _unsupported_values, create_model, run_stage
 from .settings import MAX_TOKENS, TEMPERATURE
 from .tools import Toolbox
 
@@ -242,6 +242,31 @@ def _parse_overview(reply: str, urls: dict[int, str]) -> _Overview:
     )
 
 
+def _grounded_facts(
+    facts: list[tuple[str, str | None, float]],
+    sources: list[_Source],
+) -> list[tuple[str, str | None, float]]:
+    """Keep only facts the sources bear out, lowering the confidence of those their cited source does not.
+
+    A fact stating a version or date that no source contains is dropped. One whose values or words
+    are missing from the source it cites, or that cites none, is kept at low confidence.
+    """
+    texts: dict[str, list[str]] = {}
+    for source in sources:
+        texts.setdefault(source.url, []).append(source.text)
+    everything = "\n".join(source.text for source in sources)
+    grounded = []
+    for statement, url, confidence in facts:
+        if _unsupported_values(statement, everything):
+            continue
+        cited = "\n".join(texts.get(url, [])) if url else ""
+        terms = _search_terms(statement)
+        if not cited or _unsupported_values(statement, cited) or (terms and not _shares_half_the_terms(terms, cited)):
+            confidence = min(confidence, CONFIDENCE_LEVELS["low"])
+        grounded.append((statement, url, confidence))
+    return grounded
+
+
 def _shorten_page(page_json: str, max_chars: int) -> str:
     """Keep only the start of a long page, so summarizing it holds the model for a few calls at most."""
     page = json.loads(page_json)
@@ -339,7 +364,7 @@ def research_one_topic(
         pages, snippets = _number_sources(results, page_summaries)
         urls = {source.number: source.url for source in [*pages, *snippets]}
         groups = [[page] for page in pages] + ([snippets] if snippets else [])
-        facts = _extract_facts(model, topic, groups, urls, report)
+        facts = _grounded_facts(_extract_facts(model, topic, groups, urls, report), [*pages, *snippets])
 
         report("Summarizing the topic")
         try:

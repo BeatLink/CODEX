@@ -266,7 +266,10 @@ For each queued topic it:
    call writes the topic summary, relationships between named things, and the
    broader topic this one belongs under. Each call's reply stays short, and a
    call that fails loses only its own part. A fact citing a number that is not
-   a source is kept without one.
+   a source is kept without one. A fact stating a version or date that no
+   source contains is dropped, and one whose values or most of whose words are
+   missing from the source it cites, or that cites none, is kept at low
+   confidence.
 3. Stores the sources, page summaries, facts, and relationships, files the topic
    under its parent, and rewrites the parent's summary from its children's.
 

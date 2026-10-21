@@ -145,13 +145,13 @@ class ExtractionTests(unittest.TestCase):
 
         with (
             patch("smartharness.background.Toolbox", return_value=toolbox),
-            patch("smartharness.background._summarize_web_page", return_value="Page summary.") as summarize,
+            patch("smartharness.background._summarize_web_page", return_value="FTS5 is an SQLite module.") as summarize,
             patch("smartharness.background.run_stage", side_effect=lambda *args, **kwargs: next(replies)) as run_stage,
         ):
             self.assertTrue(research_one_topic(self.settings, llm=object()))
 
         self.assertEqual(summarize.call_count, 1)
-        self.assertIn("Page summary.", run_stage.call_args_list[0].args[2])
+        self.assertIn("FTS5 is an SQLite module.", run_stage.call_args_list[0].args[2])
         self.assertNotIn("Full text.", run_stage.call_args_list[0].args[2])
         self.assertIn("Full text.", run_stage.call_args_list[1].args[2])
         for call in run_stage.call_args_list[:3]:
@@ -164,8 +164,30 @@ class ExtractionTests(unittest.TestCase):
         topics = {topic["name"]: topic for topic in self.store.topics()}
         self.assertEqual(topics["SQLite FTS5"]["parent"], "Databases")
         self.assertEqual(self.store.child_summaries("Databases"), [("SQLite FTS5", "FTS5 adds full-text search to SQLite.")])
-        self.assertEqual(self.store.sources()[0]["summary"], "Page summary.")
+        self.assertEqual(self.store.sources()[0]["summary"], "FTS5 is an SQLite module.")
         self.assertEqual(self.store.queue_status()[0]["status"], "done")
+
+    def test_extracted_facts_are_checked_against_the_sources(self):
+        from smartharness.background import _grounded_facts, _Source
+
+        sources = [
+            _Source(1, "https://example.test/zig", "Zig 0.13.0 was released on 2024-06-07 with a new build system."),
+            _Source(2, "https://example.test/news", "News: Zig ships releases twice a year."),
+        ]
+        facts = _grounded_facts([
+            ("Zig 0.13.0 was released on June 7, 2024.", "https://example.test/zig", 0.9),
+            ("Zig 0.14.0 was released in 2025.", "https://example.test/zig", 0.9),
+            ("Zig 0.13.0 has a new build system.", "https://example.test/news", 0.9),
+            ("Zig ships releases twice a year.", None, 0.6),
+            ("Rust compiles quickly with incremental caching.", "https://example.test/zig", 0.9),
+        ], sources)
+
+        self.assertEqual(facts, [
+            ("Zig 0.13.0 was released on June 7, 2024.", "https://example.test/zig", 0.9),
+            ("Zig 0.13.0 has a new build system.", "https://example.test/news", 0.3),
+            ("Zig ships releases twice a year.", None, 0.3),
+            ("Rust compiles quickly with incremental caching.", "https://example.test/zig", 0.3),
+        ])
 
     def test_learning_turns_past_requests_into_user_memory(self):
         self.store.record_episode("Write my Rust CLI in clap", "action", "1. Use clap", "Done", "answered")

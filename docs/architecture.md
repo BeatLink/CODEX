@@ -228,7 +228,9 @@ pending job and:
 2. Numbers every page summary and search snippet as a source, then extracts up to five facts from
    each page on its own and from the snippets together, each with a source number and a
    `low`/`medium`/`high` confidence (stored as 0.3, 0.6, 0.9). Small groups keep each reply short,
-   and one group failing loses only its own facts.
+   and one group failing loses only its own facts. Each fact is then held to the sources: one
+   stating a version or date that no source contains is dropped, and one whose values or half of
+   whose words are missing from the source it cites, or that cites none, drops to low confidence.
 3. Makes one overview call for the topic summary, up to five entity relationships, and a parent
    topic, offering the existing top-level topics so the model can reuse one.
 4. Stores the sources, page summaries, facts and relationships, files the topic under its parent,
@@ -297,8 +299,8 @@ These are properties of the code as it stands, recorded so changes can be measur
 - **Well-supported facts never age.** Sources expire after a week, but a medium or high confidence
   fact stays `active` indefinitely; only contradiction or the low-confidence prune retires one, so a
   version number that has since changed is still recalled until a newer fact contradicts it.
-- **Extracted facts are not checked against their source.** Confidence is the model's own label,
-  and nothing confirms that a statement's words appear in the page or snippet it cites.
+- **Fact grounding is lexical.** A fact is checked against its source by shared words, versions
+  and dates, so a paraphrase that changes a claim's meaning but keeps its words still passes.
 - **Topics are named after raw search queries.** Consolidation merges and re-files them, but only
   pairs that share half their words are ever compared, so differently worded duplicates stay apart.
 - **Refresh ignores use.** Re-queueing is by age and priority alone, and the worker does not seed
