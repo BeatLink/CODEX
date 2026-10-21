@@ -367,13 +367,15 @@ Changes that need no model come first:
 Then the model gives each topic still called by the search query that found it,
 or with a name over five words or 40 characters, such as "how do i use fts5 in
 sqlite", a title as short as a chat title, such as "SQLite FTS5", from its
-summary and facts. A name that another topic already has merges the two, and
-each topic is named once. A renamed topic and its subtopics are placed again,
+summary and facts. The model sees the existing topics sharing a word with it, so
+it can reuse one, and a name that another topic already has merges the two. A
+title must share a word with the current name, since one drawn only from the
+summary may describe a different thing. Each topic is named once. A renamed topic and its subtopics are placed again,
 since they were placed under the old name. A renamed topic with no facts is researched again
 under its new name, and one that names no subject at all, such as a sentence
 copied from an answer that gives a screen size but never says which product it
 means, is removed when it holds no facts or subtopics; its
-sources stay.
+sources stay. A topic whose name is already a title is never removed this way.
 
 The model then compares pairs that share at least half their words, one pair
 per call, with a schema that lets it reply only with a short reason and one
@@ -392,7 +394,9 @@ again after being set aside is compared afresh.
 Each topic's place in the tree is also reviewed once every
 `background_refresh_interval_hours`. The model picks the narrowest of up to 20
 related topics that this one is a kind of or part of, or the top level, from a
-list fixed by the schema; its own subtopics are never offered. A researched
+list fixed by the schema. Its own subtopics, topics with no summary, and topics
+whose names hold every word of its name and more, such as "PinePhone
+community" for "PinePhone", are never offered. A researched
 topic may instead name a broader subject the tree lacks, such as "Pine64" for
 "PinePhone" beside "PineTime"; that topic is made where this one sat and is
 placed in its own turn, and a topic made this way never names one above itself.

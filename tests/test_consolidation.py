@@ -182,6 +182,38 @@ class ModelCheckTests(ConsolidationTestCase):
 
         self.assertEqual(self.topic_names(), {"PineTime": None, "Screen notes": "PineTime"})
 
+    def test_a_title_sharing_no_word_with_the_current_name_counts_as_no_subject(self):
+        sentence = "It features a 5.7-inch touchscreen and a 13-megapixel rear camera."
+        self.store.store_search_results(sentence, [{"title": "Scanner", "url": "https://example.test/scan", "snippet": "A rugged scanner."}], topic=sentence, summary="A rugged handheld scanner.")
+        self.store.add_fact("SQLite", "SQLite is small.")
+        self.place_every_topic()
+
+        self.consolidate(json.dumps({"reason": "The sources describe a scanner.", "name": "Honeywell ScanPal EDA52"}))
+
+        self.assertEqual(list(self.topic_names()), ["SQLite"])
+        self.assertEqual(self.store.queue_status(), [])
+
+    def test_a_topic_already_called_by_a_title_is_never_removed_as_naming_no_subject(self):
+        self.store.store_search_results("PineTime distinction", [{"title": "Watch", "url": "https://example.test/watch", "snippet": "A watch."}], topic="PineTime distinction", summary="A smartwatch.")
+        self.place_every_topic()
+
+        self.consolidate(json.dumps({"reason": "Unclear.", "name": ""}))
+
+        self.assertEqual(list(self.topic_names()), ["PineTime distinction"])
+
+    def test_the_naming_call_lists_existing_topics_sharing_a_word(self):
+        query = "can you search the internet for information about the pinetime smartwatch"
+        self.store.store_search_results(query, [{"title": "Watch", "url": "https://example.test/watch", "snippet": "A watch."}], topic=query)
+        self.store.add_fact("pinetime", "The PineTime is a smartwatch.")
+        self.store.add_fact("SQLite", "SQLite is small.")
+        self.place_every_topic()
+
+        worked, calls = self.consolidate(json.dumps({"reason": "It asks about the PineTime.", "name": "pinetime"}))
+
+        self.assertIn("Existing topics:\npinetime", calls[0].args[2])
+        self.assertNotIn("SQLite", calls[0].args[2])
+        self.assertEqual(set(self.topic_names()), {"pinetime", "SQLite"})
+
     def test_a_query_topic_with_no_summary_or_facts_is_still_named(self):
         query = "can you search the internet for information about the pinetime smartwatch"
         self.store.store_search_results(query, [{"title": "Watch", "url": "https://example.test/watch", "snippet": "A watch."}], topic=query)
@@ -358,6 +390,15 @@ class ModelCheckTests(ConsolidationTestCase):
         self.assertTrue(worked)
         self.assertNotIn(NEW_PARENT, calls[0].kwargs["json_schema"]["properties"]["parent"]["enum"])
         self.assertEqual(self.topic_names()["Pine64"], "Hardware")
+
+    def test_a_topic_whose_name_holds_every_word_of_this_one_and_more_is_not_offered_as_a_parent(self):
+        for name in ("PinePhone", "PinePhone community", "Pine64"):
+            self.store.add_fact(name, f"{name} is real.")
+            self.store.set_topic_summary(name, f"About {name}.")
+
+        candidates = self.store.placement_candidates(self.store.add_topic("PinePhone"))
+
+        self.assertEqual({candidate["name"] for candidate in candidates}, {"Pine64"})
 
     def test_a_topic_is_never_offered_its_own_subtopics_as_a_parent(self):
         self.store.add_fact("Databases", "Databases hold data.")

@@ -1117,16 +1117,20 @@ class KnowledgeStore:
     def placement_candidates(self, topic_id: int, limit: int = 20) -> list[dict[str, Any]]:
         """Return the topics this one could sit under, the most related first, with the current parent kept in.
 
-        A topic with no summary tells the model nothing about what it covers, so it is left out.
+        A topic with no summary tells the model nothing about what it covers, so it is left out, and so is
+        one whose name holds every word of this one and more, such as 'PinePhone community' for 'PinePhone'.
         """
         with self._connect() as connection:
             topic = connection.execute("SELECT name, summary, parent_id FROM topics WHERE id = ?", (topic_id,)).fetchone()
             if topic is None:
                 return []
             excluded = self._descendant_ids(connection, topic_id) | {topic_id}
+            name_terms = _comparison_terms(topic["name"])
             rows = [
                 dict(row) for row in connection.execute("SELECT id, name, summary, parent_id FROM topics")
-                if row["id"] not in excluded and (row["summary"] or row["id"] == topic["parent_id"])
+                if row["id"] not in excluded
+                and (row["summary"] or row["id"] == topic["parent_id"])
+                and not name_terms < _comparison_terms(row["name"])
             ]
         terms = _comparison_terms(f"{topic['name']} {topic['summary']}")
 
@@ -1141,7 +1145,7 @@ class KnowledgeStore:
         return sorted(rows, key=rank)[:limit]
 
     def next_topic_to_name(self) -> dict[str, Any] | None:
-        """Return the most used topic named after its search query or too long for a title, with its best facts."""
+        """Return the most used topic named after its search query or too long for a title, with its best facts and the topics sharing a word with it."""
         with self._connect() as connection:
             row = connection.execute(
                 "SELECT t.id, t.name, t.summary FROM topics t "
@@ -1161,6 +1165,11 @@ class KnowledgeStore:
                     (topic["id"],),
                 )
             ]
+            terms = _comparison_terms(topic["name"])
+            topic["related"] = [
+                row["name"] for row in connection.execute("SELECT id, name FROM topics ORDER BY use_count DESC, name")
+                if row["id"] != topic["id"] and terms & _comparison_terms(row["name"])
+            ][:10]
             return topic
 
     def rename_topic(self, topic_id: int, name: str) -> str:
