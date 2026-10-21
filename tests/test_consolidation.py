@@ -34,6 +34,11 @@ class ConsolidationTestCase(unittest.TestCase):
         with self.store._connect() as connection:
             connection.execute("UPDATE topics SET placed_at = ?", (time.time(),))
 
+    def mark_titled(self, name):
+        """Record that a topic's name was already checked, so a test can start at a later step."""
+        topic_id = self.store.add_topic(name)
+        self.store.record_check("title", topic_id, topic_id, name)
+
     def topic_names(self):
         return {topic["name"]: topic["parent"] for topic in self.store.topics()}
 
@@ -214,6 +219,28 @@ class ModelCheckTests(ConsolidationTestCase):
         self.assertNotIn("SQLite", calls[0].args[2])
         self.assertEqual(set(self.topic_names()), {"pinetime", "SQLite"})
 
+    def test_a_topic_named_under_older_rules_is_checked_again_and_removed_when_it_names_no_subject(self):
+        sentence = "* **Hardware**: It features a 5.7-inch touchscreen and a 13-megapixel rear camera."
+        self.store.store_search_results(sentence, [{"title": "Scanner", "url": "https://example.test/scan", "snippet": "A scanner."}], topic=sentence, summary="A rugged scanner.")
+        topic_id = self.store.add_topic(sentence)
+        self.store.record_check("name", topic_id, topic_id, "Honeywell ScanPal EDA52")
+        self.store.rename_topic(topic_id, "Honeywell ScanPal EDA52")
+        self.place_every_topic()
+
+        worked, calls = self.consolidate(json.dumps({"reason": "No product is named.", "name": ""}))
+
+        self.assertTrue(worked)
+        self.assertIn("Searches that found it:\n- * **Hardware**", calls[0].args[2])
+        self.assertEqual(self.topic_names(), {})
+
+    def test_a_title_may_take_its_words_from_the_search_that_found_the_topic(self):
+        self.store.store_search_results("what is the pinephone", [{"title": "Phone", "url": "https://example.test/phone", "snippet": "A phone."}], topic="Phone notes", summary="A Linux phone.")
+        self.place_every_topic()
+
+        self.consolidate(json.dumps({"reason": "The search names the PinePhone.", "name": "PinePhone"}))
+
+        self.assertEqual(list(self.topic_names()), ["PinePhone"])
+
     def test_a_query_topic_with_no_summary_or_facts_is_still_named(self):
         query = "can you search the internet for information about the pinetime smartwatch"
         self.store.store_search_results(query, [{"title": "Watch", "url": "https://example.test/watch", "snippet": "A watch."}], topic=query)
@@ -346,7 +373,7 @@ class ModelCheckTests(ConsolidationTestCase):
         self.place_every_topic()
         with self.store._connect() as connection:
             connection.execute("UPDATE topics SET placed_at = NULL WHERE name = 'Owner forums'")
-            connection.execute("INSERT INTO consolidation_checks VALUES ('name', (SELECT id FROM topics WHERE name = 'PinePhone'), (SELECT id FROM topics WHERE name = 'PinePhone'), 'PinePhone', 0)")
+            connection.execute("INSERT INTO consolidation_checks VALUES ('title', (SELECT id FROM topics WHERE name = 'PinePhone'), (SELECT id FROM topics WHERE name = 'PinePhone'), 'PinePhone', 0)")
 
         worked, calls = self.consolidate(verdict("PinePhone", key="parent"), verdict("second is broader"))
 
@@ -363,6 +390,7 @@ class ModelCheckTests(ConsolidationTestCase):
         self.store.add_fact("PineTime", "The PineTime is a smartwatch made by Pine64.")
         self.store.store_search_results("pinephone linux phone", [{"title": "Phone", "url": "https://example.test/phone", "snippet": "A phone."}], topic="PinePhone", summary="A Linux phone made by Pine64.")
         self.store.add_topic("PinePhone", parent="Hardware")
+        self.mark_titled("PinePhone")
         self.place_every_topic()
         with self.store._connect() as connection:
             connection.execute("UPDATE topics SET placed_at = NULL WHERE name = 'PinePhone'")

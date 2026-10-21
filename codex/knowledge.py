@@ -397,6 +397,17 @@ class KnowledgeStore:
                 (status, time.time(), error[:1000], job_id),
             )
 
+    def requeue_interrupted_jobs(self) -> int:
+        """Put back in the queue the jobs a stopped worker left running, dropping those whose topic is queued again already."""
+        with self._connect() as connection:
+            connection.execute(
+                "DELETE FROM research_queue WHERE status = 'running' AND topic_id IN "
+                "(SELECT topic_id FROM research_queue WHERE status = 'pending')"
+            )
+            return connection.execute(
+                "UPDATE research_queue SET status = 'pending', started_at = NULL WHERE status = 'running'"
+            ).rowcount
+
     def defer_job(self, job_id: int) -> None:
         with self._connect() as connection:
             connection.execute(
@@ -1145,13 +1156,16 @@ class KnowledgeStore:
         return sorted(rows, key=rank)[:limit]
 
     def next_topic_to_name(self) -> dict[str, Any] | None:
-        """Return the most used topic named after its search query or too long for a title, with its best facts and the topics sharing a word with it."""
+        """Return the most used topic not yet checked for a title, with its best facts, the searches that found it, and the topics sharing a word with it.
+
+        Every researched topic is checked once, and so is any other whose name is too long for a title.
+        """
         with self._connect() as connection:
             row = connection.execute(
                 "SELECT t.id, t.name, t.summary FROM topics t "
-                "WHERE (EXISTS (SELECT 1 FROM sources s WHERE s.query = t.name COLLATE NOCASE) "
+                "WHERE (EXISTS (SELECT 1 FROM sources s WHERE s.topic_id = t.id) "
                 "OR length(t.name) > ? OR length(t.name) - length(replace(t.name, ' ', '')) >= ?) "
-                "AND NOT EXISTS (SELECT 1 FROM consolidation_checks c WHERE c.kind = 'name' AND c.first_id = t.id) "
+                "AND NOT EXISTS (SELECT 1 FROM consolidation_checks c WHERE c.kind = 'title' AND c.first_id = t.id) "
                 "ORDER BY t.use_count DESC, t.id LIMIT 1",
                 (MAX_TOPIC_NAME_CHARS, MAX_TOPIC_NAME_WORDS),
             ).fetchone()
@@ -1163,6 +1177,11 @@ class KnowledgeStore:
                     "SELECT statement FROM facts WHERE topic_id = ? AND status = 'active' "
                     "ORDER BY confidence DESC, use_count DESC, id LIMIT 5",
                     (topic["id"],),
+                )
+            ]
+            topic["queries"] = [
+                row["query"] for row in connection.execute(
+                    "SELECT DISTINCT query FROM sources WHERE topic_id = ? AND query != '' LIMIT 3", (topic["id"],)
                 )
             ]
             terms = _comparison_terms(topic["name"])
@@ -1395,7 +1414,7 @@ class KnowledgeStore:
         connection.execute("DELETE FROM graph_nodes WHERE kind = 'topic' AND label = ?", (name,))
         connection.execute("DELETE FROM embeddings WHERE kind = 'topic' AND item_id = ?", (topic_id,))
         self._forget_checks(connection, "topic", topic_id)
-        self._forget_checks(connection, "name", topic_id)
+        self._forget_checks(connection, "title", topic_id)
 
     @staticmethod
     def _rank_topics(connection: sqlite3.Connection, first_id: int, second_id: int) -> tuple[int, int]:

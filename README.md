@@ -368,18 +368,20 @@ Changes that need no model come first:
   and topics are never evicted. Freed space is reused by SQLite rather than
   returned to the disk.
 
-Then the model gives each topic still called by the search query that found it,
-or with a name over five words or 40 characters, such as "how do i use fts5 in
-sqlite", a title as short as a chat title, such as "SQLite FTS5", from its
-summary and facts. The model sees the existing topics sharing a word with it, so
-it can reuse one, and a name that another topic already has merges the two. A
-title must share a word with the current name, since one drawn only from the
-summary may describe a different thing. Each topic is named once. A renamed topic and its subtopics are placed again,
-since they were placed under the old name. A renamed topic with no facts is researched again
-under its new name, and one that names no subject at all, such as a sentence
-copied from an answer that gives a screen size but never says which product it
-means, is removed when it holds no facts or subtopics; its
-sources stay. A topic whose name is already a title is never removed this way.
+Then the model checks the name of each researched topic once, and of any other
+topic whose name is over five words or 40 characters. A search query or a
+sentence such as "how do i use fts5 in sqlite" becomes a title as short as a
+chat title, such as "SQLite FTS5", drawn from the name, the searches that found
+the topic, its summary and its facts. The model sees the existing topics sharing
+a word with it, so it can reuse one, and a name that another topic already has
+merges the two. A title must share a word with the current name or one of those
+searches, since one drawn only from the summary may describe a different thing.
+A renamed topic is researched again under its new name, and it and its
+subtopics are placed again, since they were placed under the old name. A topic
+that names no subject, such as a sentence copied from an answer that gives a
+screen size but never says which product it means, is removed when it holds no
+facts and only sentence-length searches found it; its subtopics take its place
+and its sources stay.
 
 The model then compares pairs that share at least half their words, one pair
 per call, with a schema that lets it reply only with a short reason and one

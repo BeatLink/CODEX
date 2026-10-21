@@ -288,6 +288,19 @@ class KnowledgeStoreTests(unittest.TestCase):
         self.assertEqual(len(self.store.episodes()), 1)
 
 
+    def test_jobs_a_stopped_worker_left_running_go_back_in_the_queue(self):
+        self.store.enqueue_topic("SQLite")
+        self.store.claim_job()
+        self.store.enqueue_topic("PinePhone")
+        self.store.claim_job()
+        self.store.enqueue_topic("PinePhone")
+
+        self.assertEqual(self.store.requeue_interrupted_jobs(), 1)
+
+        jobs = sorted((job["topic"], job["status"]) for job in self.store.queue_status())
+        self.assertEqual(jobs, [("PinePhone", "pending"), ("SQLite", "pending")])
+
+
 class StoreSizeCapTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()

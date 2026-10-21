@@ -257,7 +257,8 @@ pending job and:
 4. Stores the sources, page summaries, facts and relationships. Where the topic sits in the tree is
    left to consolidation.
 
-A paused job goes back to `pending`; any other error marks it `failed` with the message.
+A paused job goes back to `pending`; any other error marks it `failed` with the message. A job left
+`running` by a stopped daemon goes back to `pending` when the daemon next starts.
 
 `learn_from_episodes` reads up to five unprocessed episodes and asks for durable preferences,
 projects and corrections, with an instruction to leave out secrets and personal identifiers. The
@@ -276,10 +277,11 @@ of tidying per pass, so it yields to a run as quickly as research does.
    least valuable kind first (pruned facts, finished task runs, processed episodes, expired
    uncited sources, least used facts), with their search entries and vectors, until the data is
    under 90% of the cap.
-2. **With the model**, one call per pass, in this order: rename a topic still called by the search
-   query that found it, or named with over five words or 40 characters, to a title of at most five
-   words (folding it into the topic that already has that name, re-queuing research when it has no
-   facts, and removing it when the model finds no subject and it holds no facts or subtopics),
+2. **With the model**, one call per pass, in this order: check once the name of each researched
+   topic, and of any named with over five words or 40 characters, renaming it to a title of at most
+   five words (folding it into the topic that already has that name and re-queuing its research), or
+   removing it when the model finds no subject, it holds no facts, and only sentence-length searches
+   found it,
    compare two topics (same subject, one broader, or different), re-place one topic under the
    narrowest of up to 20 related topics, the top level, or, for a researched topic, a new broader
    subject made where it sat (a move under an existing topic needs a second, pair-comparison call

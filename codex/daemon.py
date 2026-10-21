@@ -143,6 +143,8 @@ class HarnessDaemon:
     # ==========================================================================
 
     def start_background_worker(self) -> None:
+        # A daemon stopped mid-job leaves that job running, and nothing else would ever pick it up again.
+        self._knowledge_store(self.get_settings()["knowledge_db_path"]).requeue_interrupted_jobs()
         self._worker = threading.Thread(target=self._background_loop, name="background-research", daemon=True)
         self._worker.start()
 
