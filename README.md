@@ -455,6 +455,10 @@ Each run gets an empty knowledge store and an empty scratch directory as its
 filesystem root, with no MCP servers, so no task sees what an earlier one found
 or the user's own files. Web search stays on.
 
+`evals/hard_tasks.json` holds tasks a small model tends to get wrong on its
+own: counting letters, multi-step arithmetic and dates, a logic puzzle, facts
+that need a search, and writing under several exact constraints.
+
 `evals/execute_tasks.json` holds execute-mode tasks. Each one carries `files`,
 a small project written into the scratch root before the run, and the pipeline
 and task tree may change those files and run their tests. The bare model gets
@@ -483,6 +487,7 @@ run recalls by meaning as well as by words.
 smartharness eval --runners bare,tree --only stable-fact,python-bug
 smartharness eval --tasks my-tasks.json --output report.json
 smartharness eval --tasks evals/execute_tasks.json
+smartharness eval --tasks evals/hard_tasks.json
 smartharness eval --runners pipeline --seed-store ~/.local/share/smartharness/knowledge.sqlite3
 smartharness eval --seed --runners pipeline,tree
 ```

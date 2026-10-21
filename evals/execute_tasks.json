@@ -98,5 +98,23 @@
         "value": "Added CSV export."
       }
     ]
+  },
+  {
+    "id": "implement-parse-duration",
+    "mode": "execute",
+    "prompt": "Implement parse_duration(text) in durations.py so that the tests in test_durations.py pass, without changing the tests. It turns text such as '1h30m' or '2h5s' into a number of seconds.",
+    "files": {
+      "durations.py": "def parse_duration(text):\n    \"\"\"Return the number of seconds in a duration such as '1h30m'.\"\"\"\n    raise NotImplementedError\n",
+      "test_durations.py": "import unittest\n\nfrom durations import parse_duration\n\n\nclass ParseDurationTests(unittest.TestCase):\n    def test_single_units(self):\n        self.assertEqual(parse_duration(\"45s\"), 45)\n        self.assertEqual(parse_duration(\"2h\"), 7200)\n        self.assertEqual(parse_duration(\"10m\"), 600)\n\n    def test_combined_units(self):\n        self.assertEqual(parse_duration(\"1h30m\"), 5400)\n        self.assertEqual(parse_duration(\"1h2m3s\"), 3723)\n        self.assertEqual(parse_duration(\"2h5s\"), 7205)\n\n    def test_days_and_spaces(self):\n        self.assertEqual(parse_duration(\"1d 2h\"), 93600)\n        self.assertEqual(parse_duration(\" 3m \"), 180)\n\n    def test_rejects_bad_text(self):\n        for text in (\"\", \"h\", \"5\", \"5x\", \"1m1h\", \"1h1h\", \"-5s\"):\n            with self.subTest(text=text), self.assertRaises(ValueError):\n                parse_duration(text)\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
+    },
+    "checks": [
+      {
+        "type": "tests_pass"
+      },
+      {
+        "type": "file_unchanged",
+        "path": "test_durations.py"
+      }
+    ]
   }
 ]

@@ -63,6 +63,9 @@ class LoadTasksTests(unittest.TestCase):
         self.assertTrue(tasks)
         self.assertEqual(len({task.id for task in tasks}), len(tasks))
 
+    def test_hard_task_set_loads(self):
+        self.assertTrue(load_tasks(EVALS_DIRECTORY / "hard_tasks.json"))
+
     def test_recall_task_set_loads(self):
         self.assertTrue(load_tasks(RECALL_TASKS_PATH))
 
