@@ -349,7 +349,12 @@ Changes that need no model come first:
   `background_prune_after_days` old. A pruned fact stays in the store and comes
   back if research finds it again.
 
-Then the model compares pairs that share at least half their words, one pair
+Then the model gives each topic still called by the search query that found it,
+such as "how do i use fts5 in sqlite", a short subject name such as "SQLite
+FTS5", from its summary and facts. A name that another topic already has merges
+the two, and each topic is named once.
+
+The model then compares pairs that share at least half their words, one pair
 per call, with a schema that lets it reply only with a short reason and one
 verdict:
 

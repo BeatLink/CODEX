@@ -96,6 +96,46 @@ class TidyTests(ConsolidationTestCase):
 
 
 class ModelCheckTests(ConsolidationTestCase):
+    def search_topic(self, query: str, fact: str) -> None:
+        """Store a search under a topic named after its query, as a request does, with one fact."""
+        self.store.store_search_results(query, [{"title": "FTS5", "url": f"https://example.test/{len(query)}", "snippet": fact}], topic=query)
+        self.store.add_fact(query, fact)
+
+    def test_a_topic_named_after_its_search_query_is_renamed_once(self):
+        self.search_topic("how do i use fts5 in sqlite", "FTS5 adds full-text search to SQLite.")
+        self.store.add_topic("SQLite", priority=1)
+        self.store.adopt_topic(self.store.add_topic("SQLite"), self.store.add_topic("how do i use fts5 in sqlite"))
+        self.place_every_topic()
+
+        worked, calls = self.consolidate(json.dumps({"reason": "It is about FTS5.", "name": "SQLite FTS5"}))
+
+        self.assertTrue(worked)
+        self.assertIn("FTS5 adds full-text search to SQLite.", calls[0].args[2])
+        self.assertEqual(self.topic_names(), {"SQLite": None, "SQLite FTS5": "SQLite"})
+        edges = [(edge["source"], edge["relation"], edge["target"]) for edge in self.store.graph()]
+        self.assertIn(("SQLite", "contains", "SQLite FTS5"), edges)
+        self.assertNotIn("how do i use fts5 in sqlite", {edge["target"] for edge in self.store.graph()})
+        self.assertIsNone(self.store.next_topic_to_name())
+
+    def test_a_query_topic_given_an_existing_name_is_merged_into_that_topic(self):
+        self.store.add_fact("SQLite FTS5", "FTS5 supports ranking.")
+        self.search_topic("fts5 full text search sqlite", "FTS5 adds full-text search to SQLite.")
+        self.place_every_topic()
+
+        self.consolidate(json.dumps({"reason": "Same subject.", "name": "sqlite fts5"}))
+
+        self.assertEqual(list(self.topic_names()), ["SQLite FTS5"])
+        self.assertEqual(len(self.store.facts()), 2)
+
+    def test_an_unreadable_or_query_like_name_keeps_the_topic_and_is_not_asked_again(self):
+        self.search_topic("fts5 sqlite", "FTS5 adds full-text search to SQLite.")
+        self.place_every_topic()
+
+        self.consolidate(json.dumps({"reason": "Long.", "name": "how to use the full text search module of the sqlite database"}))
+
+        self.assertEqual(list(self.topic_names()), ["fts5 sqlite"])
+        self.assertIsNone(self.store.next_topic_to_name())
+
     def test_topics_naming_one_subject_are_merged_into_the_better_supported_one(self):
         self.store.add_fact("SQLite FTS5", "FTS5 adds full-text search.")
         self.store.add_fact("SQLite FTS5", "FTS5 supports ranking.")

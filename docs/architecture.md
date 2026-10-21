@@ -263,7 +263,9 @@ of tidying per pass, so it yields to a run as quickly as research does.
    have the same words and facts that differ only in case and punctuation, remove empty topics,
    and mark low-confidence facts that were never recalled as `pruned` once they are
    `background_prune_after_days` old.
-2. **With the model**, one pair per call, in this order: compare two topics (same subject, one
+2. **With the model**, one call per pass, in this order: rename a topic still called by the search
+   query that found it to a short subject name (folding it into the topic that already has that
+   name), compare two topics (same subject, one
    broader, or different), re-place one topic under the narrowest of up to 20 related topics or the
    top level, compare two facts under one topic (same, contradict, different), and compare two user
    memories. Candidate pairs must share at least half their words. Every reply is a short reason
@@ -312,7 +314,8 @@ These are properties of the code as it stands, recorded so changes can be measur
   and its topic is re-researched, but it stays `active` until a newer fact contradicts it.
 - **Fact grounding is lexical.** A fact is checked against its source by shared words, versions
   and dates, so a paraphrase that changes a claim's meaning but keeps its words still passes.
-- **Topics are named after raw search queries.** Consolidation merges and re-files them, but only
-  pairs that share half their words are ever compared, so differently worded duplicates stay apart.
+- **Duplicates must share words.** Consolidation renames query-named topics and merges and re-files
+  topics, but only pairs that share half their words are ever compared, so differently worded
+  duplicates stay apart.
 - **Use counts only grow.** A topic recalled often long ago still counts as often used, so its
   refreshes stay frequent as long as it is used at all.

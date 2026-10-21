@@ -907,6 +907,51 @@ class KnowledgeStore:
 
         return sorted(rows, key=rank)[:limit]
 
+    def next_topic_to_name(self) -> dict[str, Any] | None:
+        """Return the most used topic still named after the search query that found it, with its best facts.
+
+        Topics with neither a summary nor facts wait, since there is nothing yet to name them from.
+        """
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT t.id, t.name, t.summary FROM topics t "
+                "WHERE EXISTS (SELECT 1 FROM sources s WHERE s.query = t.name COLLATE NOCASE) "
+                "AND NOT EXISTS (SELECT 1 FROM consolidation_checks c WHERE c.kind = 'name' AND c.first_id = t.id) "
+                "AND (t.summary != '' OR EXISTS (SELECT 1 FROM facts f WHERE f.topic_id = t.id AND f.status = 'active')) "
+                "ORDER BY t.use_count DESC, t.id LIMIT 1"
+            ).fetchone()
+            if row is None:
+                return None
+            topic = dict(row)
+            topic["facts"] = [
+                fact["statement"] for fact in connection.execute(
+                    "SELECT statement FROM facts WHERE topic_id = ? AND status = 'active' "
+                    "ORDER BY confidence DESC, use_count DESC, id LIMIT 5",
+                    (topic["id"],),
+                )
+            ]
+            return topic
+
+    def rename_topic(self, topic_id: int, name: str) -> str:
+        """Rename a topic, or fold it into the topic that already has that name; return the name it ends up under."""
+        name = self._clean_text(name, "topic", 200)
+        with self._connect() as connection:
+            old_name = connection.execute("SELECT name FROM topics WHERE id = ?", (topic_id,)).fetchone()["name"]
+            other = connection.execute(
+                "SELECT id, name FROM topics WHERE name = ? COLLATE NOCASE AND id != ?", (name, topic_id)
+            ).fetchone()
+            if other is not None:
+                self._merge_topic_into(connection, other["id"], topic_id)
+                return other["name"]
+            old_node = self._node_id(connection, "topic", old_name)
+            connection.execute("UPDATE topics SET name = ? WHERE id = ?", (name, topic_id))
+            new_node = self._node_id(connection, "topic", name)
+            if new_node != old_node:
+                connection.execute("UPDATE OR IGNORE graph_edges SET source_node_id = ? WHERE source_node_id = ?", (new_node, old_node))
+                connection.execute("UPDATE OR IGNORE graph_edges SET target_node_id = ? WHERE target_node_id = ?", (new_node, old_node))
+                connection.execute("DELETE FROM graph_nodes WHERE id = ?", (old_node,))
+            return name
+
     def mark_topic_placed(self, topic_id: int) -> None:
         with self._connect() as connection:
             connection.execute("UPDATE topics SET placed_at = ? WHERE id = ?", (time.time(), topic_id))
@@ -1085,6 +1130,7 @@ class KnowledgeStore:
         connection.execute("DELETE FROM topics WHERE id = ?", (topic_id,))
         connection.execute("DELETE FROM graph_nodes WHERE kind = 'topic' AND label = ?", (name,))
         self._forget_checks(connection, "topic", topic_id)
+        self._forget_checks(connection, "name", topic_id)
 
     @staticmethod
     def _rank_topics(connection: sqlite3.Connection, first_id: int, second_id: int) -> tuple[int, int]:
