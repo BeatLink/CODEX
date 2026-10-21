@@ -31,6 +31,8 @@ DEFAULT_SETTINGS = {
     "max_tool_calls": 5,
     "max_search_results": 5,
     "enable_test_execution": False,
+    # In an interactive run, the user approves a run's file changes, test runs, and MCP calls before they happen.
+    "confirm_actions": True,
     "show_thinking": True,
     "mode": "auto",
     "max_task_depth": MAX_TASK_DEPTH,
@@ -115,6 +117,8 @@ def validate_settings(values: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("allow_file_writes must be a boolean.")
     if not isinstance(values["enable_test_execution"], bool):
         raise ValueError("enable_test_execution must be a boolean.")
+    if not isinstance(values["confirm_actions"], bool):
+        raise ValueError("confirm_actions must be a boolean.")
     if not isinstance(values["show_thinking"], bool):
         raise ValueError("show_thinking must be a boolean.")
     if values["mode"] not in MODE_CHOICES:

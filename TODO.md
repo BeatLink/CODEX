@@ -17,7 +17,7 @@
 - [ ] Add patch-based edits and Git diff/status tools
 - [ ] Add a bounded command runner for targeted checks
 - [ ] Iterate code changes from verification failures
-- [ ] Add approval gates for consequential actions
+- [x] Add approval gates for consequential actions
 - [ ] Benchmark on real maintenance tasks
 - [x] Keep the loaded model between requests and share it with the background worker
 - [x] Return structured JSON from stages using llama.cpp schema-constrained output

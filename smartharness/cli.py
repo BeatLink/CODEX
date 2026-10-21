@@ -152,6 +152,7 @@ def main(argv: list[str] | None = None) -> int:
                 clarification_callback=(
                     _ask_clarification if sys.stdin.isatty() else None
                 ),
+                confirm_actions=settings["confirm_actions"],
             )
             result = execute_task_tree(
                 prompt,

@@ -453,6 +453,8 @@ class HarnessDaemon:
         callbacks = dict(
             show_thinking=False,
             clarification_callback=ask_clarification if interactive else None,
+            # A resumed run keeps the options it started with, but asks before acting as the current settings say.
+            confirm_actions=(settings or self.get_settings())["confirm_actions"],
             progress_callback=report_progress,
             stage_output_callback=report_token,
             model_cache=self._model_cache,

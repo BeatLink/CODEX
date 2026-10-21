@@ -260,6 +260,32 @@ class DirectTaskTests(unittest.TestCase):
         self.assertEqual(tool_calls[0]["allowed_tools"], {"web_search", "web_fetch", "list_directory", "read_file"})
         self.assertIn("Finding from https://docs.example/a", model.call("write", "1")["input"])
 
+    def test_a_declined_action_runs_no_tool_and_is_asked_about_once(self):
+        questions = []
+        model = ScriptedModel({
+            ("decide", "1"): decision("decompose", subtasks=[("Edit a.py", []), ("Edit b.py", [])]),
+            ("decide", "1.1"): decision("act"),
+            ("decide", "1.2"): decision("act"),
+            ("write", "1.1"): "Not changed.",
+            ("write", "1.2"): "Not changed.",
+            ("combine", "1"): "Nothing was edited.",
+        })
+
+        def answer(question):
+            questions.append(question)
+            return "no"
+
+        with (
+            patch("smartharness.task_tree.run_stage", side_effect=model),
+            patch("smartharness.task_tree.run_tool_stage", side_effect=AssertionError("tool stage")),
+        ):
+            execute_task_tree("/do Edit both files", llm=object(), allow_file_writes=True,
+                              clarification_callback=answer, progress_callback=lambda label: None)
+
+        self.assertEqual(len(questions), 1)
+        self.assertIn("Task 1.1: Edit a.py", questions[0])
+        self.assertIn("did not approve the actions", model.call("write", "1.2")["input"])
+
     def test_failed_check_revises_once_then_accepts_the_result_as_unverified(self):
         result, model, _, trees = run_tree({
             ("decide", "1"): decision("answer"),

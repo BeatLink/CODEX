@@ -68,6 +68,7 @@ PATH_FIELDS = (
 SWITCH_FIELDS = (
     ("Allow the model to create and replace files", "allow_file_writes"),
     ("Allow the model to run project tests", "enable_test_execution"),
+    ("Ask before the model changes files, runs tests, or calls MCP tools", "confirm_actions"),
 )
 
 

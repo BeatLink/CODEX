@@ -526,6 +526,11 @@ class SmartHarnessApp(App[None]):
                 value=self.settings["enable_test_execution"],
                 id="enable-test-execution",
             )
+            yield Checkbox(
+                "Ask before the model changes files, runs tests, or calls MCP tools",
+                value=self.settings["confirm_actions"],
+                id="confirm-actions",
+            )
 
             yield Static("HOW REQUESTS RUN", classes="eyebrow section-heading")
             yield from self._number_fields(
@@ -704,6 +709,7 @@ class SmartHarnessApp(App[None]):
                 "filesystem_root": self.query_one("#filesystem-root", TextArea).text,
                 "allow_file_writes": self.query_one("#allow-file-writes", Checkbox).value,
                 "enable_test_execution": self.query_one("#enable-test-execution", Checkbox).value,
+                "confirm_actions": self.query_one("#confirm-actions", Checkbox).value,
                 "max_tool_calls": self._int_setting("max-tool-calls"),
                 "max_search_results": self._int_setting("max-search-results"),
                 "max_task_depth": self._int_setting("max-task-depth"),
@@ -780,6 +786,7 @@ class SmartHarnessApp(App[None]):
         for selector, name in (
             ("allow-file-writes", "allow_file_writes"),
             ("enable-test-execution", "enable_test_execution"),
+            ("confirm-actions", "confirm_actions"),
             ("background-enabled", "background_research_enabled"),
         ):
             self.query_one(f"#{selector}", Checkbox).value = settings[name]

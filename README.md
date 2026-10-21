@@ -539,6 +539,7 @@ another. Unknown keys are rejected.
 	"max_tool_calls": 5,
 	"max_search_results": 5,
 	"enable_test_execution": false,
+	"confirm_actions": true,
 	"show_thinking": true,
 	"mode": "auto",
 	"max_task_depth": 3,
@@ -562,6 +563,14 @@ another. Unknown keys are rejected.
 task, and `max_task_nodes` (1 to 60) caps the tasks in one tree, the top task
 included. Each task takes three to six model calls, so these bound how long a
 request can run.
+
+With `confirm_actions` on, the default, an interactive run asks you before it
+changes a file, runs tests, or calls an MCP tool. It shows the first task
+that would act, with the outline of the whole tree, and your answer covers the
+rest of the run. A reply starting with yes, ok, go, or sure approves; any other reply
+declines, nothing is run, and the answer says so. A run with no one to ask,
+such as piped CLI input, goes ahead as `allow_file_writes` and
+`enable_test_execution` allow.
 
 Precedence, lowest first: built-in defaults, the settings file, the
 `MODEL_PATH` environment variable, then command-line options.

@@ -271,6 +271,34 @@ REVISE_NOTE = (
 
 
 # ==============================================================================
+# Approving actions
+# ==============================================================================
+
+APPROVAL_QUESTION = (
+    "Approve these actions before anything is changed? Reply yes to go ahead; any other reply stops them."
+)
+# How much of the planned actions the approval question shows.
+MAX_APPROVAL_PLAN_CHARS = 1500
+_APPROVAL = re.compile(r"\s*(y|yes|yeah|yep|ok|okay|approve[ds]?|go|go ahead|sure|do it)\b", re.IGNORECASE)
+
+
+def actions_approved(clarification_callback: Callable[[str], str], plan: str) -> tuple[bool, str]:
+    """Ask the user to approve the planned actions; return whether they did and what they replied."""
+    plan = plan.strip()
+    if len(plan) > MAX_APPROVAL_PLAN_CHARS:
+        plan = plan[:MAX_APPROVAL_PLAN_CHARS] + " [...]"
+    reply = clarification_callback(f"{APPROVAL_QUESTION}\n\n{plan}").strip()
+    return bool(_APPROVAL.match(reply)), reply
+
+
+def declined_actions_note(reply: str) -> str:
+    return (
+        "The user did not approve the actions, so no tool was run and nothing was changed."
+        + (f" Their reply: {reply}" if reply else "")
+    )
+
+
+# ==============================================================================
 # Task nodes
 # ==============================================================================
 
@@ -553,9 +581,13 @@ class TaskTreeRun:
         mode: str = "auto",
         checkpoint_id: int | None = None,
         instructions: str = "",
+        confirm_actions: bool = True,
     ) -> None:
         self.user_prompt = user_prompt
         self.instructions = instructions
+        self.confirm_actions = confirm_actions
+        # The user approves or declines a run's actions once, the first time a task would act.
+        self.actions_decision: tuple[bool, str] | None = None
         self.llm = llm
         self.toolbox = toolbox
         self.knowledge_store = knowledge_store
@@ -944,6 +976,10 @@ class TaskTreeRun:
             if answered_from_memory:
                 return evidence
 
+        if decision.approach == "act" and not self.approve_actions(node):
+            note = declined_actions_note(self.actions_decision[1])
+            self.evidence.append(note)
+            return [*evidence, ("Action results", note)]
         system_prompt = GATHER_PROMPTS[decision.approach] + filesystem_note(self.toolbox, self.allow_file_writes)
         if decision.approach == "act":
             system_prompt += self.source_check(False) + self.test_note()
@@ -979,6 +1015,15 @@ class TaskTreeRun:
         self.evidence.append(findings)
         evidence.append(("Findings for this task" if decision.approach != "act" else "Action results", findings))
         return evidence
+
+    def approve_actions(self, node: TaskNode) -> bool:
+        """Ask the user, once per run, whether tasks may change files, run tests, or call MCP tools."""
+        if not self.confirm_actions or self.clarification_callback is None:
+            return True
+        if self.actions_decision is None:
+            plan = f"Task {node.id}: {node.prompt}\nDeliverable: {node.deliverable}\n\nWhole request:\n{self.tree.outline(node)}"
+            self.actions_decision = actions_approved(self.clarification_callback, plan)
+        return self.actions_decision[0]
 
     def test_note(self) -> str:
         if self.enable_test_execution and self.allow_file_writes:
@@ -1216,6 +1261,7 @@ def execute_task_tree(
     max_task_nodes: int = MAX_TASK_NODES,
     mode: str = "auto",
     resume_run_id: int | None = None,
+    confirm_actions: bool = True,
 ) -> str:
     """Answer a request by working it as a tree of tasks.
 
@@ -1280,6 +1326,7 @@ def execute_task_tree(
         mode=mode,
         checkpoint_id=resume_run_id,
         instructions=load_instructions(toolbox.root),
+        confirm_actions=confirm_actions,
     )
     if saved_run is not None:
         run.restore(saved_run["state"])
