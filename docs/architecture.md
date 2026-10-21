@@ -303,6 +303,22 @@ research_queue ─► research_one_topic (idle time) ─► facts, summaries, pa
                      consolidate_knowledge (idle time) ◄──┘ merge, re-file, dispute, prune
 ```
 
+## Limits on the development laptop
+
+SmartHarness is developed on a Lenovo IdeaPad Gaming 3: an RTX 3050 Ti Mobile with 4 GB of VRAM
+(the display runs on the AMD iGPU, so the card is free for models), a Ryzen 5 5600H and 27 GiB of
+DDR4. Two limits found there shape the settings and what was left out.
+
+- **Context stops at 6,144 tokens.** With `Qwen3.5-4B-UD-Q4_K_XL` fully on the card, 6,144 tokens
+  runs; from 7,168 to 10,240 the model loads but the process aborts with a CUDA error once a long
+  prompt arrives, and from 12,288 the context cannot be created. A context that loads is therefore
+  no proof that it fits. `settings.json` uses 6,144, and the 560 MiB fixed reserve in
+  [auto_size.py](../smartharness/auto_size.py) is fitted to these results (measured 2026-10-20).
+- **No draft model or prompt lookup.** In llama-cpp-python 0.3.36 any draft model forces
+  `logits_all`, a context × vocabulary float array: with Qwen3.5's 248,320-token vocabulary that is
+  5.7 GiB of RAM at 6,144 tokens, and the card would compute logits for every prompt token while
+  already at its largest working context.
+
 ## Current weak points
 
 These are properties of the code as it stands, recorded so changes can be measured against them.
