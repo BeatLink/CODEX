@@ -551,6 +551,7 @@ class SmartHarnessApp(App[None]):
                 ("Max tokens", "background-max-tokens", "background_max_tokens"),
                 ("Queue cap", "background-queue-cap", "background_max_pending_jobs"),
                 ("Prune after days", "background-prune-days", "background_prune_after_days"),
+                ("Store cap MB", "background-store-cap", "background_max_store_megabytes"),
             )
             yield Label("SQLite database", classes="field-label")
             yield TextArea(
@@ -722,6 +723,7 @@ class SmartHarnessApp(App[None]):
                 "background_max_tokens": self._int_setting("background-max-tokens"),
                 "background_max_pending_jobs": self._int_setting("background-queue-cap"),
                 "background_prune_after_days": self._int_setting("background-prune-days"),
+                "background_max_store_megabytes": self._int_setting("background-store-cap"),
                 "background_model_path": self.query_one("#background-model-path", TextArea).text,
                 "background_context_size": self._int_setting("background-context-size"),
                 "background_gpu_layers": self._int_setting("background-gpu-layers"),
@@ -779,6 +781,7 @@ class SmartHarnessApp(App[None]):
             ("background-max-tokens", "background_max_tokens"),
             ("background-queue-cap", "background_max_pending_jobs"),
             ("background-prune-days", "background_prune_after_days"),
+            ("background-store-cap", "background_max_store_megabytes"),
             ("background-context-size", "background_context_size"),
             ("background-gpu-layers", "background_gpu_layers"),
         ):

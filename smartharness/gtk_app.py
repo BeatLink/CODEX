@@ -53,6 +53,7 @@ BACKGROUND_NUMBER_FIELDS = (
     ("Max tokens", "background_max_tokens", 32, 4096, 32, 0),
     ("Queue cap", "background_max_pending_jobs", 1, 1000, 1, 0),
     ("Prune after days", "background_prune_after_days", 1, 3650, 1, 0),
+    ("Store cap MB", "background_max_store_megabytes", 16, 1048576, 16, 0),
 )
 BACKGROUND_MODEL_NUMBER_FIELDS = (
     ("Context size (0 uses the main one)", "background_context_size", 0, 1048576, 256, 0),

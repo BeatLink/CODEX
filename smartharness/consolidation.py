@@ -285,7 +285,11 @@ def consolidate_knowledge(
     """Do one piece of tidying in the knowledge store, returning False when nothing is left to do."""
     store = KnowledgeStore(settings["knowledge_db_path"])
     report = on_progress or (lambda message: None)
-    changes = store.tidy(settings["background_prune_after_days"], settings["background_max_pending_jobs"])
+    changes = store.tidy(
+        settings["background_prune_after_days"],
+        settings["background_max_pending_jobs"],
+        settings["background_max_store_megabytes"],
+    )
     if changes:
         report("Tidied the knowledge store: " + ", ".join(f"{count} {name}" for name, count in changes.items()))
         return True

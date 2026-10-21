@@ -288,6 +288,66 @@ class KnowledgeStoreTests(unittest.TestCase):
         self.assertEqual(len(self.store.episodes()), 1)
 
 
+class StoreSizeCapTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.path = Path(self.directory.name) / "knowledge.db"
+        self.store = KnowledgeStore(self.path)
+
+    def tearDown(self):
+        self.directory.cleanup()
+
+    def live_megabytes(self):
+        with sqlite3.connect(self.path) as connection:
+            used = connection.execute("PRAGMA page_count").fetchone()[0] - connection.execute("PRAGMA freelist_count").fetchone()[0]
+            size = used * connection.execute("PRAGMA page_size").fetchone()[0]
+        connection.close()
+        return size / (1024 * 1024)
+
+    def test_processed_episodes_go_before_any_fact_or_user_memory(self):
+        self.store.add_fact("Kestrel", "Kestrel ingest listens on port 7413.")
+        self.store.add_user_memory("preference", "Prefers ISO dates.")
+        for number in range(60):
+            episode_id = self.store.record_episode(f"Request {number}", "answer", "", "Done.", "answered", task_tree="x" * 40_000)
+            self.store.mark_episode_processed(episode_id)
+        self.assertGreater(self.live_megabytes(), 1)
+
+        changes = self.store.tidy(prune_after_days=90, max_megabytes=1)
+
+        self.assertLessEqual(self.live_megabytes(), 0.9)
+        self.assertGreater(changes["items evicted to fit the size cap"], 0)
+        self.assertLess(len(self.store.episodes(limit=100)), 60)
+        self.assertEqual([fact["statement"] for fact in self.store.facts()], ["Kestrel ingest listens on port 7413."])
+        self.assertEqual([memory["statement"] for memory in self.store.user_memories()], ["Prefers ISO dates."])
+
+    def test_the_least_used_facts_go_first_and_their_search_entries_with_them(self):
+        # The used fact is the oldest, so only its use can keep it.
+        self.store.add_fact("Kestrel", "Kestrel ingest listens on port 7413.")
+        self.store.recall("Kestrel ingest port")
+        filler = " ".join(f"word{number}" for number in range(60))
+        for number in range(1500):
+            self.store.add_fact("Filler", f"Unused fact {number}: {filler}")
+        self.assertGreater(self.live_megabytes(), 1)
+
+        self.store.tidy(prune_after_days=90, max_megabytes=1)
+
+        statements = [fact["statement"] for fact in self.store.facts(limit=5000)]
+        self.assertLess(len(statements), 1501)
+        self.assertIn("Kestrel ingest listens on port 7413.", statements)
+        with sqlite3.connect(self.path) as connection:
+            indexed = connection.execute("SELECT COUNT(*) FROM memory_search WHERE kind = 'fact'").fetchone()[0]
+        connection.close()
+        self.assertEqual(indexed, len(statements))
+
+    def test_a_store_under_its_cap_is_left_alone(self):
+        self.store.add_fact("Kestrel", "Kestrel ingest listens on port 7413.")
+
+        changes = self.store.tidy(prune_after_days=90, max_megabytes=1)
+
+        self.assertNotIn("items evicted to fit the size cap", changes)
+        self.assertEqual(len(self.store.facts()), 1)
+
+
 def build_old_store(path, version):
     """Write a database at an earlier schema version holding one row in each table that version has."""
     now = time.time()

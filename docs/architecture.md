@@ -272,7 +272,10 @@ of tidying per pass, so it yields to a run as quickly as research does.
 1. **Without the model** (`KnowledgeStore.tidy`): break topic parent loops, merge topics whose names
    have the same words and facts that differ only in case and punctuation, remove empty topics,
    and mark low-confidence facts that were never recalled as `pruned` once they are
-   `background_prune_after_days` old.
+   `background_prune_after_days` old. Past `background_max_store_megabytes` it deletes rows,
+   least valuable kind first (pruned facts, finished task runs, processed episodes, expired
+   uncited sources, least used facts), with their search entries and vectors, until the data is
+   under 90% of the cap.
 2. **With the model**, one call per pass, in this order: rename a topic still called by the search
    query that found it to a short subject name (folding it into the topic that already has that
    name), compare two topics (same subject, one

@@ -184,6 +184,9 @@ SIMILAR_OVERLAP = 0.5
 
 # Facts this weak are pruned once they have gone unused for the configured number of days.
 PRUNE_BELOW_CONFIDENCE = 0.5
+# Eviction stops below this share of the size cap, so the next few runs do not each evict again.
+EVICT_TO_SHARE_OF_CAP = 0.9
+EVICT_BATCH_SIZE = 100
 
 
 def _search_terms(query: str) -> list[str]:
@@ -871,8 +874,8 @@ class KnowledgeStore:
     # Consolidation
     # ==========================================================================
 
-    def tidy(self, prune_after_days: int, max_pending: int = 100) -> dict[str, int]:
-        """Make every change that needs no model: break parent loops, merge exact duplicates, research empty topics, and prune stale facts."""
+    def tidy(self, prune_after_days: int, max_pending: int = 100, max_megabytes: int | None = None) -> dict[str, int]:
+        """Make every change that needs no model: break parent loops, merge exact duplicates, research empty topics, prune stale facts, and evict to fit the size cap."""
         with self._connect() as connection:
             changes = {
                 "parent loops broken": self._break_topic_loops(connection),
@@ -885,7 +888,86 @@ class KnowledgeStore:
                 "AND confidence < ? AND created_at < ?",
                 (PRUNE_BELOW_CONFIDENCE, time.time() - prune_after_days * 86400),
             ).rowcount
+            if max_megabytes is not None:
+                changes["items evicted to fit the size cap"] = self._evict_to_fit(connection, max_megabytes * 1024 * 1024)
         return {name: count for name, count in changes.items() if count}
+
+    # ==========================================================================
+    # Keeping the store under its size cap
+    # ==========================================================================
+
+    @staticmethod
+    def _live_bytes(connection: sqlite3.Connection) -> int:
+        """Return the bytes the store's data uses, leaving out pages freed by earlier deletes."""
+        page_count = connection.execute("PRAGMA page_count").fetchone()[0]
+        free_pages = connection.execute("PRAGMA freelist_count").fetchone()[0]
+        return (page_count - free_pages) * connection.execute("PRAGMA page_size").fetchone()[0]
+
+    def _evict_to_fit(self, connection: sqlite3.Connection, max_bytes: int) -> int:
+        """Delete the least valuable rows, least valuable kind first, until the store fits under its cap."""
+        if self._live_bytes(connection) <= max_bytes:
+            return 0
+        target = int(max_bytes * EVICT_TO_SHARE_OF_CAP)
+        placeholders = ", ".join("?" for _ in RESUMABLE_TASK_RUN_STATUSES)
+        candidates = (
+            ("fact", "SELECT id FROM facts WHERE status = 'pruned' ORDER BY created_at LIMIT ?", ()),
+            (
+                "task_run",
+                f"SELECT id FROM task_runs WHERE status NOT IN ({placeholders}) ORDER BY updated_at LIMIT ?",
+                RESUMABLE_TASK_RUN_STATUSES,
+            ),
+            ("episode", "SELECT id FROM episodes WHERE processed_at IS NOT NULL ORDER BY created_at LIMIT ?", ()),
+            (
+                "source",
+                "SELECT id FROM sources WHERE expires_at < ? AND id NOT IN "
+                "(SELECT source_id FROM facts WHERE source_id IS NOT NULL) ORDER BY retrieved_at LIMIT ?",
+                (time.time(),),
+            ),
+            (
+                "fact",
+                "SELECT id FROM facts ORDER BY status = 'active', use_count, COALESCE(last_used_at, created_at) LIMIT ?",
+                (),
+            ),
+        )
+        evicted = 0
+        for kind, query, parameters in candidates:
+            while self._live_bytes(connection) > target:
+                ids = [row[0] for row in connection.execute(query, (*parameters, EVICT_BATCH_SIZE))]
+                if not ids:
+                    break
+                for item_id in ids:
+                    self._delete_item(connection, kind, item_id)
+                evicted += len(ids)
+                # A full-text index only marks deleted rows, so it is merged for their pages to be freed.
+                index = "knowledge_search" if kind == "source" else "memory_search"
+                connection.execute(f"INSERT INTO {index}({index}) VALUES ('optimize')")
+            if self._live_bytes(connection) <= target:
+                break
+        return evicted
+
+    @staticmethod
+    def _delete_item(connection: sqlite3.Connection, kind: str, item_id: int) -> None:
+        """Delete one row together with its search entries, vector, and graph links."""
+        if kind == "fact":
+            connection.execute("DELETE FROM facts WHERE id = ?", (item_id,))
+            connection.execute(
+                "DELETE FROM consolidation_checks WHERE kind = 'fact' AND (first_id = ? OR second_id = ?)",
+                (item_id, item_id),
+            )
+        elif kind == "episode":
+            connection.execute("DELETE FROM episodes WHERE id = ?", (item_id,))
+        elif kind == "task_run":
+            connection.execute("DELETE FROM task_runs WHERE id = ?", (item_id,))
+            return
+        else:
+            url = connection.execute("SELECT url FROM sources WHERE id = ?", (item_id,)).fetchone()[0]
+            connection.execute("DELETE FROM knowledge_search WHERE rowid = ?", (item_id,))
+            # Removing the source's node also removes every edge to it.
+            connection.execute("DELETE FROM graph_nodes WHERE kind = 'source' AND label = ?", (url,))
+            connection.execute("DELETE FROM sources WHERE id = ?", (item_id,))
+            return
+        connection.execute("DELETE FROM memory_search WHERE kind = ? AND item_id = ?", (kind, item_id))
+        connection.execute("DELETE FROM embeddings WHERE kind = ? AND item_id = ?", (kind, item_id))
 
     def next_unchecked_pair(self, kind: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
         """Return the most alike pair of the given kind that the model has not compared yet."""

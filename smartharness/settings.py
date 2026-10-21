@@ -51,6 +51,7 @@ DEFAULT_SETTINGS = {
     "background_max_tokens": 512,
     "background_max_pending_jobs": 100,
     "background_prune_after_days": 90,
+    "background_max_store_megabytes": 1024,
 }
 
 
@@ -148,6 +149,7 @@ def validate_settings(values: dict[str, Any]) -> dict[str, Any]:
         ("background_max_tokens", 32, 4096),
         ("background_max_pending_jobs", 1, 1000),
         ("background_prune_after_days", 1, 3650),
+        ("background_max_store_megabytes", 16, 1048576),
     ):
         value = values[name]
         if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:

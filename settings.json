@@ -19,5 +19,6 @@
   "background_max_tokens": 768,
   "background_max_pending_jobs": 100,
   "background_prune_after_days": 90,
+  "background_max_store_megabytes": 1024,
   "mcp_servers": []
 }

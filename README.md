@@ -355,6 +355,12 @@ Changes that need no model come first:
 - Low-confidence facts that have never been recalled are pruned once they are
   `background_prune_after_days` old. A pruned fact stays in the store and comes
   back if research finds it again.
+- When the store's data passes `background_max_store_megabytes` (1024 by
+  default), the least valuable rows are deleted until it is back under 90% of
+  that size: pruned facts first, then finished task runs, processed episodes,
+  expired sources no fact cites, and last the least used facts. User memories
+  and topics are never evicted. Freed space is reused by SQLite rather than
+  returned to the disk.
 
 Then the model gives each topic still called by the search query that found it,
 such as "how do i use fts5 in sqlite", a short subject name such as "SQLite
@@ -560,6 +566,7 @@ another. Unknown keys are rejected.
 	"background_max_tokens": 512,
 	"background_max_pending_jobs": 100,
 	"background_prune_after_days": 90,
+	"background_max_store_megabytes": 1024,
 	"mcp_servers": []
 }
 ```
