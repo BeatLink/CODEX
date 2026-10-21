@@ -211,6 +211,14 @@ class ModelCheckTests(ConsolidationTestCase):
         self.assertLess(calls[0].args[2].index("Python"), calls[0].args[2].index("Rust"))
         self.assertEqual([memory["statement"] for memory in self.store.user_memories()], ["Prefers Rust for scripting tasks."])
 
+    def test_a_stated_user_memory_outlasts_a_newer_learned_one_it_contradicts(self):
+        self.store.add_user_memory("preference", "Prefers Python for scripting tasks.", origin="user")
+        self.store.add_user_memory("preference", "Prefers Rust for scripting tasks.")
+
+        self.consolidate(verdict("contradict"))
+
+        self.assertEqual([memory["statement"] for memory in self.store.user_memories()], ["Prefers Python for scripting tasks."])
+
     def test_a_topic_is_moved_under_the_parent_the_model_picks(self):
         self.store.add_fact("Databases", "Databases hold data.")
         self.store.add_fact("Web frameworks", "Frameworks serve pages.")

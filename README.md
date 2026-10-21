@@ -164,7 +164,11 @@ Knowledge lives in a SQLite database at `knowledge_db_path`
   retrieved, and when it expires (one week by default).
 - **Facts**: single statements under a topic, each with its source and a
   confidence from 0 to 1. A repeated fact keeps its highest confidence.
-- **User memory**: preferences, projects, and corrections about the user.
+- **User memory**: preferences, projects, corrections, and references (where
+  something lives, such as a URL or host) about the user, each with an
+  optional reason it holds. A memory is either learned from past requests or
+  stated by the user, and a project memory belongs to the folder
+  (`filesystem_root`) its requests were worked in.
 - **Episodes**: each finished request with its mode, its task tree, any
   clarification, the answer, and how it ended (how many tasks met their
   deliverable, and how many were unverified or failed).
@@ -175,8 +179,10 @@ Knowledge lives in a SQLite database at `knowledge_db_path`
   carry the source that supports them.
 - **A research queue** of pending, running, done, and failed jobs.
 
-Before the first model call, the request recalls what memory holds for it: the
-user memory, plus facts and past episodes that share at least half of the
+Before the first model call, the request recalls what memory holds for it: up
+to ten user memories, global ones and those of the current folder, sharing the
+most words with the request first, then those the user stated, then the
+newest, so a new memory is never crowded out by older ones; plus facts and past episodes that share at least half of the
 prompt's search terms, or three of them for a longer prompt, ignoring common
 words; those sharing the most terms come first. When fewer than five match and
 the request names a stored topic (every word of the topic's name appears in
@@ -245,7 +251,9 @@ up to five stored relationships of the named things it mentions.
 
 With no research queued, the worker reads recent requests that have not been
 processed yet and remembers what they show about the user: preferences,
-projects, and corrections. It is told to leave out secrets and personal
+projects, corrections, and references, with a reason when the requests give
+one. Each pass reads requests from one folder, and the project memories it
+learns stay with that folder. It is told to leave out secrets and personal
 identifiers. The same call names up to three general subjects that would help
 with the ongoing work the requests show, and each one with no facts yet is
 queued for research. It also re-queues topics whose research is older than
@@ -310,7 +318,7 @@ verdict:
 | --- | --- | --- |
 | Two topics | same subject, first is broader, second is broader, different | Same subjects are merged into the one with more facts and sources, carrying over its facts, sources, subtopics, queued research, and graph edges. A broader topic adopts the narrower one when that narrows where it sits now |
 | Two facts under one topic | same, contradict, different | Same facts are merged into the more trusted one. Of two contradicting facts the less trusted is marked disputed, or both when neither is more trusted, and the topic is queued for fresh research |
-| Two user memories | same, contradict, different | Same memories are merged. Of two contradicting memories the older is set aside |
+| Two user memories | same, contradict, different | Same memories are merged. Of two contradicting memories the older is set aside, except that one the user stated outlasts a learned one. Project memories are compared only with global ones and those of their own folder |
 
 Disputed and pruned facts and set-aside memories are no longer recalled. Each
 pair is compared once; its verdict is stored, and a fact or memory learned

@@ -230,6 +230,51 @@ class KnowledgeStoreTests(unittest.TestCase):
             {"name": "SQLite", "summary": "An embedded database."},
         ])
 
+    def test_a_new_user_memory_is_recalled_beside_often_used_ones(self):
+        for number in range(12):
+            self.store.add_user_memory("preference", f"Likes style number {number}")
+        for _ in range(3):
+            self.store.recall("anything at all")
+        self.store.add_user_memory("preference", "Wants answers in British English")
+
+        recalled = [memory["statement"] for memory in self.store.recall("anything at all")["user"]]
+
+        self.assertEqual(len(recalled), 10)
+        self.assertEqual(recalled[0], "Wants answers in British English")
+
+    def test_user_memories_sharing_the_request_s_words_come_first(self):
+        self.store.add_user_memory("preference", "Uses Rust for command line tools")
+        self.store.add_user_memory("preference", "Prefers short answers")
+
+        recalled = self.store.recall("Write a Rust command line parser")["user"]
+
+        self.assertEqual(recalled[0]["statement"], "Uses Rust for command line tools")
+
+    def test_a_project_memory_is_recalled_only_in_its_project(self):
+        self.store.add_user_memory("project", "Is porting the parser to Zig", scope="/work/parser")
+        self.store.add_user_memory("preference", "Prefers short answers")
+
+        here = [memory["statement"] for memory in self.store.recall("next step", scope="/work/parser")["user"]]
+        elsewhere = [memory["statement"] for memory in self.store.recall("next step", scope="/work/other")["user"]]
+
+        self.assertCountEqual(here, ["Is porting the parser to Zig", "Prefers short answers"])
+        self.assertEqual(elsewhere, ["Prefers short answers"])
+
+    def test_learning_a_stated_memory_again_keeps_it_stated_with_its_reason(self):
+        self.store.add_user_memory("reference", "Docs live at https://example.test/docs", reason="Moved there", origin="user")
+        self.store.add_user_memory("reference", "Docs live at https://example.test/docs")
+
+        [memory] = self.store.user_memories()
+
+        self.assertEqual((memory["origin"], memory["reason"]), ("user", "Moved there"))
+
+    def test_a_forgotten_user_memory_is_gone(self):
+        memory_id = self.store.add_user_memory("preference", "Prefers tabs")
+
+        self.assertTrue(self.store.forget_user_memory(memory_id))
+        self.assertFalse(self.store.forget_user_memory(memory_id))
+        self.assertEqual(self.store.user_memories(), [])
+
     def test_user_memory_rejects_unknown_kinds(self):
         with self.assertRaisesRegex(ValueError, "kind must be one of"):
             self.store.add_user_memory("secret", "anything")

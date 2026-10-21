@@ -782,7 +782,7 @@ class TaskTreeRun:
 
     def run(self) -> str:
         if self.knowledge_store is not None:
-            self.recalled = self.knowledge_store.recall(self.user_prompt)
+            self.recalled = self.knowledge_store.recall(self.user_prompt, scope=str(self.toolbox.root))
             self.recalled_facts = bool(self.recalled["facts"])
             queue_stale_topics(self.knowledge_store, self.recalled["facts"], self.max_pending_research_jobs)
         self.publish()
@@ -1138,6 +1138,7 @@ class TaskTreeRun:
                 self.tree.root.result,
                 self.outcome(),
                 task_tree=json.dumps(self.tree.snapshot(), ensure_ascii=False),
+                scope=str(self.toolbox.root),
             )
         except sqlite3.Error:
             # The answer matters more than the memory of it, so a storage failure is not fatal.

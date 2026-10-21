@@ -280,6 +280,27 @@ class ExtractionTests(unittest.TestCase):
         self.assertEqual(self.store.episodes(unprocessed_only=True), [])
         self.assertFalse(learn_from_episodes(self.settings, llm=object()))
 
+    def test_learning_keeps_a_project_memory_to_the_folder_its_requests_came_from(self):
+        self.store.record_episode("Plan my week", "answer", "", "Done", "answered", scope="/home")
+        self.store.record_episode("Port the parser to Zig", "action", "", "Done", "answered", scope="/work/parser")
+        reply = json.dumps({
+            "memories": [
+                {"kind": "project", "statement": "Is porting a parser to Zig."},
+                {"kind": "preference", "statement": "Likes Zig.", "reason": "Asked for Zig"},
+            ],
+            "research_topics": [],
+        })
+
+        with patch("smartharness.background.run_stage", return_value=reply) as run_stage:
+            learn_from_episodes(self.settings, llm=object())
+
+        self.assertEqual(run_stage.call_count, 1)
+        self.assertEqual(
+            {memory["statement"]: (memory["scope"], memory["reason"]) for memory in self.store.user_memories()},
+            {"Is porting a parser to Zig.": ("/work/parser", ""), "Likes Zig.": ("", "Asked for Zig")},
+        )
+        self.assertEqual(len(self.store.episodes(unprocessed_only=True)), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

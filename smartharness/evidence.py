@@ -76,7 +76,9 @@ def format_recall(recalled: dict[str, list[dict[str, Any]]]) -> str:
     parts = []
     if recalled.get("user"):
         parts.append("About the user:\n" + "\n".join(
-            f"- ({memory['kind']}) {memory['statement']}" for memory in recalled["user"]
+            f"- ({memory['kind']}) {memory['statement']}"
+            + (f" Why: {memory['reason']}" if memory.get("reason") else "")
+            for memory in recalled["user"]
         ))
     if recalled.get("facts"):
         parts.append("Stored facts (from earlier research; cite the URL when using one):\n" + "\n".join(

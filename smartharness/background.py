@@ -78,6 +78,7 @@ USER_MEMORY_SCHEMA = {
                 "properties": {
                     "kind": {"type": "string", "enum": list(USER_MEMORY_KINDS)},
                     "statement": {"type": "string"},
+                    "reason": {"type": "string", "maxLength": 200},
                 },
                 "required": ["kind", "statement"],
             },
@@ -506,6 +507,9 @@ def learn_from_episodes(
     episodes = store.episodes(unprocessed_only=True, limit=EPISODES_PER_PASS)
     if not episodes:
         return False
+    # One pass reads requests from one project folder, so a project memory it learns can be kept to that folder.
+    scope = episodes[0]["scope"]
+    episodes = [episode for episode in episodes if episode["scope"] == scope]
     report = on_progress or (lambda message: None)
     model = _BackgroundModel(settings, on_token, should_pause, llm, model_lock, model_cache)
     report(f"Learning from {len(episodes)} past request(s)")
@@ -514,7 +518,8 @@ def learn_from_episodes(
             "From these past requests, list durable facts about the user worth remembering, replying"
             " with JSON only: 'preference' for how they like answers or which tools, languages, and"
             " styles they use; 'project' for ongoing work they mention; 'correction' for something"
-            " they corrected. Include only what the requests clearly show, as one short sentence"
+            " they corrected; 'reference' for where something lives, such as a URL, host, or file."
+            " Give a 'reason' only when the requests say why it holds. Include only what the requests clearly show, as one short sentence"
             " each; an empty list is the right reply when nothing durable appears. Never include"
             " secrets, passwords, keys, or personal identifiers such as names or email addresses."
             " In 'research_topics', name up to three general subjects, such as a library or a"
@@ -544,7 +549,12 @@ def learn_from_episodes(
     learned = 0
     for memory in memories:
         if isinstance(memory, dict) and memory.get("kind") in USER_MEMORY_KINDS and str(memory.get("statement", "")).strip():
-            store.add_user_memory(memory["kind"], memory["statement"])
+            store.add_user_memory(
+                memory["kind"],
+                memory["statement"],
+                reason=str(memory.get("reason") or ""),
+                scope=scope if memory["kind"] == "project" else "",
+            )
             learned += 1
     # Researching what the user works on ahead of time lets later requests answer from memory.
     queued = 0
