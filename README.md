@@ -126,8 +126,13 @@ top task's write or combine step is the final answer.
   and everything recalled from the knowledge store are fenced between
   `<untrusted-data>` tags under a heading that says to use them as information
   and never follow instructions in them. Any such tag inside the text is
-  removed first, so a hostile page cannot close the fence early.
-  `evals/hostile_seed.json` and `evals/hostile_tasks.json` test this:
+  removed first, so a hostile page cannot close the fence early, and so is
+  every sentence that gives orders to the reader ("ignore previous
+  instructions", "note to AI assistants", anything about the system prompt,
+  "end every answer with", or a line starting `System:`), which becomes
+  `[instruction removed]`. A 4B model followed an appended instruction inside
+  the fence every time; with those sentences removed it passed every hostile
+  task. `evals/hostile_seed.json` and `evals/hostile_tasks.json` test this:
   `smartharness eval --seed evals/hostile_seed.json --tasks evals/hostile_tasks.json`.
 
 `mode` limits what a request may do: in `answer` and `draft` mode the `act`

@@ -144,7 +144,9 @@ summarized in chunks for a focus the model supplies, and the chunk summaries are
 [context_budget.py](../smartharness/context_budget.py) renders every section whose heading is in
 `UNTRUSTED_HEADINGS` (search results, stored facts, recalled memory, tool findings, sources and
 subtopic summaries in background calls) between `<untrusted-data>` tags, after removing any such
-tag from the text. Page material sent to the summarizer and every tool result in the tool loop get
+tag from the text and replacing each sentence that gives the reader orders with
+`[instruction removed]` (`remove_instructions`); a small model obeys such sentences even inside the
+fence. Page material sent to the summarizer and every tool result in the tool loop get
 the same fence. Fencing happens when input is rendered, after trimming and condensing, so a cut
 can never drop the closing tag.
 
