@@ -191,7 +191,9 @@ There are two read paths, used at different moments:
    summaries. The result is formatted as a "Remembered context" section, and recall bumps the use
    counts of what it returned. In a task tree, each subtask adds the facts its own prompt recalls,
    and each search query recalls facts as a "Stored facts" evidence section; when facts or stored
-   summaries answer every query of a task, its tool loop is skipped.
+   summaries answer every query of a task, its tool loop is skipped. A fact whose source has
+   expired (or, with no source, that is older than the source lifetime) is shown as possibly out
+   of date, cannot answer a query on its own, and queues its topic for research.
 2. **Search with memory**, for every search query (`search_with_memory`). It looks the query up in
    `knowledge_search`, keeping unexpired sources that share half the query's terms. A hit is used
    as "Local knowledge result" and no web search runs; when every query was answered by a stored
@@ -296,9 +298,8 @@ These are properties of the code as it stands, recorded so changes can be measur
   then given their ancestor summaries; nothing walks the tree from the top to pick a branch.
 - **The graph is write-only.** Relationships are stored and shown in the Knowledge browser, but no
   request reads them.
-- **Well-supported facts never age.** Sources expire after a week, but a medium or high confidence
-  fact stays `active` indefinitely; only contradiction or the low-confidence prune retires one, so a
-  version number that has since changed is still recalled until a newer fact contradicts it.
+- **Stale facts are flagged, not retired.** A fact whose source expired is recalled with a warning
+  and its topic is re-researched, but it stays `active` until a newer fact contradicts it.
 - **Fact grounding is lexical.** A fact is checked against its source by shared words, versions
   and dates, so a paraphrase that changes a claim's meaning but keeps its words still passes.
 - **Topics are named after raw search queries.** Consolidation merges and re-files them, but only

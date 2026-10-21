@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass, field
 import json
+from datetime import date
 from pathlib import Path
 import re
 import sqlite3
@@ -451,7 +452,9 @@ def _format_recall(recalled: dict[str, list[dict[str, Any]]]) -> str:
         parts.append("Stored facts (from earlier research; cite the URL when using one):\n" + "\n".join(
             f"- {fact['statement']} [{' > '.join([*(step['name'] for step in fact.get('topic_path', [])), fact['topic']])};"
             f" confidence {fact['confidence']:.1f}"
-            + (f"; {fact['source_url']}" if fact.get("source_url") else "") + "]"
+            + (f"; {fact['source_url']}" if fact.get("source_url") else "")
+            + (f"; retrieved {date.fromtimestamp(fact['retrieved_at']).isoformat()}" if fact.get("retrieved_at") else "")
+            + ("; may be out of date" if fact.get("stale") else "") + "]"
             for fact in recalled["facts"]
         ))
         overviews = {
@@ -733,6 +736,16 @@ def queue_research_topic(knowledge_store: KnowledgeStore | None, topic: str, max
         knowledge_store.enqueue_topic(topic[:200], max_pending=max_pending)
     except ValueError:
         pass
+
+
+def queue_stale_topics(
+    knowledge_store: KnowledgeStore | None,
+    facts: list[dict[str, Any]],
+    max_pending: int,
+) -> None:
+    """Queue the topics of recalled facts whose sources have expired, so what is used gets refreshed."""
+    for topic in dict.fromkeys(fact["topic"] for fact in facts if fact.get("stale")):
+        queue_research_topic(knowledge_store, topic, max_pending)
 
 
 def build_toolbox(
@@ -1051,6 +1064,7 @@ def execute_pipeline(
     if knowledge_store is not None:
         recalled = knowledge_store.recall(user_prompt)
         recalled_facts = bool(recalled["facts"])
+        queue_stale_topics(knowledge_store, recalled["facts"], max_pending_research_jobs)
         remembered = _format_recall(recalled)
         if remembered:
             previous_results.append((MEMORY_LABEL, remembered))

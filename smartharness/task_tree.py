@@ -28,6 +28,7 @@ from .pipeline import (
     filesystem_note,
     load_model,
     page_summarizer,
+    queue_stale_topics,
     run_stage,
     search_with_memory,
     section_summarizer,
@@ -673,6 +674,7 @@ class TaskTreeRun:
             if node.parent is not None and self.knowledge_store is not None:
                 known = {fact["id"] for fact in facts}
                 own = self.knowledge_store.recall(node.prompt, include_user=False)["facts"]
+                queue_stale_topics(self.knowledge_store, own, self.max_pending_research_jobs)
                 # A subtask is narrower than the request, so its own matches come first.
                 facts = [*(fact for fact in own if fact["id"] not in known), *facts][:MAX_FACTS_PER_TASK]
                 self.recalled_facts = self.recalled_facts or bool(own)
@@ -705,6 +707,7 @@ class TaskTreeRun:
         if self.knowledge_store is not None:
             self.recalled = self.knowledge_store.recall(self.user_prompt)
             self.recalled_facts = bool(self.recalled["facts"])
+            queue_stale_topics(self.knowledge_store, self.recalled["facts"], self.max_pending_research_jobs)
         self.publish()
         self.work(self.tree.root)
         return self.tree.root.result
@@ -814,6 +817,7 @@ class TaskTreeRun:
                     fact for fact in self.knowledge_store.recall(query, include_user=False)["facts"]
                     if fact["id"] not in shown
                 ]
+                queue_stale_topics(self.knowledge_store, facts, self.max_pending_research_jobs)
                 if facts:
                     shown.update(fact["id"] for fact in facts)
                     self.recalled_facts = True
@@ -823,8 +827,8 @@ class TaskTreeRun:
             )
             evidence.append((f"{label} for '{query}'", text))
             self.local_knowledge_used = self.local_knowledge_used or label == "Local knowledge result"
-            # Stored facts were extracted from fetched pages, so they answer a query as a stored summary does.
-            answered_from_memory = answered_from_memory and (from_summary or bool(facts))
+            # Fresh stored facts were extracted from fetched pages, so they answer a query as a stored summary does.
+            answered_from_memory = answered_from_memory and (from_summary or any(not fact["stale"] for fact in facts))
         self.evidence.extend(text for _, text in evidence)
         return evidence, answered_from_memory
 

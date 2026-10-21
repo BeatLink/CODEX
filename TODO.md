@@ -59,7 +59,7 @@
 - [x] Rank recalled facts by FTS5 score and term overlap instead of requiring half the prompt's terms
 - [ ] Retrieve along the topic tree: pick the best-matching branch, then search only the facts under it
 - [ ] Add one-hop graph neighbours of entities named in recalled facts to the remembered context
-- [ ] Give facts an expiry from their source and recheck them when their topic is refreshed
+- [x] Give facts an expiry from their source and recheck them when their topic is refreshed
 - [x] Check that an extracted fact's numbers, dates, and distinctive words appear in the source it cites
 - [ ] Queue background research from the user's recorded projects
 - [ ] Compare differently worded duplicate topics and facts during consolidation, once embeddings exist

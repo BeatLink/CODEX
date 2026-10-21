@@ -1,5 +1,6 @@
 import json
 import re
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -601,6 +602,34 @@ class RecallTests(unittest.TestCase):
         self.assertNotIn("Zig 0.13.0", model.call("decide", "1.1")["input"])
         self.assertIn("Stored facts for 'zig release'", model.call("write", "1.1")["input"])
         self.assertNotIn(("revise", "1.1"), model.steps())
+
+
+    def test_a_stale_fact_is_flagged_queues_its_topic_and_does_not_answer_the_query(self):
+        self.store.add_fact("Zig", "Zig 0.13.0 was released in June 2024.")
+        with sqlite3.connect(self.database_path) as connection:
+            connection.execute("UPDATE facts SET created_at = 0")
+
+        with patch("smartharness.task_tree.run_tool_stage", return_value="Findings.") as tool_stage:
+            model = ScriptedModel({
+                ("decide", "1"): decision("decompose", subtasks=[("Describe the newest version", []), ("Explain the rest", [])]),
+                ("decide", "1.1"): decision("research", queries=["zig release"]),
+                ("write", "1.1"): "A result.",
+                ("decide", "1.2"): decision("answer"),
+                ("write", "1.2"): "The rest.",
+                ("combine", "1"): "Both.",
+            })
+            with (
+                patch("smartharness.task_tree.run_stage", side_effect=model),
+                patch("smartharness.task_tree.search_with_memory", return_value=NOTHING_FOUND),
+            ):
+                execute_task_tree(
+                    "Write a guide to a systems language", llm=object(), progress_callback=lambda label: None,
+                    knowledge_db_path=self.database_path,
+                )
+
+        self.assertIn("may be out of date", model.call("write", "1.1")["input"])
+        self.assertEqual(tool_stage.call_count, 1)
+        self.assertIn("Zig", [job["topic"] for job in self.store.queue_status() if job["status"] == "pending"])
 
 
 class EpisodeTests(unittest.TestCase):

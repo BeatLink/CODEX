@@ -240,8 +240,11 @@ words; those sharing the most terms come first. These go to every later step as
 count. In a task tree, each subtask also recalls facts for its own prompt, and
 each search query recalls facts for itself; facts that answer every query of a
 task let it skip its tool loop, as stored summaries do. Recalled facts count as
-evidence when checking cited URLs and values. When the run ends, it is recorded
-as an episode.
+evidence when checking cited URLs and values. Each recalled fact shows when its
+source was retrieved; once that source has expired, the fact is marked as
+possibly out of date, no longer lets a task skip its web research, and its
+topic is queued for fresh research. When the run ends, it is recorded as an
+episode.
 
 Every web search the pipeline runs is stored under a topic named after its
 query. A stored source is reused only while it has not expired and shares at

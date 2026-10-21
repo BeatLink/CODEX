@@ -156,6 +156,19 @@ class KnowledgeStoreTests(unittest.TestCase):
             ["FastAPI runs async def endpoints on the event loop."],
         )
 
+    def test_a_fact_whose_source_has_expired_is_recalled_as_stale(self):
+        self.store.store_search_results("zig", [{"url": "https://zig.example/", "title": "Zig", "snippet": "Zig."}])
+        self.store.add_fact("Zig", "Zig 0.13.0 is the newest Zig release.", "https://zig.example/")
+        self.store.add_fact("Zig", "Zig releases ship a new Zig build system.")
+        with sqlite3.connect(self.store.path) as connection:
+            connection.execute("UPDATE sources SET expires_at = 0")
+
+        facts = {fact["statement"]: fact for fact in self.store.recall("newest zig release build")["facts"]}
+
+        self.assertTrue(facts["Zig 0.13.0 is the newest Zig release."]["stale"])
+        self.assertFalse(facts["Zig releases ship a new Zig build system."]["stale"])
+        self.assertIsNotNone(facts["Zig releases ship a new Zig build system."]["retrieved_at"])
+
     def test_recalled_fact_carries_its_chain_of_parent_summaries(self):
         self.store.add_topic("SQLite", parent="Databases")
         self.store.add_topic("SQLite FTS5", parent="SQLite")

@@ -181,6 +181,9 @@ def _shares_half_the_terms(terms: list[str], text: str) -> bool:
     return _shared_term_count(terms, text) >= (len(terms) + 1) // 2
 
 
+# How long a stored search result is trusted before it should be looked up again.
+SOURCE_TTL_SECONDS = 7 * 24 * 3600
+
 # A remembered fact is one short sentence, so a long request can only ever share a few words with it.
 RECALL_MIN_SHARED_TERMS = 3
 
@@ -320,7 +323,7 @@ class KnowledgeStore:
         query: str,
         results: list[dict[str, str]],
         topic: str | None = None,
-        ttl_seconds: int = 604800,
+        ttl_seconds: int = SOURCE_TTL_SECONDS,
         summary: str = "",
     ) -> int:
         topic_id = self.add_topic(topic) if topic else None
@@ -641,15 +644,20 @@ class KnowledgeStore:
                     if row["kind"] == "fact" and len(recalled["facts"]) < limit:
                         fact = connection.execute(
                             "SELECT f.id, f.statement, f.confidence, f.topic_id, t.name AS topic, "
-                            "s.url AS source_url FROM facts f JOIN topics t ON t.id = f.topic_id "
+                            "s.url AS source_url, COALESCE(s.retrieved_at, f.created_at) AS retrieved_at, "
+                            # A fact with no source ages from when it was stored, as its source would have.
+                            "COALESCE(s.expires_at, f.created_at + ?) < ? AS stale "
+                            "FROM facts f JOIN topics t ON t.id = f.topic_id "
                             "LEFT JOIN sources s ON s.id = f.source_id "
                             "WHERE f.id = ? AND f.status = 'active'",
-                            (row["item_id"],),
+                            (SOURCE_TTL_SECONDS, now, row["item_id"]),
                         ).fetchone()
                         if fact:
-                            recalled["facts"].append(
-                                {**dict(fact), "topic_path": self._topic_path(connection, fact["topic_id"])}
-                            )
+                            recalled["facts"].append({
+                                **dict(fact),
+                                "stale": bool(fact["stale"]),
+                                "topic_path": self._topic_path(connection, fact["topic_id"]),
+                            })
                     elif row["kind"] == "episode" and len(recalled["episodes"]) < min(limit, 3):
                         episode = connection.execute(
                             "SELECT id, prompt, task_type, outcome, created_at FROM episodes WHERE id = ?",

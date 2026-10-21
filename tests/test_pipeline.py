@@ -3,6 +3,7 @@ import sys
 import types
 import unittest
 from contextlib import redirect_stdout
+from datetime import date
 from io import StringIO
 from pathlib import Path
 import tempfile
@@ -956,7 +957,10 @@ class MemoryTests(unittest.TestCase):
                 progress_callback=lambda label: None,
             )
 
-        self.assertIn("- SQLite stores a database in one file. [Databases > SQLite; confidence 0.9]", stage_inputs[0])
+        self.assertIn(
+            f"- SQLite stores a database in one file. [Databases > SQLite; confidence 0.9; retrieved {date.today().isoformat()}]",
+            stage_inputs[0],
+        )
         self.assertIn("Broader topic overviews:\n- Databases: Ways to store data.", stage_inputs[0])
 
     def test_search_that_finds_nothing_is_queued_for_background_research(self):
