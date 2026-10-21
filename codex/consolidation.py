@@ -185,11 +185,17 @@ def _name_topic(store: KnowledgeStore, model: _BackgroundModel, settings: dict[s
     if name and _is_title(name) and name != topic["name"]:
         new_name = store.rename_topic(topic["id"], name)
         report(f"Renamed {topic['name']} to {new_name}")
-        # A search for the title finds better sources than one for the query or sentence it replaces.
-        try:
-            store.enqueue_topic(new_name, max_pending=settings["background_max_pending_jobs"])
-        except ValueError:
-            pass
+    elif topic["queries"]:
+        # Its summary and place may come from older rules, so the topic is researched and placed afresh under its name.
+        new_name = topic["name"]
+        store.mark_topic_unplaced(topic["id"])
+    else:
+        return True
+    # A search for the title finds better sources than one for the query or sentence it replaces.
+    try:
+        store.enqueue_topic(new_name, max_pending=settings["background_max_pending_jobs"])
+    except ValueError:
+        pass
     return True
 
 
@@ -290,6 +296,10 @@ def _place_topic(store: KnowledgeStore, model: _BackgroundModel, settings: dict[
     if not candidates:
         store.mark_topic_placed(topic["id"])
         return True
+    if not topic["researched"] and topic["children"]:
+        # A grouping topic is judged by its summary, which must describe the subtopics it holds now.
+        _refresh_parent_summary(store, model, topic["name"])
+        topic = store.next_topic_to_place(time.time() - settings["background_refresh_interval_hours"] * 3600) or topic
     report(f"Checking where {topic['name']} belongs")
     # Only a researched topic may name a new parent, so a parent made this way never names one above itself.
     choices = [TOP_LEVEL, *(candidate["name"] for candidate in candidates), *([NEW_PARENT] if topic["researched"] else [])]

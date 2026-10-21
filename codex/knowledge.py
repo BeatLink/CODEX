@@ -1232,6 +1232,10 @@ class KnowledgeStore:
             self._delete_topic(connection, topic_id, row["name"])
             return True
 
+    def mark_topic_unplaced(self, topic_id: int) -> None:
+        with self._connect() as connection:
+            connection.execute("UPDATE topics SET placed_at = NULL WHERE id = ?", (topic_id,))
+
     def mark_topic_placed(self, topic_id: int) -> None:
         with self._connect() as connection:
             connection.execute("UPDATE topics SET placed_at = ? WHERE id = ?", (time.time(), topic_id))

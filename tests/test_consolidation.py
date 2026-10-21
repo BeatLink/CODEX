@@ -262,6 +262,15 @@ class ModelCheckTests(ConsolidationTestCase):
 
         self.assertEqual(list(self.topic_names()), ["pinetime"])
 
+    def test_a_researched_topic_that_keeps_its_name_is_researched_and_placed_afresh(self):
+        self.store.store_search_results("PinePhone", [{"title": "Phone", "url": "https://example.test/phone", "snippet": "A phone."}], topic="PinePhone", summary="Sources say nothing.")
+        self.place_every_topic()
+
+        self.consolidate(json.dumps({"reason": "It already reads as a title.", "name": "PinePhone"}))
+
+        self.assertEqual([job["topic"] for job in self.store.queue_status()], ["PinePhone"])
+        self.assertEqual(self.store.next_topic_to_place(time.time())["name"], "PinePhone")
+
     def test_a_title_may_take_its_words_from_the_search_that_found_the_topic(self):
         self.store.store_search_results("what is the pinephone", [{"title": "Phone", "url": "https://example.test/phone", "snippet": "A phone."}], topic="Phone notes", summary="A Linux phone.")
         self.place_every_topic()
@@ -471,6 +480,23 @@ class ModelCheckTests(ConsolidationTestCase):
         self.assertTrue(worked)
         self.assertIn("First topic: Hardware", calls[1].args[2])
         self.assertEqual(self.topic_names(), {"PineTime": None, "Hardware": None})
+
+    def test_a_grouping_topic_is_placed_by_a_summary_rebuilt_from_its_subtopics(self):
+        self.store.add_topic("PinePhone", parent="Hardware")
+        self.store.set_topic_summary("PinePhone", "A Linux phone.")
+        self.store.add_fact("PinePhone", "The PinePhone runs Linux.")
+        self.store.set_topic_summary("Hardware", "A stale summary about a 5.7-inch screen.")
+        self.store.add_fact("Computing", "Computing covers hardware and software.")
+        self.store.set_topic_summary("Computing", "Hardware and software.")
+        self.place_every_topic()
+        with self.store._connect() as connection:
+            connection.execute("UPDATE topics SET placed_at = NULL WHERE name = 'Hardware'")
+
+        worked, calls = self.consolidate(json.dumps({"summary": "Physical devices such as the PinePhone."}), verdict(TOP_LEVEL, key="parent"))
+
+        self.assertTrue(worked)
+        self.assertIn("Physical devices such as the PinePhone.", calls[1].args[2])
+        self.assertNotIn("stale", calls[1].args[2])
 
     def test_a_topic_is_never_offered_its_own_subtopics_as_a_parent(self):
         self.store.add_fact("Databases", "Databases hold data.")
