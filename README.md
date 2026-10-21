@@ -453,8 +453,17 @@ runner.
 
 Each run gets an empty knowledge store and an empty scratch directory as its
 filesystem root, with no MCP servers, so no task sees what an earlier one found
-or the user's own files. Web search stays on. Tasks use the `auto`, `answer`,
-or `draft` mode; execute mode is not covered yet.
+or the user's own files. Web search stays on.
+
+`evals/execute_tasks.json` holds execute-mode tasks. Each one carries `files`,
+a small project written into the scratch root before the run, and the pipeline
+and task tree may change those files and run their tests. The bare model gets
+the files inline and gives back each file it changes in full, as a
+`File: <path>` line and a fenced block, which is written into the root before
+scoring. Three more checks look at the files after the run: `tests_pass` runs
+unittest discovery as the `run_tests` tool does, `file_contains` looks for text
+in one file, and `file_unchanged` fails when a file such as a test differs from
+how the task gave it.
 
 `--seed-store PATH` measures what recall adds: the pipeline and the task tree
 each run once more, as `pipeline+store` and `tree+store`, starting from a fresh
@@ -473,6 +482,7 @@ run recalls by meaning as well as by words.
 ```bash
 smartharness eval --runners bare,tree --only stable-fact,python-bug
 smartharness eval --tasks my-tasks.json --output report.json
+smartharness eval --tasks evals/execute_tasks.json
 smartharness eval --runners pipeline --seed-store ~/.local/share/smartharness/knowledge.sqlite3
 smartharness eval --seed --runners pipeline,tree
 ```

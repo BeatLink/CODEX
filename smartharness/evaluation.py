@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import time
@@ -26,9 +27,17 @@ RUNNER_CHOICES = ("bare", "pipeline", "tree")
 STORE_RUNNERS = ("pipeline", "tree")
 SEEDED_SUFFIX = "+store"
 BARE_SYSTEM_PROMPT = "You are a helpful assistant. Answer the user's request."
-# Execute mode is left out because its tasks would need files to work on.
-EVAL_MODES = ("auto", "answer", "draft")
-CHECK_TYPES = ("contains", "contains_any", "not_contains", "regex", "max_words", "min_words")
+BARE_FILES_NOTE = (
+    "The files below are the whole project. To create or change a file, give its full new content as a line"
+    " 'File: <path>' followed by a fenced code block; files you leave out stay as they are."
+)
+EVAL_MODES = ("auto", "answer", "draft", "execute")
+ANSWER_CHECK_TYPES = ("contains", "contains_any", "not_contains", "regex", "max_words", "min_words")
+# These checks look at the task's files after the run instead of at the answer.
+FILE_CHECK_TYPES = ("tests_pass", "file_contains", "file_unchanged")
+CHECK_TYPES = ANSWER_CHECK_TYPES + FILE_CHECK_TYPES
+TEST_TIMEOUT_SECONDS = 120
+_FILE_BLOCK = re.compile(r"^File:\s*`?([^`\n]+?)`?\s*\n```[^\n]*\n(.*?)^```", re.MULTILINE | re.DOTALL)
 
 
 # ==============================================================================
@@ -42,6 +51,8 @@ class EvalTask:
     prompt: str
     checks: list[dict[str, Any]]
     mode: str = "auto"
+    # The project the task works on, as relative path to content; the runners may change these files.
+    files: dict[str, str] = field(default_factory=dict)
 
 
 def load_tasks(tasks_path: str | Path) -> list[EvalTask]:
@@ -57,6 +68,7 @@ def load_tasks(tasks_path: str | Path) -> list[EvalTask]:
             prompt=str(entry.get("prompt", "")).strip(),
             checks=entry.get("checks", []),
             mode=entry.get("mode", "auto"),
+            files=entry.get("files", {}),
         )
         if not task.id or task.id in seen_ids:
             raise ValueError(f"Each task needs a unique id; got {task.id!r}.")
@@ -64,10 +76,20 @@ def load_tasks(tasks_path: str | Path) -> list[EvalTask]:
             raise ValueError(f"Task {task.id} has no prompt.")
         if task.mode not in EVAL_MODES:
             raise ValueError(f"Task {task.id} has mode {task.mode!r}; use one of: {', '.join(EVAL_MODES)}.")
+        if not isinstance(task.files, dict) or not all(
+            isinstance(path, str) and path.strip() and isinstance(content, str) for path, content in task.files.items()
+        ):
+            raise ValueError(f"Task {task.id}: 'files' must map relative paths to their text.")
+        if task.mode == "execute" and not task.files:
+            raise ValueError(f"Task {task.id} is in execute mode but has no files to work on.")
         if not isinstance(task.checks, list) or not task.checks:
             raise ValueError(f"Task {task.id} has no checks.")
         for check in task.checks:
             validate_check(task.id, check)
+            if check["type"] in FILE_CHECK_TYPES and not task.files:
+                raise ValueError(f"Task {task.id} has a {check['type']} check but no files.")
+            if check["type"] == "file_unchanged" and check["path"] not in task.files:
+                raise ValueError(f"Task {task.id}: file_unchanged names {check['path']}, which is not one of its files.")
         seen_ids.add(task.id)
         tasks.append(task)
     return tasks
@@ -84,6 +106,13 @@ def validate_check(task_id: str, check: Any) -> None:
     elif kind in ("max_words", "min_words"):
         if isinstance(check.get("value"), bool) or not isinstance(check.get("value"), int):
             raise ValueError(f"Task {task_id}: a {kind} check needs a whole number in 'value'.")
+    elif kind == "tests_pass":
+        return
+    elif kind in ("file_contains", "file_unchanged"):
+        if not isinstance(check.get("path"), str) or not check["path"].strip():
+            raise ValueError(f"Task {task_id}: a {kind} check needs a 'path'.")
+        if kind == "file_contains" and (not isinstance(check.get("value"), str) or not check["value"]):
+            raise ValueError(f"Task {task_id}: a file_contains check needs a string in 'value'.")
     elif kind == "regex":
         try:
             re.compile(check.get("pattern", ""))
@@ -125,9 +154,11 @@ def build_seed_store(seed_path: str | Path, database_path: str | Path, embedder:
 # ==============================================================================
 
 
-def check_passes(answer: str, check: dict[str, Any]) -> bool:
-    """Score one check against the answer; text matches ignore case."""
+def check_passes(answer: str, check: dict[str, Any], task: EvalTask | None = None, workspace: Path | None = None) -> bool:
+    """Score one check against the answer, or against the task's files in the workspace; text matches ignore case."""
     kind = check["type"]
+    if kind in FILE_CHECK_TYPES:
+        return file_check_passes(check, task, workspace)
     lowered = answer.lower()
     if kind == "contains":
         return check["value"].lower() in lowered
@@ -143,8 +174,42 @@ def check_passes(answer: str, check: dict[str, Any]) -> bool:
     return word_count >= check["value"]
 
 
+def file_check_passes(check: dict[str, Any], task: EvalTask, workspace: Path) -> bool:
+    if check["type"] == "tests_pass":
+        return run_tests(workspace)
+    path = workspace / check["path"]
+    if not path.is_file():
+        return False
+    content = path.read_text(encoding="utf-8", errors="replace")
+    if check["type"] == "file_unchanged":
+        return content == task.files[check["path"]]
+    return check["value"].lower() in content.lower()
+
+
+def run_tests(workspace: Path) -> bool:
+    """Run unittest discovery the way the run_tests tool does, passing when every test passes."""
+    start_directory = workspace / "tests" if (workspace / "tests").is_dir() else workspace
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-m", "unittest", "discover", "-s", str(start_directory)],
+            cwd=workspace,
+            capture_output=True,
+            timeout=TEST_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return False
+    return completed.returncode == 0
+
+
 def describe_check(check: dict[str, Any]) -> str:
     kind = check["type"]
+    if kind == "tests_pass":
+        return "tests_pass"
+    if kind == "file_unchanged":
+        return f"file_unchanged {check['path']}"
+    if kind == "file_contains":
+        return f"file_contains {check['path']} {check['value']!r}"
     if kind == "contains_any":
         return f"contains_any {check['values']}"
     if kind == "regex":
@@ -208,22 +273,50 @@ def run_task(
     started = time.monotonic()
     # Each run gets its own store, empty or a fresh copy of the seed, so no run sees what an earlier one stored.
     with tempfile.TemporaryDirectory(prefix="smartharness-eval-") as scratch_directory:
+        # The workspace is the filesystem root, so the knowledge store beside it stays out of the model's reach.
+        workspace = Path(scratch_directory) / "workspace"
         try:
+            write_files(workspace, task.files)
             if seed_store is not None:
                 copy_store(seed_store, Path(scratch_directory) / "knowledge.sqlite3")
             result.answer = answer_with(runner, task, counting_model, settings, scratch_directory)
         except Exception as error:
             result.error = f"{type(error).__name__}: {error}"
-    result.seconds = round(time.monotonic() - started, 2)
-    result.model_calls = counting_model.calls
-    result.completion_tokens = counting_model.completion_tokens
-    if not result.error:
-        for check in task.checks:
-            if check_passes(result.answer, check):
-                result.checks_passed += 1
-            else:
-                result.failed_checks.append(describe_check(check))
+        result.seconds = round(time.monotonic() - started, 2)
+        result.model_calls = counting_model.calls
+        result.completion_tokens = counting_model.completion_tokens
+        if not result.error:
+            for check in task.checks:
+                if check_passes(result.answer, check, task, workspace):
+                    result.checks_passed += 1
+                else:
+                    result.failed_checks.append(describe_check(check))
     return result
+
+
+def write_files(workspace: Path, files: dict[str, str]) -> None:
+    """Write each file under the workspace, refusing a path that would land outside it."""
+    workspace.mkdir(parents=True, exist_ok=True)
+    root = workspace.resolve()
+    for relative_path, content in files.items():
+        path = (root / relative_path).resolve()
+        if not path.is_relative_to(root) or path == root:
+            raise ValueError(f"File path {relative_path!r} is outside the workspace.")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+
+def bare_prompt(task: EvalTask) -> str:
+    """Give the bare model the task's files inline, since it has no tools to read or write them."""
+    if not task.files:
+        return task.prompt
+    listing = "\n\n".join(f"File: {path}\n```\n{content}\n```" for path, content in task.files.items())
+    return f"{task.prompt}\n\n{BARE_FILES_NOTE}\n\n{listing}"
+
+
+def file_blocks(answer: str) -> dict[str, str]:
+    """Read the files a bare answer gives in full, each as a 'File: <path>' line and a fenced block."""
+    return {path.strip(): content for path, content in _FILE_BLOCK.findall(answer)}
 
 
 def copy_store(seed_store: str | Path, destination: Path) -> None:
@@ -240,20 +333,26 @@ def copy_store(seed_store: str | Path, destination: Path) -> None:
 
 
 def answer_with(runner: str, task: EvalTask, llm: Any, settings: dict[str, Any], scratch_directory: str) -> str:
+    workspace = Path(scratch_directory) / "workspace"
     if runner == "bare":
-        return run_stage(
+        answer = run_stage(
             llm,
             BARE_SYSTEM_PROMPT,
-            task.prompt,
+            bare_prompt(task),
             max_tokens=settings["max_tokens"],
             temperature=settings["temperature"],
         )
+        if task.files:
+            write_files(workspace, file_blocks(answer))
+        return answer
     options = dict(
         context_size=settings["context_size"],
         max_tokens=settings["max_tokens"],
         temperature=settings["temperature"],
-        # The scratch directory stands in for the filesystem, so no task reads the user's own files.
-        filesystem_root=scratch_directory,
+        # The workspace stands in for the filesystem, so no task reads or changes the user's own files.
+        filesystem_root=str(workspace),
+        allow_file_writes=bool(task.files),
+        enable_test_execution=bool(task.files),
         max_tool_calls=settings["max_tool_calls"],
         max_search_results=settings["max_search_results"],
         mcp_servers=[],

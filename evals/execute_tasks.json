@@ -1,0 +1,102 @@
+[
+  {
+    "id": "fix-off-by-one",
+    "mode": "execute",
+    "prompt": "The tests in test_ranges.py fail. Fix the bug in ranges.py so that they pass, without changing the tests.",
+    "files": {
+      "ranges.py": "def inclusive_range(start, end):\n    \"\"\"Return the whole numbers from start to end, including end.\"\"\"\n    return list(range(start, end))\n",
+      "test_ranges.py": "import unittest\n\nfrom ranges import inclusive_range\n\n\nclass InclusiveRangeTests(unittest.TestCase):\n    def test_includes_both_ends(self):\n        self.assertEqual(inclusive_range(1, 3), [1, 2, 3])\n\n    def test_single_number(self):\n        self.assertEqual(inclusive_range(5, 5), [5])\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
+    },
+    "checks": [
+      {
+        "type": "tests_pass"
+      },
+      {
+        "type": "file_unchanged",
+        "path": "test_ranges.py"
+      }
+    ]
+  },
+  {
+    "id": "add-slugify",
+    "mode": "execute",
+    "prompt": "Add a slugify(text) function to text_tools.py that lowercases the text, turns each run of characters other than letters and digits into a single hyphen, and strips hyphens from both ends. The tests in test_text_tools.py describe it; make them pass without changing them.",
+    "files": {
+      "text_tools.py": "def word_count(text):\n    \"\"\"Count the words in text.\"\"\"\n    return len(text.split())\n",
+      "test_text_tools.py": "import unittest\n\nfrom text_tools import slugify, word_count\n\n\nclass TextToolsTests(unittest.TestCase):\n    def test_word_count(self):\n        self.assertEqual(word_count(\"one two three\"), 3)\n\n    def test_slugify_punctuation(self):\n        self.assertEqual(slugify(\"Hello, World!\"), \"hello-world\")\n\n    def test_slugify_runs_and_ends(self):\n        self.assertEqual(slugify(\"  --Local LLM   Harness v2--  \"), \"local-llm-harness-v2\")\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
+    },
+    "checks": [
+      {
+        "type": "tests_pass"
+      },
+      {
+        "type": "file_unchanged",
+        "path": "test_text_tools.py"
+      },
+      {
+        "type": "file_contains",
+        "path": "text_tools.py",
+        "value": "def word_count"
+      }
+    ]
+  },
+  {
+    "id": "change-default-and-test",
+    "mode": "execute",
+    "prompt": "Change the default request timeout in app_settings.py from 30 to 45 seconds, and update the test that checks the default so the tests still pass.",
+    "files": {
+      "app_settings.py": "DEFAULTS = {\n    \"retries\": 3,\n    \"timeout_seconds\": 30,\n}\n\n\ndef setting(name, overrides=None):\n    \"\"\"Return a setting, preferring an override when one is given.\"\"\"\n    return (overrides or {}).get(name, DEFAULTS[name])\n",
+      "test_app_settings.py": "import unittest\n\nfrom app_settings import setting\n\n\nclass SettingTests(unittest.TestCase):\n    def test_default_timeout(self):\n        self.assertEqual(setting(\"timeout_seconds\"), 30)\n\n    def test_override(self):\n        self.assertEqual(setting(\"retries\", {\"retries\": 5}), 5)\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
+    },
+    "checks": [
+      {
+        "type": "tests_pass"
+      },
+      {
+        "type": "file_contains",
+        "path": "app_settings.py",
+        "value": "\"timeout_seconds\": 45"
+      },
+      {
+        "type": "file_contains",
+        "path": "test_app_settings.py",
+        "value": "45"
+      },
+      {
+        "type": "file_contains",
+        "path": "app_settings.py",
+        "value": "\"retries\": 3"
+      }
+    ]
+  },
+  {
+    "id": "add-changelog-entry",
+    "mode": "execute",
+    "prompt": "Add an entry for version 1.3.0 at the top of the version list in CHANGELOG.md, above 1.2.0, saying that the date parser now accepts ISO week dates. Keep the existing entries.",
+    "files": {
+      "CHANGELOG.md": "# Changelog\n\n## 1.2.0\n\n- Fixed the date parser for leap years.\n\n## 1.1.0\n\n- Added CSV export.\n"
+    },
+    "checks": [
+      {
+        "type": "file_contains",
+        "path": "CHANGELOG.md",
+        "value": "## 1.3.0"
+      },
+      {
+        "type": "file_contains",
+        "path": "CHANGELOG.md",
+        "value": "week"
+      },
+      {
+        "type": "file_contains",
+        "path": "CHANGELOG.md",
+        "value": "Fixed the date parser for leap years."
+      },
+      {
+        "type": "file_contains",
+        "path": "CHANGELOG.md",
+        "value": "Added CSV export."
+      }
+    ]
+  }
+]

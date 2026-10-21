@@ -9,6 +9,7 @@ from smartharness.cli import main as cli_main
 from smartharness.evaluation import (
     DEFAULT_SEED_PATH,
     DEFAULT_TASKS_PATH,
+    EVALS_DIRECTORY,
     RECALL_TASKS_PATH,
     build_seed_store,
     CountingModel,
@@ -65,7 +66,7 @@ class LoadTasksTests(unittest.TestCase):
     def test_recall_task_set_loads(self):
         self.assertTrue(load_tasks(RECALL_TASKS_PATH))
 
-    def test_rejects_duplicate_ids_bad_checks_and_execute_mode(self):
+    def test_rejects_duplicate_ids_bad_checks_and_execute_mode_without_files(self):
         bad_sets = [
             [TASK, TASK],
             [{**TASK, "checks": []}],
@@ -149,7 +150,9 @@ class RunTaskTests(unittest.TestCase):
         self.assertTrue(result.passed)
         self.assertEqual(seen["mode"], "answer")
         self.assertEqual(seen["mcp_servers"], [])
-        self.assertEqual(Path(seen["knowledge_db_path"]).parent, Path(seen["filesystem_root"]))
+        # The store sits beside the workspace, out of the tools' reach.
+        self.assertEqual(Path(seen["knowledge_db_path"]).parent, Path(seen["filesystem_root"]).parent)
+        self.assertFalse(seen["allow_file_writes"])
         self.assertIsInstance(seen["llm"], CountingModel)
         self.assertFalse(Path(seen["filesystem_root"]).exists())
 
@@ -209,6 +212,95 @@ class RunTaskTests(unittest.TestCase):
 
         self.assertEqual((totals["tasks"], totals["tasks_passed"], totals["checks_passed"]), (2, 1, 1))
         self.assertEqual((totals["model_calls"], totals["completion_tokens"]), (2, 14))
+
+
+RANGES_TASK = {
+    "id": "fix",
+    "mode": "execute",
+    "prompt": "Fix ranges.py so the tests pass.",
+    "files": {
+        "ranges.py": "def inclusive_range(start, end):\n    return list(range(start, end))\n",
+        "test_ranges.py": (
+            "import unittest\nfrom ranges import inclusive_range\n\n\n"
+            "class Tests(unittest.TestCase):\n"
+            "    def test_ends(self):\n        self.assertEqual(inclusive_range(1, 3), [1, 2, 3])\n"
+        ),
+    },
+    "checks": [
+        {"type": "tests_pass"},
+        {"type": "file_unchanged", "path": "test_ranges.py"},
+        {"type": "file_contains", "path": "ranges.py", "value": "end + 1"},
+    ],
+}
+FIXED_RANGES = "File: ranges.py\n```python\ndef inclusive_range(start, end):\n    return list(range(start, end + 1))\n```\n"
+
+
+def ranges_task():
+    with tempfile.TemporaryDirectory() as directory:
+        return load_tasks(write_tasks(directory, [RANGES_TASK]))[0]
+
+
+class FileTaskTests(unittest.TestCase):
+    def test_no_shipped_execute_task_passes_when_nothing_is_changed(self):
+        for task in load_tasks(EVALS_DIRECTORY / "execute_tasks.json"):
+            with self.subTest(task=task.id):
+                result = run_task(task, "bare", ReplyingModel("I changed nothing."), DEFAULT_SETTINGS)
+                self.assertEqual(task.mode, "execute")
+                self.assertFalse(result.error)
+                self.assertFalse(result.passed)
+
+    def test_rejects_file_checks_without_files_and_paths_it_does_not_have(self):
+        bad_sets = [
+            [{**TASK, "checks": [{"type": "tests_pass"}]}],
+            [{**RANGES_TASK, "checks": [{"type": "file_unchanged", "path": "other.py"}]}],
+            [{**RANGES_TASK, "checks": [{"type": "file_contains", "path": "ranges.py"}]}],
+            [{**RANGES_TASK, "files": {"ranges.py": 3}}],
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            for tasks in bad_sets:
+                with self.subTest(tasks=tasks), self.assertRaises(ValueError):
+                    load_tasks(write_tasks(directory, tasks))
+
+    def test_bare_runner_sees_the_files_and_its_file_blocks_are_written_back(self):
+        prompts = []
+
+        class FixingModel(ReplyingModel):
+            def create_chat_completion(self, **request):
+                prompts.append(request["messages"][1]["content"])
+                return super().create_chat_completion(**request)
+
+        result = run_task(ranges_task(), "bare", FixingModel(FIXED_RANGES), DEFAULT_SETTINGS)
+
+        self.assertIn("File: test_ranges.py", prompts[0])
+        self.assertEqual(result.failed_checks, [])
+        self.assertTrue(result.passed)
+
+    def test_a_bare_file_block_outside_the_workspace_is_an_error(self):
+        escaping = FIXED_RANGES.replace("File: ranges.py", "File: ../ranges.py")
+
+        result = run_task(ranges_task(), "bare", ReplyingModel(escaping), DEFAULT_SETTINGS)
+
+        self.assertIn("outside the workspace", result.error)
+
+    def test_tree_runner_may_write_and_test_in_a_workspace_holding_the_files(self):
+        seen = {}
+
+        def fake_tree(prompt, **options):
+            seen.update(options)
+            root = Path(options["filesystem_root"])
+            self.assertEqual(sorted(path.name for path in root.iterdir()), ["ranges.py", "test_ranges.py"])
+            (root / "test_ranges.py").write_text("changed", encoding="utf-8")
+            return "Done."
+
+        with patch("smartharness.evaluation.execute_task_tree", side_effect=fake_tree):
+            result = run_task(ranges_task(), "tree", ReplyingModel(""), DEFAULT_SETTINGS)
+
+        self.assertTrue(seen["allow_file_writes"] and seen["enable_test_execution"])
+        self.assertEqual(seen["mode"], "execute")
+        self.assertEqual(
+            result.failed_checks,
+            ["tests_pass", "file_unchanged test_ranges.py", "file_contains ranges.py 'end + 1'"],
+        )
 
 
 class CommandLineTests(unittest.TestCase):
