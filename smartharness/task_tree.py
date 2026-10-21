@@ -10,6 +10,7 @@ from typing import Any
 
 from .context_budget import condense_sections, input_token_budget, render_sections, token_counter
 from .embeddings import get_embedder
+from .instructions import INSTRUCTIONS_LABEL, load_instructions
 from .knowledge import MAX_RECALLED_RELATIONSHIPS, KnowledgeStore
 from .checks import action_report_problems, uncited_urls, unsupported_values
 from .evidence import (
@@ -549,8 +550,10 @@ class TaskTreeRun:
         tree_callback: Callable[[list[dict[str, Any]]], None] | None,
         mode: str = "auto",
         checkpoint_id: int | None = None,
+        instructions: str = "",
     ) -> None:
         self.user_prompt = user_prompt
+        self.instructions = instructions
         self.llm = llm
         self.toolbox = toolbox
         self.knowledge_store = knowledge_store
@@ -725,6 +728,10 @@ class TaskTreeRun:
                 self.report(node, "Condensing earlier results")
             return self.summarize(heading, text, reply_tokens)
 
+        if self.instructions:
+            # The user's instructions follow the request and are pinned with it.
+            sections = [sections[0], (INSTRUCTIONS_LABEL, self.instructions), *sections[1:]]
+            pinned += 1
         return render_sections(condense_sections(sections, budget, self.count_tokens, summarize, pinned))
 
     def source_check(self, searched: bool) -> str:
@@ -1256,6 +1263,7 @@ def execute_task_tree(
         tree_callback=tree_callback,
         mode=mode,
         checkpoint_id=resume_run_id,
+        instructions=load_instructions(toolbox.root),
     )
     if saved_run is not None:
         run.restore(saved_run["state"])

@@ -151,6 +151,21 @@ the options it started with, not the current settings. The TUI and GTK
 interfaces offer Resume and Discard for the newest unfinished run, and
 `smartharness --resume` resumes it from the command line.
 
+## Standing instructions
+
+Rules you write yourself go into every model call, after the request, and are
+never condensed or trimmed before the earlier results are. SmartHarness reads
+two files, in this order:
+
+- `~/.config/smartharness/SMARTHARNESS.md` (under `$XDG_CONFIG_HOME` when it
+  is set), for rules that hold everywhere.
+- `SMARTHARNESS.md` in `filesystem_root`, or `AGENTS.md` when there is none,
+  for rules about that folder, such as how its tests run.
+
+Together they are cut at 4000 characters, since a small model's window has
+little room to spare. Keep each rule short and plain; a small model follows a
+written rule far more reliably than one it has to work out.
+
 ## Long-term memory
 
 ### Knowledge store
