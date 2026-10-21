@@ -518,10 +518,14 @@ def create_model(model_path: str, context_size: int, gpu_layers: int) -> Any:
             "llama-cpp-python is required; install it in the active environment."
         ) from error
 
+    # A CUDA build still puts the context cache and large prompt batches on the GPU unless told not to.
+    on_cpu_only = gpu_layers == 0
     return Llama(
         model_path=model_path,
         n_gpu_layers=gpu_layers,
         n_ctx=context_size,
+        offload_kqv=not on_cpu_only,
+        op_offload=not on_cpu_only,
         verbose=False,
     )
 

@@ -308,7 +308,7 @@ research_queue ─► research_one_topic (idle time) ─► facts, summaries, pa
 
 SmartHarness is developed on a Lenovo IdeaPad Gaming 3: an RTX 3050 Ti Mobile with 4 GB of VRAM
 (the display runs on the AMD iGPU, so the card is free for models), a Ryzen 5 5600H and 27 GiB of
-DDR4. Two limits found there shape the settings and what was left out.
+DDR4. The limits found there shape the settings and what was left out.
 
 - **Context stops at 6,144 tokens.** With `Qwen3.5-4B-UD-Q4_K_XL` fully on the card, 6,144 tokens
   runs; from 7,168 to 10,240 the model loads but the process aborts with a CUDA error once a long
@@ -319,6 +319,12 @@ DDR4. Two limits found there shape the settings and what was left out.
   `logits_all`, a context × vocabulary float array: with Qwen3.5's 248,320-token vocabulary that is
   5.7 GiB of RAM at 6,144 tokens, and the card would compute logits for every prompt token while
   already at its largest working context.
+- **A CPU model still uses the GPU unless told not to.** With `gpu_layers` 0 alone, the CUDA build
+  put 1,116 MiB of the 4B's context cache and prompt batches on the card, so `create_model` also
+  turns off `offload_kqv` and `op_offload` for such a model, leaving only the 82 MiB CUDA context.
+- **A 9B background model on the CPU is too slow.** `Qwen3.5-9B-Q4_K_M` had not finished
+  summarizing its first page after 12 minutes, where the 4B on the card took 28 seconds and
+  finished a whole topic in 80 (measured 2026-10-20).
 
 ## Current weak points
 

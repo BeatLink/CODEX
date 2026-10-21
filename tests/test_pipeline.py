@@ -1060,6 +1060,22 @@ class ModelCacheTests(unittest.TestCase):
         self.assertIsNot(second, first)
         self.assertEqual(create_model.call_count, 2)
 
+    def test_a_cpu_model_keeps_its_cache_and_prompt_batches_off_the_gpu(self):
+        import sys
+        from unittest.mock import MagicMock
+
+        from smartharness.pipeline import create_model
+
+        llama_cpp = MagicMock()
+        with patch.dict(sys.modules, {"llama_cpp": llama_cpp}):
+            create_model("model.gguf", 4096, 0)
+            cpu = llama_cpp.Llama.call_args.kwargs
+            create_model("model.gguf", 4096, -1)
+            gpu = llama_cpp.Llama.call_args.kwargs
+
+        self.assertEqual((cpu["offload_kqv"], cpu["op_offload"]), (False, False))
+        self.assertEqual((gpu["offload_kqv"], gpu["op_offload"]), (True, True))
+
 
 if __name__ == "__main__":
     unittest.main()
