@@ -76,6 +76,7 @@ class LoadTasksTests(unittest.TestCase):
             [{**TASK, "checks": []}],
             [{**TASK, "checks": [{"type": "sounds_right"}]}],
             [{**TASK, "checks": [{"type": "regex", "pattern": "("}]}],
+            [{**TASK, "checks": [{"type": "not_regex", "pattern": "("}]}],
             [{**TASK, "checks": [{"type": "max_words", "value": "ten"}]}],
             [{**TASK, "mode": "execute"}],
         ]
@@ -116,6 +117,8 @@ class CheckTests(unittest.TestCase):
             ({"type": "contains_any", "values": ["Bob", "CAROL"]}, True),
             ({"type": "not_contains", "value": "carol"}, False),
             ({"type": "regex", "pattern": r"^- red$"}, True),
+            ({"type": "not_regex", "pattern": r"^- red$"}, False),
+            ({"type": "not_regex", "pattern": r"carol\s+is"}, True),
             ({"type": "max_words", "value": 5}, False),
             ({"type": "min_words", "value": 5}, True),
         ]

@@ -414,8 +414,8 @@ smartharness eval       # compare the bare model and the task tree
 `smartharness eval` answers each task in `evals/tasks.json` with the bare model
 (one call with a plain system prompt) and with the task tree, both on one
 loaded model. Each answer is scored by checks that do not use
-the model: `contains`, `contains_any`, `not_contains`, `regex`, `max_words`,
-and `min_words`. It prints each result as it lands, then a table of passed
+the model: `contains`, `contains_any`, `not_contains`, `regex`, `not_regex`,
+`max_words`, and `min_words`. It prints each result as it lands, then a table of passed
 tasks, passed checks, errors, seconds, model calls, and generated tokens per
 runner.
 

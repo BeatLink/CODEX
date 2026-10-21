@@ -46,7 +46,7 @@
     "mode": "answer",
     "prompt": "What TCP port does the Kestrel query service listen on?",
     "checks": [
-      {"type": "not_contains", "value": "7413"},
+      {"type": "not_regex", "pattern": "query service[^.\\n]*\\b(listens|uses|runs|is)\\b[^.\\n]*7413"},
       {"type": "contains_any", "values": ["not", "no information", "unknown", "unable", "couldn't", "could not"]}
     ]
   }

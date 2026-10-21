@@ -32,7 +32,7 @@ BARE_FILES_NOTE = (
     " 'File: <path>' followed by a fenced code block; files you leave out stay as they are."
 )
 EVAL_MODES = ("auto", "answer", "draft", "execute")
-ANSWER_CHECK_TYPES = ("contains", "contains_any", "not_contains", "regex", "max_words", "min_words")
+ANSWER_CHECK_TYPES = ("contains", "contains_any", "not_contains", "regex", "not_regex", "max_words", "min_words")
 # These checks look at the task's files after the run instead of at the answer.
 FILE_CHECK_TYPES = ("tests_pass", "file_contains", "file_unchanged")
 CHECK_TYPES = ANSWER_CHECK_TYPES + FILE_CHECK_TYPES
@@ -113,13 +113,13 @@ def validate_check(task_id: str, check: Any) -> None:
             raise ValueError(f"Task {task_id}: a {kind} check needs a 'path'.")
         if kind == "file_contains" and (not isinstance(check.get("value"), str) or not check["value"]):
             raise ValueError(f"Task {task_id}: a file_contains check needs a string in 'value'.")
-    elif kind == "regex":
+    elif kind in ("regex", "not_regex"):
         try:
             re.compile(check.get("pattern", ""))
         except (re.error, TypeError) as error:
-            raise ValueError(f"Task {task_id}: a regex check has a bad pattern: {error}") from error
+            raise ValueError(f"Task {task_id}: a {kind} check has a bad pattern: {error}") from error
         if not check.get("pattern"):
-            raise ValueError(f"Task {task_id}: a regex check needs a 'pattern'.")
+            raise ValueError(f"Task {task_id}: a {kind} check needs a 'pattern'.")
     elif not isinstance(check.get("value"), str) or not check["value"]:
         raise ValueError(f"Task {task_id}: a {kind} check needs a string in 'value'.")
 
@@ -166,8 +166,9 @@ def check_passes(answer: str, check: dict[str, Any], task: EvalTask | None = Non
         return any(value.lower() in lowered for value in check["values"])
     if kind == "not_contains":
         return check["value"].lower() not in lowered
-    if kind == "regex":
-        return re.search(check["pattern"], answer, re.IGNORECASE | re.MULTILINE) is not None
+    if kind in ("regex", "not_regex"):
+        found = re.search(check["pattern"], answer, re.IGNORECASE | re.MULTILINE) is not None
+        return found if kind == "regex" else not found
     word_count = len(answer.split())
     if kind == "max_words":
         return word_count <= check["value"]
@@ -212,8 +213,8 @@ def describe_check(check: dict[str, Any]) -> str:
         return f"file_contains {check['path']} {check['value']!r}"
     if kind == "contains_any":
         return f"contains_any {check['values']}"
-    if kind == "regex":
-        return f"regex {check['pattern']}"
+    if kind in ("regex", "not_regex"):
+        return f"{kind} {check['pattern']}"
     return f"{kind} {check['value']!r}" if isinstance(check["value"], str) else f"{kind} {check['value']}"
 
 
