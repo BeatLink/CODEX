@@ -1,6 +1,6 @@
 import unittest
 
-from smartharness.checks import action_report_problems, uncited_urls, unsupported_values
+from smartharness.checks import action_report_problems, unbacked_claims, uncited_urls, unsupported_values
 
 
 class EvidenceCheckTests(unittest.TestCase):
@@ -42,6 +42,22 @@ class ActionReportTests(unittest.TestCase):
         self.assertIn("No file was written, so the report must not say that anything was changed.", problems)
         self.assertTrue(any("Writing a.py failed" in problem for problem in problems))
         self.assertEqual(action_report_problems("The change to a.py could not be made.", log), [])
+
+    def test_claimed_changes_and_passing_tests_need_a_recorded_action(self):
+        report = "Changed `ranges.py` to use `range(start, end + 1)`. Ran `test_ranges.py` and all tests now pass."
+
+        self.assertEqual(len(unbacked_claims(report, [])), 2)
+        log = [
+            ("write_file", {"path": "ranges.py"}, "Wrote 80 bytes to ranges.py."),
+            ("run_tests", {}, "Tests passed.\nOK"),
+        ]
+        self.assertEqual(unbacked_claims(report, log), [])
+        failed_run = [log[0], ("run_tests", {}, "Tests failed (exit 1).\nFAILED")]
+        self.assertEqual(
+            unbacked_claims(report, failed_run), ["No test run passed, so the report must not say that the tests pass."]
+        )
+        self.assertEqual(unbacked_claims("The bug is that range excludes the end.", []), [])
+        self.assertEqual(unbacked_claims("Nothing was edited, and the tests did not pass.", []), [])
 
 
 if __name__ == "__main__":

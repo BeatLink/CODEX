@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -8,6 +9,53 @@ from .mcp_tools import MCPToolbox
 from .tools import Toolbox
 
 MAX_TOOL_HISTORY_CHARS = 8_000
+# Qwen models write tool calls as text that llama-cpp-python's chat handler does not turn into tool calls.
+_TEXT_TOOL_CALL = re.compile(r"<tool_call>\s*(.*?)\s*(?:</tool_call>|$)", re.DOTALL)
+_XML_FUNCTION = re.compile(r"<function=([^>\s]+)>(.*?)(?:</function>|$)", re.DOTALL)
+_XML_PARAMETER = re.compile(r"<parameter=([^>\s]+)>\n?(.*?)\n?</parameter>", re.DOTALL)
+
+
+def _parameter_value(value: str, parameter_type: Any) -> Any:
+    """Keep a string parameter as written, and read any other type as JSON when it parses."""
+    if parameter_type == "string":
+        return value
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return value
+
+
+def text_tool_calls(content: Any, tool_definitions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Read the tool calls a reply wrote as text, in Qwen's XML form or as JSON, in the shape of real tool calls."""
+    if not isinstance(content, str):
+        return []
+    properties = {
+        definition["function"]["name"]: definition["function"].get("parameters", {}).get("properties", {})
+        for definition in tool_definitions
+    }
+    calls = []
+    for block in _TEXT_TOOL_CALL.findall(content):
+        function = _XML_FUNCTION.search(block)
+        if function:
+            name = function.group(1)
+            arguments = {
+                key: _parameter_value(value, properties.get(name, {}).get(key, {}).get("type"))
+                for key, value in _XML_PARAMETER.findall(function.group(2))
+            }
+        else:
+            try:
+                data = json.loads(block)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(data, dict) or not isinstance(data.get("name"), str):
+                continue
+            name, arguments = data["name"], data.get("arguments") or {}
+        calls.append({
+            "id": f"text-call-{len(calls) + 1}",
+            "type": "function",
+            "function": {"name": name, "arguments": json.dumps(arguments)},
+        })
+    return calls
 
 
 def run_tool_stage(
@@ -164,6 +212,12 @@ async def _run_tool_stage(
                 )
             assistant_message = choice.get("message", {})
             tool_calls = assistant_message.get("tool_calls") or []
+            if not tool_calls:
+                tool_calls = text_tool_calls(assistant_message.get("content"), tool_definitions)
+                if tool_calls:
+                    # The text before the first call is the reply's own words; the calls go back as real tool calls.
+                    before_calls = assistant_message["content"].split("<tool_call>", 1)[0].strip()
+                    assistant_message = {"role": "assistant", "content": before_calls or None, "tool_calls": tool_calls}
             if not tool_calls:
                 content = assistant_message.get("content")
                 if not isinstance(content, str) or not content.strip():

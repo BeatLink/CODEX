@@ -241,6 +241,42 @@ class ToolStageTests(unittest.TestCase):
         )
         self.assertIn("sample tool output", result)
 
+    def test_a_tool_call_written_as_qwen_xml_text_is_run(self):
+        toolbox = FakeToolbox()
+        written = (
+            "I will save it.\n<tool_call>\n<function=write_file>\n<parameter=path>\nanswer.txt\n</parameter>\n"
+            "<parameter=content>\n42\n</parameter>\n</function>\n</tool_call>"
+        )
+        model = FakeModel([
+            {"choices": [{"finish_reason": "stop", "message": {"content": written}}]},
+            {"choices": [{"finish_reason": "stop", "message": {"content": "Saved answer.txt."}}]},
+        ])
+
+        result = run_tool_stage(
+            model, "Use tools when useful.", "Save 42.", toolbox, max_tokens=200, temperature=0.1, max_tool_calls=3
+        )
+
+        # A string parameter keeps its text even when it looks like a number.
+        self.assertEqual(toolbox.calls, [("write_file", {"path": "answer.txt", "content": "42"})])
+        replayed = model.requests[1]["messages"][2]
+        self.assertEqual(replayed["content"], "I will save it.")
+        self.assertEqual(replayed["tool_calls"][0]["function"]["name"], "write_file")
+        self.assertIn("Saved answer.txt.", result)
+
+    def test_a_tool_call_written_as_json_text_is_run_with_typed_arguments(self):
+        toolbox = FakeToolbox()
+        written = '<tool_call>\n{"name": "web_search", "arguments": {"query": "sqlite wal", "max_results": 3}}\n</tool_call>'
+        model = FakeModel([
+            {"choices": [{"finish_reason": "stop", "message": {"content": written}}]},
+            {"choices": [{"finish_reason": "stop", "message": {"content": "Found it."}}]},
+        ])
+
+        run_tool_stage(
+            model, "Use tools when useful.", "Search.", toolbox, max_tokens=200, temperature=0.1, max_tool_calls=3
+        )
+
+        self.assertEqual(toolbox.calls, [("web_search", {"query": "sqlite wal", "max_results": 3})])
+
     def test_stops_after_tool_call_limit_and_keeps_results(self):
         toolbox = FakeToolbox()
         model = FakeModel([tool_call_response("call-1"), tool_call_response("call-2")])

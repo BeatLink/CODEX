@@ -14,7 +14,7 @@ from .commands import expand_command, is_memory_command, run_memory_command
 from .embeddings import get_embedder
 from .instructions import INSTRUCTIONS_LABEL, load_instructions
 from .knowledge import MAX_RECALLED_RELATIONSHIPS, KnowledgeStore
-from .checks import action_report_problems, uncited_urls, unsupported_values
+from .checks import action_report_problems, unbacked_claims, uncited_urls, unsupported_values
 from .evidence import (
     MAX_SEARCH_QUERIES,
     MAX_SEARCH_QUERY_CHARS,
@@ -143,8 +143,10 @@ DECISION_PROMPT = (
     " the request, and earlier results;"
     " 'research' looks facts up in stored knowledge and on the web, and must"
     " be chosen whenever 'facts_to_check' is not empty;"
-    " 'files' lists directories and reads local files;"
-    " 'act' changes files, runs tests, or uses connected tools;"
+    " 'files' only lists directories and reads local files;"
+    " 'act' reads and changes files, runs tests, or uses connected tools,"
+    " and must be chosen whenever the task asks for files to be changed or"
+    " tests to be run;"
     " 'decompose' splits the task into smaller subtasks. Choose 'decompose'"
     " only when the task has several distinct parts that are each a real"
     " piece of work; anything one focused step can finish should be done"
@@ -620,6 +622,7 @@ class TaskTreeRun:
         self.evidence: list[str] = []
         # The file writes and test runs each acting task made, so its report can be held to them.
         self.task_actions: dict[str, list[tuple[str, dict[str, Any], str]]] = {}
+        self.mode = mode
         # Answer and draft modes never change anything, so only auto and execute may act.
         self.can_act = mode in ("auto", "execute") and (
             allow_file_writes or enable_test_execution or any(server.get("enabled", True) for server in mcp_servers)
@@ -884,6 +887,9 @@ class TaskTreeRun:
             self.ask_clarification(decision.clarification)
             # The answer can change how the task is best done, so the decision is made again with it.
             return self.decide(node)
+        if decision.approach == "files" and self.mode == "execute" and self.can_act:
+            # An execute request is there to change things, and acting can read files as well.
+            decision.approach = "act"
         return decision
 
     def ask_clarification(self, question: str) -> None:
@@ -1091,6 +1097,9 @@ class TaskTreeRun:
             )
         if node.id in self.task_actions:
             problems.extend(action_report_problems(result, self.task_actions[node.id]))
+        elif self.can_act:
+            # A task that did not act may still claim changes or passing tests that no action in the run made.
+            problems.extend(unbacked_claims(result, self.toolbox.action_log))
         return " ".join(problem for problem in problems if problem)
 
     def plan_subtasks(

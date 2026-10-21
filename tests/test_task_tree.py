@@ -211,6 +211,40 @@ class DirectTaskTests(unittest.TestCase):
         self.assertEqual(result, "The change to a.py could not be made: file access is read-only.")
         self.assertIn("No file was written", model.call("revise", "1")["input"])
 
+    def test_an_execute_request_that_would_only_read_files_acts_instead(self):
+        model = ScriptedModel({
+            ("decide", "1"): decision("files"),
+            ("write", "1"): "The bug is on line 3.",
+        })
+        approaches = []
+
+        def record(llm, system_prompt, user_input, toolbox, **kwargs):
+            approaches.append(kwargs.get("blocked_tools"))
+            return "Read ranges.py."
+
+        with (
+            patch("smartharness.task_tree.run_stage", side_effect=model),
+            patch("smartharness.task_tree.run_tool_stage", side_effect=record),
+        ):
+            execute_task_tree(
+                "Fix ranges.py", llm=object(), progress_callback=lambda label: None,
+                allow_file_writes=True, mode="execute", max_task_depth=0,
+            )
+
+        # Acting blocks only the web tools, so the task can both read and write files.
+        self.assertEqual(approaches, [{"web_search", "web_fetch"}])
+
+    def test_a_task_that_did_not_act_cannot_claim_a_change(self):
+        _, model, _, _ = run_tree({
+            ("decide", "1"): decision("answer"),
+            ("write", "1"): "Fixed ranges.py and all tests now pass.",
+            ("revise", "1"): "The fix is to use range(start, end + 1); no file was changed.",
+        }, prompt="What is wrong in ranges.py?", allow_file_writes=True, max_task_depth=0)
+
+        correction = model.call("revise", "1")["input"]
+        self.assertIn("No file was written", correction)
+        self.assertIn("No test run passed", correction)
+
     def test_listed_facts_turn_an_answer_into_research(self):
         searches = []
 

@@ -11,12 +11,27 @@ _FAILURE_WORD = re.compile(
     r"\b(fail\w*|error\w*|unable|blocked|timed out|could not|couldn't|did not|didn't|was not|wasn't)\b",
     re.IGNORECASE,
 )
-# Phrases such as "was updated" or "I changed", which a report must not use when no file was written.
+# Phrases such as "was updated", "I changed", or a sentence opening "Fixed", which a report must not use when no file was written.
 _CLAIMED_CHANGE = re.compile(
-    r"\b(?:i|i've|i have|has been|have been|was|were)\s+(?:now\s+)?"
-    r"(?:wrote|written|updated|changed|created|modified|edited|renamed)\b",
-    re.IGNORECASE,
+    r"(?:\b(?:i|i've|i have|has been|have been|was|were)\s+(?:now\s+)?|(?:^|[.!?]\s+)\s*(?:[-*]\s+)?)"
+    r"(?:wrote|written|updated|changed|created|modified|edited|renamed|fixed|added)\b",
+    re.IGNORECASE | re.MULTILINE,
 )
+# Phrases such as "all tests now pass", which a report must not use unless a test run passed.
+_CLAIMED_PASSING_TESTS = re.compile(
+    r"\btests?\b[^.!?\n]{0,40}\b(?:pass|passes|passed|passing|succeed\w*)\b", re.IGNORECASE
+)
+
+_NEGATION = re.compile(r"\b(?:no|not|nothing|none|never|without)\b|n't\b", re.IGNORECASE)
+
+
+def _claims(pattern: re.Pattern[str], report: str) -> bool:
+    """Say whether the report makes the claim in a sentence that does not negate it, as "nothing was edited" does."""
+    for match in pattern.finditer(report):
+        sentence_start = max(report.rfind(mark, 0, match.start()) for mark in ".!?\n") + 1
+        if not _NEGATION.search(report[sentence_start:match.end()]):
+            return True
+    return False
 
 
 def uncited_urls(answer: str, evidence: str) -> list[str]:
@@ -93,9 +108,18 @@ def action_report_problems(report: str, action_log: list[tuple[str, dict[str, An
                 problems.append(f"The test run did not pass ({result.splitlines()[0]}); the report must say so.")
             elif "test" not in folded:
                 problems.append(f"The tests were run ({result.splitlines()[0]}); the report must give the result.")
+    return problems + unbacked_claims(report, action_log)
+
+
+def unbacked_claims(report: str, action_log: list[tuple[str, dict[str, Any], str]]) -> list[str]:
+    """List the changes and passing tests a report claims that no recorded action backs up."""
+    problems = []
     wrote_a_file = any(
         name == "write_file" and not result.startswith("Tool error") for name, _, result in action_log
     )
-    if not wrote_a_file and _CLAIMED_CHANGE.search(report):
+    if not wrote_a_file and _claims(_CLAIMED_CHANGE, report):
         problems.append("No file was written, so the report must not say that anything was changed.")
+    tests_passed = any(name == "run_tests" and result.startswith("Tests passed") for name, _, result in action_log)
+    if not tests_passed and _claims(_CLAIMED_PASSING_TESTS, report):
+        problems.append("No test run passed, so the report must not say that the tests pass.")
     return problems
