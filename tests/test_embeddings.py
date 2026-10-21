@@ -1,4 +1,5 @@
 import re
+import sqlite3
 import tempfile
 import unittest
 import unittest.mock
@@ -96,6 +97,21 @@ class EmbeddingRetrievalTests(unittest.TestCase):
             [("topic", "Rust: A systems language.")],
         )
         self.assertEqual(len(self.store.items_to_embed("another.gguf", 100)), 2)
+
+    def test_merged_facts_and_topics_leave_no_vectors_behind(self):
+        first = self.store.add_fact("Rust", "Cargo builds crates.")
+        second = self.store.add_fact("Rust", "Cargo builds Rust crates.")
+        self.store.add_fact("Rust language", "Rust has no garbage collector.")
+        self.index_everything()
+
+        self.store.merge_facts(first, second)
+        topic_ids = {topic["name"]: topic["id"] for topic in self.store.topics()}
+        self.store.merge_topics(topic_ids["Rust"], topic_ids["Rust language"])
+
+        with sqlite3.connect(self.database_path) as connection:
+            vectors = connection.execute("SELECT kind, COUNT(*) FROM embeddings GROUP BY kind").fetchall()
+        connection.close()
+        self.assertEqual(dict(vectors), {"fact": 2, "topic": 1})
 
     def test_consolidation_compares_facts_worded_differently_but_alike_in_meaning(self):
         self.store.add_fact("Web frameworks", "FastAPI endpoints use async.")

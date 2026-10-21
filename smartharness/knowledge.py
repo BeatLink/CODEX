@@ -1393,6 +1393,7 @@ class KnowledgeStore:
     def _delete_topic(self, connection: sqlite3.Connection, topic_id: int, name: str) -> None:
         connection.execute("DELETE FROM topics WHERE id = ?", (topic_id,))
         connection.execute("DELETE FROM graph_nodes WHERE kind = 'topic' AND label = ?", (name,))
+        connection.execute("DELETE FROM embeddings WHERE kind = 'topic' AND item_id = ?", (topic_id,))
         self._forget_checks(connection, "topic", topic_id)
         self._forget_checks(connection, "name", topic_id)
 
@@ -1468,6 +1469,7 @@ class KnowledgeStore:
         )
         connection.execute("DELETE FROM facts WHERE id = ?", (drop_id,))
         connection.execute("DELETE FROM memory_search WHERE kind = 'fact' AND item_id = ?", (drop_id,))
+        connection.execute("DELETE FROM embeddings WHERE kind = 'fact' AND item_id = ?", (drop_id,))
         self._forget_checks(connection, "fact", drop_id)
 
     def queue_status(self) -> list[dict[str, Any]]:
