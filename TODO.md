@@ -87,7 +87,7 @@
 - [x] Run the eval harness with the knowledge store empty and filled to measure what recall adds
 - [x] Score recall against a fixed set of questions with known relevant facts
 - [ ] Cap the knowledge store's size and evict the least used facts, pages, and episodes
-- [ ] Mark recalled and fetched text as untrusted in every prompt and test it against hostile pages
+- [x] Mark recalled and fetched text as untrusted in every prompt and test it against hostile pages
 - [ ] Rate-limit background fetches per domain, honour robots.txt, and cap fetches per day
 - [ ] Back up, export, and reset the knowledge store, and delete a single fact or memory from the interfaces
 - [ ] Let the user mark a recalled fact wrong, lowering its confidence and queueing a recheck
