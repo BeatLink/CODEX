@@ -42,6 +42,7 @@ class Embedder:
                 embedding=True,
                 n_gpu_layers=0,
                 offload_kqv=False,
+                op_offload=False,
                 n_ctx=EMBEDDING_CONTEXT_SIZE,
                 n_threads=EMBEDDING_THREADS,
                 n_threads_batch=EMBEDDING_THREADS,

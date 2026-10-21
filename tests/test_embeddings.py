@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from smartharness.background import index_knowledge
-from smartharness.embeddings import normalize
+from smartharness.embeddings import Embedder, normalize
 from smartharness.knowledge import KnowledgeStore, _fuse_rankings
 from smartharness.settings import DEFAULT_SETTINGS
 
@@ -129,6 +129,16 @@ class EmbeddingRetrievalTests(unittest.TestCase):
         self.assertEqual(passes, 2)
         self.assertEqual(len(self.embedder.documents), 11)
         self.assertEqual(self.store.items_to_embed(self.embedder.name, 100), [])
+
+    def test_the_embedding_model_keeps_its_cache_and_prompt_batches_off_the_gpu(self):
+        import sys
+
+        llama_cpp = unittest.mock.MagicMock()
+        with patch.dict(sys.modules, {"llama_cpp": llama_cpp}):
+            Embedder("embedding.gguf")._load()
+        options = llama_cpp.Llama.call_args.kwargs
+
+        self.assertEqual((options["n_gpu_layers"], options["offload_kqv"], options["op_offload"]), (0, False, False))
 
     def test_the_worker_does_nothing_without_an_embedding_model(self):
         settings = {**DEFAULT_SETTINGS, "knowledge_db_path": str(self.database_path), "embedding_model_path": ""}
