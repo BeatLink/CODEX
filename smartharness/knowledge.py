@@ -128,9 +128,25 @@ _MIGRATIONS = (
         PRIMARY KEY (kind, first_id, second_id)
     );
     """,
+    """
+    CREATE TABLE task_runs (
+        id INTEGER PRIMARY KEY,
+        prompt TEXT NOT NULL,
+        options TEXT NOT NULL,
+        state TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'running',
+        tasks_done INTEGER NOT NULL DEFAULT 0,
+        tasks_total INTEGER NOT NULL DEFAULT 0,
+        started_at REAL NOT NULL,
+        updated_at REAL NOT NULL
+    );
+    """,
 )
 
 MEMORY_KINDS = ("fact", "episode")
+# A task tree run is running until it ends; a run left running by a crash, or stopped, can be resumed.
+TASK_RUN_STATUSES = ("running", "stopped", "finished", "discarded")
+RESUMABLE_TASK_RUN_STATUSES = ("running", "stopped")
 USER_MEMORY_KINDS = ("preference", "project", "correction")
 
 # What consolidation compares: two topics, two facts under one topic, or two user memories.
@@ -619,6 +635,52 @@ class KnowledgeStore:
                 "SELECT id, prompt, task_type, checklist, answer, outcome, task_tree, created_at, processed_at "
                 "FROM episodes WHERE (? = 0 OR processed_at IS NULL) ORDER BY created_at DESC LIMIT ?",
                 (int(unprocessed_only), limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def start_task_run(self, prompt: str, options: dict[str, Any]) -> int:
+        """Open a checkpoint for a task tree run, holding what is needed to start it again."""
+        now = time.time()
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "INSERT INTO task_runs(prompt, options, started_at, updated_at) VALUES (?, ?, ?, ?)",
+                (prompt, json.dumps(options), now, now),
+            )
+            return int(cursor.lastrowid)
+
+    def save_task_run(self, run_id: int, state: dict[str, Any], tasks_done: int, tasks_total: int) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "UPDATE task_runs SET state = ?, tasks_done = ?, tasks_total = ?, updated_at = ? WHERE id = ?",
+                (json.dumps(state, ensure_ascii=False), tasks_done, tasks_total, time.time(), run_id),
+            )
+
+    def set_task_run_status(self, run_id: int, status: str) -> None:
+        if status not in TASK_RUN_STATUSES:
+            raise ValueError(f"Unknown task run status: {status}")
+        with self._connect() as connection:
+            connection.execute(
+                "UPDATE task_runs SET status = ?, updated_at = ? WHERE id = ?", (status, time.time(), run_id)
+            )
+
+    def task_run(self, run_id: int) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute("SELECT * FROM task_runs WHERE id = ?", (run_id,)).fetchone()
+        if row is None:
+            return None
+        run = dict(row)
+        run["options"] = json.loads(run["options"])
+        run["state"] = json.loads(run["state"]) if run["state"] else None
+        return run
+
+    def unfinished_task_runs(self, limit: int = 10) -> list[dict[str, Any]]:
+        """List task tree runs that can be resumed, newest first, without their saved state."""
+        placeholders = ", ".join("?" for _ in RESUMABLE_TASK_RUN_STATUSES)
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT id, prompt, status, tasks_done, tasks_total, started_at, updated_at FROM task_runs "
+                f"WHERE status IN ({placeholders}) ORDER BY updated_at DESC LIMIT ?",
+                (*RESUMABLE_TASK_RUN_STATUSES, limit),
             ).fetchall()
         return [dict(row) for row in rows]
 

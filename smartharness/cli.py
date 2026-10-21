@@ -11,6 +11,7 @@ from rich.markdown import Markdown
 from .client import DISCONNECTED_EVENT, connect_to_daemon
 from .pipeline import execute_pipeline
 from .settings import MODE_CHOICES, default_settings_path, load_settings, validate_settings
+from .knowledge import KnowledgeStore
 from .task_tree import execute_task_tree
 
 
@@ -62,6 +63,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Answer a question, draft a piece of writing or a plan, or execute file changes; auto lets the model pick.",
     )
     parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Carry on the newest task tree run that a crash, restart, or cancel left unfinished.",
+    )
+    parser.add_argument(
         "--show-thinking",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -95,6 +101,9 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as error:
         print(f"Error in settings: {error}", file=sys.stderr)
         return 1
+
+    if args.resume:
+        return _resume(settings)
 
     if args.tui or (not args.prompt and sys.stdin.isatty()):
         from .tui import SmartHarnessApp
@@ -149,16 +158,52 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error: {error}", file=sys.stderr)
         return 1
 
+    _print_result(result)
+    return 0
+
+
+def _print_result(result: str) -> None:
     print("\n=== FINAL RESULT ===\n")
     if sys.stdout.isatty():
         Console().print(Markdown(result))
     else:
         print(result)
+
+
+def _resume(settings: dict[str, Any]) -> int:
+    """Resume the newest unfinished task tree run, on a running daemon or in this process."""
+    try:
+        store = KnowledgeStore(Path(settings["knowledge_db_path"]).expanduser())
+        unfinished = store.unfinished_task_runs(limit=1)
+        if not unfinished:
+            print("There is no unfinished task tree run to resume.", file=sys.stderr)
+            return 1
+        saved = store.task_run(unfinished[0]["id"])
+        print(f"Resuming: {saved['prompt']} ({saved['tasks_done']} of {saved['tasks_total']} tasks done)")
+        interactive = sys.stdin.isatty()
+        result = _run_with_daemon(saved["prompt"], settings, interactive, resume_run_id=saved["id"])
+        if result is None:
+            result = execute_task_tree(
+                saved["prompt"],
+                **saved["options"],
+                show_thinking=settings["show_thinking"],
+                clarification_callback=_ask_clarification if interactive else None,
+                resume_run_id=saved["id"],
+            )
+    except (OSError, RuntimeError, ValueError) as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
+    _print_result(result)
     return 0
 
 
-def _run_with_daemon(prompt: str, settings: dict[str, Any], interactive: bool) -> str | None:
-    """Run the prompt on a daemon that is already running; returns None when none is."""
+def _run_with_daemon(
+    prompt: str,
+    settings: dict[str, Any],
+    interactive: bool,
+    resume_run_id: int | None = None,
+) -> str | None:
+    """Run the prompt, or resume a saved task tree run, on a daemon that is already running; None when none is."""
     events: queue.Queue[tuple[str, dict[str, Any]]] = queue.Queue()
     try:
         client = connect_to_daemon(on_event=lambda event, data: events.put((event, data)), start=False)
@@ -170,7 +215,10 @@ def _run_with_daemon(prompt: str, settings: dict[str, Any], interactive: bool) -
         **{name: str(Path(settings[name]).expanduser().resolve()) for name in PATH_SETTINGS},
     }
     try:
-        run_id = client.call("run", prompt=prompt, settings=settings, interactive=interactive)["run_id"]
+        if resume_run_id is not None:
+            run_id = client.call("resume_run", run_id=resume_run_id, interactive=interactive)["run_id"]
+        else:
+            run_id = client.call("run", prompt=prompt, settings=settings, interactive=interactive)["run_id"]
         while True:
             event, data = events.get()
             if event == DISCONNECTED_EVENT:

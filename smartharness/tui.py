@@ -255,6 +255,17 @@ class SmartHarnessApp(App[None]):
         height: 3;
         margin: 1 0;
     }
+    #resume-bar {
+        height: auto;
+        min-height: 3;
+        display: none;
+    }
+    #resume-text {
+        width: 1fr;
+        height: auto;
+        padding: 1 1 0 0;
+        color: $warning;
+    }
     #mode {
         width: 22;
         margin-right: 1;
@@ -395,6 +406,7 @@ class SmartHarnessApp(App[None]):
         self._stage_output_buffers = [""] * len(STAGE_LABELS)
         self._pending_stage_output: list[list[str]] = [[] for _ in STAGE_LABELS]
         self._runner = self.settings["runner"]
+        self._unfinished_runs: list[dict[str, Any]] = []
         self._steps_output = ""
         self._pending_steps_output: list[str] = []
         self._last_step_label = ""
@@ -445,6 +457,10 @@ class SmartHarnessApp(App[None]):
                             yield Button("Cancel", id="cancel", disabled=True)
                             yield Button("Clear", id="clear")
                             yield Button("Copy answer", id="copy", disabled=True)
+                        with Horizontal(id="resume-bar"):
+                            yield Static("", id="resume-text", markup=False)
+                            yield Button("Resume", id="resume-run", variant="primary")
+                            yield Button("Discard", id="discard-run")
                 with TabPane("Output", id="output-pane"):
                     with TabbedContent(initial="final", id="phase-tabs"):
                         for index, title in enumerate(STAGE_TAB_TITLES, start=1):
@@ -634,6 +650,10 @@ class SmartHarnessApp(App[None]):
             self._clear_workbench()
         elif event.button.id == "copy":
             self._copy_answer()
+        elif event.button.id == "resume-run":
+            self._resume_run()
+        elif event.button.id == "discard-run":
+            self._discard_run()
         elif event.button.id == "apply-options":
             self._apply_settings()
         elif event.button.id == "save-options":
@@ -867,6 +887,7 @@ class SmartHarnessApp(App[None]):
                     self._update_stage(label)
                 for label, text in run["outputs"].items():
                     self._append_stage_output(label, text)
+        self._show_unfinished_runs(status["unfinished_runs"])
         self._refresh_knowledge()
         self._refresh_queue()
 
@@ -899,6 +920,8 @@ class SmartHarnessApp(App[None]):
             self._append_background_token(data["token"])
         elif event == "queue.changed":
             self._refresh_queue()
+        elif event == "runs.changed":
+            self._show_unfinished_runs(self._call_daemon("unfinished_runs") or [])
         elif event == "knowledge.changed":
             self._refresh_knowledge()
         elif event == "settings.changed":
@@ -958,8 +981,38 @@ class SmartHarnessApp(App[None]):
         self.query_one("#status", Static).update("Starting local model...")
         self._set_running(True)
 
+    def _show_unfinished_runs(self, runs: list[dict[str, Any]]) -> None:
+        """Offer to resume the newest task tree run that a crash, restart, or cancel left unfinished."""
+        self._unfinished_runs = runs
+        bar = self.query_one("#resume-bar")
+        bar.display = bool(runs) and not self._request_running
+        if runs:
+            run = runs[0]
+            prompt = " ".join(run["prompt"].split())
+            self.query_one("#resume-text", Static).update(
+                f"Unfinished: {prompt[:80]}{'…' if len(prompt) > 80 else ''}"
+                f" ({run['tasks_done']} of {run['tasks_total']} tasks done)"
+            )
+
+    def _resume_run(self) -> None:
+        if self._request_running or not self._unfinished_runs:
+            return
+        run = self._unfinished_runs[0]
+        self.query_one("#prompt", TextArea).text = run["prompt"]
+        self._begin_run(None, "tree")
+        started = self._call_daemon("resume_run", run_id=run["id"])
+        if started is None:
+            self._stop_run("_The request could not resume._", "WAIT", "Ready")
+            return
+        self._run_id = started["run_id"]
+
+    def _discard_run(self) -> None:
+        if self._unfinished_runs and self._call_daemon("discard_run", run_id=self._unfinished_runs[0]["id"]) is not None:
+            self._show_unfinished_runs(self._unfinished_runs[1:])
+
     def _set_running(self, running: bool) -> None:
         self._request_running = running
+        self.query_one("#resume-bar").display = bool(self._unfinished_runs) and not running
         self.query_one("#run", Button).disabled = running
         self.query_one("#clear", Button).disabled = running
         self.query_one("#cancel", Button).disabled = not running

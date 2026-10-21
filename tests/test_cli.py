@@ -1,3 +1,4 @@
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -6,6 +7,7 @@ from daemon_harness import RunningDaemon
 
 from smartharness.cli import main
 from smartharness.client import DaemonClient
+from smartharness.knowledge import KnowledgeStore
 from smartharness.settings import DEFAULT_SETTINGS
 
 # These tests patch the eight-stage pipeline, so they run in pipeline mode.
@@ -75,6 +77,38 @@ class CliTests(unittest.TestCase):
         self.assertEqual(task_tree.call_args.kwargs["max_task_nodes"], 9)
         self.assertEqual(task_tree.call_args.kwargs["max_task_depth"], DEFAULT_SETTINGS["max_task_depth"])
 
+    def test_resume_carries_on_the_newest_unfinished_tree_run(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = {**DEFAULT_SETTINGS, "knowledge_db_path": str(Path(directory) / "knowledge.db")}
+            store = KnowledgeStore(settings["knowledge_db_path"])
+            run_id = store.start_task_run("Plan the trip", {"max_task_depth": 2, "mode": "draft"})
+            store.save_task_run(run_id, {"nodes": []}, 1, 3)
+            with (
+                patch("smartharness.cli.load_settings", return_value=settings),
+                patch("smartharness.cli.execute_task_tree", return_value="Trip planned.") as task_tree,
+                patch("sys.stdin.isatty", return_value=False),
+                patch("sys.stdout.isatty", return_value=False),
+                patch("builtins.print") as printed,
+            ):
+                self.assertEqual(main(["--resume"]), 0)
+
+        printed.assert_any_call("Resuming: Plan the trip (1 of 3 tasks done)")
+        printed.assert_called_with("Trip planned.")
+        self.assertEqual(task_tree.call_args.args, ("Plan the trip",))
+        self.assertEqual(task_tree.call_args.kwargs["resume_run_id"], run_id)
+        self.assertEqual(task_tree.call_args.kwargs["mode"], "draft")
+
+    def test_resume_without_an_unfinished_run_says_so(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = {**DEFAULT_SETTINGS, "knowledge_db_path": str(Path(directory) / "knowledge.db")}
+            with (
+                patch("smartharness.cli.load_settings", return_value=settings),
+                patch("sys.stderr") as stderr,
+            ):
+                self.assertEqual(main(["--resume"]), 1)
+
+        self.assertIn("no unfinished task tree run", "".join(call.args[0] for call in stderr.write.call_args_list))
+
     def test_tui_subcommand_opens_interface_with_initial_prompt(self):
         with (
             patch("smartharness.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
@@ -92,7 +126,9 @@ class CliTests(unittest.TestCase):
         app.return_value.run.assert_called_once_with()
 
     def test_prompt_runs_on_a_running_daemon_with_resolved_paths(self):
-        daemon = RunningDaemon(PIPELINE_SETTINGS.copy())
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        daemon = RunningDaemon({**PIPELINE_SETTINGS, "knowledge_db_path": str(Path(directory.name) / "knowledge.db")})
         self.addCleanup(daemon.stop)
 
         def connect(on_event, start):

@@ -19,6 +19,11 @@ PIPELINE_SETTINGS = {**DEFAULT_SETTINGS, "runner": "pipeline"}
 
 class TuiTests(unittest.IsolatedAsyncioTestCase):
     def app(self, settings=PIPELINE_SETTINGS, settings_path=None, start_worker=False, **options):
+        if settings["knowledge_db_path"] == DEFAULT_SETTINGS["knowledge_db_path"]:
+            # The interface sends its own settings with each run, so both sides get the temporary database.
+            directory = tempfile.TemporaryDirectory()
+            self.addCleanup(directory.cleanup)
+            settings = {**settings, "knowledge_db_path": str(Path(directory.name) / "knowledge.db")}
         daemon = RunningDaemon(settings, settings_path, start_worker=start_worker)
         self.addCleanup(daemon.stop)
         return SmartHarnessApp(settings, client=daemon.client(), **options)
@@ -404,6 +409,34 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 tabs = app.query_one("#phase-tabs", TabbedContent)
                 self.assertTrue(tabs.get_tab("steps").display)
                 self.assertFalse(tabs.get_tab("phase-1").display)
+
+    async def test_an_unfinished_tree_run_can_be_resumed_or_discarded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = {**DEFAULT_SETTINGS, "knowledge_db_path": str(Path(directory) / "knowledge.db")}
+            settings["background_research_enabled"] = False
+            store = KnowledgeStore(settings["knowledge_db_path"])
+            for prompt in ("Plan the trip", "Sort the photos"):
+                run_id = store.start_task_run(prompt, {"mode": "auto"})
+                store.save_task_run(run_id, {"nodes": []}, 1, 4)
+                store.set_task_run_status(run_id, "stopped")
+            app = self.app(settings=settings)
+
+            with patch("smartharness.daemon.execute_task_tree", return_value="Trip planned.") as task_tree:
+                async with app.run_test(size=(120, 42)) as pilot:
+                    await connected(pilot, app)
+                    self.assertTrue(app.query_one("#resume-bar").display)
+                    self.assertIn("Sort the photos (1 of 4 tasks done)", str(app.query_one("#resume-text").render()))
+
+                    app.query_one("#discard-run", Button).press()
+                    await pilot.pause()
+                    self.assertIn("Plan the trip", str(app.query_one("#resume-text").render()))
+
+                    app.query_one("#resume-run", Button).press()
+                    await wait_until(pilot, lambda: app._last_answer)
+
+                    self.assertEqual(app._last_answer, "Trip planned.")
+                    self.assertEqual(app.query_one("#prompt", TextArea).text, "Plan the trip")
+                    self.assertEqual(task_tree.call_args.kwargs["resume_run_id"], 1)
 
     async def test_ctrl_r_runs_the_prompt(self):
         app = self.app(initial_prompt="Draft a plan")

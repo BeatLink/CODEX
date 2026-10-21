@@ -306,6 +306,15 @@ class TaskNode:
             node = node.parent
         return chain[::-1]
 
+    def state(self) -> dict[str, Any]:
+        """Everything needed to rebuild this task when a run is resumed."""
+        return {
+            **self.snapshot(),
+            "result": self.result,
+            "replans": self.replans,
+            "from_split": self.from_split,
+        }
+
     def snapshot(self) -> dict[str, Any]:
         return {
             "id": self.id,
@@ -357,6 +366,29 @@ class TaskTree:
             ))
         node.children = kept + added
         return added
+
+    @classmethod
+    def from_state(cls, prompt: str, nodes: list[dict[str, Any]], max_depth: int, max_nodes: int) -> "TaskTree":
+        """Rebuild a saved tree; a task that was cut off mid-way starts again, keeping any subtasks it planned."""
+        tree = cls(prompt, max_depth, max_nodes)
+        built: dict[str, TaskNode] = {}
+        for saved in nodes:
+            parent = built.get(saved["parent"]) if saved["parent"] else None
+            node = tree.root if parent is None else TaskNode(saved["id"], saved["prompt"], saved["deliverable"], parent)
+            node.depends_on = list(saved["depends_on"])
+            node.status, node.approach = saved["status"], saved["approach"]
+            node.result, node.note = saved["result"], saved["note"]
+            node.replans, node.from_split = saved["replans"], saved["from_split"]
+            if parent is not None:
+                parent.children.append(node)
+            built[node.id] = node
+        for node in tree.nodes():
+            if node.status not in FINISHED_STATUSES:
+                node.status = "pending"
+                if not node.children:
+                    # Its decision is made again, since the work after it was lost.
+                    node.approach = ""
+        return tree
 
     def find(self, node_id: str) -> TaskNode | None:
         return next((node for node in self.nodes() if node.id == node_id), None)
@@ -518,6 +550,7 @@ class TaskTreeRun:
         stage_output_callback: Callable[[str, str], None] | None,
         tree_callback: Callable[[list[dict[str, Any]]], None] | None,
         mode: str = "auto",
+        checkpoint_id: int | None = None,
     ) -> None:
         self.user_prompt = user_prompt
         self.llm = llm
@@ -537,6 +570,7 @@ class TaskTreeRun:
         self.progress_callback = progress_callback
         self.stage_output_callback = stage_output_callback
         self.tree_callback = tree_callback
+        self.checkpoint_id = checkpoint_id
         self.tree = TaskTree(user_prompt, max_task_depth, max_task_nodes)
         self.count_tokens = token_counter(llm)
         self.summarize = section_summarizer(llm, temperature, context_size, self.count_tokens)
@@ -561,6 +595,42 @@ class TaskTreeRun:
     def publish(self) -> None:
         if self.tree_callback is not None:
             self.tree_callback(self.tree.snapshot())
+        self.save_checkpoint()
+
+    def save_checkpoint(self) -> None:
+        """Save the tree after every change, so a crash or restart loses at most the task in progress."""
+        if self.knowledge_store is None or self.checkpoint_id is None:
+            return
+        nodes = self.tree.nodes()
+        try:
+            self.knowledge_store.save_task_run(
+                self.checkpoint_id,
+                self.state(),
+                sum(node.status in FINISHED_STATUSES for node in nodes),
+                len(nodes),
+            )
+        except sqlite3.Error:
+            # Losing a checkpoint costs only the ability to resume, so the run carries on.
+            pass
+
+    def state(self) -> dict[str, Any]:
+        return {
+            "nodes": [node.state() for node in self.tree.nodes()],
+            "clarification": list(self.clarification) if self.clarification else None,
+            "evidence": self.evidence,
+            "found_urls": sorted(self.found_urls),
+            "used_tools": sorted(self.toolbox.used_tools),
+            "local_knowledge_used": self.local_knowledge_used,
+        }
+
+    def restore(self, state: dict[str, Any]) -> None:
+        """Pick up a saved run: its tree, the clarification already given, and the evidence gathered so far."""
+        self.tree = TaskTree.from_state(self.user_prompt, state["nodes"], self.tree.max_depth, self.tree.max_nodes)
+        self.clarification = tuple(state["clarification"]) if state["clarification"] else None
+        self.evidence = list(state["evidence"])
+        self.found_urls.update(state["found_urls"])
+        self.toolbox.used_tools.update(state["used_tools"])
+        self.local_knowledge_used = state["local_knowledge_used"]
 
     def report(self, node: TaskNode, step: str) -> str:
         label = f"Task {node.id} · {step}"
@@ -721,9 +791,16 @@ class TaskTreeRun:
 
     def work(self, node: TaskNode) -> None:
         """Do one task, and for a task with subtasks, all of them; only the top task lets errors through."""
+        if node.status in FINISHED_STATUSES:
+            # A resumed run keeps the tasks that finished before it stopped.
+            return
         node.status = "running"
         self.publish()
         try:
+            if node.children:
+                # A resumed task whose subtasks were already planned carries on with them.
+                self.run_subtasks(node, node.children[0].from_split)
+                return
             decision = self.decide(node)
             node.approach = decision.approach
             self.publish()
@@ -735,7 +812,8 @@ class TaskTreeRun:
             if node.parent is None:
                 raise
             node.status, node.note = "failed", str(error)
-        self.publish()
+        finally:
+            self.publish()
 
     def approaches_for(self, node: TaskNode) -> list[str]:
         approaches = ["answer", "research", "files"]
@@ -982,9 +1060,13 @@ class TaskTreeRun:
         return _parse_subtasks(data.get("subtasks") if isinstance(data, dict) else None, existing, first_number)
 
     def work_subtasks(self, node: TaskNode, subtasks: list[dict[str, Any]], from_split: bool = False) -> None:
-        """Run the subtasks in order, re-plan the rest after one fails, then combine their results."""
+        """Plan the subtasks, then run them."""
         self.tree.set_children(node, subtasks, from_split)
         self.publish()
+        self.run_subtasks(node, from_split)
+
+    def run_subtasks(self, node: TaskNode, from_split: bool) -> None:
+        """Run the subtasks in order, re-plan the rest after one fails, then combine their results."""
         index = 0
         while index < len(node.children):
             child = node.children[index]
@@ -1012,7 +1094,16 @@ class TaskTreeRun:
             child.result or "No result.",
         ) for child in node.children]
         system_prompt = (ROOT_COMBINE_PROMPT if node.parent is None else COMBINE_PROMPT) + self.source_check(False)
-        result = self.call(node, "Combining", system_prompt, self.sections(node, extra=results))
+        try:
+            result = self.call(node, "Combining", system_prompt, self.sections(node, extra=results))
+        except (RuntimeError, ValueError) as error:
+            # Results too long to merge in one reply are joined as they are, so the finished work is not lost.
+            node.result = "\n\n".join(
+                f"## {child.prompt}\n\n{child.result or 'No result.'}" for child in node.children
+            )
+            node.note = f"The results were joined without merging, because merging them failed ({error})."
+            node.status = "unverified"
+            return
         result, problem = self.check_and_revise(node, system_prompt, result, [], results)
         node.result, node.note = result, problem
         node.status = "unverified" if problem else "done"
@@ -1048,6 +1139,14 @@ class TaskTreeRun:
             pass
 
 
+# The arguments a checkpoint saves, so a resumed run works under the same settings it started with.
+RESUMABLE_OPTIONS = (
+    "model_path", "context_size", "gpu_layers", "max_tokens", "temperature", "filesystem_root",
+    "max_tool_calls", "max_search_results", "enable_test_execution", "allow_file_writes", "mcp_servers",
+    "knowledge_db_path", "max_pending_research_jobs", "max_task_depth", "max_task_nodes", "mode",
+)
+
+
 def execute_task_tree(
     user_prompt: str,
     model_path: str = DEFAULT_MODEL_PATH,
@@ -1073,8 +1172,13 @@ def execute_task_tree(
     max_task_depth: int = MAX_TASK_DEPTH,
     max_task_nodes: int = MAX_TASK_NODES,
     mode: str = "auto",
+    resume_run_id: int | None = None,
 ) -> str:
-    """Answer a request by working it as a tree of tasks; takes the same arguments as execute_pipeline."""
+    """Answer a request by working it as a tree of tasks; takes the same arguments as execute_pipeline.
+
+    With a knowledge store, the tree is checkpointed as it goes; resume_run_id carries on a saved run instead.
+    """
+    options = {name: value for name, value in locals().items() if name in RESUMABLE_OPTIONS}
     if mode not in MODE_CHOICES:
         raise ValueError(f"mode must be one of: {', '.join(MODE_CHOICES)}.")
     # A leading word such as /plan picks the mode, as it does for the pipeline.
@@ -1085,6 +1189,11 @@ def execute_task_tree(
     if isinstance(max_tool_calls, bool) or not isinstance(max_tool_calls, int) or not 1 <= max_tool_calls <= 10:
         raise ValueError("max_tool_calls must be an integer from 1 to 10.")
     knowledge_store = KnowledgeStore(knowledge_db_path) if knowledge_db_path else None
+    saved_run = None
+    if resume_run_id is not None:
+        saved_run = knowledge_store.task_run(resume_run_id) if knowledge_store else None
+        if saved_run is None or saved_run["state"] is None:
+            raise ValueError(f"There is no saved task tree run {resume_run_id} to resume.")
     found_urls: set[str] = set()
     toolbox = build_toolbox(
         filesystem_root,
@@ -1118,9 +1227,23 @@ def execute_task_tree(
         stage_output_callback=stage_output_callback,
         tree_callback=tree_callback,
         mode=mode,
+        checkpoint_id=resume_run_id,
     )
-    answer = run.run()
+    if saved_run is not None:
+        run.restore(saved_run["state"])
+    elif knowledge_store is not None:
+        # The prompt is saved without its mode prefix, so the mode that prefix picked is saved with it.
+        run.checkpoint_id = knowledge_store.start_task_run(user_prompt, {**options, "mode": mode})
+    try:
+        answer = run.run()
+    except BaseException:
+        # A stopped run stays resumable, whether it was cancelled or failed.
+        if knowledge_store is not None and run.checkpoint_id is not None:
+            knowledge_store.set_task_run_status(run.checkpoint_id, "stopped")
+        raise
     if show_thinking and progress_callback is None:
         print()
+    if knowledge_store is not None and run.checkpoint_id is not None:
+        knowledge_store.set_task_run_status(run.checkpoint_id, "finished")
     run.record_episode()
     return answer

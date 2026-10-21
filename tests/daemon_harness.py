@@ -5,6 +5,7 @@ from typing import Any
 
 from smartharness.client import DaemonClient
 from smartharness.daemon import HarnessDaemon
+from smartharness.settings import DEFAULT_KNOWLEDGE_DB_PATH
 
 
 class RunningDaemon:
@@ -17,6 +18,8 @@ class RunningDaemon:
         start_worker: bool = False,
         exit_when_unused_seconds: float | None = None,
     ) -> None:
+        if settings["knowledge_db_path"] == DEFAULT_KNOWLEDGE_DB_PATH:
+            raise AssertionError("A test daemon must use a temporary knowledge database, never the user's real one.")
         # Unix socket paths are limited to about 100 characters, so this stays short.
         self.directory = tempfile.TemporaryDirectory(prefix="sh-", dir="/tmp")
         self.socket_path = Path(self.directory.name) / "daemon.sock"

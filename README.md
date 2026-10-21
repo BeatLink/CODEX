@@ -42,12 +42,13 @@ The protocol is one JSON object per line. A request is
 back; the daemon also sends `{"event", "data"}` lines at any time. Methods are
 `status`, `get_settings`, `apply_settings`, `save_settings`,
 `set_background_enabled`, `run`, `cancel`, `answer_clarification`,
-`queue_topic`, `research_now`, `queue_status`, `knowledge`, and `shutdown`.
+`queue_topic`, `research_now`, `queue_status`, `knowledge`, `unfinished_runs`,
+`resume_run`, `discard_run`, and `shutdown`.
 Events are `run.started` (with the run's `runner`), `run.progress`, `run.token`,
 `run.tree` (every task's state, sent whenever one changes), `run.clarification`,
 `run.finished`, `run.failed`, `run.cancelled`, `background.status`,
-`background.token`, `queue.changed`, `knowledge.changed`, and
-`settings.changed`.
+`background.token`, `queue.changed`, `knowledge.changed`, `runs.changed` (the
+list of unfinished task tree runs changed), and `settings.changed`.
 
 ## How a request is handled
 
@@ -111,6 +112,17 @@ and draft mode the `act` approach is never offered, so nothing is changed.
 The decision asks one clarification question for the top task when the request
 is materially ambiguous, then decides again with the answer. The finished tree
 is saved with the request's episode in the knowledge store.
+
+With a knowledge store, a tree run is also checkpointed: the store's
+`task_runs` table keeps the options it started with and every task's state,
+saved after each change. A run that is cancelled, fails, or is cut off by a
+crash or a daemon restart can be resumed. Finished tasks keep their results, a
+task that had already split carries on with its unfinished subtasks, and a
+task that was cut off mid-way starts again from its decision. The clarification
+answer and the evidence gathered so far are restored, and the run works under
+the options it started with, not the current settings. The TUI and GTK
+interfaces offer Resume and Discard for the newest unfinished run, and
+`smartharness --resume` resumes it from the command line.
 
 ### Eight-stage pipeline
 
@@ -384,6 +396,7 @@ smartharness --tui      # or: smartharness-tui
 python -m smartharness  # same as smartharness
 smartharness-gtk        # open the GTK interface
 smartharness-daemon     # run the daemon in the foreground
+smartharness --resume   # carry on the newest unfinished task tree run
 ```
 
 ### Terminal interface
@@ -397,7 +410,9 @@ The TUI has four pages:
   own heading; for a pipeline run the sidebar lists the eight stages and each
   has its own output tab. The Final tab shows the Markdown answer, which can be
   copied.
-  Clarification questions appear as a dialog.
+  Clarification questions appear as a dialog. When a task tree run was left
+  unfinished, a bar under the Run button names it and how many of its tasks are
+  done, with Resume and Discard buttons.
 - **Background**: queue topics, start research now, pause or resume the worker,
   and watch its output and queue.
 - **Options**: every setting, including model, how requests run, folder access, tool limits,
@@ -565,8 +580,8 @@ Run the tests with `python -m unittest discover -s tests`.
 
 ## Current limits
 
-- Subtasks run one after another, and a task tree is not resumed after the
-  daemon restarts; the saved tree is a record, not a checkpoint.
+- Subtasks run one after another. Resuming restarts the task that was cut off
+  from its decision, so the work it had done before the stop is redone.
 
 - One-shot CLI runs without a daemon load the model for each run; the daemon
   keeps it loaded and shares it with the background worker.

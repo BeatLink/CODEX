@@ -76,6 +76,39 @@ class DaemonTests(unittest.TestCase):
         self.assertEqual(late_status[0]["runner"], "tree")
         self.assertEqual(late_status[0]["tree"], tree)
 
+    def test_an_unfinished_tree_run_is_listed_resumed_with_its_options_or_discarded(self):
+        store = KnowledgeStore(self.settings["knowledge_db_path"])
+        options = {"model_path": "saved.gguf", "max_task_depth": 2, "mode": "draft"}
+        stopped = store.start_task_run("Plan the trip", options)
+        store.save_task_run(stopped, {"nodes": []}, 1, 3)
+        store.set_task_run_status(stopped, "stopped")
+        finished = store.start_task_run("Done already", options)
+        store.save_task_run(finished, {"nodes": []}, 1, 1)
+        store.set_task_run_status(finished, "finished")
+
+        with patch("smartharness.daemon.execute_task_tree", return_value="Resumed answer") as task_tree:
+            daemon = self.start()
+            events = EventLog()
+            client = daemon.client(events)
+            listed = client.call("status")["unfinished_runs"]
+            self.assertEqual([(run["id"], run["tasks_done"], run["tasks_total"]) for run in listed], [(stopped, 1, 3)])
+            self.assertEqual(client.call("unfinished_runs"), listed)
+            with self.assertRaises(DaemonError):
+                client.call("resume_run", run_id=finished)
+            client.call("resume_run", run_id=stopped)
+            finished_event = events.wait_for("run.finished")
+            events.wait_for("runs.changed")
+
+        self.assertEqual(finished_event["result"], "Resumed answer")
+        self.assertEqual(events.wait_for("run.started")["prompt"], "Plan the trip")
+        self.assertEqual(task_tree.call_args.args, ("Plan the trip",))
+        self.assertEqual(task_tree.call_args.kwargs["resume_run_id"], stopped)
+        self.assertEqual(task_tree.call_args.kwargs["model_path"], "saved.gguf")
+        self.assertEqual(task_tree.call_args.kwargs["mode"], "draft")
+
+        client.call("discard_run", run_id=stopped)
+        self.assertEqual(client.call("status")["unfinished_runs"], [])
+
     def test_clarification_is_asked_of_the_owner_and_answered(self):
         answers = []
 

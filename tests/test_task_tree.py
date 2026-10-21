@@ -405,6 +405,20 @@ class SubtaskTests(unittest.TestCase):
         self.assertIn("Original user request:\nExplain the plan", model.call("write", "1.2")["input"])
         self.assertEqual(sum(label == "Task 1.2 · Condensing earlier results" for label in progress), 1)
 
+    def test_results_too_long_to_merge_are_joined_under_headings(self):
+        result, _, _, trees = run_tree({
+            ("decide", "1"): decision("decompose", subtasks=[("Plan day 1", []), ("Plan day 2", [])]),
+            ("decide", "1.1"): decision("answer"),
+            ("write", "1.1"): "Walk the old town.",
+            ("decide", "1.2"): decision("answer"),
+            ("write", "1.2"): "Visit Belem.",
+            ("combine", "1"): RuntimeError("A pipeline stage reached the token limit"),
+        })
+
+        self.assertEqual(result, "## Plan day 1\n\nWalk the old town.\n\n## Plan day 2\n\nVisit Belem.")
+        self.assertEqual(trees[-1][0]["status"], "unverified")
+        self.assertIn("joined without merging", trees[-1][0]["note"])
+
     def test_subtasks_nest_until_the_depth_limit(self):
         _, model, _, trees = run_tree({
             ("decide", "1"): decision("decompose", subtasks=[("Part one", []), ("Part two", [])]),
@@ -675,6 +689,70 @@ class EpisodeTests(unittest.TestCase):
         self.assertIn("1 [done, answer] Say something short", episode["checklist"])
         self.assertEqual(json.loads(episode["task_tree"])[0]["result"], "Short.")
         self.assertEqual(episode["outcome"], "1 of 1 task(s) met their deliverable")
+
+
+class Interrupted(Exception):
+    """Stands in for a cancel or a crash in the middle of a run."""
+
+
+class ResumeTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.database_path = str(Path(directory.name) / "knowledge.db")
+        self.store = KnowledgeStore(self.database_path)
+
+    def test_a_finished_run_is_checkpointed_and_marked_finished(self):
+        run_tree(
+            {("decide", "1"): decision("answer"), ("write", "1"): "Done."},
+            prompt="/plan Tidy the notes",
+            knowledge_db_path=self.database_path,
+        )
+
+        saved = self.store.task_run(1)
+        self.assertEqual(saved["status"], "finished")
+        self.assertEqual(saved["prompt"], "Tidy the notes")
+        self.assertEqual(saved["options"]["mode"], "draft")
+        self.assertEqual(saved["state"]["nodes"][0]["result"], "Done.")
+        self.assertEqual((saved["tasks_done"], saved["tasks_total"]), (1, 1))
+        self.assertEqual(self.store.unfinished_task_runs(), [])
+
+    def test_an_interrupted_run_resumes_without_redoing_finished_tasks(self):
+        first_half = {
+            ("decide", "1"): decision("decompose", subtasks=[("Find the options", []), ("Compare them", [1])]),
+            ("decide", "1.1"): decision("answer"),
+            ("write", "1.1"): "Options: A and B.",
+            ("decide", "1.2"): decision("answer"),
+            ("write", "1.2"): Interrupted(),
+        }
+        with self.assertRaises(Interrupted):
+            run_tree(first_half, knowledge_db_path=self.database_path)
+
+        unfinished = self.store.unfinished_task_runs()
+        self.assertEqual(
+            [(run["id"], run["status"], run["tasks_done"], run["tasks_total"]) for run in unfinished],
+            [(1, "stopped", 1, 3)],
+        )
+
+        result, model, _, trees = run_tree({
+            ("decide", "1.2"): decision("answer"),
+            ("write", "1.2"): "A is simpler.",
+            ("combine", "1"): "Use A.",
+        }, prompt=unfinished[0]["prompt"], knowledge_db_path=self.database_path, resume_run_id=1)
+
+        self.assertEqual(result, "Use A.")
+        self.assertEqual(
+            [step for step in model.steps() if step[0] != "check"],
+            [("decide", "1.2"), ("write", "1.2"), ("combine", "1")],
+        )
+        self.assertIn("Options: A and B.", model.call("write", "1.2")["input"])
+        self.assertEqual({node["status"] for node in trees[-1]}, {"done"})
+        self.assertEqual(self.store.task_run(1)["status"], "finished")
+        self.assertEqual(self.store.unfinished_task_runs(), [])
+
+    def test_resuming_an_unknown_run_is_refused(self):
+        with self.assertRaisesRegex(ValueError, "no saved task tree run 7"):
+            run_tree({}, knowledge_db_path=self.database_path, resume_run_id=7)
 
 
 if __name__ == "__main__":

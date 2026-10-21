@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from daemon_harness import RunningDaemon
 
+from smartharness.knowledge import KnowledgeStore
 from smartharness.settings import DEFAULT_SETTINGS
 from smartharness.stages import STAGE_LABELS
 
@@ -151,6 +152,26 @@ class WindowTests(unittest.TestCase):
         )
         self.assertEqual(self.window.steps_output.text, "▸ Task 1.1 · Writing\n\nDesign A is simple.")
         self.assertEqual(self.window._last_answer, "Pick A.")
+
+    def test_an_unfinished_tree_run_can_be_resumed_or_discarded(self):
+        store = KnowledgeStore(self.settings["knowledge_db_path"])
+        for prompt in ("Plan the trip", "Sort the photos"):
+            run_id = store.start_task_run(prompt, {"mode": "auto"})
+            store.save_task_run(run_id, {"nodes": []}, 2, 5)
+            store.set_task_run_status(run_id, "stopped")
+        self.window._call_daemon("status", self.window._show_daemon_status)
+        wait_until(lambda: self.window.resume_bar.get_visible())
+        self.assertIn("Sort the photos (2 of 5 tasks done)", self.window.resume_label.get_label())
+
+        self.window.discard_button.emit("clicked")
+        wait_until(lambda: "Plan the trip" in self.window.resume_label.get_label())
+        with patch("smartharness.daemon.execute_task_tree", return_value="Trip planned.") as task_tree:
+            self.window.resume_button.emit("clicked")
+            wait_until(lambda: self.window.status.get_label() == "Complete")
+
+        self.assertEqual(self.window._last_answer, "Trip planned.")
+        self.assertEqual(task_tree.call_args.kwargs["resume_run_id"], 1)
+        self.assertEqual(self.window._prompt_text(), "Plan the trip")
 
     def test_failed_run_marks_the_failing_stage(self):
         def failing_pipeline(prompt, **kwargs):

@@ -352,6 +352,7 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         self._pending_stage_output: list[list[str]] = [[] for _ in STAGE_LABELS]
         self._stage_output_started = [False] * len(STAGE_LABELS)
         self._runner = self.settings["runner"]
+        self._unfinished_runs: list[dict[str, Any]] = []
         self._pending_steps_output: list[str] = []
         self._steps_output_started = False
         self._last_step_label = ""
@@ -453,6 +454,7 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         request.append(section_heading("Your request"))
         request.append(prompt_scroller)
         request.append(actions)
+        request.append(self._build_resume_bar())
 
         self.phase_pages = Gtk.Stack(vexpand=True)
         self.stage_outputs: list[OutputView] = []
@@ -477,6 +479,19 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         self._show_phase("final")
         sidebar_scroller = Gtk.ScrolledWindow(child=sidebar, hscrollbar_policy=Gtk.PolicyType.NEVER)
         return Gtk.Paned(start_child=sidebar_scroller, end_child=work_area, position=300, shrink_start_child=False)
+
+    def _build_resume_bar(self) -> Gtk.Widget:
+        """A row offering to resume the newest task tree run that a crash, restart, or cancel left unfinished."""
+        self.resume_label = Gtk.Label(xalign=0, hexpand=True, wrap=True)
+        self.resume_button = Gtk.Button(label="Resume")
+        self.resume_button.add_css_class("suggested-action")
+        self.resume_button.connect("clicked", lambda _button: self._resume_run())
+        self.discard_button = Gtk.Button(label="Discard")
+        self.discard_button.connect("clicked", lambda _button: self._discard_run())
+        self.resume_bar = Gtk.Box(spacing=6, visible=False)
+        for widget in (self.resume_label, self.resume_button, self.discard_button):
+            self.resume_bar.append(widget)
+        return self.resume_bar
 
     def _build_background_page(self) -> Gtk.Widget:
         page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin_top=12, margin_bottom=12, margin_start=12, margin_end=12)
@@ -701,6 +716,7 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
                     self._update_stage(label)
                 for label, text in run["outputs"].items():
                     self._append_stage_output(label, text)
+        self._show_unfinished_runs(status["unfinished_runs"])
         self._refresh_knowledge()
         self._refresh_queue()
 
@@ -731,6 +747,8 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
             self._pending_background_tokens.append(data["token"])
         elif event == "queue.changed":
             self._refresh_queue()
+        elif event == "runs.changed":
+            self._call_daemon("unfinished_runs", self._show_unfinished_runs)
         elif event == "knowledge.changed":
             self._refresh_knowledge()
         elif event == "settings.changed":
@@ -898,8 +916,43 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         self.status.set_label("Starting local model...")
         self._set_running(True)
 
+    def _show_unfinished_runs(self, runs: list[dict[str, Any]]) -> None:
+        self._unfinished_runs = runs
+        self.resume_bar.set_visible(bool(runs) and not self._request_running)
+        if runs:
+            run = runs[0]
+            prompt = " ".join(run["prompt"].split())
+            self.resume_label.set_label(
+                f"Unfinished: {prompt[:80]}{'…' if len(prompt) > 80 else ''}"
+                f" ({run['tasks_done']} of {run['tasks_total']} tasks done)"
+            )
+
+    def _resume_run(self) -> None:
+        if self._request_running or not self._unfinished_runs:
+            return
+        run = self._unfinished_runs[0]
+        self.prompt.get_buffer().set_text(run["prompt"])
+        self._begin_run(None, "tree")
+
+        def started(result: dict[str, Any]) -> None:
+            self._run_id = result["run_id"]
+
+        def failed(_message: str) -> None:
+            self._stop_run("The request could not resume.", "WAIT", "Ready")
+
+        self._call_daemon("resume_run", started, failed, run_id=run["id"])
+
+    def _discard_run(self) -> None:
+        if not self._unfinished_runs:
+            return
+        remaining = self._unfinished_runs[1:]
+        self._call_daemon(
+            "discard_run", lambda _result: self._show_unfinished_runs(remaining), run_id=self._unfinished_runs[0]["id"]
+        )
+
     def _set_running(self, running: bool) -> None:
         self._request_running = running
+        self.resume_bar.set_visible(bool(self._unfinished_runs) and not running)
         self.run_button.set_sensitive(not running)
         self.clear_button.set_sensitive(not running)
         self.cancel_button.set_sensitive(running)
