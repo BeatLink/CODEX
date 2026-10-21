@@ -93,7 +93,7 @@
 - [ ] Let the user mark a recalled fact wrong, lowering its confidence and queueing a recheck
 - [ ] Show background job metrics and how often recalled facts are cited in answers
 - [x] Take the shared GPU lock in the daemon before loading a model
-- [ ] Test schema migrations from every earlier knowledge store version
+- [x] Test schema migrations from every earlier knowledge store version
 
 ## in progress
 
