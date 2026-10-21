@@ -33,6 +33,17 @@ several can be open at once and all see the same run, queue, and settings.
 - One request runs at a time. A run belongs to the interface that started it:
   only that interface is asked clarification questions, and the run is
   cancelled if that interface disconnects.
+- Loading a model with layers on the GPU takes the lock file
+  `$XDG_RUNTIME_DIR/smartharness-gpu.lock` and holds it until that model is
+  unloaded, so two programs never fill the GPU at once (llama.cpp aborts the
+  whole process when the GPU runs out of memory). A load waits up to 30
+  minutes for another holder, and an interface shows "Waiting for the GPU"
+  meanwhile. Other programs can share the GPU the same way with
+  `flock "$XDG_RUNTIME_DIR/smartharness-gpu.lock" command`; SmartHarness
+  started under such a command uses the lock it was given. Models with no GPU
+  layers, such as the embedding model, never take it.
+  `SMARTHARNESS_GPU_LOCK` names another lock file, or turns the lock off when
+  set empty.
 - The daemon reads `settings.json` when it starts. Relative paths in settings
   are resolved from the directory the daemon started in; the CLI sends its
   paths already resolved.

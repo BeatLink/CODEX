@@ -87,7 +87,7 @@
 - [ ] Back up, export, and reset the knowledge store, and delete a single fact or memory from the interfaces
 - [ ] Let the user mark a recalled fact wrong, lowering its confidence and queueing a recheck
 - [ ] Show background job metrics and how often recalled facts are cited in answers
-- [ ] Take the shared GPU lock in the daemon before loading a model
+- [x] Take the shared GPU lock in the daemon before loading a model
 - [ ] Test schema migrations from every earlier knowledge store version
 
 ## in progress

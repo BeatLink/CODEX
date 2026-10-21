@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import sqlite3
 from typing import Any
+import weakref
 
 from .context_budget import (
     condense_sections,
@@ -15,6 +16,7 @@ from .context_budget import (
     token_counter,
 )
 from .embeddings import get_embedder
+from .gpu_lock import GPU_LOCK
 from .knowledge import KnowledgeStore
 from .settings import CONTEXT_SIZE, DEFAULT_MODEL_PATH, MAX_TOKENS, MODE_CHOICES, TEMPERATURE
 from .tool_stage import run_tool_stage
@@ -509,8 +511,16 @@ def _search_query(user_prompt: str) -> str:
     return query[:MAX_SEARCH_QUERY_CHARS].rsplit(" ", 1)[0]
 
 
-def create_model(model_path: str, context_size: int, gpu_layers: int) -> Any:
-    """Load the local GGUF model only when inference is requested."""
+def create_model(
+    model_path: str,
+    context_size: int,
+    gpu_layers: int,
+    on_wait: Callable[[str], None] | None = None,
+) -> Any:
+    """Load the local GGUF model only when inference is requested.
+
+    A model with layers on the GPU holds the shared GPU lock until it is freed.
+    """
     try:
         from llama_cpp import Llama
     except ImportError as error:
@@ -520,14 +530,24 @@ def create_model(model_path: str, context_size: int, gpu_layers: int) -> Any:
 
     # A CUDA build still puts the context cache and large prompt batches on the GPU unless told not to.
     on_cpu_only = gpu_layers == 0
-    return Llama(
-        model_path=model_path,
-        n_gpu_layers=gpu_layers,
-        n_ctx=context_size,
-        offload_kqv=not on_cpu_only,
-        op_offload=not on_cpu_only,
-        verbose=False,
-    )
+    if not on_cpu_only:
+        GPU_LOCK.acquire(on_wait)
+    try:
+        model = Llama(
+            model_path=model_path,
+            n_gpu_layers=gpu_layers,
+            n_ctx=context_size,
+            offload_kqv=not on_cpu_only,
+            op_offload=not on_cpu_only,
+            verbose=False,
+        )
+    except BaseException:
+        if not on_cpu_only:
+            GPU_LOCK.release()
+        raise
+    if not on_cpu_only:
+        weakref.finalize(model, GPU_LOCK.release)
+    return model
 
 
 class ModelCache:
@@ -540,11 +560,17 @@ class ModelCache:
     def has(self, model_path: str, context_size: int, gpu_layers: int) -> bool:
         return self._model is not None and self._key == (model_path, context_size, gpu_layers)
 
-    def get(self, model_path: str, context_size: int, gpu_layers: int) -> Any:
+    def get(
+        self,
+        model_path: str,
+        context_size: int,
+        gpu_layers: int,
+        on_wait: Callable[[str], None] | None = None,
+    ) -> Any:
         if not self.has(model_path, context_size, gpu_layers):
             # Drop the old model first so two never sit in memory together.
             self._model = None
-            self._model = create_model(model_path, context_size, gpu_layers)
+            self._model = create_model(model_path, context_size, gpu_layers, on_wait)
             self._key = (model_path, context_size, gpu_layers)
         return self._model
 
@@ -742,7 +768,7 @@ def load_model(
         else:
             print(f"Loading model from {model_path}...")
     load = model_cache.get if model_cache is not None else create_model
-    return load(model_path, context_size, gpu_layers)
+    return load(model_path, context_size, gpu_layers, progress_callback or print)
 
 
 def queue_research_topic(knowledge_store: KnowledgeStore | None, topic: str, max_pending: int) -> None:

@@ -1067,7 +1067,8 @@ class ModelCacheTests(unittest.TestCase):
         from smartharness.pipeline import create_model
 
         llama_cpp = MagicMock()
-        with patch.dict(sys.modules, {"llama_cpp": llama_cpp}):
+        # A GPU load takes the shared GPU lock, which another program may be holding.
+        with patch.dict(sys.modules, {"llama_cpp": llama_cpp}), patch("smartharness.pipeline.GPU_LOCK"):
             create_model("model.gguf", 4096, 0)
             cpu = llama_cpp.Llama.call_args.kwargs
             create_model("model.gguf", 4096, -1)

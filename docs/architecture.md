@@ -54,6 +54,10 @@ and a background worker uses idle time to turn it into facts, topic summaries an
 - **A separate background model** (`background_model_path`) has its own `ModelCache` and lock, so
   it never evicts the main model. It still gives way to a run in the same way, and the daemon
   unloads it after five minutes without background work.
+- **The GPU lock** ([gpu_lock.py](../smartharness/gpu_lock.py)) is shared with other programs: a
+  model with GPU layers takes an exclusive `flock` on `$XDG_RUNTIME_DIR/smartharness-gpu.lock` when
+  it loads and releases it when the last such model in the process is freed. A process started
+  under `flock` reuses the descriptor it inherited instead of waiting on itself.
 
 ## How a request runs
 
