@@ -235,7 +235,10 @@ Knowledge lives in a SQLite database at `knowledge_db_path`
 Before the first model call, the request recalls what memory holds for it: the
 user memory, plus facts and past episodes that share at least half of the
 prompt's search terms, or three of them for a longer prompt, ignoring common
-words; those sharing the most terms come first. These go to every later step as
+words; those sharing the most terms come first. When fewer than five match and
+the request names a stored topic (every word of the topic's name appears in
+it), the rest come from that topic and its subtopics, most relevant, trusted,
+and used first. These go to every later step as
 "Remembered context", and each recall counts towards that fact's and topic's use
 count. In a task tree, each subtask also recalls facts for its own prompt, and
 each search query recalls facts for itself; facts that answer every query of a

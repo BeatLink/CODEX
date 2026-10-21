@@ -187,7 +187,9 @@ There are two read paths, used at different moments:
 1. **Recall** (`KnowledgeStore.recall`), before the first model call. It returns the ten most-used
    user memories, plus facts and past episodes whose text shares half the prompt's search terms,
    or three of them for a longer prompt (stopwords removed, at most twelve terms), those sharing
-   the most terms first. Each recalled fact carries its chain of ancestor topics and their
+   the most terms first. When fewer than five match, recall walks the topic tree: it takes the most
+   specific topic whose whole name appears in the query and fills up from facts in that topic and
+   its subtopics. Each recalled fact carries its chain of ancestor topics and their
    summaries, and the recalled facts bring up to five graph relationships of the entities they
    name. The result is formatted as a "Remembered context" section, and recall bumps the use
    counts of what it returned. In a task tree, each subtask adds the facts its own prompt recalls,
@@ -298,8 +300,8 @@ These are properties of the code as it stands, recorded so changes can be measur
   paraphrase that shares no words with a stored fact finds nothing.
 - **The pipeline recalls once, on the whole prompt.** Only the task tree recalls for each subtask
   and search query.
-- **The topic tree decorates results but does not route them.** Facts are found by flat search and
-  then given their ancestor summaries; nothing walks the tree from the top to pick a branch.
+- **Branch routing needs the topic's name.** Recall only enters a branch whose name the query
+  states word for word, so a question about a subject in other words never reaches its branch.
 - **The graph is read one step out.** Recall adds the relationships of entities a recalled fact
   names, but never follows them further or uses them to find facts.
 - **Stale facts are flagged, not retired.** A fact whose source expired is recalled with a warning

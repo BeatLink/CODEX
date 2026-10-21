@@ -58,7 +58,7 @@
 - [x] Count recalled memory as evidence in the task tree's URL and value checks, as the pipeline does
 - [x] Recall memory for each task's own prompt and search queries, not only once for the whole request
 - [x] Rank recalled facts by FTS5 score and term overlap instead of requiring half the prompt's terms
-- [ ] Retrieve along the topic tree: pick the best-matching branch, then search only the facts under it
+- [x] Retrieve along the topic tree: pick the best-matching branch, then search only the facts under it
 - [x] Add one-hop graph neighbours of entities named in recalled facts to the remembered context
 - [x] Give facts an expiry from their source and recheck them when their topic is refreshed
 - [x] Check that an extracted fact's numbers, dates, and distinctive words appear in the source it cites

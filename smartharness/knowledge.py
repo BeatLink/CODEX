@@ -646,22 +646,9 @@ class KnowledgeStore:
                 ranked = sorted((pair for pair in counted if pair[0] >= needed), key=lambda pair: -pair[0])
                 for _, row in ranked:
                     if row["kind"] == "fact" and len(recalled["facts"]) < limit:
-                        fact = connection.execute(
-                            "SELECT f.id, f.statement, f.confidence, f.topic_id, t.name AS topic, "
-                            "s.url AS source_url, COALESCE(s.retrieved_at, f.created_at) AS retrieved_at, "
-                            # A fact with no source ages from when it was stored, as its source would have.
-                            "COALESCE(s.expires_at, f.created_at + ?) < ? AS stale "
-                            "FROM facts f JOIN topics t ON t.id = f.topic_id "
-                            "LEFT JOIN sources s ON s.id = f.source_id "
-                            "WHERE f.id = ? AND f.status = 'active'",
-                            (SOURCE_TTL_SECONDS, now, row["item_id"]),
-                        ).fetchone()
+                        fact = self._recalled_fact(connection, row["item_id"], now)
                         if fact:
-                            recalled["facts"].append({
-                                **dict(fact),
-                                "stale": bool(fact["stale"]),
-                                "topic_path": self._topic_path(connection, fact["topic_id"]),
-                            })
+                            recalled["facts"].append(fact)
                     elif row["kind"] == "episode" and len(recalled["episodes"]) < min(limit, 3):
                         episode = connection.execute(
                             "SELECT id, prompt, task_type, outcome, created_at FROM episodes WHERE id = ?",
@@ -669,6 +656,12 @@ class KnowledgeStore:
                         ).fetchone()
                         if episode:
                             recalled["episodes"].append(dict(episode))
+                if len(recalled["facts"]) < limit:
+                    shown = {fact["id"] for fact in recalled["facts"]}
+                    for fact_id in self._branch_fact_ids(connection, terms, shown, limit - len(recalled["facts"])):
+                        fact = self._recalled_fact(connection, fact_id, now)
+                        if fact:
+                            recalled["facts"].append(fact)
             recalled["relationships"] = self._relationships_named_in(
                 connection, [fact["statement"] for fact in recalled["facts"]]
             )
@@ -1114,6 +1107,54 @@ class KnowledgeStore:
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{name} must be a non-empty string.")
         return value.strip()[:maximum]
+
+    @classmethod
+    def _recalled_fact(cls, connection: sqlite3.Connection, fact_id: int, now: float) -> dict[str, Any] | None:
+        """Load an active fact with its source, its age, and the chain of topics above it."""
+        fact = connection.execute(
+            "SELECT f.id, f.statement, f.confidence, f.topic_id, t.name AS topic, "
+            "s.url AS source_url, COALESCE(s.retrieved_at, f.created_at) AS retrieved_at, "
+            # A fact with no source ages from when it was stored, as its source would have.
+            "COALESCE(s.expires_at, f.created_at + ?) < ? AS stale "
+            "FROM facts f JOIN topics t ON t.id = f.topic_id "
+            "LEFT JOIN sources s ON s.id = f.source_id "
+            "WHERE f.id = ? AND f.status = 'active'",
+            (SOURCE_TTL_SECONDS, now, fact_id),
+        ).fetchone()
+        if fact is None:
+            return None
+        return {**dict(fact), "stale": bool(fact["stale"]), "topic_path": cls._topic_path(connection, fact["topic_id"])}
+
+    @classmethod
+    def _branch_fact_ids(cls, connection: sqlite3.Connection, terms: list[str], shown: set[int], limit: int) -> list[int]:
+        """Return the best facts from the branch of the most specific topic the query names.
+
+        A topic counts as named when every word of its name is among the query's terms, so a
+        fact under it is found even when it shares too few words with the query to match itself.
+        """
+        named = []
+        for topic in connection.execute("SELECT id, name FROM topics").fetchall():
+            name_terms = _search_terms(topic["name"])
+            if name_terms and all(term in terms for term in name_terms):
+                named.append((len(name_terms), topic["id"]))
+        if not named:
+            return []
+        most_specific = max(count for count, _ in named)
+        branch = set()
+        for count, topic_id in named:
+            if count == most_specific:
+                branch |= {topic_id, *cls._descendant_ids(connection, topic_id)}
+        marks = ", ".join("?" * len(branch))
+        rows = connection.execute(
+            f"SELECT id, statement, confidence, use_count FROM facts WHERE status = 'active' AND topic_id IN ({marks})",
+            tuple(branch),
+        ).fetchall()
+        candidates = [row for row in rows if row["id"] not in shown]
+        # Facts sharing the most of the query come first, then the most trusted and most used.
+        candidates.sort(key=lambda row: (
+            -_shared_term_count(terms, row["statement"]), -row["confidence"], -row["use_count"]
+        ))
+        return [row["id"] for row in candidates[:limit]]
 
     @staticmethod
     def _relationships_named_in(connection: sqlite3.Connection, statements: list[str]) -> list[dict[str, Any]]:

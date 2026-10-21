@@ -151,9 +151,10 @@ class KnowledgeStoreTests(unittest.TestCase):
         )
 
         self.assertEqual(recalled["user"], [])
+        # The other fact comes from the named topic's branch, after the one matching the request itself.
         self.assertEqual(
             [fact["statement"] for fact in recalled["facts"]],
-            ["FastAPI runs async def endpoints on the event loop."],
+            ["FastAPI runs async def endpoints on the event loop.", "FastAPI is a Python web framework."],
         )
 
     def test_a_fact_whose_source_has_expired_is_recalled_as_stale(self):
@@ -181,6 +182,21 @@ class KnowledgeStoreTests(unittest.TestCase):
         self.assertEqual(relationships, [
             {"subject": "FTS5", "relation": "extends", "object": "SQLite", "source_url": "https://example.test/fts"},
         ])
+
+    def test_recall_fills_up_from_the_branch_of_the_topic_the_query_names(self):
+        self.store.add_topic("FastAPI", parent="Python web frameworks")
+        self.store.add_topic("FastAPI dependencies", parent="FastAPI")
+        self.store.add_fact("FastAPI", "It is built on Starlette and Pydantic.", confidence=0.6)
+        self.store.add_fact("FastAPI dependencies", "Depends() injects shared resources.", confidence=0.9)
+        self.store.add_fact("Python web frameworks", "Django ships an admin site.", confidence=0.9)
+        self.store.add_fact("Rust", "Cargo builds crates.", confidence=0.9)
+
+        recalled = self.store.recall("How should I lay out a FastAPI app?")
+
+        self.assertEqual(
+            [fact["statement"] for fact in recalled["facts"]],
+            ["Depends() injects shared resources.", "It is built on Starlette and Pydantic."],
+        )
 
     def test_recalled_fact_carries_its_chain_of_parent_summaries(self):
         self.store.add_topic("SQLite", parent="Databases")
