@@ -254,6 +254,8 @@ class RunResult:
     seconds: float = 0.0
     model_calls: int = 0
     completion_tokens: int = 0
+    # Which round of a repeated eval this run belongs to, counting from 1.
+    attempt: int = 1
 
     @property
     def passed(self) -> bool:
@@ -266,11 +268,12 @@ def run_task(
     llm: Any,
     settings: dict[str, Any],
     seed_store: str | Path | None = None,
+    attempt: int = 1,
 ) -> RunResult:
     """Answer one task with one runner and score the answer, recording a failure as an error."""
     counting_model = CountingModel(llm)
     label = runner + SEEDED_SUFFIX if seed_store is not None else runner
-    result = RunResult(task_id=task.id, runner=label, checks_total=len(task.checks))
+    result = RunResult(task_id=task.id, runner=label, checks_total=len(task.checks), attempt=attempt)
     started = time.monotonic()
     # Each run gets its own store, empty or a fresh copy of the seed, so no run sees what an earlier one stored.
     with tempfile.TemporaryDirectory(prefix="smartharness-eval-") as scratch_directory:
@@ -393,26 +396,33 @@ def run_eval(
     settings: dict[str, Any],
     on_result: Callable[[RunResult], None] | None = None,
     seed_store: str | Path | None = None,
+    repeat: int = 1,
 ) -> list[RunResult]:
+    """Run every task on every runner, going through the whole set once per round."""
     results = []
-    for task in tasks:
-        for label in runner_labels(runners, seed_store):
-            runner = label.removesuffix(SEEDED_SUFFIX)
-            result = run_task(task, runner, llm, settings, seed_store if label != runner else None)
-            results.append(result)
-            if on_result is not None:
-                on_result(result)
+    # Each round covers the whole set, so a run stopped early still holds complete rounds.
+    for attempt in range(1, repeat + 1):
+        for task in tasks:
+            for label in runner_labels(runners, seed_store):
+                runner = label.removesuffix(SEEDED_SUFFIX)
+                result = run_task(task, runner, llm, settings, seed_store if label != runner else None, attempt)
+                results.append(result)
+                if on_result is not None:
+                    on_result(result)
     return results
 
 
 def summarize(results: list[RunResult], runners: list[str]) -> dict[str, dict[str, Any]]:
-    """Total each runner's passed tasks, passed checks, errors, time, calls, and tokens."""
+    """Total each runner's passed tasks, passed checks, errors, time, calls, and tokens, and its passes per round."""
     summary = {}
     for runner in runners:
         own = [result for result in results if result.runner == runner]
+        rounds = sorted({result.attempt for result in own})
         summary[runner] = {
             "tasks": len(own),
             "tasks_passed": sum(result.passed for result in own),
+            "pass_rate": round(sum(result.passed for result in own) / len(own), 3) if own else 0.0,
+            "round_passes": [sum(result.passed for result in own if result.attempt == attempt) for attempt in rounds],
             "checks_passed": sum(result.checks_passed for result in own),
             "checks_total": sum(result.checks_total for result in own),
             "errors": sum(bool(result.error) for result in own),
@@ -424,25 +434,57 @@ def summarize(results: list[RunResult], runners: list[str]) -> dict[str, dict[st
 
 
 def format_summary(summary: dict[str, dict[str, Any]]) -> str:
+    repeated = any(len(totals["round_passes"]) > 1 for totals in summary.values())
     header = f"{'runner':<14} {'tasks':>9} {'checks':>9} {'errors':>6} {'seconds':>9} {'calls':>6} {'tokens':>8}"
+    if repeated:
+        header += f" {'rate':>6}  per round"
     lines = [header, "-" * len(header)]
     for runner, totals in summary.items():
-        lines.append(
+        line = (
             f"{runner:<14} {totals['tasks_passed']:>4}/{totals['tasks']:<4} "
             f"{totals['checks_passed']:>4}/{totals['checks_total']:<4} {totals['errors']:>6} "
             f"{totals['seconds']:>9.1f} {totals['model_calls']:>6} {totals['completion_tokens']:>8}"
         )
+        if repeated:
+            line += f" {totals['pass_rate']:>6.0%}  {' '.join(str(count) for count in totals['round_passes'])}"
+        lines.append(line)
     return "\n".join(lines)
 
 
-def format_result(result: RunResult) -> str:
+def task_pass_counts(results: list[RunResult]) -> dict[str, dict[str, list[int]]]:
+    """Count, for each task and runner, the rounds it passed and the rounds it ran."""
+    counts: dict[str, dict[str, list[int]]] = {}
+    for result in results:
+        passed_and_run = counts.setdefault(result.task_id, {}).setdefault(result.runner, [0, 0])
+        passed_and_run[0] += result.passed
+        passed_and_run[1] += 1
+    return counts
+
+
+def format_unsteady_tasks(counts: dict[str, dict[str, list[int]]]) -> str:
+    """List the tasks a runner passed in some rounds but not all, which a single run would misreport."""
+    lines = []
+    for task_id, by_runner in counts.items():
+        unsteady = [f"{runner} {passed}/{run}" for runner, (passed, run) in by_runner.items() if 0 < passed < run]
+        if unsteady:
+            lines.append(f"  {task_id}: {', '.join(unsteady)}")
+    if not lines:
+        return "Every task passed in all rounds or in none."
+    return "Tasks that passed in only some rounds:\n" + "\n".join(lines)
+
+
+def format_result(result: RunResult, show_attempt: bool = False) -> str:
     if result.error:
         outcome = f"error: {result.error}"
     elif result.passed:
         outcome = "pass"
     else:
         outcome = f"fail ({'; '.join(result.failed_checks)})"
-    return f"[{result.task_id} / {result.runner}] {result.checks_passed}/{result.checks_total} in {result.seconds}s: {outcome}"
+    round_note = f" #{result.attempt}" if show_attempt else ""
+    return (
+        f"[{result.task_id} / {result.runner}{round_note}] "
+        f"{result.checks_passed}/{result.checks_total} in {result.seconds}s: {outcome}"
+    )
 
 
 # ==============================================================================
@@ -475,8 +517,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Build the seed store from this seed file (evals/seed.json when no file is named) and answer the "
         "recall task set, unless --tasks names another.",
     )
+    parser.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        help="Run the whole set this many times and report pass rates, since one run cannot tell a change from chance.",
+    )
     parser.add_argument("--model-path", help="Path to a GGUF model (overrides settings.json).")
     args = parser.parse_args(argv)
+    if args.repeat < 1:
+        parser.error("--repeat takes a whole number of at least 1")
 
     runners = [name.strip() for name in args.runners.split(",") if name.strip()]
     unknown = [name for name in runners if name not in RUNNER_CHOICES]
@@ -533,19 +583,29 @@ def run_and_report(args: argparse.Namespace, tasks: list[EvalTask], runners: lis
         runners,
         llm,
         settings,
-        on_result=lambda result: print(format_result(result), flush=True),
+        on_result=lambda result: print(format_result(result, args.repeat > 1), flush=True),
         seed_store=args.seed_store,
+        repeat=args.repeat,
     )
     summary = summarize(results, runner_labels(runners, args.seed_store))
+    counts = task_pass_counts(results)
     print()
     print(format_summary(summary))
+    if args.repeat > 1:
+        print()
+        print(format_unsteady_tasks(counts))
     if args.output:
         report = {
             "model_path": settings["model_path"],
             "tasks_path": args.tasks,
             "seed": args.seed,
             "seed_store": args.seed_store if not args.seed else None,
+            "repeat": args.repeat,
             "summary": summary,
+            "task_passes": {
+                task_id: {runner: {"passed": passed, "runs": run} for runner, (passed, run) in by_runner.items()}
+                for task_id, by_runner in counts.items()
+            },
             "results": [{**asdict(result), "passed": result.passed} for result in results],
         }
         Path(args.output).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

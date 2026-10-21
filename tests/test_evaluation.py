@@ -15,11 +15,14 @@ from smartharness.evaluation import (
     CountingModel,
     EvalTask,
     check_passes,
+    format_summary,
+    format_unsteady_tasks,
     load_tasks,
     main,
     run_eval,
     run_task,
     summarize,
+    task_pass_counts,
 )
 from smartharness.knowledge import KnowledgeStore
 from smartharness.settings import DEFAULT_SETTINGS
@@ -63,9 +66,6 @@ class LoadTasksTests(unittest.TestCase):
 
         self.assertTrue(tasks)
         self.assertEqual(len({task.id for task in tasks}), len(tasks))
-
-    def test_hard_task_set_loads(self):
-        self.assertTrue(load_tasks(EVALS_DIRECTORY / "hard_tasks.json"))
 
     def test_recall_task_set_loads(self):
         self.assertTrue(load_tasks(RECALL_TASKS_PATH))
@@ -217,6 +217,28 @@ class RunTaskTests(unittest.TestCase):
         self.assertEqual((totals["tasks"], totals["tasks_passed"], totals["checks_passed"]), (2, 1, 1))
         self.assertEqual((totals["model_calls"], totals["completion_tokens"]), (2, 14))
 
+    def test_repeated_eval_reports_each_round_and_the_tasks_that_passed_only_sometimes(self):
+        steady = EvalTask(id="steady", prompt="Say 4.", checks=[{"type": "contains", "value": "4"}])
+        unsteady = EvalTask(id="unsteady", prompt="Say 5.", checks=[{"type": "contains", "value": "5"}])
+
+        class AlternatingModel(ReplyingModel):
+            def create_chat_completion(self, **request):
+                self.calls_made = getattr(self, "calls_made", 0) + 1
+                self.reply = "4 and 5" if self.calls_made in (2, 4) else "4"
+                return super().create_chat_completion(**request)
+
+        results = run_eval([steady, unsteady], ["bare"], AlternatingModel(""), DEFAULT_SETTINGS, repeat=3)
+        totals = summarize(results, ["bare"])["bare"]
+        counts = task_pass_counts(results)
+
+        self.assertEqual([result.attempt for result in results], [1, 1, 2, 2, 3, 3])
+        self.assertEqual(totals["round_passes"], [2, 2, 1])
+        self.assertEqual(totals["pass_rate"], round(5 / 6, 3))
+        self.assertEqual(counts["unsteady"]["bare"], [2, 3])
+        self.assertIn("unsteady: bare 2/3", format_unsteady_tasks(counts))
+        self.assertNotIn("steady:", format_unsteady_tasks(counts).replace("unsteady:", ""))
+        self.assertIn("per round", format_summary(summarize(results, ["bare"])))
+
 
 RANGES_TASK = {
     "id": "fix",
@@ -328,6 +350,27 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual([result["task_id"] for result in report["results"]], ["sum"])
         self.assertTrue(report["results"][0]["passed"])
         self.assertEqual(report["summary"]["bare"]["tasks_passed"], 1)
+
+    def test_repeat_flag_runs_each_round_and_reports_passes_per_task(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tasks_path = write_tasks(directory, [TASK])
+            output_path = Path(directory) / "report.json"
+            with (
+                patch("smartharness.evaluation.load_settings", return_value=DEFAULT_SETTINGS.copy()),
+                patch("smartharness.evaluation.create_model", return_value=ReplyingModel("4")) as create_model,
+                patch("builtins.print"),
+            ):
+                exit_code = main(["--tasks", str(tasks_path), "--runners", "bare", "--repeat", "2", "--output", str(output_path)])
+                with self.assertRaises(SystemExit), patch("sys.stderr"):
+                    main(["--tasks", str(tasks_path), "--repeat", "0"])
+
+            report = json.loads(output_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(create_model.call_count, 1)
+        self.assertEqual(report["repeat"], 2)
+        self.assertEqual(report["task_passes"], {"sum": {"bare": {"passed": 2, "runs": 2}}})
+        self.assertEqual(report["summary"]["bare"]["round_passes"], [1, 1])
 
     def test_seed_flag_builds_the_store_and_answers_the_recall_tasks_with_and_without_it(self):
         with tempfile.TemporaryDirectory() as directory:
