@@ -12,7 +12,6 @@ gi.require_version("Gtk", "4.0")
 from gi.repository import Gio, GLib, Gtk, Pango  # noqa: E402
 
 from .client import DISCONNECTED_EVENT, DaemonClient, DaemonError, connect_to_daemon  # noqa: E402
-from .pipeline import MODE_PROGRESS_PREFIX, SKIPPED_PREFIX  # noqa: E402
 from .settings import (  # noqa: E402
     MODE_CHOICES,
     default_settings_path,
@@ -21,18 +20,10 @@ from .settings import (  # noqa: E402
     mcp_servers_to_json,
     validate_settings,
 )
-from .stages import (  # noqa: E402
-    STAGE_LABELS,
-    STAGE_TAB_TITLES,
-    TASK_STEP_PREFIX,
-    task_detail_markdown,
-    task_tree_lines,
-)
+from .task_view import TASK_STEP_PREFIX, task_detail_markdown, task_tree_lines  # noqa: E402
 
 
 APPLICATION_ID = "org.smartharness.SmartHarness"
-PHASE_WAITING_TEXT = "Waiting for this phase..."
-PHASE_SKIPPED_TEXT = "Skipped: this request does not need this phase."
 FINAL_WAITING_TEXT = "Your final response will appear here."
 MODE_NAMES = {"auto": "Auto mode", "answer": "Answer mode", "draft": "Draft mode", "execute": "Execute mode"}
 STEPS_WAITING_TEXT = "Each step of each task will appear here as it runs."
@@ -259,14 +250,11 @@ def field_label(text: str) -> Gtk.Label:
 
 
 class PhaseRow(Gtk.ListBoxRow):
-    def __init__(self, page_name: str, state: Gtk.Label, title: str) -> None:
+    def __init__(self, page_name: str, title: str) -> None:
         super().__init__()
         self.page_name = page_name
         self.title = title
-        box = Gtk.Box(spacing=8, margin_top=4, margin_bottom=4, margin_start=4, margin_end=4)
-        box.append(state)
-        box.append(Gtk.Label(label=title, xalign=0, wrap=True, hexpand=True))
-        self.set_child(box)
+        self.set_child(Gtk.Label(label=title, xalign=0, wrap=True, margin_top=4, margin_bottom=4, margin_start=4, margin_end=4))
 
 
 class TaskRow(Gtk.ListBoxRow):
@@ -296,7 +284,7 @@ class TopicRow(Gtk.ListBoxRow):
 
 
 class ClarificationDialog(Gtk.Window):
-    """Asks the user the pipeline's clarification question; closing it counts as skipping."""
+    """Asks the user the run's clarification question; closing it counts as skipping."""
 
     def __init__(self, parent: Gtk.Window, question: str, on_answer: Callable[[str], None]) -> None:
         super().__init__(title="Clarification", transient_for=parent, modal=True, default_width=520)
@@ -361,14 +349,8 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         self._run_id: int | None = None
         self._request_running = False
         self._last_answer = ""
-        self._active_stage: int | None = None
-        self._run_mode = ""
-        self._skipped_stages: set[int] = set()
-        self._follow_stages = True
+        self._follow_steps = True
         self._showing_phase_programmatically = False
-        self._pending_stage_output: list[list[str]] = [[] for _ in STAGE_LABELS]
-        self._stage_output_started = [False] * len(STAGE_LABELS)
-        self._runner = self.settings["runner"]
         self._unfinished_runs: list[dict[str, Any]] = []
         self._task_nodes: list[dict[str, Any]] = []
         self._chosen_task_id: str | None = None
@@ -429,20 +411,12 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
 
     def _build_workbench_page(self) -> Gtk.Widget:
         sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, margin_top=12, margin_bottom=12, margin_start=12, margin_end=12)
-        self.sidebar_title = section_heading("Pipeline")
-        sidebar.append(self.sidebar_title)
-        # Each row shows a stage's state, and choosing it shows that stage's output.
+        sidebar.append(section_heading("Task tree"))
+        # Choosing a row shows every step's output or the final answer.
         self.phase_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE)
         self.phase_list.connect("row-selected", self._on_phase_selected)
-        self.stage_states: list[Gtk.Label] = []
-        for index, label in enumerate(STAGE_LABELS, start=1):
-            state = Gtk.Label(label="WAIT", width_chars=5, xalign=0)
-            state.add_css_class("monospace")
-            self.stage_states.append(state)
-            self.phase_list.append(PhaseRow(f"phase-{index}", state, label.split(": ", 1)[1]))
-        self.phase_list.append(PhaseRow("steps", Gtk.Label(label="", width_chars=5, xalign=0), "Steps"))
-        final_state = Gtk.Label(label="", width_chars=5, xalign=0)
-        self.phase_list.append(PhaseRow("final", final_state, "Final answer"))
+        self.phase_list.append(PhaseRow("steps", "Steps"))
+        self.phase_list.append(PhaseRow("final", "Final answer"))
         sidebar.append(self.phase_list)
         # Each row is one task; choosing it shows that task's deliverable, state, and result.
         self.task_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE, margin_top=12)
@@ -478,11 +452,6 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         request.append(self._build_resume_bar())
 
         self.phase_pages = Gtk.Stack(vexpand=True)
-        self.stage_outputs: list[OutputView] = []
-        for index, title in enumerate(STAGE_TAB_TITLES, start=1):
-            output = OutputView(PHASE_WAITING_TEXT)
-            self.stage_outputs.append(output)
-            self.phase_pages.add_titled(output.widget, f"phase-{index}", f"{index} {title}")
         self.steps_output = OutputView(STEPS_WAITING_TEXT)
         self.phase_pages.add_titled(self.steps_output.widget, "steps", "Steps")
         self.task_detail = OutputView(TASK_DETAIL_WAITING_TEXT)
@@ -498,7 +467,6 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         work_area.set_margin_top(12)
         work_area.set_margin_bottom(12)
         work_area.set_margin_end(12)
-        self._show_runner(self._runner)
         self._show_phase("final")
         sidebar_scroller = Gtk.ScrolledWindow(child=sidebar, hscrollbar_policy=Gtk.PolicyType.NEVER)
         return Gtk.Paned(start_child=sidebar_scroller, end_child=work_area, position=300, shrink_start_child=False)
@@ -573,12 +541,7 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
             row.append(self.switches[name])
             row.append(Gtk.Label(label=label, xalign=0))
             page.append(row)
-        page.append(section_heading("How requests run"))
-        row = Gtk.Box(spacing=12, margin_top=6)
-        self.tree_switch = Gtk.Switch(active=self.settings["runner"] == "tree", valign=Gtk.Align.CENTER)
-        row.append(self.tree_switch)
-        row.append(Gtk.Label(label="Work requests as a task tree (off runs the fixed eight-stage pipeline)", xalign=0, wrap=True))
-        page.append(row)
+        page.append(section_heading("Task tree"))
         page.append(self._number_grid(TREE_NUMBER_FIELDS))
         page.append(section_heading("Tool limits"))
         page.append(self._number_grid(TOOL_NUMBER_FIELDS))
@@ -679,14 +642,14 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         if row is None:
             return
         if not self._rebuilding_task_list:
-            # A stage or step page replaces the task view, so no task stays chosen.
+            # The steps or final page replaces the task view, so no task stays chosen.
             self._rebuilding_task_list = True
             self.task_list.unselect_all()
             self._rebuilding_task_list = False
         self.phase_pages.set_visible_child_name(row.page_name)
         self.phase_title.set_markup(f"<b>{GLib.markup_escape_text(row.title)}</b>")
         if not self._showing_phase_programmatically and self._request_running:
-            self._follow_stages = False
+            self._follow_steps = False
 
     def notify_user(self, message: str) -> None:
         self.notice_label.set_label(message)
@@ -733,18 +696,12 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
             self.status.set_label("Ready")
         else:
             # Another interface started this run, so show its progress so far.
-            self._begin_run(run["run_id"], run["runner"])
-            if run["runner"] == "tree":
-                self._show_task_tree(run["tree"])
-                for label, text in run["outputs"].items():
-                    self._append_stage_output(label, text)
-                if run["progress"]:
-                    self._update_stage(run["progress"][-1])
-            else:
-                for label in run["progress"]:
-                    self._update_stage(label)
-                for label, text in run["outputs"].items():
-                    self._append_stage_output(label, text)
+            self._begin_run(run["run_id"])
+            self._show_task_tree(run["tree"])
+            for label, text in run["outputs"].items():
+                self._append_step_output(label, text)
+            if run["progress"]:
+                self._update_progress(run["progress"][-1])
         self._show_unfinished_runs(status["unfinished_runs"])
         self._refresh_knowledge()
         self._refresh_queue()
@@ -755,13 +712,13 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
     def _handle_daemon_event(self, event: str, data: dict[str, Any]) -> None:
         if event == "run.started":
             if not self._request_running or self._run_id is None:
-                self._begin_run(data["run_id"], data.get("runner", "pipeline"))
+                self._begin_run(data["run_id"])
         elif event == "run.tree":
             self._show_task_tree(data["nodes"])
         elif event == "run.progress":
-            self._update_stage(data["label"])
+            self._update_progress(data["label"])
         elif event == "run.token":
-            self._append_stage_output(data["label"], data["token"])
+            self._append_step_output(data["label"], data["token"])
         elif event == "run.clarification":
             self._request_clarification(data["run_id"], data["clarification_id"], data["question"])
         elif event == "run.finished":
@@ -769,7 +726,7 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         elif event == "run.failed":
             self._fail_run(data["message"])
         elif event == "run.cancelled":
-            self._stop_run("Run cancelled.", "STOP", "Cancelled")
+            self._stop_run("Run cancelled.", "Cancelled")
         elif event == "background.status":
             self._set_background_status(data["message"])
         elif event == "background.token":
@@ -829,7 +786,6 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         for name, switch in self.switches.items():
             settings[name] = switch.get_active()
         settings["background_research_enabled"] = self.background_switch.get_active()
-        settings["runner"] = "tree" if self.tree_switch.get_active() else "pipeline"
         buffer = self.mcp_servers.get_buffer()
         settings["mcp_servers"] = mcp_servers_from_json(buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), False))
         settings["mode"] = MODE_CHOICES[self.mode_dropdown.get_selected()]
@@ -843,12 +799,9 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
             spin.set_value(settings[name])
         for name, switch in self.switches.items():
             switch.set_active(settings[name])
-        self.tree_switch.set_active(settings["runner"] == "tree")
         self.mcp_servers.get_buffer().set_text(mcp_servers_to_json(settings["mcp_servers"]))
         self._set_background_switch(settings["background_research_enabled"])
         self.mode_dropdown.set_selected(MODE_CHOICES.index(settings["mode"]))
-        if not self._request_running:
-            self._show_runner(settings["runner"])
 
     def _apply_settings(self) -> None:
         try:
@@ -923,13 +876,13 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         except ValueError as error:
             self.notify_user(f"Invalid settings: {error}")
             return
-        self._begin_run(None, settings["runner"])
+        self._begin_run(None)
 
         def started(result: dict[str, Any]) -> None:
             self._run_id = result["run_id"]
 
         def failed(_message: str) -> None:
-            self._stop_run("The request could not start.", "WAIT", "Ready")
+            self._stop_run("The request could not start.", "Ready")
 
         def applied(_settings: dict[str, Any]) -> None:
             self.settings = settings
@@ -937,10 +890,9 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
 
         self._call_daemon("apply_settings", applied, failed, settings=settings)
 
-    def _begin_run(self, run_id: int | None, runner: str) -> None:
+    def _begin_run(self, run_id: int | None) -> None:
         self._run_id = run_id
-        self._show_runner(runner)
-        self._reset_stages()
+        self._reset_run_view()
         self.final_output.set_text("Working on your request...")
         self.status.set_label("Starting local model...")
         self._set_running(True)
@@ -961,13 +913,13 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
             return
         run = self._unfinished_runs[0]
         self.prompt.get_buffer().set_text(run["prompt"])
-        self._begin_run(None, "tree")
+        self._begin_run(None)
 
         def started(result: dict[str, Any]) -> None:
             self._run_id = result["run_id"]
 
         def failed(_message: str) -> None:
-            self._stop_run("The request could not resume.", "WAIT", "Ready")
+            self._stop_run("The request could not resume.", "Ready")
 
         self._call_daemon("resume_run", started, failed, run_id=run["id"])
 
@@ -1001,7 +953,7 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         self.final_output.set_text(FINAL_WAITING_TEXT)
         self._last_answer = ""
         self.copy_button.set_sensitive(False)
-        self._reset_stages()
+        self._reset_run_view()
         self.status.set_label("Ready")
 
     def _copy_answer(self) -> None:
@@ -1030,19 +982,6 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
             rows.append(child)
             child = child.get_next_sibling()
         return rows
-
-    def _show_runner(self, runner: str) -> None:
-        """Show the eight stages for a pipeline run, or the task tree and its steps for a tree run."""
-        self._runner = runner
-        tree_mode = runner == "tree"
-        title = "Task tree" if tree_mode else "Pipeline"
-        self.sidebar_title.set_markup(f"<b>{GLib.markup_escape_text(title)}</b>")
-        for row in self._phase_rows():
-            if row.page_name.startswith("phase-"):
-                row.set_visible(not tree_mode)
-            elif row.page_name == "steps":
-                row.set_visible(tree_mode)
-        self.task_list.set_visible(tree_mode)
 
     def _show_task_tree(self, nodes: list[dict[str, Any]]) -> None:
         self._task_nodes = nodes
@@ -1076,7 +1015,7 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         self.phase_title.set_markup(f"<b>Task {GLib.markup_escape_text(row.task_id)}</b>")
         # Choosing a task is the user's own pick, so the view stops following the running step.
         if self._request_running:
-            self._follow_stages = False
+            self._follow_steps = False
 
     def _note_step(self, label: str) -> None:
         """Start a new heading in the steps view whenever the step changes."""
@@ -1084,19 +1023,8 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
             self._last_step_label = label
             self._pending_steps_output.append(f"\n\n▸ {label}\n\n")
 
-    def _set_stage_state(self, index: int, state: str) -> None:
-        self.stage_states[index].set_label(state)
-
-    def _reset_stages(self) -> None:
-        self._active_stage = None
-        self._run_mode = ""
-        self._skipped_stages.clear()
-        self._follow_stages = True
-        for index, output in enumerate(self.stage_outputs):
-            self._set_stage_state(index, "WAIT")
-            self._pending_stage_output[index].clear()
-            output.set_text(PHASE_WAITING_TEXT)
-            self._stage_output_started[index] = False
+    def _reset_run_view(self) -> None:
+        self._follow_steps = True
         self._pending_steps_output.clear()
         self._steps_output_started = False
         self._last_step_label = ""
@@ -1105,23 +1033,12 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         self._show_task_tree([])
         self._show_phase("final")
 
-    def _append_stage_output(self, label: str, token: str) -> None:
+    def _append_step_output(self, label: str, token: str) -> None:
         if label.startswith(TASK_STEP_PREFIX):
             self._note_step(label)
             self._pending_steps_output.append(token)
-        elif label in STAGE_LABELS:
-            self._pending_stage_output[STAGE_LABELS.index(label)].append(token)
 
     def _flush_output(self) -> bool:
-        for index, pending in enumerate(self._pending_stage_output):
-            if not pending:
-                continue
-            output = self.stage_outputs[index]
-            if not self._stage_output_started[index]:
-                output.set_text("")
-                self._stage_output_started[index] = True
-            output.append("".join(pending))
-            pending.clear()
         if self._pending_steps_output:
             text = "".join(self._pending_steps_output)
             self._pending_steps_output.clear()
@@ -1135,37 +1052,16 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
             self._pending_background_tokens.clear()
         return True
 
-    def _update_stage(self, label: str) -> None:
+    def _update_progress(self, label: str) -> None:
         if label.startswith(TASK_STEP_PREFIX):
             self._note_step(label)
         self._flush_output()
         if label == "Loading model":
             self.status.set_label("Loading local model...")
             return
-        if label.startswith(MODE_PROGRESS_PREFIX):
-            self._run_mode = f"{MODE_NAMES[label.removeprefix(MODE_PROGRESS_PREFIX)]} · "
-        if label.startswith(TASK_STEP_PREFIX):
-            self.status.set_label(label)
-            if self._follow_stages:
-                self._show_phase("steps")
-            return
-        if label.startswith(SKIPPED_PREFIX) and label.removeprefix(SKIPPED_PREFIX) in STAGE_LABELS:
-            skipped = STAGE_LABELS.index(label.removeprefix(SKIPPED_PREFIX))
-            self._skipped_stages.add(skipped)
-            self._set_stage_state(skipped, "SKIP")
-            self.stage_outputs[skipped].set_text(PHASE_SKIPPED_TEXT)
-            return
-        if label not in STAGE_LABELS:
-            self.status.set_label(label)
-            return
-        active = STAGE_LABELS.index(label)
-        self._active_stage = active
-        for index in range(len(STAGE_LABELS)):
-            if index not in self._skipped_stages:
-                self._set_stage_state(index, "DONE" if index < active else "NOW" if index == active else "WAIT")
-        if self._follow_stages:
-            self._show_phase(f"phase-{active + 1}")
-        self.status.set_label(f"{self._run_mode}Stage {active + 1} of {len(STAGE_LABELS)}")
+        self.status.set_label(label)
+        if label.startswith(TASK_STEP_PREFIX) and self._follow_steps:
+            self._show_phase("steps")
 
     def _finish_run(self, result: str) -> None:
         self._flush_output()
@@ -1173,21 +1069,17 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         self._set_running(False)
         self.final_output.set_markdown(result)
         self._show_phase("final")
-        for index in range(len(STAGE_LABELS)):
-            self._set_stage_state(index, "SKIP" if index in self._skipped_stages else "DONE")
         self.status.set_label("Complete")
 
-    def _stop_run(self, final_text: str, stage_state: str, status: str) -> None:
+    def _stop_run(self, final_text: str, status: str) -> None:
         self._flush_output()
         self._set_running(False)
         self.final_output.set_text(final_text)
         self._show_phase("final")
-        if self._active_stage is not None:
-            self._set_stage_state(self._active_stage, stage_state)
         self.status.set_label(status)
 
     def _fail_run(self, message: str) -> None:
-        self._stop_run(f"Run failed\n\n{message}", "FAIL", "Run failed")
+        self._stop_run(f"Run failed\n\n{message}", "Run failed")
         self.notify_user(message)
 
     def _request_clarification(self, run_id: int, clarification_id: int, question: str) -> None:

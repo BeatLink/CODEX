@@ -50,8 +50,6 @@ UNTRUSTED_HEADINGS = (
     "Stored facts",
     "Findings for this task",
     "Action results",
-    "Stage 2 result",
-    "Stage 5 result",
     "Source ",
     "Subtopic: ",
     "First fact",

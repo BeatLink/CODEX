@@ -10,13 +10,10 @@ from smartharness.client import DaemonClient
 from smartharness.knowledge import KnowledgeStore
 from smartharness.settings import DEFAULT_SETTINGS
 
-# These tests patch the eight-stage pipeline, so they run in pipeline mode.
-PIPELINE_SETTINGS = {**DEFAULT_SETTINGS, "runner": "pipeline"}
-
 
 class CliTests(unittest.TestCase):
     def setUp(self):
-        # These tests run the pipeline in-process, as when no daemon is running.
+        # These tests run the request in-process, as when no daemon is running.
         no_daemon = patch("smartharness.cli.connect_to_daemon", side_effect=FileNotFoundError)
         no_daemon.start()
         self.addCleanup(no_daemon.stop)
@@ -24,8 +21,8 @@ class CliTests(unittest.TestCase):
     def test_final_result_uses_markdown_renderer_in_terminal(self):
         result = "```python\nprint('hello')\n```"
         with (
-            patch("smartharness.cli.load_settings", return_value=PIPELINE_SETTINGS.copy()),
-            patch("smartharness.cli.execute_pipeline", return_value=result),
+            patch("smartharness.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
+            patch("smartharness.cli.execute_task_tree", return_value=result),
             patch("sys.stdin.isatty", return_value=False),
             patch("sys.stdout.isatty", return_value=True),
             patch("smartharness.cli.Console") as console,
@@ -41,32 +38,31 @@ class CliTests(unittest.TestCase):
         for arguments, expected in ((["prompt"], True), (["--no-show-thinking", "prompt"], False)):
             with self.subTest(arguments=arguments):
                 with (
-                    patch("smartharness.cli.load_settings", return_value=PIPELINE_SETTINGS.copy()),
-                    patch("smartharness.cli.execute_pipeline", return_value="answer") as execute_pipeline,
+                    patch("smartharness.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
+                    patch("smartharness.cli.execute_task_tree", return_value="answer") as execute_task_tree,
                     patch("sys.stdin.isatty", return_value=False),
                     patch("builtins.print"),
                 ):
                     self.assertEqual(main(arguments), 0)
 
-                self.assertIs(execute_pipeline.call_args.kwargs["show_thinking"], expected)
+                self.assertIs(execute_task_tree.call_args.kwargs["show_thinking"], expected)
 
     def test_mode_option_overrides_the_setting(self):
         with (
-            patch("smartharness.cli.load_settings", return_value=PIPELINE_SETTINGS.copy()),
-            patch("smartharness.cli.execute_pipeline", return_value="answer") as execute_pipeline,
+            patch("smartharness.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
+            patch("smartharness.cli.execute_task_tree", return_value="answer") as execute_task_tree,
             patch("sys.stdin.isatty", return_value=False),
             patch("builtins.print"),
         ):
             self.assertEqual(main(["--mode", "draft", "prompt"]), 0)
 
-        self.assertEqual(execute_pipeline.call_args.kwargs["mode"], "draft")
+        self.assertEqual(execute_task_tree.call_args.kwargs["mode"], "draft")
 
-    def test_tree_mode_runs_the_task_tree_with_its_limits(self):
+    def test_a_request_runs_the_task_tree_with_its_limits(self):
         settings = {**DEFAULT_SETTINGS, "max_task_nodes": 9}
         with (
             patch("smartharness.cli.load_settings", return_value=settings),
             patch("smartharness.cli.execute_task_tree", return_value="tree answer") as task_tree,
-            patch("smartharness.cli.execute_pipeline", side_effect=AssertionError("pipeline")),
             patch("sys.stdin.isatty", return_value=False),
             patch("sys.stdout.isatty", return_value=False),
             patch("builtins.print") as printed,
@@ -128,7 +124,7 @@ class CliTests(unittest.TestCase):
     def test_prompt_runs_on_a_running_daemon_with_resolved_paths(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
-        daemon = RunningDaemon({**PIPELINE_SETTINGS, "knowledge_db_path": str(Path(directory.name) / "knowledge.db")})
+        daemon = RunningDaemon({**DEFAULT_SETTINGS, "knowledge_db_path": str(Path(directory.name) / "knowledge.db")})
         self.addCleanup(daemon.stop)
 
         def connect(on_event, start):
@@ -138,19 +134,19 @@ class CliTests(unittest.TestCase):
             return client
 
         with (
-            patch("smartharness.cli.load_settings", return_value=PIPELINE_SETTINGS.copy()),
+            patch("smartharness.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
             patch("smartharness.cli.connect_to_daemon", side_effect=connect),
-            patch("smartharness.cli.execute_pipeline") as local_pipeline,
-            patch("smartharness.daemon.execute_pipeline", return_value="daemon answer") as daemon_pipeline,
+            patch("smartharness.cli.execute_task_tree") as local_task_tree,
+            patch("smartharness.daemon.execute_task_tree", return_value="daemon answer") as daemon_task_tree,
             patch("sys.stdin.isatty", return_value=False),
             patch("sys.stdout.isatty", return_value=False),
             patch("builtins.print") as printed,
         ):
             self.assertEqual(main(["--max-tokens", "512", "prompt"]), 0)
 
-        local_pipeline.assert_not_called()
+        local_task_tree.assert_not_called()
         printed.assert_called_with("daemon answer")
-        options = daemon_pipeline.call_args.kwargs
+        options = daemon_task_tree.call_args.kwargs
         self.assertEqual(options["max_tokens"], 512)
         self.assertEqual(options["filesystem_root"], str(Path.cwd()))
         self.assertIsNone(options["clarification_callback"])

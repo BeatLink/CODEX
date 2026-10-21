@@ -33,12 +33,20 @@ class SettingsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "mode"):
             validate_settings(settings)
 
-    def test_requests_run_as_a_task_tree_by_default_within_checked_limits(self):
-        self.assertEqual(DEFAULT_SETTINGS["runner"], "tree")
-
-        for name, value in (("runner", "graph"), ("max_task_depth", 7), ("max_task_nodes", 0)):
+    def test_task_tree_limits_are_checked(self):
+        for name, value in (("max_task_depth", 7), ("max_task_nodes", 0)):
             with self.subTest(name=name), self.assertRaisesRegex(ValueError, name):
                 validate_settings({**DEFAULT_SETTINGS, name: value})
+
+    def test_a_settings_file_that_still_names_a_runner_loads_without_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.json"
+            path.write_text('{"runner": "pipeline", "mode": "draft"}', encoding="utf-8")
+
+            loaded = settings_module.load_settings(path)
+
+        self.assertNotIn("runner", loaded)
+        self.assertEqual(loaded["mode"], "draft")
 
     def test_test_execution_setting_must_be_boolean(self):
         settings = DEFAULT_SETTINGS.copy()

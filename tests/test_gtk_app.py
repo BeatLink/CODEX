@@ -8,7 +8,6 @@ from daemon_harness import RunningDaemon
 
 from smartharness.knowledge import KnowledgeStore
 from smartharness.settings import DEFAULT_SETTINGS
-from smartharness.stages import STAGE_LABELS
 
 try:
     import gi
@@ -80,39 +79,36 @@ class WindowTests(unittest.TestCase):
         self.settings = DEFAULT_SETTINGS.copy()
         self.settings["knowledge_db_path"] = str(Path(directory.name) / "knowledge.db")
         self.settings["background_research_enabled"] = False
-        # Most tests drive the eight-stage view, so the window starts in pipeline mode.
-        self.settings["runner"] = "pipeline"
         self.daemon = RunningDaemon(self.settings)
         self.addCleanup(self.daemon.stop)
         self.window = SmartHarnessWindow(self.application, self.settings, client=self.daemon.client())
         self.addCleanup(self.window.destroy)
         wait_until(lambda: self.window.status.get_label() == "Ready")
 
-    def test_run_shows_stage_progress_and_the_final_answer(self):
-        def routed_pipeline(prompt, **kwargs):
-            kwargs["progress_callback"](STAGE_LABELS[0])
-            kwargs["stage_output_callback"](STAGE_LABELS[0], "Phase output")
-            kwargs["progress_callback"]("Skipped: " + STAGE_LABELS[1])
+    def test_run_shows_step_progress_and_the_final_answer(self):
+        def fake_task_tree(prompt, **kwargs):
+            kwargs["progress_callback"]("Task 1 · Writing")
+            kwargs["stage_output_callback"]("Task 1 · Writing", "Step output")
             return "# Done"
 
         self.window.prompt.get_buffer().set_text("Draft a plan")
-        with patch("smartharness.daemon.execute_pipeline", side_effect=routed_pipeline):
+        with patch("smartharness.daemon.execute_task_tree", side_effect=fake_task_tree):
             self.window.run_button.emit("clicked")
             wait_until(lambda: self.window.status.get_label() == "Complete")
 
         self.assertEqual(self.window._last_answer, "# Done")
         self.assertEqual(self.window.final_output.text, "Done\n")
-        self.assertEqual(self.window.stage_outputs[0].text, "Phase output")
-        self.assertEqual(self.window.stage_states[1].get_label(), "SKIP")
+        self.assertEqual(self.window.steps_output.text, "▸ Task 1 · Writing\n\nStep output")
         self.assertEqual(self.window.phase_pages.get_visible_child_name(), "final")
         self.assertTrue(self.window.copy_button.get_sensitive())
 
-    def test_selected_mode_is_passed_to_the_run_and_shown_in_the_status(self):
+    def test_selected_mode_is_passed_to_the_run_and_steps_show_in_the_status(self):
         statuses = []
+        modes = []
 
-        def routed_pipeline(prompt, **kwargs):
-            kwargs["progress_callback"]("Mode: " + kwargs["mode"])
-            kwargs["progress_callback"](STAGE_LABELS[2])
+        def fake_task_tree(prompt, **kwargs):
+            modes.append(kwargs["mode"])
+            kwargs["progress_callback"]("Task 1 · Checking")
             return "Done"
 
         def record_status(*_arguments):
@@ -121,11 +117,12 @@ class WindowTests(unittest.TestCase):
         self.window.status.connect("notify::label", record_status)
         self.window.mode_dropdown.set_selected(3)
         self.window.prompt.get_buffer().set_text("Fix the parser")
-        with patch("smartharness.daemon.execute_pipeline", side_effect=routed_pipeline):
+        with patch("smartharness.daemon.execute_task_tree", side_effect=fake_task_tree):
             self.window.run_button.emit("clicked")
             wait_until(lambda: self.window.status.get_label() == "Complete")
 
-        self.assertIn("Execute mode · Stage 3 of 8", statuses)
+        self.assertEqual(modes, ["execute"])
+        self.assertIn("Task 1 · Checking", statuses)
 
     def test_tree_run_shows_the_task_tree_and_each_step(self):
         def fake_task_tree(prompt, **kwargs):
@@ -140,15 +137,12 @@ class WindowTests(unittest.TestCase):
             kwargs["stage_output_callback"]("Task 1.1 · Writing", "Design A is simple.")
             return "Pick A."
 
-        self.window.tree_switch.set_active(True)
         self.window.prompt.get_buffer().set_text("Compare two designs")
         with patch("smartharness.daemon.execute_task_tree", side_effect=fake_task_tree):
             self.window.run_button.emit("clicked")
             wait_until(lambda: self.window.status.get_label() == "Complete")
 
-        rows = {row.page_name: row for row in self.window._phase_rows()}
-        self.assertFalse(rows["phase-1"].get_visible())
-        self.assertTrue(rows["steps"].get_visible())
+        self.assertEqual([row.page_name for row in self.window._phase_rows()], ["steps", "final"])
         self.assertEqual(
             [row.get_child().get_label() for row in self.window._task_rows()],
             ["DONE  1 Compare two designs", "WARN    1.1 Describe design A"],
@@ -185,18 +179,18 @@ class WindowTests(unittest.TestCase):
         self.assertEqual(task_tree.call_args.kwargs["resume_run_id"], 1)
         self.assertEqual(self.window._prompt_text(), "Plan the trip")
 
-    def test_failed_run_marks_the_failing_stage(self):
-        def failing_pipeline(prompt, **kwargs):
-            kwargs["progress_callback"](STAGE_LABELS[3])
+    def test_failed_run_shows_the_error_and_allows_a_new_run(self):
+        def failing_task_tree(prompt, **kwargs):
+            kwargs["progress_callback"]("Task 1 · Writing")
             raise RuntimeError("tool exploded")
 
         self.window.prompt.get_buffer().set_text("Draft a plan")
-        with patch("smartharness.daemon.execute_pipeline", side_effect=failing_pipeline):
+        with patch("smartharness.daemon.execute_task_tree", side_effect=failing_task_tree):
             self.window.run_button.emit("clicked")
             wait_until(lambda: self.window.status.get_label() == "Run failed")
 
-        self.assertEqual(self.window.stage_states[3].get_label(), "FAIL")
-        self.assertEqual(self.window.stage_states[2].get_label(), "DONE")
+        self.assertIn("tool exploded", self.window.final_output.text)
+        self.assertEqual(self.window.phase_pages.get_visible_child_name(), "final")
         self.assertTrue(self.window.run_button.get_sensitive())
 
     def test_auto_size_fills_the_context_and_token_fields(self):

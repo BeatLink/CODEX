@@ -49,7 +49,7 @@ and a background worker uses idle time to turn it into facts, topic summaries an
   takes the same lock for one model call at a time and checks before every step and every streamed
   token whether a run has started; if so it raises out, puts its job back in the queue, and releases
   the lock. A foreground request therefore waits for at most one token.
-- **ModelCache** ([pipeline.py](../smartharness/pipeline.py)) keeps one `Llama` instance and reloads
+- **ModelCache** ([model.py](../smartharness/model.py)) keeps one `Llama` instance and reloads
   it only when the model path, context size or GPU layers change.
 - **A separate background model** (`background_model_path`) has its own `ModelCache` and lock, so
   it never evicts the main model. It still gives way to a run in the same way, and the daemon
@@ -61,14 +61,11 @@ and a background worker uses idle time to turn it into facts, topic summaries an
 
 ## How a request runs
 
-`runner` in the settings picks one of two engines. Both share the same building blocks (model
-calls, context fitting, tools, evidence checks, knowledge access); they differ in who decides the
-shape of the work.
-
-| Runner | Module | Shape of the work |
-| --- | --- | --- |
-| `tree` (default) | [task_tree.py](../smartharness/task_tree.py) | The model decides, task by task, whether to answer, research, read files, act, or split |
-| `pipeline` | [pipeline.py](../smartharness/pipeline.py) | A fixed chain of up to eight stages, with a mode router choosing which stages run |
+Every request is worked as a tree of tasks by [task_tree.py](../smartharness/task_tree.py): the
+model decides, task by task, whether to answer, research, read files, act, or split. It builds on
+[model.py](../smartharness/model.py) for loading the model and making calls,
+[evidence.py](../smartharness/evidence.py) for searching, recall and page summaries, and
+[checks.py](../smartharness/checks.py) for the checks that do not rely on the model.
 
 ### Task tree
 
@@ -111,21 +108,13 @@ Rules that keep a small model on track:
   clarification, results of tasks it depends on, gathered evidence, the tree outline, and recalled
   memory. Trimming takes from the end, so memory is the first to go.
 
-### Eight-stage pipeline
-
-Identify → Research → Plan → Review plan → Act → Draft → Critique → Revise. Stage 1 starts with a
-short router call that picks `answer`, `draft` or `execute`, and each mode runs only its own subset
-of stages (a quick answer is two model calls). The plan is reviewed before any tool acts, execute
-mode is checked against the recorded tool calls rather than by a model critique, and the
-critique/revise loop runs at most two rounds. The README has the full stage table.
-
 ## Shared machinery
 
 ### Model calls
 
 `run_stage` sends one system prompt and one user message, streams tokens to a callback, and passes
 an optional JSON schema as llama.cpp's `response_format`. Replies that drive control flow
-(decisions, checks, critiques, routes, background extraction) always use a schema; prose replies do
+(decisions, checks, background extraction) always use a schema; prose replies do
 not. Every parser has a fallback for a malformed reply, so a bad reply degrades the run rather than
 crashing it.
 
@@ -146,9 +135,9 @@ overflows is trimmed. The original request and the current task are pinned.
 stay under `filesystem_root`, and sensitive file names are refused. [mcp_tools.py](../smartharness/mcp_tools.py)
 adds tools from configured MCP servers, limited to each server's `allowed_tools`.
 
-[tool_stage.py](../smartharness/tool_stage.py) runs the tool-calling loop for a stage or a task's
-gather step, with an allow or block list per approach and at most `max_tool_calls` calls. Fetched
-pages are summarized in chunks for a focus the model supplies, and the chunk summaries are merged.
+[tool_stage.py](../smartharness/tool_stage.py) runs the tool-calling loop for a task's gather step,
+with an allow or block list per approach and at most `max_tool_calls` calls. Fetched pages are
+summarized in chunks for a focus the model supplies, and the chunk summaries are merged.
 
 ### Untrusted text
 
@@ -161,13 +150,12 @@ can never drop the closing tag.
 
 ### Checks that do not rely on the model
 
-The model's own verdicts are backed by deterministic checks, applied to the task tree's check step
-and to the pipeline's critique:
+The model's own verdicts are backed by deterministic checks, applied in the task tree's check step:
 
 - A cited URL that appears in no captured evidence is a problem.
 - After research, a version number or date that appears in no evidence and not in the request is a
   problem. Dates are compared by value, and numbers inside code blocks are ignored.
-- In execute mode, the report must match the recorded file writes and test runs.
+- A task that acted must report what its recorded file writes and test runs really did.
 - When every search found nothing, the writer is told not to describe what it could not look up.
 
 ## Knowledge store
@@ -349,8 +337,6 @@ These are properties of the code as it stands, recorded so changes can be measur
   lookup before a web search still needs shared words.
 - **Vector search is brute force.** Every recall compares the query with every stored vector; fine
   for thousands of facts, slow for millions.
-- **The pipeline recalls once, on the whole prompt.** Only the task tree recalls for each subtask
-  and search query.
 - **Branch routing picks one branch.** Recall enters only the most specific named topic, or the
   single closest one in meaning, even when the question spans several.
 - **The graph is read one step out.** Recall adds the relationships of entities a recalled fact

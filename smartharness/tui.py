@@ -31,7 +31,6 @@ from textual.widgets import (
 )
 
 from .client import DISCONNECTED_EVENT, DaemonClient, DaemonError, connect_to_daemon
-from .pipeline import MODE_PROGRESS_PREFIX, SKIPPED_PREFIX
 from .settings import (
     default_settings_path,
     load_settings,
@@ -39,11 +38,9 @@ from .settings import (
     mcp_servers_to_json,
     validate_settings,
 )
-from .stages import STAGE_LABELS, STAGE_TAB_TITLES, TASK_STEP_PREFIX, task_detail_markdown, task_tree_lines
+from .task_view import TASK_STEP_PREFIX, task_detail_markdown, task_tree_lines
 
 
-PHASE_WAITING_TEXT = "_Waiting for this phase..._"
-PHASE_SKIPPED_TEXT = "_Skipped: this request does not need this phase._"
 FINAL_WAITING_TEXT = "Your final response will appear here."
 MODE_OPTIONS = (
     ("Auto mode", "auto"),
@@ -59,7 +56,7 @@ BACKGROUND_WAITING_TEXT = "_Waiting for background work..._"
 HALON_DARK_VARIABLES = {
     "field-border": "#64748b",
     "label-text": "#cbd5e1",
-    "stage-text": "#94a3b8",
+    "task-text": "#94a3b8",
     "footer-foreground": "#ffffff",
 }
 HALON_DARK_THEME = Theme(
@@ -91,7 +88,7 @@ HALON_LIGHT_THEME = Theme(
     variables={
         "field-border": "#8792a3",
         "label-text": "#475569",
-        "stage-text": "#64748b",
+        "task-text": "#64748b",
         "footer-foreground": "#475569",
     },
 )
@@ -229,16 +226,12 @@ class SmartHarnessApp(App[None]):
         margin-top: 1;
         color: $foreground;
     }
-    .stage-row {
-        height: 2;
-        color: $stage-text;
-    }
     #task-tree {
         height: auto;
         max-height: 24;
         border: none;
         background: $background;
-        color: $stage-text;
+        color: $task-text;
     }
     #status {
         height: 2;
@@ -287,7 +280,7 @@ class SmartHarnessApp(App[None]):
         height: 1fr;
         padding: 1 2;
     }
-    #phase-tabs {
+    #output-tabs {
         height: 1fr;
         min-height: 7;
         border: tall $field-border;
@@ -354,10 +347,10 @@ class SmartHarnessApp(App[None]):
         margin-bottom: 1;
         color: $primary;
     }
-    .stage-output-scroll {
+    .output-scroll {
         height: 1fr;
     }
-    .stage-output {
+    .output-text {
         padding: 1 2;
     }
     ClarificationScreen {
@@ -404,14 +397,8 @@ class SmartHarnessApp(App[None]):
         self._run_id: int | None = None
         self._request_running = False
         self._last_answer = ""
-        self._active_stage: int | None = None
-        self._run_mode = ""
-        self._skipped_stages: set[int] = set()
-        self._follow_stages = True
-        self._programmatic_phase_tabs: list[str] = []
-        self._stage_output_buffers = [""] * len(STAGE_LABELS)
-        self._pending_stage_output: list[list[str]] = [[] for _ in STAGE_LABELS]
-        self._runner = self.settings["runner"]
+        self._follow_running_step = True
+        self._programmatic_output_tabs: list[str] = []
         self._unfinished_runs: list[dict[str, Any]] = []
         self._task_nodes: list[dict[str, Any]] = []
         self._chosen_task_id: str | None = None
@@ -449,9 +436,7 @@ class SmartHarnessApp(App[None]):
     def _compose_workbench_page(self) -> ComposeResult:
         with Horizontal(id="workspace"):
             with VerticalScroll(id="sidebar"):
-                yield Static("PIPELINE", classes="eyebrow", id="sidebar-title")
-                for index, label in enumerate(STAGE_LABELS, start=1):
-                    yield Static(f"WAIT  {label}", classes="stage-row", id=f"stage-row-{index}")
+                yield Static("TASK TREE", classes="eyebrow", id="sidebar-title")
                 yield OptionList(id="task-tree")
                 yield Static("Ready", id="status")
             with TabbedContent(initial="request-pane", id="workbench-tabs"):
@@ -470,24 +455,16 @@ class SmartHarnessApp(App[None]):
                             yield Button("Resume", id="resume-run", variant="primary")
                             yield Button("Discard", id="discard-run")
                 with TabPane("Output", id="output-pane"):
-                    with TabbedContent(initial="final", id="phase-tabs"):
-                        for index, title in enumerate(STAGE_TAB_TITLES, start=1):
-                            with TabPane(f"{index} {title}", id=f"phase-{index}"):
-                                with FollowingScroll(classes="stage-output-scroll"):
-                                    yield Markdown(
-                                        PHASE_WAITING_TEXT,
-                                        classes="stage-output",
-                                        id=f"stage-output-{index}",
-                                    )
+                    with TabbedContent(initial="final", id="output-tabs"):
                         with TabPane("Steps", id="steps"):
-                            with FollowingScroll(classes="stage-output-scroll"):
-                                yield Markdown(STEPS_WAITING_TEXT, classes="stage-output", id="steps-output")
+                            with FollowingScroll(classes="output-scroll"):
+                                yield Markdown(STEPS_WAITING_TEXT, classes="output-text", id="steps-output")
                         with TabPane("Task", id="task-detail"):
-                            with VerticalScroll(classes="stage-output-scroll"):
-                                yield Markdown(TASK_DETAIL_WAITING_TEXT, classes="stage-output", id="task-detail-output")
+                            with VerticalScroll(classes="output-scroll"):
+                                yield Markdown(TASK_DETAIL_WAITING_TEXT, classes="output-text", id="task-detail-output")
                         with TabPane("Final", id="final"):
-                            with FollowingScroll(classes="stage-output-scroll"):
-                                yield Markdown(FINAL_WAITING_TEXT, classes="stage-output", id="final-output")
+                            with FollowingScroll(classes="output-scroll"):
+                                yield Markdown(FINAL_WAITING_TEXT, classes="output-text", id="final-output")
 
     def _compose_background_page(self) -> ComposeResult:
         with Vertical():
@@ -551,11 +528,6 @@ class SmartHarnessApp(App[None]):
             )
 
             yield Static("HOW REQUESTS RUN", classes="eyebrow section-heading")
-            yield Checkbox(
-                "Work requests as a task tree (off runs the fixed eight-stage pipeline)",
-                value=self.settings["runner"] == "tree",
-                id="tree-runner",
-            )
             yield from self._number_fields(
                 ("Max task depth (0-6)", "max-task-depth", "max_task_depth"),
                 ("Max tasks (1-60)", "max-task-nodes", "max_task_nodes"),
@@ -645,9 +617,8 @@ class SmartHarnessApp(App[None]):
         return HALON_DARK_VARIABLES
 
     def on_mount(self) -> None:
-        self._show_runner(self._runner)
         self.query_one("#prompt", TextArea).focus()
-        self.set_interval(0.15, self._flush_stage_output)
+        self.set_interval(0.15, self._flush_output)
         self.query_one("#status", Static).update("Connecting to the daemon...")
         self.connect_daemon()
 
@@ -704,11 +675,11 @@ class SmartHarnessApp(App[None]):
                 self._render_background_page()
             elif event.pane.id == "knowledge-page":
                 self._refresh_knowledge()
-        elif event.tabbed_content.id == "phase-tabs":
-            if event.pane.id in self._programmatic_phase_tabs:
-                self._programmatic_phase_tabs.remove(event.pane.id)
+        elif event.tabbed_content.id == "output-tabs":
+            if event.pane.id in self._programmatic_output_tabs:
+                self._programmatic_output_tabs.remove(event.pane.id)
             elif self._request_running:
-                self._follow_stages = False
+                self._follow_running_step = False
 
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         selected = event.node.data
@@ -735,7 +706,6 @@ class SmartHarnessApp(App[None]):
                 "enable_test_execution": self.query_one("#enable-test-execution", Checkbox).value,
                 "max_tool_calls": self._int_setting("max-tool-calls"),
                 "max_search_results": self._int_setting("max-search-results"),
-                "runner": "tree" if self.query_one("#tree-runner", Checkbox).value else "pipeline",
                 "max_task_depth": self._int_setting("max-task-depth"),
                 "max_task_nodes": self._int_setting("max-task-nodes"),
                 "knowledge_db_path": self.query_one("#knowledge-db-path", TextArea).text,
@@ -813,10 +783,7 @@ class SmartHarnessApp(App[None]):
             ("background-enabled", "background_research_enabled"),
         ):
             self.query_one(f"#{selector}", Checkbox).value = settings[name]
-        self.query_one("#tree-runner", Checkbox).value = settings["runner"] == "tree"
         self.query_one("#mcp-servers", TextArea).text = mcp_servers_to_json(settings["mcp_servers"])
-        if not self._request_running:
-            self._show_runner(settings["runner"])
 
     def _auto_size(self) -> None:
         """Fill the context and token limits from the model file and free memory, ready to apply or save."""
@@ -895,18 +862,12 @@ class SmartHarnessApp(App[None]):
             self.query_one("#status", Static).update("Ready")
         else:
             # Another interface started this run, so show its progress so far.
-            self._begin_run(run["run_id"], run["runner"])
-            if run["runner"] == "tree":
-                self._show_task_tree(run["tree"])
-                for label, text in run["outputs"].items():
-                    self._append_stage_output(label, text)
-                if run["progress"]:
-                    self._update_stage(run["progress"][-1])
-            else:
-                for label in run["progress"]:
-                    self._update_stage(label)
-                for label, text in run["outputs"].items():
-                    self._append_stage_output(label, text)
+            self._begin_run(run["run_id"])
+            self._show_task_tree(run["tree"])
+            for label, text in run["outputs"].items():
+                self._append_step_output(label, text)
+            if run["progress"]:
+                self._update_step(run["progress"][-1])
         self._show_unfinished_runs(status["unfinished_runs"])
         self._refresh_knowledge()
         self._refresh_queue()
@@ -919,13 +880,13 @@ class SmartHarnessApp(App[None]):
         event, data = message.event, message.data
         if event == "run.started":
             if not self._request_running or self._run_id is None:
-                self._begin_run(data["run_id"], data.get("runner", "pipeline"))
+                self._begin_run(data["run_id"])
         elif event == "run.tree":
             self._show_task_tree(data["nodes"])
         elif event == "run.progress":
-            self._update_stage(data["label"])
+            self._update_step(data["label"])
         elif event == "run.token":
-            self._append_stage_output(data["label"], data["token"])
+            self._append_step_output(data["label"], data["token"])
         elif event == "run.clarification":
             self._request_clarification(data["run_id"], data["clarification_id"], data["question"])
         elif event == "run.finished":
@@ -985,17 +946,16 @@ class SmartHarnessApp(App[None]):
         if self._call_daemon("apply_settings", settings=settings) is None:
             return
         self.settings = settings
-        self._begin_run(None, settings["runner"])
+        self._begin_run(None)
         started = self._call_daemon("run", prompt=prompt, settings=settings)
         if started is None:
-            self._stop_run("_The request could not start._", "WAIT", "Ready")
+            self._stop_run("_The request could not start._", "Ready")
             return
         self._run_id = started["run_id"]
 
-    def _begin_run(self, run_id: int | None, runner: str) -> None:
+    def _begin_run(self, run_id: int | None) -> None:
         self._run_id = run_id
-        self._show_runner(runner)
-        self._reset_stages()
+        self._reset_run_view()
         self.query_one("#final-output", Markdown).update("_Working on your request..._")
         self._show_output_pane()
         self.query_one("#status", Static).update("Starting local model...")
@@ -1019,10 +979,10 @@ class SmartHarnessApp(App[None]):
             return
         run = self._unfinished_runs[0]
         self.query_one("#prompt", TextArea).text = run["prompt"]
-        self._begin_run(None, "tree")
+        self._begin_run(None)
         started = self._call_daemon("resume_run", run_id=run["id"])
         if started is None:
-            self._stop_run("_The request could not resume._", "WAIT", "Ready")
+            self._stop_run("_The request could not resume._", "Ready")
             return
         self._run_id = started["run_id"]
 
@@ -1052,7 +1012,7 @@ class SmartHarnessApp(App[None]):
         self.query_one("#final-output", Markdown).update(FINAL_WAITING_TEXT)
         self._last_answer = ""
         self.query_one("#copy", Button).disabled = True
-        self._reset_stages()
+        self._reset_run_view()
         self.query_one("#status", Static).update("Ready")
 
     def _copy_answer(self) -> None:
@@ -1067,27 +1027,13 @@ class SmartHarnessApp(App[None]):
     def _show_output_pane(self) -> None:
         # Focus moves too, or Textual switches back to the tab holding the focused prompt.
         self.query_one("#workbench-tabs", TabbedContent).active = "output-pane"
-        self.query_one("#phase-tabs", TabbedContent).query_one(Tabs).focus()
+        self.query_one("#output-tabs", TabbedContent).query_one(Tabs).focus()
 
-    def _show_phase_tab(self, pane_id: str) -> None:
-        tabs = self.query_one("#phase-tabs", TabbedContent)
+    def _show_output_tab(self, pane_id: str) -> None:
+        tabs = self.query_one("#output-tabs", TabbedContent)
         if tabs.active != pane_id:
-            self._programmatic_phase_tabs.append(pane_id)
+            self._programmatic_output_tabs.append(pane_id)
             tabs.active = pane_id
-
-    def _show_runner(self, runner: str) -> None:
-        """Show the eight stages for a pipeline run, or the task tree and its steps for a tree run."""
-        self._runner = runner
-        tree_mode = runner == "tree"
-        self.query_one("#sidebar-title", Static).update("TASK TREE" if tree_mode else "PIPELINE")
-        for row in self.query(".stage-row"):
-            row.display = not tree_mode
-        self.query_one("#task-tree", OptionList).display = tree_mode
-        tabs = self.query_one("#phase-tabs", TabbedContent)
-        for index in range(1, len(STAGE_LABELS) + 1):
-            (tabs.hide_tab if tree_mode else tabs.show_tab)(f"phase-{index}")
-        for pane_id in ("steps", "task-detail"):
-            (tabs.show_tab if tree_mode else tabs.hide_tab)(pane_id)
 
     def _show_task_tree(self, nodes: list[dict[str, Any]]) -> None:
         self._task_nodes = nodes
@@ -1114,8 +1060,8 @@ class SmartHarnessApp(App[None]):
         self._show_task_detail()
         # Choosing a task is the user's own pick, so the view stops following the running step.
         if self._request_running:
-            self._follow_stages = False
-        self._show_phase_tab("task-detail")
+            self._follow_running_step = False
+        self._show_output_tab("task-detail")
 
     def _note_step(self, label: str) -> None:
         """Start a new heading in the steps view whenever the step changes."""
@@ -1123,47 +1069,22 @@ class SmartHarnessApp(App[None]):
             self._last_step_label = label
             self._pending_steps_output.append(f"\n\n### {label}\n\n")
 
-    def _set_stage_row(self, index: int, state: str) -> None:
-        self.query_one(f"#stage-row-{index + 1}", Static).update(f"{state}  {STAGE_LABELS[index]}")
-
-    def _reset_stages(self) -> None:
-        self._active_stage = None
-        self._run_mode = ""
-        self._skipped_stages.clear()
-        self._follow_stages = True
-        for index in range(len(STAGE_LABELS)):
-            self._set_stage_row(index, "WAIT")
-            self._stage_output_buffers[index] = ""
-            self._pending_stage_output[index].clear()
-            self.query_one(f"#stage-output-{index + 1}", Markdown).update(PHASE_WAITING_TEXT)
+    def _reset_run_view(self) -> None:
+        self._follow_running_step = True
         self._steps_output = ""
         self._pending_steps_output.clear()
         self._last_step_label = ""
         self.query_one("#steps-output", Markdown).update(STEPS_WAITING_TEXT)
         self._chosen_task_id = None
         self._show_task_tree([])
-        self._show_phase_tab("final")
+        self._show_output_tab("final")
 
-    def _append_stage_output(self, label: str, token: str) -> None:
+    def _append_step_output(self, label: str, token: str) -> None:
         if label.startswith(TASK_STEP_PREFIX):
             self._note_step(label)
             self._pending_steps_output.append(token)
-            return
-        try:
-            index = STAGE_LABELS.index(label)
-        except ValueError:
-            return
-        self._pending_stage_output[index].append(token)
 
-    def _flush_stage_output(self) -> None:
-        for index, pending in enumerate(self._pending_stage_output):
-            if not pending:
-                continue
-            new_text = "".join(pending)
-            pending.clear()
-            output = self.query_one(f"#stage-output-{index + 1}", Markdown)
-            self._write_markdown(output, new_text, append=bool(self._stage_output_buffers[index]))
-            self._stage_output_buffers[index] += new_text
+    def _flush_output(self) -> None:
         if self._pending_steps_output:
             new_text = "".join(self._pending_steps_output)
             self._pending_steps_output.clear()
@@ -1180,65 +1101,38 @@ class SmartHarnessApp(App[None]):
         else:
             output.update(text)
 
-    def _update_stage(self, label: str) -> None:
+    def _update_step(self, label: str) -> None:
         if label.startswith(TASK_STEP_PREFIX):
             self._note_step(label)
-        self._flush_stage_output()
+        self._flush_output()
         if label == "Loading model":
             self.query_one("#status", Static).update("Loading local model...")
             return
-        if label.startswith(MODE_PROGRESS_PREFIX):
-            self._run_mode = f"{label.removeprefix(MODE_PROGRESS_PREFIX).capitalize()} mode · "
-        if label.startswith(TASK_STEP_PREFIX):
-            self.query_one("#status", Static).update(label)
-            if self._follow_stages:
-                self._show_phase_tab("steps")
-            return
-        if label.startswith(SKIPPED_PREFIX) and label.removeprefix(SKIPPED_PREFIX) in STAGE_LABELS:
-            skipped = STAGE_LABELS.index(label.removeprefix(SKIPPED_PREFIX))
-            self._skipped_stages.add(skipped)
-            self._set_stage_row(skipped, "SKIP")
-            self.query_one(f"#stage-output-{skipped + 1}", Markdown).update(PHASE_SKIPPED_TEXT)
-            return
-        try:
-            active = STAGE_LABELS.index(label)
-        except ValueError:
-            self.query_one("#status", Static).update(label)
-            return
-        self._active_stage = active
-        for index in range(len(STAGE_LABELS)):
-            if index in self._skipped_stages:
-                continue
-            self._set_stage_row(index, "DONE" if index < active else "NOW " if index == active else "WAIT")
-        if self._follow_stages:
-            self._show_phase_tab(f"phase-{active + 1}")
-        self.query_one("#status", Static).update(f"{self._run_mode}Stage {active + 1} of {len(STAGE_LABELS)}")
+        self.query_one("#status", Static).update(label)
+        if label.startswith(TASK_STEP_PREFIX) and self._follow_running_step:
+            self._show_output_tab("steps")
 
     def _finish_run(self, result: str) -> None:
-        self._flush_stage_output()
+        self._flush_output()
         self._last_answer = result
         self._set_running(False)
         self.query_one("#final-output", Markdown).update(result)
-        self._show_phase_tab("final")
-        for index in range(len(STAGE_LABELS)):
-            self._set_stage_row(index, "SKIP" if index in self._skipped_stages else "DONE")
+        self._show_output_tab("final")
         self.query_one("#status", Static).update("Complete")
 
-    def _stop_run(self, final_text: str, stage_state: str, status: str) -> None:
-        self._flush_stage_output()
+    def _stop_run(self, final_text: str, status: str) -> None:
+        self._flush_output()
         self._set_running(False)
         self.query_one("#final-output", Markdown).update(final_text)
-        self._show_phase_tab("final")
-        if self._active_stage is not None:
-            self._set_stage_row(self._active_stage, stage_state)
+        self._show_output_tab("final")
         self.query_one("#status", Static).update(status)
 
     def _fail_run(self, message: str) -> None:
-        self._stop_run(f"**Run failed**\n\n{message}", "FAIL", "Run failed")
+        self._stop_run(f"**Run failed**\n\n{message}", "Run failed")
         self.notify(message, title="SmartHarness error", severity="error", timeout=8)
 
     def _cancelled_run(self) -> None:
-        self._stop_run("_Run cancelled._", "STOP", "Cancelled")
+        self._stop_run("_Run cancelled._", "Cancelled")
 
     def _request_clarification(self, run_id: int, clarification_id: int, question: str) -> None:
         def on_dismiss(value: str | None) -> None:

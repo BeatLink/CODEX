@@ -4,10 +4,12 @@ from contextlib import nullcontext
 from dataclasses import dataclass, field
 from typing import Any
 
+from .checks import unsupported_values
 from .context_budget import fit_sections_to_tokens, input_token_budget, render_sections, token_counter
 from .embeddings import get_embedder
+from .evidence import queue_research_topic, summarize_web_page
 from .knowledge import USER_MEMORY_KINDS, KnowledgeStore, _search_terms, _shares_half_the_terms
-from .pipeline import ModelCache, _summarize_web_page, _unsupported_values, create_model, queue_research_topic, run_stage
+from .model import ModelCache, create_model, run_stage
 from .settings import MAX_TOKENS, TEMPERATURE, background_model_key
 from .tools import Toolbox
 
@@ -158,7 +160,7 @@ class _BackgroundModel:
     def summarize_page(self, page_json: str, topic: str) -> str:
         with self._locked():
             self.check_pause()
-            return _summarize_web_page(
+            return summarize_web_page(
                 self._load(),
                 page_json,
                 topic,
@@ -277,11 +279,11 @@ def _grounded_facts(
     grounded = []
     for statement, url, confidence in facts:
         # A statement ending in an ellipsis was copied from a cut-off snippet and is not a whole fact.
-        if _unsupported_values(statement, everything) or statement.rstrip().endswith(("...", "\u2026")):
+        if unsupported_values(statement, everything) or statement.rstrip().endswith(("...", "\u2026")):
             continue
         cited = "\n".join(texts.get(url, [])) if url else ""
         terms = _search_terms(statement)
-        if not cited or _unsupported_values(statement, cited) or (terms and not _shares_half_the_terms(terms, cited)):
+        if not cited or unsupported_values(statement, cited) or (terms and not _shares_half_the_terms(terms, cited)):
             confidence = min(confidence, CONFIDENCE_LEVELS["low"])
         grounded.append((statement, url, confidence))
     return grounded

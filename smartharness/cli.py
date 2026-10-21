@@ -9,7 +9,6 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 from .client import DISCONNECTED_EVENT, connect_to_daemon
-from .pipeline import execute_pipeline
 from .settings import MODE_CHOICES, default_settings_path, load_settings, validate_settings
 from .knowledge import KnowledgeStore
 from .task_tree import execute_task_tree
@@ -31,7 +30,7 @@ def main(argv: list[str] | None = None) -> int:
         from .recall_benchmark import main as recall_benchmark_main
 
         return recall_benchmark_main(argv[1:])
-    parser = argparse.ArgumentParser(description="Run a staged local LLM prompt harness.")
+    parser = argparse.ArgumentParser(description="Answer a request with a local model, working it as a tree of tasks.")
     parser.add_argument(
         "prompt",
         nargs="*",
@@ -79,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
         "--show-thinking",
         action=argparse.BooleanOptionalAction,
         default=None,
-        help="Stream generated text token by token for each pipeline stage.",
+        help="Stream generated text token by token for each step.",
     )
     args = parser.parse_args(argv)
 
@@ -154,15 +153,12 @@ def main(argv: list[str] | None = None) -> int:
                     _ask_clarification if sys.stdin.isatty() else None
                 ),
             )
-            if settings["runner"] == "tree":
-                result = execute_task_tree(
-                    prompt,
-                    **options,
-                    max_task_depth=settings["max_task_depth"],
-                    max_task_nodes=settings["max_task_nodes"],
-                )
-            else:
-                result = execute_pipeline(prompt, **options)
+            result = execute_task_tree(
+                prompt,
+                **options,
+                max_task_depth=settings["max_task_depth"],
+                max_task_nodes=settings["max_task_nodes"],
+            )
     except (OSError, RuntimeError, ValueError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1

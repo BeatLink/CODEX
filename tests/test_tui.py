@@ -23,14 +23,11 @@ from daemon_harness import RunningDaemon
 
 from smartharness.knowledge import KnowledgeStore
 from smartharness.settings import DEFAULT_SETTINGS, load_settings
-from smartharness.tui import STAGE_LABELS, SmartHarnessApp
-
-# Most tests drive the eight-stage view, so they run in pipeline mode.
-PIPELINE_SETTINGS = {**DEFAULT_SETTINGS, "runner": "pipeline"}
+from smartharness.tui import ClarificationScreen, SmartHarnessApp
 
 
 class TuiTests(unittest.IsolatedAsyncioTestCase):
-    def app(self, settings=PIPELINE_SETTINGS, settings_path=None, start_worker=False, **options):
+    def app(self, settings=DEFAULT_SETTINGS, settings_path=None, start_worker=False, **options):
         if settings["knowledge_db_path"] == DEFAULT_SETTINGS["knowledge_db_path"]:
             # The interface sends its own settings with each run, so both sides get the temporary database.
             directory = tempfile.TemporaryDirectory()
@@ -40,60 +37,62 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(daemon.stop)
         return SmartHarnessApp(settings, client=daemon.client(), **options)
 
-    async def test_app_mounts_prompt_pipeline_and_response_controls(self):
+    async def test_app_mounts_prompt_task_tree_and_response_controls(self):
         app = self.app(initial_prompt="Draft a plan")
 
         async with app.run_test(size=(120, 42)) as pilot:
             await connected(pilot, app)
             self.assertEqual(app.query_one("#prompt", TextArea).text, "Draft a plan")
             self.assertTrue(app.query_one("#model-path", TextArea).soft_wrap)
-            self.assertEqual(len(app.query(".stage-row")), len(STAGE_LABELS))
+            self.assertEqual(str(app.query_one("#sidebar-title").render()), "TASK TREE")
+            self.assertTrue(app.query_one("#task-tree", OptionList).display)
             self.assertEqual(
-                len(app.query_one("#phase-tabs").query(TabPane)), len(STAGE_LABELS) + 3
+                [pane.id for pane in app.query_one("#output-tabs").query(TabPane)],
+                ["steps", "task-detail", "final"],
             )
             self.assertIsInstance(app.query_one("#request-pane", TabPane), TabPane)
             self.assertIsInstance(app.query_one("#output-pane", TabPane), TabPane)
             self.assertEqual(app.query_one("#workbench-tabs").active, "request-pane")
             self.assertTrue(app.query_one("#copy", Button).disabled)
 
-            app._update_stage(STAGE_LABELS[2])
-            self.assertEqual(app.query_one("#phase-tabs").active, "phase-3")
-            self.assertIn("NOW", str(app.query_one("#stage-row-3").render()))
+            app._update_step("Task 1 · Writing")
+            self.assertEqual(app.query_one("#output-tabs").active, "steps")
+            self.assertEqual(str(app.query_one("#status", Static).render()), "Task 1 · Writing")
             app._finish_run("# Completed")
 
             self.assertFalse(app.query_one("#copy", Button).disabled)
             self.assertEqual(app._last_answer, "# Completed")
-            self.assertEqual(app.query_one("#final-output", Markdown).id, "final-output")
+            self.assertEqual(app.query_one("#output-tabs").active, "final")
 
-    async def test_phase_output_scrolls_to_latest_content(self):
+    async def test_steps_output_scrolls_to_latest_content(self):
         app = self.app()
 
         async with app.run_test(size=(100, 30)) as pilot:
             await connected(pilot, app)
             await pilot.pause()
             app.query_one("#workbench-tabs", TabbedContent).active = "output-pane"
-            app._update_stage(STAGE_LABELS[0])
+            app._update_step("Task 1 · Writing")
             await pilot.pause()
-            app._append_stage_output(
-                STAGE_LABELS[0],
+            app._append_step_output(
+                "Task 1 · Writing",
                 "\n\n".join(f"Output line {index}" for index in range(100)),
             )
-            app._flush_stage_output()
+            app._flush_output()
             await pilot.pause(0.5)
 
-            app._append_stage_output(STAGE_LABELS[0], "\n\nOne more line")
-            app._flush_stage_output()
+            app._append_step_output("Task 1 · Writing", "\n\nOne more line")
+            app._flush_output()
             await pilot.pause(0.5)
 
-            self.assertTrue(app._stage_output_buffers[0].endswith("One more line"))
-            scroll = app.query_one("#stage-output-1", Markdown).parent
+            self.assertTrue(app._steps_output.endswith("One more line"))
+            scroll = app.query_one("#steps-output", Markdown).parent
             self.assertGreater(scroll.max_scroll_y, 0)
             self.assertEqual(scroll.scroll_y, scroll.max_scroll_y)
 
             scroll.scroll_home(animate=False)
             await pilot.pause()
-            app._append_stage_output(STAGE_LABELS[0], "\n\nLine read later")
-            app._flush_stage_output()
+            app._append_step_output("Task 1 · Writing", "\n\nLine read later")
+            app._flush_output()
             await pilot.pause(0.5)
 
             self.assertEqual(scroll.scroll_y, 0)
@@ -110,59 +109,64 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(app.query_one("#copy", Button).disabled)
             self.assertEqual(app._last_answer, "")
 
-    async def test_run_executes_in_worker_and_updates_stage_progress(self):
+    async def test_run_executes_in_worker_and_updates_step_progress(self):
         app = self.app(initial_prompt="Draft a plan")
 
-        def fake_execute_pipeline(prompt, **kwargs):
+        def fake_task_tree(prompt, **kwargs):
             self.assertEqual(prompt, "Draft a plan")
-            kwargs["progress_callback"](STAGE_LABELS[0])
-            kwargs["stage_output_callback"](STAGE_LABELS[0], "Phase output")
+            kwargs["progress_callback"]("Task 1 · Writing")
+            kwargs["stage_output_callback"]("Task 1 · Writing", "Step output")
             return "Worker response"
 
-        with patch("smartharness.daemon.execute_pipeline", side_effect=fake_execute_pipeline):
+        with patch("smartharness.daemon.execute_task_tree", side_effect=fake_task_tree):
             async with app.run_test(size=(120, 42)) as pilot:
                 await connected(pilot, app)
                 app._start_run()
-                for _ in range(20):
-                    await pilot.pause(0.05)
-                    if not app._request_running:
-                        break
+                await wait_until(pilot, lambda: not app._request_running)
 
-                self.assertFalse(app._request_running)
                 self.assertEqual(app._last_answer, "Worker response")
                 self.assertFalse(app.query_one("#copy", Button).disabled)
-                self.assertEqual(app._stage_output_buffers[0], "Phase output")
-                self.assertEqual(app.query_one("#phase-tabs").active, "final")
+                self.assertEqual(app._steps_output, "### Task 1 · Writing\n\nStep output")
+                self.assertEqual(app.query_one("#output-tabs").active, "final")
+                self.assertEqual(str(app.query_one("#status").render()), "Complete")
 
     async def test_selected_mode_is_passed_to_the_run(self):
         app = self.app(initial_prompt="Fix the parser")
         modes = []
 
-        def fake_execute_pipeline(prompt, **kwargs):
+        def fake_task_tree(prompt, **kwargs):
             modes.append(kwargs["mode"])
             return "Done"
 
-        with patch("smartharness.daemon.execute_pipeline", side_effect=fake_execute_pipeline):
+        with patch("smartharness.daemon.execute_task_tree", side_effect=fake_task_tree):
             async with app.run_test(size=(120, 42)) as pilot:
                 await connected(pilot, app)
                 app.query_one("#mode", Select).value = "execute"
                 app._start_run()
-                for _ in range(20):
-                    await pilot.pause(0.05)
-                    if not app._request_running:
-                        break
+                await wait_until(pilot, lambda: not app._request_running)
 
         self.assertEqual(modes, ["execute"])
 
-    async def test_reported_mode_is_shown_in_the_status(self):
-        app = self.app()
+    async def test_clarification_question_is_answered_from_a_dialog(self):
+        app = self.app(initial_prompt="Book a table")
+        answers = []
 
-        async with app.run_test(size=(120, 42)) as pilot:
-            await connected(pilot, app)
-            app._update_stage("Mode: execute")
-            app._update_stage(STAGE_LABELS[2])
+        def asking_task_tree(prompt, **kwargs):
+            answers.append(kwargs["clarification_callback"]("Which city?"))
+            return "Booked."
 
-            self.assertEqual(str(app.query_one("#status", Static).render()), "Execute mode · Stage 3 of 8")
+        with patch("smartharness.daemon.execute_task_tree", side_effect=asking_task_tree):
+            async with app.run_test(size=(120, 42)) as pilot:
+                await connected(pilot, app)
+                app._start_run()
+                await wait_until(pilot, lambda: isinstance(app.screen, ClarificationScreen))
+                self.assertEqual(str(app.screen.query_one("#clarification-question").render()), "Which city?")
+                app.screen.query_one("#clarification-answer", TextArea).text = "Lisbon"
+                app.screen.query_one("#clarification-submit", Button).press()
+                await wait_until(pilot, lambda: app._last_answer)
+
+        self.assertEqual(answers, ["Lisbon"])
+        self.assertEqual(app._last_answer, "Booked.")
 
     async def test_background_page_queues_topics_and_saves_worker_settings(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -308,14 +312,14 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
         app = self.app(initial_prompt="Draft a plan")
         started = threading.Event()
 
-        def endless_pipeline(prompt, **kwargs):
-            kwargs["progress_callback"](STAGE_LABELS[1])
+        def endless_task_tree(prompt, **kwargs):
+            kwargs["progress_callback"]("Task 1 · Writing")
             while True:
                 started.set()
-                kwargs["stage_output_callback"](STAGE_LABELS[1], "token ")
+                kwargs["stage_output_callback"]("Task 1 · Writing", "token ")
                 time.sleep(0.01)
 
-        with patch("smartharness.daemon.execute_pipeline", side_effect=endless_pipeline):
+        with patch("smartharness.daemon.execute_task_tree", side_effect=endless_task_tree):
             async with app.run_test(size=(120, 42)) as pilot:
                 await connected(pilot, app)
                 app._start_run()
@@ -327,66 +331,46 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 await wait_until(pilot, lambda: not app._request_running)
 
                 self.assertEqual(str(app.query_one("#status").render()), "Cancelled")
-                self.assertIn("STOP", str(app.query_one("#stage-row-2").render()))
+                self.assertEqual(app.query_one("#final-output", Markdown).source, "_Run cancelled._")
                 self.assertFalse(app.query_one("#run", Button).disabled)
                 self.assertTrue(app.query_one("#cancel", Button).disabled)
 
-    async def test_skipped_stages_stay_marked_after_the_run(self):
+    async def test_failed_run_shows_the_error(self):
         app = self.app(initial_prompt="Draft a plan")
 
-        def routed_pipeline(prompt, **kwargs):
-            kwargs["progress_callback"](STAGE_LABELS[0])
-            kwargs["progress_callback"]("Skipped: " + STAGE_LABELS[1])
-            kwargs["progress_callback"](STAGE_LABELS[2])
-            return "Routed response"
-
-        with patch("smartharness.daemon.execute_pipeline", side_effect=routed_pipeline):
-            async with app.run_test(size=(120, 42)) as pilot:
-                await connected(pilot, app)
-                app._start_run()
-                await wait_until(pilot, lambda: not app._request_running)
-
-                self.assertIn("SKIP", str(app.query_one("#stage-row-2").render()))
-                self.assertIn("DONE", str(app.query_one("#stage-row-3").render()))
-
-    async def test_failed_run_marks_the_failing_stage(self):
-        app = self.app(initial_prompt="Draft a plan")
-
-        def failing_pipeline(prompt, **kwargs):
-            kwargs["progress_callback"](STAGE_LABELS[3])
+        def failing_task_tree(prompt, **kwargs):
+            kwargs["progress_callback"]("Task 1.2 · Acting")
             raise RuntimeError("tool exploded")
 
-        with patch("smartharness.daemon.execute_pipeline", side_effect=failing_pipeline):
+        with patch("smartharness.daemon.execute_task_tree", side_effect=failing_task_tree):
             async with app.run_test(size=(120, 42)) as pilot:
                 await connected(pilot, app)
                 app._start_run()
                 await wait_until(pilot, lambda: not app._request_running)
 
-                self.assertIn("FAIL", str(app.query_one("#stage-row-4").render()))
-                self.assertIn("DONE", str(app.query_one("#stage-row-3").render()))
+                self.assertEqual(str(app.query_one("#status").render()), "Run failed")
+                self.assertIn("tool exploded", app.query_one("#final-output", Markdown).source)
+                self.assertEqual(app.query_one("#output-tabs").active, "final")
 
-    async def test_choosing_a_phase_tab_stops_following_stages(self):
+    async def test_choosing_an_output_tab_stops_following_steps(self):
         app = self.app()
 
         async with app.run_test(size=(120, 42)) as pilot:
             await connected(pilot, app)
             app._set_running(True)
-            app._update_stage(STAGE_LABELS[0])
+            app._update_step("Task 1 · Writing")
             await pilot.pause()
-            app.query_one("#phase-tabs", TabbedContent).active = "phase-1"
-            app._update_stage(STAGE_LABELS[1])
-            await pilot.pause()
-            self.assertEqual(app.query_one("#phase-tabs").active, "phase-2")
+            self.assertEqual(app.query_one("#output-tabs").active, "steps")
 
-            app.query_one("#phase-tabs", TabbedContent).active = "final"
+            app.query_one("#output-tabs", TabbedContent).active = "final"
             await pilot.pause()
-            app._update_stage(STAGE_LABELS[2])
+            app._update_step("Task 2 · Writing")
             await pilot.pause()
 
-            self.assertEqual(app.query_one("#phase-tabs").active, "final")
+            self.assertEqual(app.query_one("#output-tabs").active, "final")
 
     async def test_tree_run_shows_the_task_tree_and_each_step(self):
-        app = self.app(settings=DEFAULT_SETTINGS, initial_prompt="Compare two designs")
+        app = self.app(initial_prompt="Compare two designs")
         tree = [
             {"id": "1", "prompt": "Compare two designs", "status": "running"},
             {
@@ -408,11 +392,10 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 await connected(pilot, app)
                 app._start_run()
                 await wait_until(pilot, lambda: app._last_answer)
-                app._flush_stage_output()
+                app._flush_output()
 
                 self.assertEqual(app._last_answer, "Pick A.")
                 self.assertEqual(str(app.query_one("#sidebar-title").render()), "TASK TREE")
-                self.assertFalse(app.query_one("#stage-row-1").display)
                 task_list = app.query_one("#task-tree", OptionList)
                 self.assertEqual(
                     [str(task_list.get_option_at_index(index).prompt) for index in range(task_list.option_count)],
@@ -422,9 +405,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                     app._steps_output,
                     "### Task 1.1 · Writing\n\nDesign A is simple.\n\n### Task 1.1 · Checking\n\n",
                 )
-                tabs = app.query_one("#phase-tabs", TabbedContent)
-                self.assertTrue(tabs.get_tab("steps").display)
-                self.assertFalse(tabs.get_tab("phase-1").display)
+                tabs = app.query_one("#output-tabs", TabbedContent)
 
                 task_list.highlighted = 1
                 task_list.action_select()
@@ -467,7 +448,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
     async def test_ctrl_r_runs_the_prompt(self):
         app = self.app(initial_prompt="Draft a plan")
 
-        with patch("smartharness.daemon.execute_pipeline", return_value="Shortcut response"):
+        with patch("smartharness.daemon.execute_task_tree", return_value="Shortcut response"):
             async with app.run_test(size=(120, 42)) as pilot:
                 await connected(pilot, app)
                 await pilot.press("ctrl+r")

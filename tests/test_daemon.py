@@ -20,8 +20,6 @@ class DaemonTests(unittest.TestCase):
         self.settings = DEFAULT_SETTINGS.copy()
         self.settings["knowledge_db_path"] = str(Path(self.directory.name) / "knowledge.db")
         self.settings["background_research_enabled"] = False
-        # These tests patch the eight-stage pipeline, so they run in pipeline mode.
-        self.settings["runner"] = "pipeline"
         self.settings_path = Path(self.directory.name) / "settings.json"
 
     def tearDown(self):
@@ -33,23 +31,24 @@ class DaemonTests(unittest.TestCase):
         return daemon
 
     def test_run_streams_progress_and_tokens_then_the_result(self):
-        def fake_pipeline(prompt, **kwargs):
-            kwargs["progress_callback"]("Stage 1/8: Identifying the task and constraints")
-            kwargs["stage_output_callback"]("Stage 1/8: Identifying the task and constraints", "token")
+        def fake_task_tree(prompt, **kwargs):
+            kwargs["progress_callback"]("Task 1 · Deciding")
+            kwargs["stage_output_callback"]("Task 1 · Deciding", "token")
             return f"Answer to {prompt}"
 
-        with patch("smartharness.daemon.execute_pipeline", side_effect=fake_pipeline) as pipeline:
+        with patch("smartharness.daemon.execute_task_tree", side_effect=fake_task_tree) as task_tree:
             daemon = self.start()
             events = EventLog()
             client = daemon.client(events)
             run_id = client.call("run", prompt="Draft a plan", settings={"max_tokens": 512})["run_id"]
             finished = events.wait_for("run.finished")
+            events.wait_for("runs.changed")
 
         self.assertEqual(finished, {"run_id": run_id, "result": "Answer to Draft a plan"})
         self.assertEqual(
-            events.names(), ["run.started", "run.progress", "run.token", "run.finished"]
+            events.names(), ["run.started", "run.progress", "run.token", "run.finished", "runs.changed"]
         )
-        self.assertEqual(pipeline.call_args.kwargs["max_tokens"], 512)
+        self.assertEqual(task_tree.call_args.kwargs["max_tokens"], 512)
         self.assertEqual(daemon.harness.settings["max_tokens"], DEFAULT_SETTINGS["max_tokens"])
         self.assertIsNone(client.call("status")["run"])
 
@@ -66,14 +65,12 @@ class DaemonTests(unittest.TestCase):
             daemon = self.start()
             events = EventLog()
             client = daemon.client(events)
-            client.call("run", prompt="Draft a plan", settings={"runner": "tree", "max_task_depth": 1})
+            client.call("run", prompt="Draft a plan", settings={"max_task_depth": 1})
             finished = events.wait_for("run.finished")
 
         self.assertEqual(finished["result"], "Tree answer")
-        self.assertEqual(events.wait_for("run.started")["runner"], "tree")
         self.assertEqual(events.wait_for("run.tree")["nodes"], tree)
         self.assertEqual(task_tree.call_args.kwargs["max_task_depth"], 1)
-        self.assertEqual(late_status[0]["runner"], "tree")
         self.assertEqual(late_status[0]["tree"], tree)
 
     def test_an_unfinished_tree_run_is_listed_resumed_with_its_options_or_discarded(self):
@@ -112,11 +109,11 @@ class DaemonTests(unittest.TestCase):
     def test_clarification_is_asked_of_the_owner_and_answered(self):
         answers = []
 
-        def asking_pipeline(prompt, **kwargs):
+        def asking_task_tree(prompt, **kwargs):
             answers.append(kwargs["clarification_callback"]("Which format?"))
             return "done"
 
-        with patch("smartharness.daemon.execute_pipeline", side_effect=asking_pipeline):
+        with patch("smartharness.daemon.execute_task_tree", side_effect=asking_task_tree):
             daemon = self.start()
             owner_events, watcher_events = EventLog(), EventLog()
             owner = daemon.client(owner_events)
@@ -138,13 +135,13 @@ class DaemonTests(unittest.TestCase):
     def test_cancel_and_a_lost_owner_both_stop_the_run(self):
         started = threading.Event()
 
-        def endless_pipeline(prompt, **kwargs):
+        def endless_task_tree(prompt, **kwargs):
             while True:
                 started.set()
-                kwargs["stage_output_callback"]("Stage 2/8: Researching and inspecting relevant files", "x")
+                kwargs["stage_output_callback"]("Task 1 · Researching", "x")
                 time.sleep(0.01)
 
-        with patch("smartharness.daemon.execute_pipeline", side_effect=endless_pipeline):
+        with patch("smartharness.daemon.execute_task_tree", side_effect=endless_task_tree):
             daemon = self.start()
             events = EventLog()
             client = daemon.client(events)
@@ -167,7 +164,7 @@ class DaemonTests(unittest.TestCase):
             self.assertIsNone(client.call("status")["run"])
 
     def test_failed_run_reports_its_message(self):
-        with patch("smartharness.daemon.execute_pipeline", side_effect=RuntimeError("tool exploded")):
+        with patch("smartharness.daemon.execute_task_tree", side_effect=RuntimeError("tool exploded")):
             daemon = self.start()
             events = EventLog()
             daemon.client(events).call("run", prompt="Draft a plan")
@@ -232,7 +229,7 @@ class DaemonTests(unittest.TestCase):
         self.assertIs(lock, harness._background_model_lock)
         self.assertIs(cache, harness._background_model_cache)
 
-        with patch("smartharness.pipeline.create_model", return_value="big model"):
+        with patch("smartharness.model.create_model", return_value="big model"):
             cache.get("big.gguf", settings["context_size"], 0)
         with patch("smartharness.daemon.time.monotonic", side_effect=[100.0, 100.0 + BACKGROUND_MODEL_IDLE_SECONDS]):
             harness._unload_idle_background_model(worked=False)
@@ -241,7 +238,7 @@ class DaemonTests(unittest.TestCase):
         self.assertFalse(cache.has("big.gguf", settings["context_size"], 0))
         self.assertEqual(harness._background_status, "Idle; background model unloaded")
 
-        with patch("smartharness.pipeline.create_model", return_value="big model"):
+        with patch("smartharness.model.create_model", return_value="big model"):
             cache.get("big.gguf", settings["context_size"], 0)
         settings["background_model_path"] = ""
         harness._background_model(settings)

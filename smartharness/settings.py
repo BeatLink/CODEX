@@ -10,8 +10,8 @@ CONTEXT_SIZE = 4096
 MAX_TOKENS = 2048
 TEMPERATURE = 0.1
 MODE_CHOICES = ("auto", "answer", "draft", "execute")
-# "tree" works a request as a tree of tasks; "pipeline" runs the fixed eight-stage pipeline.
-RUNNERS = ("tree", "pipeline")
+# Settings that no longer do anything, which a settings file may still hold and loading drops.
+RETIRED_SETTINGS = ("runner",)
 MAX_TASK_DEPTH = 3
 MAX_TASK_NODES = 20
 DEFAULT_SETTINGS_PATH = Path(__file__).resolve().parent.parent / "settings.json"
@@ -33,7 +33,6 @@ DEFAULT_SETTINGS = {
     "enable_test_execution": False,
     "show_thinking": True,
     "mode": "auto",
-    "runner": "tree",
     "max_task_depth": MAX_TASK_DEPTH,
     "max_task_nodes": MAX_TASK_NODES,
     "mcp_servers": [],
@@ -76,6 +75,7 @@ def load_settings(settings_path: str | Path) -> dict[str, Any]:
     if not isinstance(settings, dict):
         raise ValueError("The settings file must contain a JSON object.")
 
+    settings = {key: value for key, value in settings.items() if key not in RETIRED_SETTINGS}
     unknown_keys = settings.keys() - DEFAULT_SETTINGS.keys()
     if unknown_keys:
         raise ValueError(f"Unknown setting(s): {', '.join(sorted(unknown_keys))}")
@@ -119,8 +119,6 @@ def validate_settings(values: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("show_thinking must be a boolean.")
     if values["mode"] not in MODE_CHOICES:
         raise ValueError(f"mode must be one of: {', '.join(MODE_CHOICES)}.")
-    if values["runner"] not in RUNNERS:
-        raise ValueError(f"runner must be one of: {', '.join(RUNNERS)}.")
     if not isinstance(values["knowledge_db_path"], str) or not values["knowledge_db_path"].strip():
         raise ValueError("knowledge_db_path must be a non-empty path string.")
     if not isinstance(values["embedding_model_path"], str):

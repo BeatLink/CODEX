@@ -11,31 +11,27 @@ from typing import Any
 from .context_budget import condense_sections, input_token_budget, render_sections, token_counter
 from .embeddings import get_embedder
 from .knowledge import MAX_RECALLED_RELATIONSHIPS, KnowledgeStore
-from .pipeline import (
+from .checks import action_report_problems, uncited_urls, unsupported_values
+from .evidence import (
     MAX_SEARCH_QUERIES,
     MAX_SEARCH_QUERY_CHARS,
     MEMORY_LABEL,
     NO_EVIDENCE_RULE,
     RESEARCHED_EVIDENCE_RULE,
     VERIFIED_EVIDENCE_RULE,
-    ModelCache,
-    _format_recall,
-    _is_self_contained,
-    _requires_web_research,
-    _search_query,
-    _uncited_urls,
-    _unsupported_values,
     build_toolbox,
     filesystem_note,
-    load_model,
+    format_recall,
+    is_self_contained,
     page_summarizer,
     queue_stale_topics,
     queue_unsupported_claims,
-    run_stage,
+    requires_web_research,
+    search_query,
     search_with_memory,
     section_summarizer,
-    split_mode_prefix,
 )
+from .model import ModelCache, load_model, run_stage
 from .settings import (
     CONTEXT_SIZE,
     DEFAULT_MODEL_PATH,
@@ -585,6 +581,8 @@ class TaskTreeRun:
         self.clarification: tuple[str, str] | None = None
         # Every search result and tool finding so far, for checking that cited URLs were really seen.
         self.evidence: list[str] = []
+        # The file writes and test runs each acting task made, so its report can be held to them.
+        self.task_actions: dict[str, list[tuple[str, dict[str, Any], str]]] = {}
         # Answer and draft modes never change anything, so only auto and execute may act.
         self.can_act = mode in ("auto", "execute") and (
             allow_file_writes or enable_test_execution or any(server.get("enabled", True) for server in mcp_servers)
@@ -758,7 +756,7 @@ class TaskTreeRun:
                 relationships = _unique([*own["relationships"], *relationships])[:MAX_RECALLED_RELATIONSHIPS]
                 self.recalled_facts = self.recalled_facts or bool(own["facts"])
             self.task_memory[node.id] = (
-                _format_recall({**self.recalled, "facts": facts, "relationships": relationships}),
+                format_recall({**self.recalled, "facts": facts, "relationships": relationships}),
                 {fact["id"] for fact in facts},
             )
         return self.task_memory[node.id]
@@ -839,7 +837,7 @@ class TaskTreeRun:
         )
         decision = parse_decision(reply, node, approaches, [task.prompt for task in self.tree.nodes()])
         if decision is None:
-            fallback = "research" if _requires_web_research(node.prompt) else "answer"
+            fallback = "research" if requires_web_research(node.prompt) else "answer"
             return Decision(approach=fallback)
         if ask and decision.clarification:
             self.ask_clarification(decision.clarification)
@@ -908,7 +906,7 @@ class TaskTreeRun:
                     self.recalled_facts = True
                     evidence.append((
                         f"Stored facts for '{query}'",
-                        _format_recall({"facts": facts, "relationships": recalled["relationships"]}),
+                        format_recall({"facts": facts, "relationships": recalled["relationships"]}),
                     ))
             label, text, from_summary = search_with_memory(
                 query, self.knowledge_store, self.toolbox, self.max_pending_research_jobs
@@ -924,14 +922,14 @@ class TaskTreeRun:
         """Run the task's tools and return what they found, or nothing for a task answered without tools."""
         if decision.approach == "answer":
             # The model cannot tell when it does not know something, so a top-level answer gets one quick search.
-            if node.parent is None and not _is_self_contained(self.user_prompt):
-                return self.search(node, [_search_query(self.user_prompt)])[0]
+            if node.parent is None and not is_self_contained(self.user_prompt):
+                return self.search(node, [search_query(self.user_prompt)])[0]
             return []
         evidence: list[tuple[str, str]] = []
         if decision.approach == "research":
             # The request's own words come first at the top, so a query the model made up is never the only search.
-            own_words = [_search_query(self.user_prompt)] if node.parent is None else []
-            queries = list(dict.fromkeys([*own_words, *decision.search_queries])) or [_search_query(node.prompt)]
+            own_words = [search_query(self.user_prompt)] if node.parent is None else []
+            queries = list(dict.fromkeys([*own_words, *decision.search_queries])) or [search_query(node.prompt)]
             evidence, answered_from_memory = self.search(node, queries)
             # Stored page and topic summaries answer on their own, so nothing more is fetched.
             if answered_from_memory:
@@ -954,6 +952,7 @@ class TaskTreeRun:
             "files": {"allowed_tools": {"list_directory", "read_file"}},
             "act": {"blocked_tools": {"web_search", "web_fetch"}, "mcp_servers": self.mcp_servers},
         }[decision.approach]
+        actions_before = len(self.toolbox.action_log)
         findings = run_tool_stage(
             self.llm,
             system_prompt,
@@ -966,6 +965,8 @@ class TaskTreeRun:
             context_size=self.context_size,
             **tool_options,
         )
+        if decision.approach == "act":
+            self.task_actions[node.id] = self.toolbox.action_log[actions_before:]
         self.evidence.append(findings)
         evidence.append(("Findings for this task" if decision.approach != "act" else "Action results", findings))
         return evidence
@@ -1024,16 +1025,18 @@ class TaskTreeRun:
         ])
         problems.extend(
             f"The result cites {url}, which is not in the captured evidence; remove it or say it is unverified."
-            for url in _uncited_urls(result, known)
+            for url in uncited_urls(result, known)
         )
         # Only researched results are held to their evidence; arithmetic and rewriting produce new numbers.
         if self.local_knowledge_used or {"web_search", "web_fetch"} & self.toolbox.used_tools:
-            unsupported = _unsupported_values(result, f"{self.user_prompt}\n{known}")
+            unsupported = unsupported_values(result, f"{self.user_prompt}\n{known}")
             queue_unsupported_claims(self.knowledge_store, result, unsupported, self.max_pending_research_jobs)
             problems.extend(
                 f"The result states {value}, which appears in no gathered evidence; remove it or say it could not be verified."
                 for value in unsupported
             )
+        if node.id in self.task_actions:
+            problems.extend(action_report_problems(result, self.task_actions[node.id]))
         return " ".join(problem for problem in problems if problem)
 
     def plan_subtasks(
@@ -1149,6 +1152,24 @@ RESUMABLE_OPTIONS = (
     "mode",
 )
 
+# A leading word such as /plan picks the mode for the whole request.
+MODE_PREFIXES = {
+    "/ask": "answer",
+    "/answer": "answer",
+    "/draft": "draft",
+    "/plan": "draft",
+    "/do": "execute",
+    "/execute": "execute",
+}
+
+
+def split_mode_prefix(user_prompt: str) -> tuple[str | None, str]:
+    """Return the mode a leading word such as /plan picks, or None, and the prompt without that word."""
+    parts = user_prompt.strip().split(maxsplit=1)
+    if parts and parts[0].casefold() in MODE_PREFIXES:
+        return MODE_PREFIXES[parts[0].casefold()], parts[1] if len(parts) > 1 else ""
+    return None, user_prompt
+
 
 def execute_task_tree(
     user_prompt: str,
@@ -1178,14 +1199,14 @@ def execute_task_tree(
     mode: str = "auto",
     resume_run_id: int | None = None,
 ) -> str:
-    """Answer a request by working it as a tree of tasks; takes the same arguments as execute_pipeline.
+    """Answer a request by working it as a tree of tasks.
 
     With a knowledge store, the tree is checkpointed as it goes; resume_run_id carries on a saved run instead.
     """
     options = {name: value for name, value in locals().items() if name in RESUMABLE_OPTIONS}
     if mode not in MODE_CHOICES:
         raise ValueError(f"mode must be one of: {', '.join(MODE_CHOICES)}.")
-    # A leading word such as /plan picks the mode, as it does for the pipeline.
+    # A leading word such as /plan picks the mode.
     prefix_mode, user_prompt = split_mode_prefix(user_prompt)
     mode = prefix_mode or mode
     if not user_prompt.strip():

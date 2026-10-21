@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from smartharness.gpu_lock import LOCK_PATH_VARIABLE, GpuLock
-from smartharness.pipeline import create_model
+from smartharness.model import create_model
 
 REPOSITORY = Path(__file__).resolve().parent.parent
 
@@ -89,7 +89,7 @@ class ModelLockTests(unittest.TestCase):
 
         with (
             patch.dict(sys.modules, {"llama_cpp": types.SimpleNamespace(Llama=FakeLlama)}),
-            patch("smartharness.pipeline.GPU_LOCK") as lock,
+            patch("smartharness.model.GPU_LOCK") as lock,
         ):
             create_model("model.gguf", 2048, 0)
             lock.acquire.assert_not_called()

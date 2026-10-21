@@ -138,17 +138,17 @@ class RunTaskTests(unittest.TestCase):
         self.assertFalse(result.passed)
         self.assertEqual((result.model_calls, result.completion_tokens), (1, 7))
 
-    def test_pipeline_runner_gets_an_empty_store_and_a_scratch_root(self):
+    def test_tree_runner_gets_an_empty_store_and_a_scratch_root(self):
         seen = {}
 
-        def fake_pipeline(prompt, **options):
+        def fake_tree(prompt, **options):
             seen.update(options)
             self.assertFalse(Path(options["knowledge_db_path"]).exists())
             return "4"
 
         task = EvalTask(id="sum", prompt="What is 2 + 2?", checks=[{"type": "contains", "value": "4"}], mode="answer")
-        with patch("smartharness.evaluation.execute_pipeline", side_effect=fake_pipeline):
-            result = run_task(task, "pipeline", ReplyingModel(""), DEFAULT_SETTINGS)
+        with patch("smartharness.evaluation.execute_task_tree", side_effect=fake_tree):
+            result = run_task(task, "tree", ReplyingModel(""), DEFAULT_SETTINGS)
 
         self.assertTrue(result.passed)
         self.assertEqual(seen["mode"], "answer")
@@ -160,7 +160,7 @@ class RunTaskTests(unittest.TestCase):
         self.assertFalse(Path(seen["filesystem_root"]).exists())
 
     def test_a_seeded_run_answers_from_a_copy_of_the_seed_store(self):
-        def fake_pipeline(prompt, **options):
+        def fake_tree(prompt, **options):
             with sqlite3.connect(options["knowledge_db_path"]) as connection:
                 text = connection.execute("SELECT text FROM notes").fetchone()[0]
                 connection.execute("DELETE FROM notes")
@@ -170,29 +170,26 @@ class RunTaskTests(unittest.TestCase):
         task = EvalTask(id="seed", prompt="What was stored?", checks=[{"type": "contains", "value": "seeded"}])
         with tempfile.TemporaryDirectory() as directory:
             seed_path = write_seed_store(directory)
-            with patch("smartharness.evaluation.execute_pipeline", side_effect=fake_pipeline):
-                result = run_task(task, "pipeline", ReplyingModel(""), DEFAULT_SETTINGS, seed_store=seed_path)
+            with patch("smartharness.evaluation.execute_task_tree", side_effect=fake_tree):
+                result = run_task(task, "tree", ReplyingModel(""), DEFAULT_SETTINGS, seed_store=seed_path)
             with sqlite3.connect(seed_path) as connection:
                 remaining = connection.execute("SELECT COUNT(*) FROM notes").fetchone()[0]
             connection.close()
 
         self.assertTrue(result.passed)
-        self.assertEqual(result.runner, "pipeline+store")
+        self.assertEqual(result.runner, "tree+store")
         self.assertEqual(remaining, 1)
 
     def test_a_seed_store_adds_a_seeded_run_for_each_runner_that_recalls(self):
         task = EvalTask(id="sum", prompt="What is 2 + 2?", checks=[{"type": "contains", "value": "4"}])
         with tempfile.TemporaryDirectory() as directory:
             seed_path = write_seed_store(directory)
-            with (
-                patch("smartharness.evaluation.execute_pipeline", return_value="4"),
-                patch("smartharness.evaluation.execute_task_tree", return_value="4"),
-            ):
-                results = run_eval([task], ["bare", "pipeline", "tree"], ReplyingModel("4"), DEFAULT_SETTINGS, seed_store=seed_path)
+            with patch("smartharness.evaluation.execute_task_tree", return_value="4"):
+                results = run_eval([task], ["bare", "tree"], ReplyingModel("4"), DEFAULT_SETTINGS, seed_store=seed_path)
 
         self.assertEqual(
             [result.runner for result in results],
-            ["bare", "pipeline", "pipeline+store", "tree", "tree+store"],
+            ["bare", "tree", "tree+store"],
         )
 
     def test_a_failing_run_is_recorded_as_an_error_and_scores_nothing(self):
@@ -334,15 +331,15 @@ class CommandLineTests(unittest.TestCase):
             with (
                 patch("smartharness.evaluation.load_settings", return_value={**DEFAULT_SETTINGS, "embedding_model_path": ""}),
                 patch("smartharness.evaluation.create_model", return_value=ReplyingModel("")),
-                patch("smartharness.evaluation.execute_pipeline", return_value="7413"),
+                patch("smartharness.evaluation.execute_task_tree", return_value="7413"),
                 patch("builtins.print"),
             ):
-                exit_code = main(["--seed", "--runners", "pipeline", "--only", "recall-port", "--output", str(output_path)])
+                exit_code = main(["--seed", "--runners", "tree", "--only", "recall-port", "--output", str(output_path)])
             report = json.loads(output_path.read_text(encoding="utf-8"))
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(report["tasks_path"], str(RECALL_TASKS_PATH))
-        self.assertEqual(set(report["summary"]), {"pipeline", "pipeline+store"})
+        self.assertEqual(set(report["summary"]), {"tree", "tree+store"})
 
     def test_unknown_task_id_or_runner_fails_before_loading_the_model(self):
         with tempfile.TemporaryDirectory() as directory:

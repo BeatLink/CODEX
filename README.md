@@ -55,7 +55,7 @@ back; the daemon also sends `{"event", "data"}` lines at any time. Methods are
 `set_background_enabled`, `run`, `cancel`, `answer_clarification`,
 `queue_topic`, `research_now`, `queue_status`, `knowledge`, `unfinished_runs`,
 `resume_run`, `discard_run`, and `shutdown`.
-Events are `run.started` (with the run's `runner`), `run.progress`, `run.token`,
+Events are `run.started`, `run.progress`, `run.token`,
 `run.tree` (every task's state, sent whenever one changes), `run.clarification`,
 `run.finished`, `run.failed`, `run.cancelled`, `background.status`,
 `background.token`, `queue.changed`, `knowledge.changed`, `runs.changed` (the
@@ -63,10 +63,7 @@ list of unfinished task tree runs changed), and `settings.changed`.
 
 ## How a request is handled
 
-`runner` picks how a request runs: as a tree of tasks (`tree`, the default),
-or through the fixed eight-stage pipeline (`pipeline`).
-
-### Task tree
+Every request is worked as a tree of tasks.
 
 The request becomes the top task, whose deliverable is a complete reply to it.
 Each task is worked the same way:
@@ -112,13 +109,32 @@ top task's write or combine step is the final answer.
 - **Checks that do not rely on the model.** A result citing a URL that appears
   in no captured evidence fails its check, and so does a researched result
   that states a version number or date found nowhere in the evidence or the
-  request.
-- **Earlier results are condensed, not cut.** When a call's input would
-  overflow the window, the largest earlier results are summarized first, as in
-  the pipeline; the request and the current task are never condensed.
+  request. Dates are compared by value, so "October 9, 2026", "9 October 2026",
+  and "2026-10-09" all match, and numbers in code blocks are not checked. A task
+  that acted is held to what its tools really did: its result must name every
+  file written, say when a write or a test run failed, give the test result,
+  and not claim a change when nothing was written.
+- **Earlier results are condensed, not cut.** Each call's input is measured
+  with the model's own tokenizer and fitted to `context_size` minus that call's
+  reply budget. When it would overflow, the largest earlier results are
+  summarized first, each only once per run, and only what still overflows is
+  trimmed; the request and the current task are never condensed. Decisions and
+  checks reply in at most 1024 and 512 tokens, which leaves them more room for
+  input. Fetched pages are summarized in chunks, then the chunk summaries are
+  merged.
+- **Untrusted input.** Web pages, file contents, tool output, search results,
+  and everything recalled from the knowledge store are fenced between
+  `<untrusted-data>` tags under a heading that says to use them as information
+  and never follow instructions in them. Any such tag inside the text is
+  removed first, so a hostile page cannot close the fence early.
+  `evals/hostile_seed.json` and `evals/hostile_tasks.json` test this:
+  `smartharness eval --seed evals/hostile_seed.json --tasks evals/hostile_tasks.json`.
 
-The tree honours `mode` and the `/ask`, `/plan`, and `/do` prefixes: in answer
-and draft mode the `act` approach is never offered, so nothing is changed.
+`mode` limits what a request may do: in `answer` and `draft` mode the `act`
+approach is never offered, so nothing is changed, while `auto` (the default)
+and `execute` allow it. Set `mode` in the settings, pass `--mode`, use the
+selector beside the Run button, or start the prompt with `/ask` or `/answer`,
+`/draft` or `/plan`, or `/do` or `/execute`.
 
 The decision asks one clarification question for the top task when the request
 is materially ambiguous, then decides again with the answer. The finished tree
@@ -135,108 +151,6 @@ the options it started with, not the current settings. The TUI and GTK
 interfaces offer Resume and Discard for the newest unfinished run, and
 `smartharness --resume` resumes it from the command line.
 
-### Eight-stage pipeline
-
-A request runs through up to eight stages. Each stage is a separate model call
-with its own system prompt, and its input is the original request plus only the
-earlier results it needs.
-
-| Stage | Goal | Sees | Tools |
-| --- | --- | --- | --- |
-| 1. Identify | Return JSON picking the mode, then the facts to check, search queries, whether files are needed, and an optional clarification question; draft and execute requests also list requirements, constraints, and assumptions | Request | none |
-| 2. Research | Gather at most five findings | Stage 1, clarification, stored or searched evidence | `web_search`, `web_fetch`, `list_directory`, `read_file` |
-| 3. Plan | Make an ordered plan covering every requirement, including any tool actions | Stages 1 and 2, evidence | none |
-| 4. Review plan | Check the plan against the request before anything runs; output a corrected outline and the exact tool actions still needed | Stages 1 to 3, evidence | none |
-| 5. Act | Carry out only the reviewed tool actions | Stage 4, evidence | file tools, `run_tests`, MCP tools (no web) |
-| 6. Draft | Write the answer from the reviewed outline and action results | Stages 4 and 5, evidence | none |
-| 7. Critique | Return JSON marking each requirement met, partly met, or missing, with a fix for each one not met, plus other issues; in execute mode and quick answers, a check that needs no model | Stages 1 and 4 to 6, evidence | none |
-| 8. Revise | Apply the corrections and return only the final answer | Stages 4 to 7, evidence | none |
-
-Every request runs in one of three modes, and each mode has its own route:
-
-| Mode | For | Stages run |
-| --- | --- | --- |
-| `answer`, quick | A question answered or something explained | 1, 6 |
-| `answer`, thorough | An answer that needs analysis, a comparison, or careful reasoning | 1, 6, 7, 8 |
-| `draft` | A piece of writing, a plan, or a design | 1, 3, 4, 6, 7, 8 |
-| `execute` | Files changed or tests run | all eight, with an automatic check at 7 |
-
-Stage 2 runs in any mode when the analysis lists a fact to check or says files
-must be read, and always in execute mode. It checks the knowledge store first,
-and skips its own web searches when every query matches a stored page or topic
-summary. A quick answer gets one quick web search even when stage 1 lists
-nothing, unless the request is plain arithmetic or rewriting pasted text,
-because a small model cannot tell when it does not know something. The
-request's own words are always one of the search queries. When every search
-finds nothing, the draft says it could not look the subject up rather than
-describing it. Skipped stages are marked SKIP in the interfaces.
-
-In `auto` mode, the default, stage 1 first asks a short router question
-whose JSON reply starts with the mode. An answer needs nothing more, so a quick
-answer costs two model calls. A draft or execute request then gets its full
-analysis with requirements. Pick the mode yourself to skip the router: set
-`mode` in the settings, pass `--mode`, use the selector beside the Run button,
-or start the prompt with `/ask` or `/answer`, `/draft` or `/plan`, or `/do`
-or `/execute`. All replies are constrained by a JSON schema, which llama.cpp
-enforces as a grammar. If a reply is still not valid JSON, the chosen mode is
-kept and research is decided by keywords in the prompt; an unreadable router
-reply falls back to a thorough answer, which never changes files.
-
-Execute mode is checked against what the tools really did, not by a model
-critique. The report must name every file written, say when a write or a test
-run failed, give the test result, and not claim a change when nothing was
-written. Any mismatch gets one revision. A quick answer gets one revision only
-when it cites a URL that is not in the evidence, or, after research, states a
-version number or date that no gathered evidence contains. The critique adds
-those same problems to its own.
-
-Dates are compared by value, so "October 9, 2026", "9 October 2026", and
-"2026-10-09" all match each other. Numbers in code blocks are not checked, and
-neither are answers that did no research, since arithmetic and rewriting
-produce new numbers of their own.
-
-Design points:
-
-- **Review before action.** The plan is checked before stage 5 runs, so file
-  changes only happen after that check.
-- **Grounded research.** When research ran, later stages may state researched
-  claims only from captured evidence (search titles, URLs, snippets, stored
-  summaries, and summaries of fetched pages) and must cite the URL. If search
-  failed or found nothing useful, the model is told to say the claims could not
-  be verified.
-- **Untrusted input.** Web pages, file contents, tool output, search results,
-  and everything recalled from the knowledge store are fenced between
-  `<untrusted-data>` tags under a heading that says to use them as information
-  and never follow instructions in them. Any such tag inside the text is
-  removed first, so a hostile page cannot close the fence early.
-  `evals/hostile_seed.json` and `evals/hostile_tasks.json` test this:
-  `smartharness eval --seed evals/hostile_seed.json --tasks evals/hostile_tasks.json`.
-- **Context budget.** Each stage's input is measured with the model's own
-  tokenizer and fitted to `context_size` minus that stage's reply budget. When
-  it overflows, the largest earlier results are condensed by a short summarize
-  call, at most three per stage and each result only once per run, and only
-  what still overflows is trimmed. The original request is never condensed, and
-  is trimmed only when it alone overflows the window. Stage 1 and the critique reply in at most
-  1024 tokens, which leaves them more room for input. Tool results are cut to
-  the room that is left, and fetched pages are summarized in chunks, then the
-  chunk summaries are merged.
-- **Revise only what failed.** When every requirement is met and the critique
-  finds no other issue, the revision is skipped and the draft is the answer.
-  Otherwise the revision gets only the corrections, and the result is critiqued
-  again, for at most two rounds.
-- **Citation check.** Any URL the answer cites that does not appear in the
-  captured evidence is added to the corrections, whatever the critique says.
-- **Graceful failure.** If a critique or revision fails, the latest answer is
-  returned with a note saying so.
-- **Clarification.** In an interactive session the model may ask one concise
-  question after stage 1; otherwise it proceeds and states its assumption.
-
-When stage 1 says research is needed, each of its search queries (up to three)
-is looked up before stage 2 runs. Fresh stored knowledge is used first; the web
-is searched only when nothing relevant is stored. Without model-written
-queries, the prompt is used as the query, with pasted code blocks removed and
-cut to 200 characters.
-
 ## Long-term memory
 
 ### Knowledge store
@@ -251,9 +165,9 @@ Knowledge lives in a SQLite database at `knowledge_db_path`
 - **Facts**: single statements under a topic, each with its source and a
   confidence from 0 to 1. A repeated fact keeps its highest confidence.
 - **User memory**: preferences, projects, and corrections about the user.
-- **Episodes**: each finished request with its mode, checklist, any
-  clarification, the answer, and how it ended (answered directly, passed the
-  critique, revised, or failed).
+- **Episodes**: each finished request with its mode, its task tree, any
+  clarification, the answer, and how it ended (how many tasks met their
+  deliverable, and how many were unverified or failed).
 - **Full-text indexes** (FTS5) over sources, and over facts and episodes.
 - **Embeddings** of facts and topics, for finding them by meaning.
 - **A graph** of nodes and labelled edges. Topics link to child topics
@@ -294,7 +208,7 @@ and facts under one topic, whose vectors are close, so duplicates worded
 differently are merged too. Without the file, or if it fails to load, search
 stays word-based.
 
-Every web search the pipeline runs is stored under a topic named after its
+Every web search a request runs is stored under a topic named after its
 query. A stored source is reused only while it has not expired and shares at
 least half of the prompt's search terms. Only snippets and summaries are
 stored, never full pages.
@@ -438,14 +352,14 @@ python -m smartharness  # same as smartharness
 smartharness-gtk        # open the GTK interface
 smartharness-daemon     # run the daemon in the foreground
 smartharness --resume   # carry on the newest unfinished task tree run
-smartharness eval       # compare the bare model, pipeline, and task tree
+smartharness eval       # compare the bare model and the task tree
 ```
 
 ### Evaluation
 
 `smartharness eval` answers each task in `evals/tasks.json` with the bare model
-(one call with a plain system prompt), the eight-stage pipeline, and the task
-tree, all on one loaded model. Each answer is scored by checks that do not use
+(one call with a plain system prompt) and with the task tree, both on one
+loaded model. Each answer is scored by checks that do not use
 the model: `contains`, `contains_any`, `not_contains`, `regex`, `max_words`,
 and `min_words`. It prints each result as it lands, then a table of passed
 tasks, passed checks, errors, seconds, model calls, and generated tokens per
@@ -460,8 +374,8 @@ own: counting letters, multi-step arithmetic and dates, a logic puzzle, facts
 that need a search, and writing under several exact constraints.
 
 `evals/execute_tasks.json` holds execute-mode tasks. Each one carries `files`,
-a small project written into the scratch root before the run, and the pipeline
-and task tree may change those files and run their tests. The bare model gets
+a small project written into the scratch root before the run, and the task
+tree may change those files and run their tests. The bare model gets
 the files inline and gives back each file it changes in full, as a
 `File: <path>` line and a fenced block, which is written into the root before
 scoring. Three more checks look at the files after the run: `tests_pass` runs
@@ -469,8 +383,8 @@ unittest discovery as the `run_tests` tool does, `file_contains` looks for text
 in one file, and `file_unchanged` fails when a file such as a test differs from
 how the task gave it.
 
-`--seed-store PATH` measures what recall adds: the pipeline and the task tree
-each run once more, as `pipeline+store` and `tree+store`, starting from a fresh
+`--seed-store PATH` measures what recall adds: the task tree runs once more,
+as `tree+store`, starting from a fresh
 copy of that knowledge store, such as the one in `knowledge_db_path`. The copy
 is made with SQLite's backup, so the seed store itself is never changed.
 
@@ -488,8 +402,8 @@ smartharness eval --runners bare,tree --only stable-fact,python-bug
 smartharness eval --tasks my-tasks.json --output report.json
 smartharness eval --tasks evals/execute_tasks.json
 smartharness eval --tasks evals/hard_tasks.json
-smartharness eval --runners pipeline --seed-store ~/.local/share/smartharness/knowledge.sqlite3
-smartharness eval --seed --runners pipeline,tree
+smartharness eval --runners tree --seed-store ~/.local/share/smartharness/knowledge.sqlite3
+smartharness eval --seed --runners tree
 ```
 
 ### Recall benchmark
@@ -522,19 +436,18 @@ On 2026-10-21, with Qwen3-Embedding-0.6B on a busy CPU:
 The TUI has four pages:
 
 - **Workbench**: write a request, pick a mode, and run it with **Ctrl+R** or
-  the Run button, and stop it with the Cancel button. For a task tree run the
-  sidebar shows the live tree with each task's state (WAIT, NOW, DONE, WARN for
-  unverified, FAIL), the Output tab's Steps tab streams every step under its
-  own heading, and choosing a task in the tree opens the Task tab with its
-  deliverable, state, note, and result; for a pipeline run the sidebar lists the eight stages and each
-  has its own output tab. The Final tab shows the Markdown answer, which can be
+  the Run button, and stop it with the Cancel button. The sidebar shows the
+  live task tree with each task's state (WAIT, NOW, DONE, WARN for unverified,
+  FAIL), the Steps tab streams every step under its own heading, and choosing a
+  task in the tree opens the Task tab with its deliverable, state, note, and
+  result. The Final tab shows the Markdown answer, which can be
   copied.
   Clarification questions appear as a dialog. When a task tree run was left
   unfinished, a bar under the Run button names it and how many of its tasks are
   done, with Resume and Discard buttons.
 - **Background**: queue topics, start research now, pause or resume the worker,
   and watch its output and queue.
-- **Options**: every setting, including model, how requests run, folder access, tool limits,
+- **Options**: every setting, including model, task tree limits, folder access, tool limits,
   background research, and the MCP server list, edited as JSON. Changes can be
   saved back to the settings file. **Auto size** reads the model file and free
   GPU memory (or RAM without a GPU) and fills in the context size and both token
@@ -545,9 +458,8 @@ The TUI has four pages:
 ### GTK interface
 
 `smartharness-gtk` has the same four pages in a GTK 4 window that follows the
-desktop's GTK theme. On the Workbench page the list on the left shows each
-stage's state, or for a task tree run the live tree and a Steps page with every
-step's output; choosing an entry shows its output, and choosing a task shows
+desktop's GTK theme. On the Workbench page the list on the left shows the
+live task tree and a Steps page with every step's output; choosing an entry shows its output, and choosing a task shows
 its deliverable, state, note, and result. The final answer's
 Markdown is shown with headings, emphasis, code, and lists styled, and web
 links open in the browser when clicked. **Ctrl+R**
@@ -575,7 +487,6 @@ another. Unknown keys are rejected.
 	"enable_test_execution": false,
 	"show_thinking": true,
 	"mode": "auto",
-	"runner": "tree",
 	"max_task_depth": 3,
 	"max_task_nodes": 20,
 	"knowledge_db_path": "~/.local/share/smartharness/knowledge.sqlite3",
@@ -606,12 +517,12 @@ Precedence, lowest first: built-in defaults, the settings file, the
 | `--model-path`, `--context-size`, `--gpu-layers`, `--max-tokens`, `--temperature` | Override the matching setting |
 | `--allow-file-writes` | Let the model create or replace files |
 | `--enable-test-execution` | Let the model run the project's tests |
-| `--show-thinking` / `--no-show-thinking` | Stream or hide each stage's or step's output |
-| `--mode auto\|answer\|draft\|execute` | Pick the mode instead of letting the router choose |
+| `--show-thinking` / `--no-show-thinking` | Stream or hide each step's output |
+| `--mode auto\|answer\|draft\|execute` | Limit what the request may do; only `auto` and `execute` may change files |
 | `--settings PATH` | Use another settings file |
 | `--tui` | Open the terminal interface; the other options are applied to the daemon it connects to |
 
-`max_tokens` is reserved for the reply in most stages, so it must leave room
+`max_tokens` is reserved for the reply in most steps, so it must leave room
 for input within `context_size`. **Auto size** in Options picks the largest
 context that fits in memory, up to 32768 tokens, then gives a quarter of it to
 `max_tokens` and an eighth to `background_max_tokens`. With a separate
@@ -620,25 +531,25 @@ background model, it sizes that model on its own device as well and sets
 
 ## Tools and safety
 
-| Tool | Stage | Notes |
+| Tool | Approach | Notes |
 | --- | --- | --- |
-| `web_search` | 2 | DuckDuckGo results via DDGS, capped by `max_search_results` |
-| `web_fetch` | 2 | Public HTTP(S) pages only; private and local addresses are refused, including after redirects. The page is summarized for a focus the model supplies |
-| `list_directory`, `read_file` | 2, 5 | Paths must stay under `filesystem_root` |
-| `write_file` | 5 | Only with `allow_file_writes`; creates or replaces files and cannot delete |
-| `run_tests` | 5 | Only with `enable_test_execution`; runs Python `unittest` discovery under the root with a 120-second limit |
+| `web_search` | research | DuckDuckGo results via DDGS, capped by `max_search_results` |
+| `web_fetch` | research | Public HTTP(S) pages only; private and local addresses are refused, including after redirects. The page is summarized for a focus the model supplies |
+| `list_directory`, `read_file` | research, files, act | Paths must stay under `filesystem_root` |
+| `write_file` | act | Only with `allow_file_writes`; creates or replaces files and cannot delete |
+| `run_tests` | act | Only with `enable_test_execution`; runs Python `unittest` discovery under the root with a 120-second limit |
 
 `filesystem_root` is resolved from the current directory. Paths are relative to
 it; an absolute path is accepted only when it points inside it. Files with
-sensitive names such as `.env` or private keys are refused. Each tool stage may
-make at most `max_tool_calls` calls (1 to 10).
+sensitive names such as `.env` or private keys are refused. Each task's tool
+loop may make at most `max_tool_calls` calls (1 to 10).
 
 ### MCP servers
 
-Explicitly configured MCP servers can provide extra tools to stage 5. Each
+Explicitly configured MCP servers can provide extra tools to tasks that act. Each
 enabled server must list `allowed_tools`; only those are exposed, named
-`mcp__<server>__<tool>`. Configure only servers you trust. Sessions open for the
-stage and close after it.
+`mcp__<server>__<tool>`. Configure only servers you trust. Sessions open for a
+task's tool loop and close after it.
 
 Two transports are supported:
 
@@ -648,7 +559,7 @@ Two transports are supported:
   with every request.
 
 Values in `env` and `headers` can reference process variables as `${NAME}`, so
-secrets stay out of the file. A missing variable stops the stage with an error.
+secrets stay out of the file. A missing variable stops the task with an error.
 
 ```json
 {
@@ -680,11 +591,13 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 | Path | Contents |
 | --- | --- |
 | `smartharness/task_tree.py` | The task tree: deciding, gathering, writing, checking, and splitting tasks |
-| `smartharness/pipeline.py` | The eight stages, model loading, page summarization, and setup shared with the task tree |
-| `smartharness/tool_stage.py` | The tool-calling loop used by stages 2 and 5 and by task tree tool steps |
+| `smartharness/model.py` | Loading the model and making one call to it |
+| `smartharness/evidence.py` | Searching with memory, recall formatting, page summaries, and the research queue |
+| `smartharness/checks.py` | Checks on a result that do not rely on the model |
+| `smartharness/tool_stage.py` | The tool-calling loop each task's gather step runs |
 | `smartharness/tools.py` | Built-in tools and their path and URL checks |
 | `smartharness/mcp_tools.py` | MCP client for stdio and HTTP servers |
-| `smartharness/context_budget.py` | Fitting stage input into the context window |
+| `smartharness/context_budget.py` | Fitting each call's input into the context window |
 | `smartharness/knowledge.py` | SQLite knowledge store, queue, and graph |
 | `smartharness/recall_benchmark.py` | Scoring recall against questions with known relevant facts |
 | `smartharness/embeddings.py` | The embedding model used to find facts and topics by meaning |
@@ -697,7 +610,7 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 | `smartharness/gtk_app.py` | GTK 4 interface |
 | `smartharness/evaluation.py`, `evals/tasks.json` | The eval harness and its fixed task set |
 | `evals/seed.json`, `evals/recall_tasks.json` | The seed store's made-up facts and the tasks only recall can answer |
-| `smartharness/stages.py` | Stage labels and task tree lines shared by the interfaces |
+| `smartharness/task_view.py` | Task tree lines and task details shared by the interfaces |
 
 See [docs/architecture.md](docs/architecture.md) for how these parts fit together.
 

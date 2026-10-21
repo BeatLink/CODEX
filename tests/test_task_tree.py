@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from smartharness.context_budget import CONDENSED_MARKER
 from smartharness.knowledge import KnowledgeStore
-from smartharness.pipeline import CONDENSE_PROMPT
+from smartharness.evidence import CONDENSE_PROMPT
 from smartharness.task_tree import (
     _parse_subtasks,
     CHECK_PROMPT,
@@ -115,8 +115,8 @@ def run_tree(replies, prompt="Explain the plan", searches=None, **options):
 
     with (
         patch("smartharness.task_tree.run_stage", side_effect=model),
-        # Condensing earlier results calls the pipeline's run_stage.
-        patch("smartharness.pipeline.run_stage", side_effect=model),
+        # Condensing earlier results calls run_stage from the evidence module.
+        patch("smartharness.evidence.run_stage", side_effect=model),
         patch("smartharness.task_tree.search_with_memory", side_effect=fake_search),
         patch("smartharness.task_tree.run_tool_stage", side_effect=AssertionError("tool stage")),
     ):
@@ -186,6 +186,29 @@ class DirectTaskTests(unittest.TestCase):
             mode="execute",
         )
         self.assertIn("act", model.call("decide", "1")["json_schema"]["properties"]["approach"]["enum"])
+
+    def test_an_acting_task_report_is_held_to_the_recorded_file_writes(self):
+        model = ScriptedModel({
+            ("decide", "1"): decision("act"),
+            ("write", "1"): "I have updated a.py.",
+            ("revise", "1"): "The change to a.py could not be made: file access is read-only.",
+        })
+
+        def failed_write(llm, system_prompt, user_input, toolbox, **kwargs):
+            toolbox.action_log.append(("write_file", {"path": "a.py"}, "Tool error: file access is read-only."))
+            return "Writing a.py failed."
+
+        with (
+            patch("smartharness.task_tree.run_stage", side_effect=model),
+            patch("smartharness.task_tree.run_tool_stage", side_effect=failed_write),
+        ):
+            result = execute_task_tree(
+                "Fix a.py", llm=object(), progress_callback=lambda label: None,
+                allow_file_writes=True, mode="execute", max_task_depth=0,
+            )
+
+        self.assertEqual(result, "The change to a.py could not be made: file access is read-only.")
+        self.assertIn("No file was written", model.call("revise", "1")["input"])
 
     def test_listed_facts_turn_an_answer_into_research(self):
         searches = []
@@ -260,7 +283,7 @@ class DirectTaskTests(unittest.TestCase):
             ("decide", "1"): decision("answer"),
             ("write", "1"): "Thin draft",
             ("check", "1"): [check("missing", "Covers one part only."), check()],
-            ("revise", "1"): RuntimeError("A pipeline stage reached the token limit"),
+            ("revise", "1"): RuntimeError("A model call reached the token limit"),
             ("split", "1"): subtasks("First part", "Second part"),
             ("decide", "1.1"): decision("answer"),
             ("write", "1.1"): "one",
@@ -271,13 +294,13 @@ class DirectTaskTests(unittest.TestCase):
 
         self.assertEqual(result, "One and two")
         self.assertIn("Failed attempt:\nThin draft", model.call("split", "1")["input"])
-        self.assertIn("The revision failed (A pipeline stage reached the token limit)", model.call("split", "1")["input"])
+        self.assertIn("The revision failed (A model call reached the token limit)", model.call("split", "1")["input"])
         self.assertEqual(trees[-1][0]["status"], "done")
 
     def test_a_task_too_big_to_write_is_split_instead(self):
         result, model, _, _ = run_tree({
             ("decide", "1"): decision("answer"),
-            ("write", "1"): RuntimeError("A pipeline stage reached the token limit"),
+            ("write", "1"): RuntimeError("A model call reached the token limit"),
             ("split", "1"): subtasks("First part", "Second part"),
             ("decide", "1.1"): decision("answer"),
             ("write", "1.1"): "one",
@@ -412,7 +435,7 @@ class SubtaskTests(unittest.TestCase):
             ("write", "1.1"): "Walk the old town.",
             ("decide", "1.2"): decision("answer"),
             ("write", "1.2"): "Visit Belem.",
-            ("combine", "1"): RuntimeError("A pipeline stage reached the token limit"),
+            ("combine", "1"): RuntimeError("A model call reached the token limit"),
         })
 
         self.assertEqual(result, "## Plan day 1\n\nWalk the old town.\n\n## Plan day 2\n\nVisit Belem.")
@@ -491,7 +514,7 @@ class SubtaskTests(unittest.TestCase):
         result, model, _, trees = run_tree({
             ("decide", "1"): decision("decompose", subtasks=[("Read the log", []), ("Summarise it", [1])]),
             ("decide", "1.1"): decision("answer"),
-            ("write", "1.1"): RuntimeError("A pipeline stage reached the token limit"),
+            ("write", "1.1"): RuntimeError("A model call reached the token limit"),
             ("split", "1.1"): subtasks(),
             ("replan", "1"): subtasks("Summarise what is known"),
             ("decide", "1.2"): decision("answer"),

@@ -156,7 +156,7 @@ class ExtractionTests(unittest.TestCase):
 
         with (
             patch("smartharness.background.Toolbox", return_value=toolbox),
-            patch("smartharness.background._summarize_web_page", return_value="FTS5 is an SQLite module.") as summarize,
+            patch("smartharness.background.summarize_web_page", return_value="FTS5 is an SQLite module.") as summarize,
             patch("smartharness.background.run_stage", side_effect=lambda *args, **kwargs: next(replies)) as run_stage,
         ):
             self.assertTrue(research_one_topic(self.settings, llm=object()))
@@ -197,7 +197,7 @@ class ExtractionTests(unittest.TestCase):
         toolbox.call.side_effect = call
         with (
             patch("smartharness.background.Toolbox", return_value=toolbox),
-            patch("smartharness.background._summarize_web_page", return_value="Summary.") as summarize,
+            patch("smartharness.background.summarize_web_page", return_value="Summary.") as summarize,
             patch("smartharness.background.run_stage", return_value=json.dumps({"facts": []})),
         ):
             research_one_topic(self.settings, llm=object())

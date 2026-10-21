@@ -7,6 +7,7 @@
 ## Planned
 
 - [x] Work each request as a tree of tasks that the model decides, decomposes, checks, and re-plans
+- [x] Remove the eight-stage pipeline and work every request as a task tree
 - [x] Resume an unfinished task tree after the daemon restarts
 - [x] Show each task's result when its row is chosen in the interfaces
 - [ ] Subagents / refinement loops

@@ -13,7 +13,7 @@ from typing import Any
 
 from .embeddings import Embedder, get_embedder
 from .knowledge import KnowledgeStore
-from .pipeline import create_model, execute_pipeline, run_stage
+from .model import create_model, run_stage
 from .settings import default_settings_path, load_settings, validate_settings
 from .task_tree import execute_task_tree
 
@@ -22,9 +22,9 @@ EVALS_DIRECTORY = Path(__file__).resolve().parent.parent / "evals"
 DEFAULT_TASKS_PATH = EVALS_DIRECTORY / "tasks.json"
 RECALL_TASKS_PATH = EVALS_DIRECTORY / "recall_tasks.json"
 DEFAULT_SEED_PATH = EVALS_DIRECTORY / "seed.json"
-RUNNER_CHOICES = ("bare", "pipeline", "tree")
+RUNNER_CHOICES = ("bare", "tree")
 # Runners that recall from the knowledge store, and so get a seeded run beside the empty one.
-STORE_RUNNERS = ("pipeline", "tree")
+STORE_RUNNERS = ("tree",)
 SEEDED_SUFFIX = "+store"
 BARE_SYSTEM_PROMPT = "You are a helpful assistant. Answer the user's request."
 BARE_FILES_NOTE = (
@@ -362,14 +362,12 @@ def answer_with(runner: str, task: EvalTask, llm: Any, settings: dict[str, Any],
         mode=task.mode,
         progress_callback=lambda label: None,
     )
-    if runner == "tree":
-        return execute_task_tree(
-            task.prompt,
-            **options,
-            max_task_depth=settings["max_task_depth"],
-            max_task_nodes=settings["max_task_nodes"],
-        )
-    return execute_pipeline(task.prompt, **options)
+    return execute_task_tree(
+        task.prompt,
+        **options,
+        max_task_depth=settings["max_task_depth"],
+        max_task_nodes=settings["max_task_nodes"],
+    )
 
 
 # ==============================================================================
@@ -454,7 +452,7 @@ def format_result(result: RunResult) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="smartharness eval",
-        description="Compare the bare model with the pipeline and the task tree on a fixed task set.",
+        description="Compare the bare model with the task tree on a fixed task set.",
     )
     parser.add_argument("--tasks", help="Path to the JSON task set (default: evals/tasks.json).")
     parser.add_argument("--settings", default=str(default_settings_path()), help="Path to the JSON settings file.")
@@ -467,7 +465,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", help="Write every answer and score to this JSON file.")
     parser.add_argument(
         "--seed-store",
-        help="Also run the pipeline and task tree with a copy of this knowledge store, to measure what recall adds.",
+        help="Also run the task tree with a copy of this knowledge store, to measure what recall adds.",
     )
     parser.add_argument(
         "--seed",

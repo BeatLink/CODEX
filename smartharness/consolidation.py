@@ -5,7 +5,7 @@ from typing import Any
 
 from .background import _BackgroundModel, _BackgroundPaused, _refresh_parent_summary
 from .knowledge import KnowledgeStore
-from .pipeline import ModelCache
+from .model import ModelCache
 
 TOPIC_VERDICTS = ("same subject", "first is broader", "second is broader", "different")
 STATEMENT_VERDICTS = ("same", "contradict", "different")

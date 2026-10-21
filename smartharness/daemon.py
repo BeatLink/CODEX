@@ -15,7 +15,7 @@ from .auto_size import auto_size
 from .background import index_knowledge, learn_from_episodes, research_one_topic
 from .consolidation import consolidate_knowledge
 from .knowledge import RESUMABLE_TASK_RUN_STATUSES, KnowledgeStore
-from .pipeline import ModelCache, execute_pipeline
+from .model import ModelCache
 from .protocol import decode_message, default_socket_path, encode_message
 from .settings import background_model_key, default_settings_path, load_settings, save_settings, validate_settings
 from .task_tree import execute_task_tree
@@ -61,11 +61,10 @@ class Clarification:
 
 
 class ActiveRun:
-    def __init__(self, run_id: int, prompt: str, owner: ClientConnection | None, runner: str) -> None:
+    def __init__(self, run_id: int, prompt: str, owner: ClientConnection | None) -> None:
         self.id = run_id
         self.prompt = prompt
         self.owner = owner
-        self.runner = runner
         self.tree: list[dict[str, Any]] = []
         self.cancel_requested = threading.Event()
         self.progress: list[str] = []
@@ -76,7 +75,6 @@ class ActiveRun:
         return {
             "run_id": self.id,
             "prompt": self.prompt,
-            "runner": self.runner,
             "tree": list(self.tree),
             "progress": list(self.progress),
             "outputs": dict(self.outputs),
@@ -334,7 +332,7 @@ class HarnessDaemon:
         if not prompt:
             raise ValueError("The prompt cannot be empty.")
         run_settings = validate_settings({**self.get_settings(), **(settings or {})})
-        return self._launch_run(connection, prompt, run_settings["runner"], run_settings, interactive, None)
+        return self._launch_run(connection, prompt, run_settings, interactive, None)
 
     def resume_run(
         self,
@@ -346,7 +344,7 @@ class HarnessDaemon:
         saved = self._knowledge_store(self.get_settings()["knowledge_db_path"]).task_run(run_id)
         if saved is None or saved["state"] is None or saved["status"] not in RESUMABLE_TASK_RUN_STATUSES:
             raise ValueError(f"Task tree run {run_id} cannot be resumed.")
-        return self._launch_run(connection, saved["prompt"], "tree", None, interactive, saved)
+        return self._launch_run(connection, saved["prompt"], None, interactive, saved)
 
     def discard_run(self, connection: ClientConnection | None = None, run_id: int = 0) -> dict[str, Any]:
         self._knowledge_store(self.get_settings()["knowledge_db_path"]).set_task_run_status(run_id, "discarded")
@@ -360,7 +358,6 @@ class HarnessDaemon:
         self,
         connection: ClientConnection | None,
         prompt: str,
-        runner: str,
         settings: dict[str, Any] | None,
         interactive: bool,
         saved: dict[str, Any] | None,
@@ -368,10 +365,10 @@ class HarnessDaemon:
         with self._lock:
             if self._run is not None:
                 raise RuntimeError("Another request is already running.")
-            run = ActiveRun(next(self._run_ids), prompt, connection, runner)
+            run = ActiveRun(next(self._run_ids), prompt, connection)
             self._run = run
         self._worker_wakeup.set()
-        self.broadcast("run.started", run_id=run.id, prompt=prompt, runner=run.runner)
+        self.broadcast("run.started", run_id=run.id, prompt=prompt)
         threading.Thread(
             target=self._execute_run,
             args=(run, settings, interactive, saved),
@@ -490,16 +487,13 @@ class HarnessDaemon:
                         mode=settings["mode"],
                         **callbacks,
                     )
-                    if run.runner == "tree":
-                        data["result"] = execute_task_tree(
-                            run.prompt,
-                            **options,
-                            tree_callback=report_tree,
-                            max_task_depth=settings["max_task_depth"],
-                            max_task_nodes=settings["max_task_nodes"],
-                        )
-                    else:
-                        data["result"] = execute_pipeline(run.prompt, **options)
+                    data["result"] = execute_task_tree(
+                        run.prompt,
+                        **options,
+                        tree_callback=report_tree,
+                        max_task_depth=settings["max_task_depth"],
+                        max_task_nodes=settings["max_task_nodes"],
+                    )
         except RunCancelled:
             event = "run.cancelled"
         except Exception as error:
@@ -509,9 +503,8 @@ class HarnessDaemon:
             self._run = None
         self._worker_wakeup.set()
         self.broadcast(event, run_id=run.id, **data)
-        # A tree run that ended, or stopped, changes the list of runs that can be resumed.
-        if run.runner == "tree":
-            self.broadcast("runs.changed")
+        # A run that ended, or stopped, changes the list of runs that can be resumed.
+        self.broadcast("runs.changed")
 
     # ==========================================================================
     # Background research

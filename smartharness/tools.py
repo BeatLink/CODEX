@@ -225,7 +225,7 @@ class Toolbox:
     def call(self, name: str, arguments: Any) -> str:
         result = self._call(name, arguments)
         if name in ACTION_TOOL_NAMES:
-            # The pipeline checks the final report against this record of what really changed.
+            # A task that acts has its report checked against this record of what really changed.
             recorded = (
                 {key: value for key, value in arguments.items() if key != "content"}
                 if isinstance(arguments, dict)
