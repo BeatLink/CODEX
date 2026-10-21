@@ -38,6 +38,9 @@ class RunningDaemon:
     def client(self, on_event: Any = None) -> DaemonClient:
         client = DaemonClient(self.socket_path, on_event)
         client.connect()
+        # The daemon registers a connection before answering anything on it, so after this reply the client
+        # hears every broadcast; without it, a run on another connection could finish before it is registered.
+        client.call("status")
         self.clients.append(client)
         return client
 
@@ -67,7 +70,8 @@ class EventLog:
         with self._condition:
             return [event for event, _ in self.events]
 
-    def wait_for(self, name: str, timeout: float = 5) -> dict[str, Any]:
+    # Long enough for a busy machine; a test that passes never waits this long.
+    def wait_for(self, name: str, timeout: float = 30) -> dict[str, Any]:
         with self._condition:
             found = self._condition.wait_for(
                 lambda: any(event == name for event, _ in self.events), timeout
