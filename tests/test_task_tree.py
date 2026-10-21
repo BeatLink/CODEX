@@ -716,7 +716,7 @@ class RecallTests(unittest.TestCase):
 
         self.assertEqual(
             [job["topic"] for job in self.store.queue_status()],
-            ["Rust 1.85.0 is the newest release."],
+            ["What is the latest Rust?: Rust 1.85.0 is the newest release."],
         )
 
 

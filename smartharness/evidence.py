@@ -228,17 +228,25 @@ def queue_research_topic(knowledge_store: KnowledgeStore | None, topic: str, max
 MAX_QUEUED_CLAIMS = 3
 
 
+# Characters of the request put before a queued claim, enough to name what the claim is about.
+MAX_CLAIM_SUBJECT_CHARS = 80
+
+
 def queue_unsupported_claims(
     knowledge_store: KnowledgeStore | None,
     text: str,
     unsupported_values: list[str],
     max_pending: int,
+    user_prompt: str,
 ) -> None:
-    """Queue each sentence stating a value no evidence holds, so the background worker looks the claim up."""
+    """Queue each sentence stating a value no evidence holds, led by the request it answers, so the background worker looks the claim up."""
     sentences = re.split(r"(?<=[.!?])\s+", CODE_BLOCK.sub(" ", text))
     claims = [sentence for sentence in sentences if any(value in sentence for value in unsupported_values)]
+    subject = search_query(user_prompt)
+    if len(subject) > MAX_CLAIM_SUBJECT_CHARS:
+        subject = subject[:MAX_CLAIM_SUBJECT_CHARS].rsplit(" ", 1)[0]
     for claim in claims[:MAX_QUEUED_CLAIMS]:
-        queue_research_topic(knowledge_store, search_query(claim), max_pending)
+        queue_research_topic(knowledge_store, search_query(f"{subject}: {claim}" if subject else claim), max_pending)
 
 
 def queue_stale_topics(

@@ -135,7 +135,7 @@ class ExtractionTests(unittest.TestCase):
         self.settings["filesystem_root"] = directory.name
         self.store = KnowledgeStore(self.settings["knowledge_db_path"])
 
-    def test_worker_stores_page_summaries_facts_relationships_and_parent(self):
+    def test_worker_stores_page_summaries_facts_and_relationships_and_leaves_placement_to_consolidation(self):
         self.store.enqueue_topic("SQLite FTS5")
         toolbox = unittest.mock.Mock()
 
@@ -150,9 +150,8 @@ class ExtractionTests(unittest.TestCase):
         overview = json.dumps({
             "summary": "FTS5 adds full-text search to SQLite.",
             "relationships": [{"subject": "FTS5", "relation": "extends", "object": "SQLite", "source": 2}],
-            "parent_topic": "Databases",
         })
-        replies = iter([page_facts, snippet_facts, overview, "Databases overview."])
+        replies = iter([page_facts, snippet_facts, overview])
 
         with (
             patch("smartharness.background.Toolbox", return_value=toolbox),
@@ -173,8 +172,10 @@ class ExtractionTests(unittest.TestCase):
         self.assertIsNone(facts["FTS5 is fast."]["source_url"])
         self.assertIn(("FTS5", "extends", "SQLite"), [(e["source"], e["relation"], e["target"]) for e in self.store.graph()])
         topics = {topic["name"]: topic for topic in self.store.topics()}
-        self.assertEqual(topics["SQLite FTS5"]["parent"], "Databases")
-        self.assertEqual(self.store.child_summaries("Databases"), [("SQLite FTS5", "FTS5 adds full-text search to SQLite.")])
+        self.assertIsNone(topics["SQLite FTS5"]["parent"])
+        with self.store._connect() as connection:
+            summary = connection.execute("SELECT summary FROM topics WHERE name = 'SQLite FTS5'").fetchone()["summary"]
+        self.assertEqual(summary, "FTS5 adds full-text search to SQLite.")
         self.assertEqual(self.store.sources()[0]["summary"], "FTS5 is an SQLite module.")
         self.assertEqual(self.store.queue_status()[0]["status"], "done")
 
@@ -205,7 +206,7 @@ class ExtractionTests(unittest.TestCase):
         self.assertEqual(summarize.call_count, 2)
         self.assertNotIn("post_page", summarize.call_args_list[1].args[1])
 
-        overview = _parse_overview(json.dumps({"summary": "", "parent_topic": "", "relationships": [
+        overview = _parse_overview(json.dumps({"summary": "", "relationships": [
             {"subject": "SQLite WAL", "relation": "implemented_in", "object": "SQLite", "source": 1},
             {"subject": "sqlite wal", "relation": "implemented_in", "object": "SQLite", "source": 2},
             {"subject": "SQLite WAL", "relation": "described_by", "object": "sqlite.org", "source": 1},
@@ -237,6 +238,14 @@ class ExtractionTests(unittest.TestCase):
             _grounded_facts([("WAL is faster.", "https://sqlite.org/wal.html", 0.9), ("WAL provides more ...", "https://sqlite.org/wal.html", 0.9)], sources),
             [("WAL is faster.", "https://sqlite.org/wal.html", 0.9)],
         )
+
+    def test_summary_sentences_stating_values_no_source_has_are_dropped(self):
+        from smartharness.background import _grounded_summary, _Source
+
+        sources = [_Source(1, "https://example.test/phone", "The PinePhone has a 5.95 inch screen.")]
+        summary = _grounded_summary("The PinePhone has a 5.95 inch screen. It has a 5.7-inch touchscreen.", sources)
+
+        self.assertEqual(summary, "The PinePhone has a 5.95 inch screen.")
 
     def test_extracted_facts_are_checked_against_the_sources(self):
         from smartharness.background import _grounded_facts, _Source

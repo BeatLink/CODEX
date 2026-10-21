@@ -188,6 +188,10 @@ PRUNE_BELOW_CONFIDENCE = 0.5
 EVICT_TO_SHARE_OF_CAP = 0.9
 EVICT_BATCH_SIZE = 100
 
+# A topic name longer than this reads as a query or a sentence rather than a title.
+MAX_TOPIC_NAME_WORDS = 5
+MAX_TOPIC_NAME_CHARS = 40
+
 
 def _search_terms(query: str) -> list[str]:
     return list(dict.fromkeys(
@@ -617,15 +621,6 @@ class KnowledgeStore:
                 "INSERT INTO knowledge_search(rowid, title, body, url) VALUES (?, ?, ?, ?)",
                 (row["id"], row["title"], f"{row['snippet']} {summary}", url),
             )
-
-    def root_topics(self, limit: int = 50) -> list[str]:
-        """Return the names of top-level topics, most used first."""
-        with self._connect() as connection:
-            rows = connection.execute(
-                "SELECT name FROM topics WHERE parent_id IS NULL ORDER BY use_count DESC, name LIMIT ?",
-                (limit,),
-            ).fetchall()
-        return [row["name"] for row in rows]
 
     def child_summaries(self, parent: str) -> list[tuple[str, str]]:
         with self._connect() as connection:
@@ -1095,7 +1090,8 @@ class KnowledgeStore:
         """Return the topic whose place in the tree has gone longest without review, if any is due."""
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT t.id, t.name, t.summary, t.parent_id, p.name AS parent FROM topics t "
+                "SELECT t.id, t.name, t.summary, t.parent_id, p.name AS parent, "
+                "EXISTS (SELECT 1 FROM sources s WHERE s.topic_id = t.id) AS researched FROM topics t "
                 "LEFT JOIN topics p ON p.id = t.parent_id "
                 "WHERE t.placed_at IS NULL OR t.placed_at < ? "
                 "ORDER BY t.placed_at IS NOT NULL, t.placed_at, t.use_count DESC, t.id LIMIT 1",
@@ -1135,17 +1131,19 @@ class KnowledgeStore:
         return sorted(rows, key=rank)[:limit]
 
     def next_topic_to_name(self) -> dict[str, Any] | None:
-        """Return the most used topic still named after the search query that found it, with its best facts.
+        """Return the most used topic named after its search query or too long for a title, with its best facts.
 
         Topics with neither a summary nor facts wait, since there is nothing yet to name them from.
         """
         with self._connect() as connection:
             row = connection.execute(
                 "SELECT t.id, t.name, t.summary FROM topics t "
-                "WHERE EXISTS (SELECT 1 FROM sources s WHERE s.query = t.name COLLATE NOCASE) "
+                "WHERE (EXISTS (SELECT 1 FROM sources s WHERE s.query = t.name COLLATE NOCASE) "
+                "OR length(t.name) > ? OR length(t.name) - length(replace(t.name, ' ', '')) >= ?) "
                 "AND NOT EXISTS (SELECT 1 FROM consolidation_checks c WHERE c.kind = 'name' AND c.first_id = t.id) "
                 "AND (t.summary != '' OR EXISTS (SELECT 1 FROM facts f WHERE f.topic_id = t.id AND f.status = 'active')) "
-                "ORDER BY t.use_count DESC, t.id LIMIT 1"
+                "ORDER BY t.use_count DESC, t.id LIMIT 1",
+                (MAX_TOPIC_NAME_CHARS, MAX_TOPIC_NAME_WORDS),
             ).fetchone()
             if row is None:
                 return None
@@ -1178,6 +1176,20 @@ class KnowledgeStore:
                 connection.execute("UPDATE OR IGNORE graph_edges SET target_node_id = ? WHERE target_node_id = ?", (new_node, old_node))
                 connection.execute("DELETE FROM graph_nodes WHERE id = ?", (old_node,))
             return name
+
+    def remove_unsupported_topic(self, topic_id: int) -> bool:
+        """Delete a topic that holds no active facts and no subtopics, keeping its sources; return whether it went."""
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT name FROM topics t WHERE id = ? "
+                "AND NOT EXISTS (SELECT 1 FROM facts f WHERE f.topic_id = t.id AND f.status = 'active') "
+                "AND NOT EXISTS (SELECT 1 FROM topics c WHERE c.parent_id = t.id)",
+                (topic_id,),
+            ).fetchone()
+            if row is None:
+                return False
+            self._delete_topic(connection, topic_id, row["name"])
+            return True
 
     def mark_topic_placed(self, topic_id: int) -> None:
         with self._connect() as connection:

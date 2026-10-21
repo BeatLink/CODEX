@@ -293,8 +293,9 @@ For each queued topic it:
    source contains is dropped, and one whose values or most of whose words are
    missing from the source it cites, or that cites none, is kept at low
    confidence.
-3. Stores the sources, page summaries, facts, and relationships, files the topic
-   under its parent, and rewrites the parent's summary from its children's.
+3. Stores the sources, page summaries, facts, and relationships. Summary
+   sentences stating a version or date no source contains are dropped, and the
+   topic's place in the tree is left to consolidation.
 
 When a fact is recalled later, it comes with the chain of topics above it and
 their summaries, so the model gets the broader picture in a few lines, and with
@@ -320,7 +321,8 @@ Topics reach the queue from requests and by hand. Every search during a request
 is queued unless its topic already has facts: one that found results is turned
 into facts, and one that found nothing is tried again later. A sentence that a
 check rejects for stating a version or date found in no evidence is queued as
-well, up to three per check, so the claim gets looked up. A page fetched during
+well, led by the start of the request it answers so the search knows its
+subject, up to three per check, so the claim gets looked up. A page fetched during
 a request keeps its summary in the store as well. Otherwise, add topics on
 the Background page: **Queue topic** adds one to the queue, and **Research now** starts it at once, even
 while idle research is paused. The worker stops when the daemon exits. One-shot
@@ -363,9 +365,13 @@ Changes that need no model come first:
   returned to the disk.
 
 Then the model gives each topic still called by the search query that found it,
-such as "how do i use fts5 in sqlite", a short subject name such as "SQLite
-FTS5", from its summary and facts. A name that another topic already has merges
-the two, and each topic is named once.
+or with a name over five words or 40 characters, such as "how do i use fts5 in
+sqlite", a title as short as a chat title, such as "SQLite FTS5", from its
+summary and facts. A name that another topic already has merges the two, and
+each topic is named once. A renamed topic with no facts is researched again
+under its new name, and one that names no subject at all, such as a sentence
+copied from an answer, is removed when it holds no facts or subtopics; its
+sources stay.
 
 The model then compares pairs that share at least half their words, one pair
 per call, with a schema that lets it reply only with a short reason and one
@@ -383,9 +389,13 @@ again after being set aside is compared afresh.
 
 Each topic's place in the tree is also reviewed once every
 `background_refresh_interval_hours`. The model picks the narrowest of up to 20
-related topics that this one is part of, or the top level, from a list fixed by
-the schema; its own subtopics are never offered. When a topic moves, the
-summaries of its new and old parents are rewritten.
+related topics that this one is a kind of or part of, or the top level, from a
+list fixed by the schema; its own subtopics are never offered. A researched
+topic may instead name a broader subject the tree lacks, such as "Pine64" for
+"PinePhone" beside "PineTime"; that topic is made where this one sat and is
+placed in its own turn, and a topic made this way never names one above itself.
+When a topic moves, the summaries of its new and old parents are rewritten.
+Research never files a topic itself, so the tree is shaped only here.
 
 ## Installation
 

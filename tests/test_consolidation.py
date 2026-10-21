@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from smartharness.consolidation import TOP_LEVEL, consolidate_knowledge
+from smartharness.consolidation import NEW_PARENT, TOP_LEVEL, consolidate_knowledge
 from smartharness.knowledge import KnowledgeStore
 from smartharness.settings import DEFAULT_SETTINGS
 
@@ -136,6 +136,34 @@ class ModelCheckTests(ConsolidationTestCase):
         self.assertEqual(list(self.topic_names()), ["fts5 sqlite"])
         self.assertIsNone(self.store.next_topic_to_name())
 
+    def test_a_long_name_is_renamed_even_when_no_search_used_it(self):
+        self.store.add_fact("Notes on the PinePhone smartphone made by Pine64", "The PinePhone runs Linux.")
+        self.place_every_topic()
+
+        self.consolidate(json.dumps({"reason": "It is about the PinePhone.", "name": "PinePhone"}))
+
+        self.assertEqual(list(self.topic_names()), ["PinePhone"])
+
+    def test_a_topic_that_names_no_subject_and_holds_no_facts_is_removed(self):
+        sentence = "Therefore the claim should be omitted."
+        self.store.store_search_results(sentence, [{"title": "Fact checks", "url": "https://example.test/check", "snippet": "Checks."}], topic=sentence, summary="Fact checking.")
+        self.store.add_fact("SQLite", "SQLite is small.")
+        self.place_every_topic()
+
+        self.consolidate(json.dumps({"reason": "No subject is named.", "name": ""}))
+
+        self.assertEqual(list(self.topic_names()), ["SQLite"])
+        self.assertEqual(len(self.store.sources()), 1)
+
+    def test_a_renamed_topic_with_no_facts_is_researched_under_its_new_name(self):
+        query = "what is the pinephone"
+        self.store.store_search_results(query, [{"title": "Phone", "url": "https://example.test/phone", "snippet": "A phone."}], topic=query, summary="A Linux phone.")
+        self.place_every_topic()
+
+        self.consolidate(json.dumps({"reason": "It is about the PinePhone.", "name": "PinePhone"}))
+
+        self.assertEqual([job["topic"] for job in self.store.queue_status()], ["PinePhone"])
+
     def test_topics_naming_one_subject_are_merged_into_the_better_supported_one(self):
         self.store.add_fact("SQLite FTS5", "FTS5 adds full-text search.")
         self.store.add_fact("SQLite FTS5", "FTS5 supports ranking.")
@@ -157,7 +185,7 @@ class ModelCheckTests(ConsolidationTestCase):
         self.store.set_topic_summary("SQLite FTS5", "Full-text search for SQLite.")
         self.place_every_topic()
 
-        worked, calls = self.consolidate(verdict("first is broader"), "SQLite overview.")
+        worked, calls = self.consolidate(verdict("first is broader"), json.dumps({"summary": "SQLite overview."}))
 
         self.assertTrue(worked)
         self.assertEqual(self.topic_names()["SQLite FTS5"], "SQLite")
@@ -228,7 +256,7 @@ class ModelCheckTests(ConsolidationTestCase):
         with self.store._connect() as connection:
             connection.execute("UPDATE topics SET placed_at = NULL WHERE name = 'PostgreSQL'")
 
-        worked, calls = self.consolidate(verdict("Databases", key="parent"), "Databases overview.")
+        worked, calls = self.consolidate(verdict("Databases", key="parent"), json.dumps({"summary": "Databases overview."}))
 
         self.assertTrue(worked)
         self.assertEqual(
@@ -238,6 +266,38 @@ class ModelCheckTests(ConsolidationTestCase):
         self.assertEqual(self.topic_names()["PostgreSQL"], "Databases")
         edges = [(edge["source"], edge["relation"], edge["target"]) for edge in self.store.graph()]
         self.assertNotIn(("Web frameworks", "contains", "PostgreSQL"), edges)
+
+    def test_a_researched_topic_can_name_a_new_parent_made_where_it_sits(self):
+        self.store.add_fact("Hardware", "Hardware is physical computing equipment.")
+        self.store.add_fact("PineTime", "The PineTime is a smartwatch made by Pine64.")
+        self.store.store_search_results("pinephone linux phone", [{"title": "Phone", "url": "https://example.test/phone", "snippet": "A phone."}], topic="PinePhone", summary="A Linux phone made by Pine64.")
+        self.store.add_topic("PinePhone", parent="Hardware")
+        self.place_every_topic()
+        with self.store._connect() as connection:
+            connection.execute("UPDATE topics SET placed_at = NULL WHERE name = 'PinePhone'")
+
+        placement = json.dumps({"reason": "Both are Pine64 devices.", "parent": NEW_PARENT, "new_parent": "Pine64"})
+        worked, calls = self.consolidate(placement, json.dumps({"summary": "Pine64 makes the PinePhone."}), json.dumps({"summary": "Hardware."}))
+
+        self.assertTrue(worked)
+        self.assertIn(NEW_PARENT, calls[0].kwargs["json_schema"]["properties"]["parent"]["enum"])
+        self.assertEqual(self.topic_names(), {"Hardware": None, "Pine64": "Hardware", "PinePhone": "Pine64", "PineTime": None})
+        self.assertEqual(self.store.child_summaries("Hardware"), [("Pine64", "Pine64 makes the PinePhone.")])
+
+    def test_a_topic_never_researched_cannot_name_a_new_parent(self):
+        self.store.add_fact("Hardware", "Hardware is physical computing equipment.")
+        self.store.add_topic("Pine64", parent="PineTime")
+        self.store.add_fact("Pine64", "Pine64 makes single-board computers.")
+        self.store.add_fact("PineTime", "The PineTime is a smartwatch.")
+        self.place_every_topic()
+        with self.store._connect() as connection:
+            connection.execute("UPDATE topics SET placed_at = NULL WHERE name = 'Pine64'")
+
+        worked, calls = self.consolidate(verdict("Hardware", key="parent"), json.dumps({"summary": "Hardware."}), json.dumps({"summary": "PineTime."}))
+
+        self.assertTrue(worked)
+        self.assertNotIn(NEW_PARENT, calls[0].kwargs["json_schema"]["properties"]["parent"]["enum"])
+        self.assertEqual(self.topic_names()["Pine64"], "Hardware")
 
     def test_a_topic_is_never_offered_its_own_subtopics_as_a_parent(self):
         self.store.add_fact("Databases", "Databases hold data.")

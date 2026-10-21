@@ -182,8 +182,8 @@ with its version bump, and a database newer than the code is refused.
 
 The knowledge is organised in three layers that mirror each other:
 
-- **The topic tree** is `topics.parent_id`. The background worker files each researched topic under
-  a broader parent the model names, and rewrites the parent's summary from its children's.
+- **The topic tree** is `topics.parent_id`. Consolidation files each topic under a broader parent,
+  making one when the tree lacks it, and rewrites the parent's summary from its children's.
 - **The fact store** is `facts` plus `sources`, with FTS5 indexes for lexical retrieval.
 - **The relationship graph** is `graph_nodes` and `graph_edges`.
 
@@ -219,7 +219,7 @@ There are two read paths, used at different moments:
   topic is queued for background research unless it already has facts.
 - Every page summary that `web_fetch` produces is saved on its source.
 - Every sentence a check rejects for stating a version or date found in no evidence is queued as a
-  research topic, up to three per check.
+  research topic, led by the first 80 characters of the request, up to three per check.
 - The finished request is saved as an episode, with the task tree snapshot for tree runs.
 
 ## Background worker
@@ -252,10 +252,10 @@ pending job and:
    and one group failing loses only its own facts. Each fact is then held to the sources: one
    stating a version or date that no source contains is dropped, and one whose values or half of
    whose words are missing from the source it cites, or that cites none, drops to low confidence.
-3. Makes one overview call for the topic summary, up to five distinct entity relationships, and a parent
-   topic, offering the existing top-level topics so the model can reuse one.
-4. Stores the sources, page summaries, facts and relationships, files the topic under its parent,
-   and rewrites the parent's summary from its children's.
+3. Makes one overview call for the topic summary and up to five distinct entity relationships, then drops
+   each summary sentence stating a version or date no source contains.
+4. Stores the sources, page summaries, facts and relationships. Where the topic sits in the tree is
+   left to consolidation.
 
 A paused job goes back to `pending`; any other error marks it `failed` with the message.
 
@@ -277,12 +277,14 @@ of tidying per pass, so it yields to a run as quickly as research does.
    uncited sources, least used facts), with their search entries and vectors, until the data is
    under 90% of the cap.
 2. **With the model**, one call per pass, in this order: rename a topic still called by the search
-   query that found it to a short subject name (folding it into the topic that already has that
-   name), compare two topics (same subject, one
-   broader, or different), re-place one topic under the narrowest of up to 20 related topics or the
-   top level, compare two facts under one topic (same, contradict, different), and compare two user
-   memories. Candidate pairs must share at least half their words, or, for topics and facts
-   under one topic, have embeddings with a cosine similarity of at least 0.75. Every reply is a short reason
+   query that found it, or named with over five words or 40 characters, to a title of at most five
+   words (folding it into the topic that already has that name, re-queuing research when it has no
+   facts, and removing it when the model finds no subject and it holds no facts or subtopics),
+   compare two topics (same subject, one broader, or different), re-place one topic under the
+   narrowest of up to 20 related topics, the top level, or, for a researched topic, a new broader
+   subject made where it sat, compare two facts under one topic (same, contradict, different), and
+   compare two user memories. Candidate pairs must share at least half their words, or, for topics
+   and facts under one topic, have embeddings with a cosine similarity of at least 0.75. Every reply is a short reason
    and a verdict from a schema enum, and each verdict is stored in `consolidation_checks` so a pair
    is asked about only once.
 
@@ -307,7 +309,7 @@ write ─► check (model verdict + URL and value checks) ─► revise / split
    │
 answer ─► episode ─────────────────────────────────────► learn_from_episodes
                                                           (idle time)
-research_queue ─► research_one_topic (idle time) ─► facts, summaries, parent topic, graph
+research_queue ─► research_one_topic (idle time) ─► facts, summaries, graph
                                                           │
                      consolidate_knowledge (idle time) ◄──┘ merge, re-file, dispute, prune
 ```
