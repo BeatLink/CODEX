@@ -288,6 +288,44 @@ class KnowledgeStoreTests(unittest.TestCase):
         self.assertEqual(len(self.store.episodes()), 1)
 
 
+def build_old_store(path, version):
+    """Write a database at an earlier schema version holding one row in each table that version has."""
+    now = time.time()
+    connection = sqlite3.connect(path)
+    connection.executescript(_MIGRATIONS[0])
+    connection.execute("INSERT INTO topics(id, name) VALUES (1, 'Kestrel')")
+    connection.execute(
+        "INSERT INTO sources(id, url, title, snippet, topic_id, retrieved_at, expires_at) "
+        "VALUES (1, 'https://wiki.example/ingest', 'Kestrel ingest', 'Kestrel ingest listens on port 7413.', 1, ?, ?)",
+        (now, now + 3600),
+    )
+    connection.execute(
+        "INSERT INTO knowledge_search(rowid, title, body, url) VALUES "
+        "(1, 'Kestrel ingest', 'Kestrel ingest listens on port 7413.', 'https://wiki.example/ingest')"
+    )
+    connection.execute("INSERT INTO research_queue(topic_id, requested_at) VALUES (1, ?)", (now,))
+    connection.execute("INSERT INTO graph_nodes(id, kind, label) VALUES (1, 'topic', 'Kestrel'), (2, 'source', 'https://wiki.example/ingest')")
+    connection.execute("INSERT INTO graph_edges(source_node_id, relation, target_node_id, source_id) VALUES (1, 'supported_by', 2, 1)")
+    for next_version in range(2, version + 1):
+        connection.executescript(_MIGRATIONS[next_version - 1])
+        if next_version == 2:
+            connection.execute(
+                "INSERT INTO facts(id, topic_id, statement, source_id, created_at) "
+                "VALUES (1, 1, 'Kestrel ingest listens on port 7413.', 1, ?)",
+                (now,),
+            )
+            connection.execute("INSERT INTO memory_search(body, kind, item_id) VALUES ('Kestrel ingest listens on port 7413.', 'fact', 1)")
+            connection.execute("INSERT INTO user_memory(kind, statement, created_at) VALUES ('preference', 'Prefers ISO dates.', ?)", (now,))
+            connection.execute("INSERT INTO episodes(prompt, task_type, created_at) VALUES ('What port?', 'answer', ?)", (now,))
+    connection.execute(f"PRAGMA user_version = {version}")
+    connection.commit()
+    connection.close()
+
+
+def count_rows(connection, table):
+    return connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+
+
 class KnowledgeMigrationTests(unittest.TestCase):
     def test_version_one_database_moves_summaries_onto_topics(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -311,6 +349,32 @@ class KnowledgeMigrationTests(unittest.TestCase):
                 self.assertEqual(check.execute("SELECT summary FROM topics").fetchone()[0], "Old summary")
                 self.assertEqual(check.execute("SELECT summary FROM sources").fetchone()[0], "")
             self.assertEqual(store.search("sqlite snippet")[0]["summary"], "Old summary")
+
+    def test_every_earlier_version_migrates_without_losing_rows(self):
+        tables = ("topics", "sources", "research_queue", "graph_nodes", "graph_edges", "facts", "user_memory", "episodes")
+        for start_version in range(1, len(_MIGRATIONS)):
+            with self.subTest(start_version=start_version), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "knowledge.db"
+                build_old_store(path, start_version)
+                with sqlite3.connect(path) as connection:
+                    existing = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+                    before = {table: count_rows(connection, table) for table in tables if table in existing}
+                connection.close()
+
+                store = KnowledgeStore(path)
+
+                with sqlite3.connect(path) as connection:
+                    self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], len(_MIGRATIONS))
+                    self.assertEqual({table: count_rows(connection, table) for table in before}, before)
+                connection.close()
+                self.assertEqual(store.search("Kestrel ingest")[0]["url"], "https://wiki.example/ingest")
+                if start_version >= 2:
+                    statements = [fact["statement"] for fact in store.recall("Kestrel ingest port")["facts"]]
+                    self.assertIn("Kestrel ingest listens on port 7413.", statements)
+                    self.assertEqual([memory["statement"] for memory in store.user_memories()], ["Prefers ISO dates."])
+                    self.assertEqual(len(store.episodes()), 1)
+                store.add_fact("Kestrel", "Kestrel ingest is written in Rust.")
+                self.assertEqual(len(store.facts()), 2 if start_version >= 2 else 1)
 
     def test_newer_schema_is_refused(self):
         with tempfile.TemporaryDirectory() as directory:
