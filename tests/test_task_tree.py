@@ -281,6 +281,16 @@ class DirectTaskTests(unittest.TestCase):
         self.assertEqual(model.call("decide", "1")["json_schema"]["properties"]["approach"]["enum"], ["act", "decompose"])
         self.assertEqual(budgets, [8])
 
+    def test_a_wrong_sum_in_the_result_is_sent_back_for_revision(self):
+        result, model, _, _ = run_tree({
+            ("decide", "1"): decision("answer"),
+            ("write", "1"): "17 × 3 = 41, so the answer is 41.",
+            ("revise", "1"): "17 × 3 = 51, so the answer is 51.",
+        }, prompt="What is 17 * 3?", max_task_depth=0)
+
+        self.assertEqual(result, "17 × 3 = 51, so the answer is 51.")
+        self.assertIn("The working states 17 * 3 = 41, but it equals 51.", model.call("revise", "1")["input"])
+
     def test_listed_facts_turn_an_answer_into_research(self):
         searches = []
 

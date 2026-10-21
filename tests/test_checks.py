@@ -1,6 +1,12 @@
 import unittest
 
-from smartharness.checks import action_report_problems, unbacked_claims, uncited_urls, unsupported_values
+from smartharness.checks import (
+    action_report_problems,
+    calculation_problems,
+    unbacked_claims,
+    uncited_urls,
+    unsupported_values,
+)
 
 
 class EvidenceCheckTests(unittest.TestCase):
@@ -61,6 +67,39 @@ class ActionReportTests(unittest.TestCase):
         self.assertEqual(unbacked_claims("Wrote nothing.", []), [])
         long_claim = "The test `test_default_timeout` in `test_app_settings.py` was run and passed."
         self.assertEqual(len(unbacked_claims(long_claim, [])), 1)
+
+
+class CalculationTests(unittest.TestCase):
+    def test_a_wrong_sum_in_the_working_is_found_with_its_true_value(self):
+        working = "4.  Summing: 588.2 + 2,048 = 2,636.2.\n5.  Subtracting: 2,636.2 − 1,125 = 2,571.2."
+
+        self.assertEqual(
+            calculation_problems(working), ["The working states 2,636.2 - 1,125 = 2,571.2, but it equals 1,511.2."]
+        )
+
+    def test_correct_and_rounded_sums_pass(self):
+        working = (
+            "1. 17% of 3,460 is 588.2 (3,460 × 0.17 = 588.2).\n"
+            "2. 263 ÷ 84 = 3.13 hours, and 2000 × 1.068^7 ≈ 3,169.78.\n"
+            "3. 787 ÷ 60 = 13 hours and 7 minutes."
+        )
+
+        self.assertEqual(calculation_problems(working), [])
+        self.assertEqual(calculation_problems("17 × 3 = 41, so 41."), ["The working states 17 * 3 = 41, but it equals 51."])
+
+    def test_times_dates_versions_and_code_are_not_read_as_sums(self):
+        text = (
+            "Start 09:47 + 13 hours = 22:47. Released 2026-03-14 = later. Python 3.9 = 3.10?\n"
+            "```\nx = 1 + 1\nassert 2 + 2 == 5\n```"
+        )
+
+        self.assertEqual(calculation_problems(text), [])
+
+    def test_a_date_given_the_wrong_weekday_is_found(self):
+        self.assertEqual(
+            calculation_problems("It falls on Wednesday, 29 February 2032. 14 March 2026 is a Saturday."),
+            ["The result calls 29 February 2032 a Wednesday, but it is a Sunday."],
+        )
 
 
 if __name__ == "__main__":

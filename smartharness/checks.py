@@ -1,5 +1,8 @@
 """Checks on a written result that do not rely on the model."""
 
+import ast
+from datetime import date
+import operator
 from pathlib import Path
 import re
 from typing import Any
@@ -125,3 +128,128 @@ def unbacked_claims(report: str, action_log: list[tuple[str, dict[str, Any], str
     if not tests_passed and _claims(_CLAIMED_PASSING_TESTS, report):
         problems.append("No test run passed, so the report must not say that the tests pass.")
     return problems
+
+
+# ==============================================================================
+# Recomputing calculations
+# ==============================================================================
+
+_EQUALS_SIGNS = "=≈"
+# Characters a written-out sum may hold: digits, operators, brackets, grouping commas, and currency signs.
+_EQUATION_CHARACTERS = set("0123456789.,()+-*/^ £$€")
+_OPERATOR_BETWEEN_NUMBERS = re.compile(r"[\d)]\s*[-+*/^]\s*[\d(]")
+_CLAIMED_NUMBER = re.compile(r"\s*[£$€]?\s*(-?\d{1,3}(?:,\d{3})+(?:\.\d+)?(?![\d,])|-?\d+(?:\.\d+)?)")
+_GROUPING_COMMA = re.compile(r"(?<=\d),(?=\d{3}(?!\d))")
+_LOOKS_LIKE_A_DATE = re.compile(r"\d{4}-\d{1,2}-\d{1,2}|\d{1,2}/\d{1,2}/\d{2,4}")
+_ARITHMETIC_OPERATORS = {
+    ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv, ast.Pow: operator.pow,
+}
+_WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+_WEEKDAY_BEFORE = re.compile(r"\b(" + "|".join(_WEEKDAYS) + r")\s*,?\s*(?:the\s+)?$", re.IGNORECASE)
+_WEEKDAY_AFTER = re.compile(
+    r"^\s*,?\s*(?:is|was|will be|would be|falls on|fell on|lands on)\s+(?:a\s+|on\s+a\s+)?(" + "|".join(_WEEKDAYS) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def _normalized_arithmetic(text: str) -> str:
+    """Write the usual typographic operators as the plain ones Python reads."""
+    text = text.replace("−", "-").replace("–", "-").replace("×", "*").replace("·", "*").replace("÷", "/")
+    return re.sub(r"(?<=\d)\s*[xX]\s*(?=\d)", " * ", text)
+
+
+def _evaluate(node: ast.AST) -> float:
+    """Work out a parsed sum of numbers only, refusing names, calls, and huge powers."""
+    if isinstance(node, ast.Expression):
+        return _evaluate(node.body)
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
+        return node.value
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+        value = _evaluate(node.operand)
+        return -value if isinstance(node.op, ast.USub) else value
+    if isinstance(node, ast.BinOp) and type(node.op) in _ARITHMETIC_OPERATORS:
+        left, right = _evaluate(node.left), _evaluate(node.right)
+        if isinstance(node.op, ast.Pow) and (abs(right) > 100 or abs(left) > 1e6):
+            raise ValueError("The power is too large to work out.")
+        return _ARITHMETIC_OPERATORS[type(node.op)](left, right)
+    raise ValueError("Only numbers and arithmetic operators can be worked out.")
+
+
+def _sum_before(text: str) -> tuple[str, float] | None:
+    """Find the written-out sum that ends where the text ends, and work it out, or return None."""
+    start = len(text)
+    while start > 0 and text[start - 1] in _EQUATION_CHARACTERS:
+        start -= 1
+    words = text[start:].split()
+    # Leading words such as a list number or an opening bracket are dropped until what is left reads as a sum.
+    for first in range(len(words)):
+        written = " ".join(words[first:]).strip()
+        while written.startswith("(") and written.count("(") > written.count(")"):
+            written = written[1:].strip()
+        if not _OPERATOR_BETWEEN_NUMBERS.search(written) or _LOOKS_LIKE_A_DATE.search(written):
+            continue
+        plain = _GROUPING_COMMA.sub("", re.sub(r"[£$€]", "", written))
+        if "," in plain:
+            continue
+        try:
+            return written, float(_evaluate(ast.parse(plain.replace("^", "**"), mode="eval")))
+        except (SyntaxError, ValueError, ZeroDivisionError, OverflowError):
+            continue
+    return None
+
+
+def _claimed_number(text: str) -> tuple[str, float] | None:
+    """Read the number written just after an equals sign, or return None when it is not a plain number."""
+    match = _CLAIMED_NUMBER.match(text)
+    if match is None:
+        return None
+    written, following = match.group(1), text[match.end():match.end() + 1]
+    # A time, a fraction, a percentage, or a version number is not the plain result of a sum.
+    if following and (following in ":/%" or (following == "." and text[match.end() + 1:match.end() + 2].isdigit())):
+        return None
+    return written, float(written.replace(",", ""))
+
+
+def _weekday_problems(text: str) -> list[str]:
+    """List the dates the text names with the wrong day of the week."""
+    problems = []
+    for pattern, fields in _DATE_FORMATS:
+        for match in pattern.finditer(text):
+            parts = dict(zip(fields, match.groups()))
+            month = parts["month"]
+            try:
+                day = date(int(parts["year"]), int(month) if month.isdigit() else _MONTHS[month.casefold()], int(parts["day"]))
+            except ValueError:
+                continue
+            named = _WEEKDAY_BEFORE.search(text[max(0, match.start() - 20):match.start()]) or _WEEKDAY_AFTER.match(
+                text[match.end():match.end() + 30]
+            )
+            if named and named.group(1).casefold() != _WEEKDAYS[day.weekday()]:
+                problems.append(
+                    f"The result calls {match.group(0)} a {named.group(1).capitalize()}, but it is a"
+                    f" {_WEEKDAYS[day.weekday()].capitalize()}."
+                )
+    return problems
+
+
+def calculation_problems(text: str) -> list[str]:
+    """List the written-out sums whose stated result is wrong, and the dates given the wrong weekday."""
+    prose = _normalized_arithmetic(CODE_BLOCK.sub(" ", text))
+    problems = []
+    for index, sign in enumerate(prose):
+        if sign not in _EQUALS_SIGNS:
+            continue
+        worked_out = _sum_before(prose[:index])
+        claimed = _claimed_number(prose[index + 1:])
+        if worked_out is None or claimed is None:
+            continue
+        (written_sum, value), (written_result, stated) = worked_out, claimed
+        decimals = len(written_result.partition(".")[2])
+        # A stated result may round the true value to the decimals it shows, and "≈" allows one more unit.
+        allowed = 10 ** -decimals * (1 if sign == "≈" else 0.5) + 1e-9
+        # A whole-number result of a division is read as the quotient, as in "787 / 60 = 13 hours and 7 minutes".
+        quotient = "/" in written_sum and decimals == 0 and stated == int(value)
+        if abs(value - stated) > allowed and not quotient:
+            exact = f"{value:,.{max(decimals, 2)}f}".rstrip("0").rstrip(".") if value != int(value) else f"{int(value):,}"
+            problems.append(f"The working states {written_sum} {sign} {written_result}, but it equals {exact}.")
+    return problems + _weekday_problems(prose)

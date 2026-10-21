@@ -14,7 +14,7 @@ from .commands import expand_command, is_memory_command, run_memory_command
 from .embeddings import get_embedder
 from .instructions import INSTRUCTIONS_LABEL, load_instructions
 from .knowledge import MAX_RECALLED_RELATIONSHIPS, KnowledgeStore
-from .checks import action_report_problems, unbacked_claims, uncited_urls, unsupported_values
+from .checks import action_report_problems, calculation_problems, unbacked_claims, uncited_urls, unsupported_values
 from .evidence import (
     MAX_SEARCH_QUERIES,
     MAX_SEARCH_QUERY_CHARS,
@@ -1108,6 +1108,7 @@ class TaskTreeRun:
                 f"The result states {value}, which appears in no gathered evidence; remove it or say it could not be verified."
                 for value in unsupported
             )
+        problems.extend(calculation_problems(result))
         if node.id in self.task_actions:
             problems.extend(action_report_problems(result, self.task_actions[node.id]))
         elif self.can_act:
