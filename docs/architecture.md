@@ -338,8 +338,7 @@ These are properties of the code as it stands, recorded so changes can be measur
   and its topic is re-researched, but it stays `active` until a newer fact contradicts it.
 - **Fact grounding is lexical.** A fact is checked against its source by shared words, versions
   and dates, so a paraphrase that changes a claim's meaning but keeps its words still passes.
-- **Duplicates must share words.** Consolidation renames query-named topics and merges and re-files
-  topics, but only pairs that share half their words are ever compared, so differently worded
-  duplicates stay apart.
+- **User memories must share words to be compared.** Topics and facts are also paired by meaning,
+  but user memories have no embeddings, so differently worded duplicates of them stay apart.
 - **Use counts only grow.** A topic recalled often long ago still counts as often used, so its
   refreshes stay frequent as long as it is used at all.
