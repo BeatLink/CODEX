@@ -1,0 +1,53 @@
+[
+  {
+    "id": "recall-port",
+    "mode": "answer",
+    "prompt": "What TCP port does the Kestrel ingest service listen on?",
+    "checks": [{"type": "contains", "value": "7413"}]
+  },
+  {
+    "id": "recall-owner",
+    "mode": "answer",
+    "prompt": "Which team owns the Kestrel ingest service?",
+    "checks": [{"type": "contains", "value": "Tidewater"}]
+  },
+  {
+    "id": "recall-two-facts",
+    "mode": "answer",
+    "prompt": "What language is Kestrel ingest written in, and where does it store its batches?",
+    "checks": [
+      {"type": "contains", "value": "Rust"},
+      {"type": "contains", "value": "ClickHouse"}
+    ]
+  },
+  {
+    "id": "recall-user-preference",
+    "mode": "answer",
+    "prompt": "When does the Kestrel 4.2 release freeze begin?",
+    "checks": [{"type": "contains", "value": "2026-11-16"}]
+  },
+  {
+    "id": "recall-by-meaning",
+    "mode": "answer",
+    "prompt": "How long does the lab's backup machine retain each night's copy?",
+    "checks": [{"type": "contains", "value": "45"}]
+  },
+  {
+    "id": "recall-parent-topic",
+    "mode": "answer",
+    "prompt": "When does the Halvorsen Lab on-call handover happen?",
+    "checks": [
+      {"type": "contains", "value": "Tuesday"},
+      {"type": "contains_any", "values": ["09:00", "9:00", "9 am", "9am"]}
+    ]
+  },
+  {
+    "id": "recall-not-stored",
+    "mode": "answer",
+    "prompt": "What TCP port does the Kestrel query service listen on?",
+    "checks": [
+      {"type": "not_contains", "value": "7413"},
+      {"type": "contains_any", "values": ["not", "no information", "unknown", "unable", "couldn't", "could not"]}
+    ]
+  }
+]

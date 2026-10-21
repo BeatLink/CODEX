@@ -444,10 +444,20 @@ each run once more, as `pipeline+store` and `tree+store`, starting from a fresh
 copy of that knowledge store, such as the one in `knowledge_db_path`. The copy
 is made with SQLite's backup, so the seed store itself is never changed.
 
+`--seed` builds that store from `evals/seed.json`, or from a seed file it
+names, and answers `evals/recall_tasks.json` unless `--tasks` names another
+set. The seed holds made-up facts about a lab that does not exist, with their
+sources and two user memories, so no web search can answer the recall tasks
+and only recall can. One task asks about something the seed leaves out, to
+catch an answer that borrows a nearby fact. When `embedding_model_path` names
+a model, the facts and topics are embedded as the store is built, and every
+run recalls by meaning as well as by words.
+
 ```bash
 smartharness eval --runners bare,tree --only stable-fact,python-bug
 smartharness eval --tasks my-tasks.json --output report.json
 smartharness eval --runners pipeline --seed-store ~/.local/share/smartharness/knowledge.sqlite3
+smartharness eval --seed --runners pipeline,tree
 ```
 
 ### Terminal interface
@@ -628,6 +638,7 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 | `smartharness/cli.py`, `smartharness/tui.py` | Command line and Textual interface |
 | `smartharness/gtk_app.py` | GTK 4 interface |
 | `smartharness/evaluation.py`, `evals/tasks.json` | The eval harness and its fixed task set |
+| `evals/seed.json`, `evals/recall_tasks.json` | The seed store's made-up facts and the tasks only recall can answer |
 | `smartharness/stages.py` | Stage labels and task tree lines shared by the interfaces |
 
 See [docs/architecture.md](docs/architecture.md) for how these parts fit together.

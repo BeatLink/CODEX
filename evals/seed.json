@@ -1,0 +1,45 @@
+{
+  "topics": [
+    {"name": "Halvorsen Lab"},
+    {"name": "Kestrel ingest", "parent": "Halvorsen Lab"},
+    {"name": "Skerry backup server", "parent": "Halvorsen Lab"}
+  ],
+  "sources": [
+    {
+      "topic": "Kestrel ingest",
+      "url": "https://wiki.halvorsen-lab.test/kestrel/ingest",
+      "title": "Kestrel ingest service",
+      "snippet": "The Kestrel ingest service listens on TCP port 7413. It is owned by the Tidewater team, is written in Rust, and stores batches in ClickHouse."
+    },
+    {
+      "topic": "Kestrel ingest",
+      "url": "https://wiki.halvorsen-lab.test/kestrel/releases",
+      "title": "Kestrel release calendar",
+      "snippet": "The Kestrel release freeze for version 4.2 begins on 16 November 2026."
+    },
+    {
+      "topic": "Skerry backup server",
+      "url": "https://wiki.halvorsen-lab.test/infra/skerry",
+      "title": "Skerry backup server",
+      "snippet": "Skerry, the lab's backup server, keeps nightly snapshots for 45 days."
+    },
+    {
+      "topic": "Halvorsen Lab",
+      "url": "https://wiki.halvorsen-lab.test/on-call",
+      "title": "On-call rota",
+      "snippet": "The Halvorsen Lab on-call rota changes over every Tuesday at 09:00."
+    }
+  ],
+  "facts": [
+    {"topic": "Kestrel ingest", "statement": "The Kestrel ingest service listens on TCP port 7413.", "source_url": "https://wiki.halvorsen-lab.test/kestrel/ingest"},
+    {"topic": "Kestrel ingest", "statement": "The Kestrel ingest service is owned by the Tidewater team.", "source_url": "https://wiki.halvorsen-lab.test/kestrel/ingest"},
+    {"topic": "Kestrel ingest", "statement": "Kestrel ingest is written in Rust and stores batches in ClickHouse.", "source_url": "https://wiki.halvorsen-lab.test/kestrel/ingest"},
+    {"topic": "Kestrel ingest", "statement": "The Kestrel release freeze for version 4.2 begins on 16 November 2026.", "source_url": "https://wiki.halvorsen-lab.test/kestrel/releases"},
+    {"topic": "Skerry backup server", "statement": "Skerry, the lab's backup server, keeps nightly snapshots for 45 days.", "source_url": "https://wiki.halvorsen-lab.test/infra/skerry"},
+    {"topic": "Halvorsen Lab", "statement": "The Halvorsen Lab on-call rota changes over every Tuesday at 09:00.", "source_url": "https://wiki.halvorsen-lab.test/on-call"}
+  ],
+  "user_memory": [
+    {"kind": "preference", "statement": "The user wants dates written in ISO 8601 form, YYYY-MM-DD."},
+    {"kind": "project", "statement": "The user works at Halvorsen Lab on the Kestrel ingest service."}
+  ]
+}

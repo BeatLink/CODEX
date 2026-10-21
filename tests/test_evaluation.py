@@ -7,7 +7,10 @@ from unittest.mock import patch
 
 from smartharness.cli import main as cli_main
 from smartharness.evaluation import (
+    DEFAULT_SEED_PATH,
     DEFAULT_TASKS_PATH,
+    RECALL_TASKS_PATH,
+    build_seed_store,
     CountingModel,
     EvalTask,
     check_passes,
@@ -17,6 +20,7 @@ from smartharness.evaluation import (
     run_task,
     summarize,
 )
+from smartharness.knowledge import KnowledgeStore
 from smartharness.settings import DEFAULT_SETTINGS
 
 
@@ -58,6 +62,9 @@ class LoadTasksTests(unittest.TestCase):
         self.assertTrue(tasks)
         self.assertEqual(len({task.id for task in tasks}), len(tasks))
 
+    def test_recall_task_set_loads(self):
+        self.assertTrue(load_tasks(RECALL_TASKS_PATH))
+
     def test_rejects_duplicate_ids_bad_checks_and_execute_mode(self):
         bad_sets = [
             [TASK, TASK],
@@ -71,6 +78,29 @@ class LoadTasksTests(unittest.TestCase):
             for tasks in bad_sets:
                 with self.subTest(tasks=tasks), self.assertRaises(ValueError):
                     load_tasks(write_tasks(directory, tasks))
+
+
+class SeedStoreTests(unittest.TestCase):
+    def test_shipped_seed_builds_a_store_that_recalls_its_facts_sources_and_user_memory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = Path(directory) / "seed.sqlite3"
+            build_seed_store(DEFAULT_SEED_PATH, database_path)
+            store = KnowledgeStore(database_path)
+            recalled = store.recall("What TCP port does the Kestrel ingest service listen on?")
+            sources = store.search("Kestrel ingest port")
+            topics = {topic["name"]: topic for topic in store.topics()}
+
+        self.assertTrue(any("7413" in fact["statement"] for fact in recalled["facts"]))
+        self.assertTrue(any("ISO 8601" in memory["statement"] for memory in recalled["user"]))
+        self.assertTrue(any("7413" in source["snippet"] for source in sources))
+        self.assertEqual(topics["Kestrel ingest"]["parent_id"], topics["Halvorsen Lab"]["id"])
+
+    def test_a_seed_without_facts_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            seed_path = Path(directory) / "seed.json"
+            seed_path.write_text(json.dumps({"topics": []}), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                build_seed_store(seed_path, Path(directory) / "seed.sqlite3")
 
 
 class CheckTests(unittest.TestCase):
@@ -202,6 +232,22 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual([result["task_id"] for result in report["results"]], ["sum"])
         self.assertTrue(report["results"][0]["passed"])
         self.assertEqual(report["summary"]["bare"]["tasks_passed"], 1)
+
+    def test_seed_flag_builds_the_store_and_answers_the_recall_tasks_with_and_without_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = Path(directory) / "report.json"
+            with (
+                patch("smartharness.evaluation.load_settings", return_value={**DEFAULT_SETTINGS, "embedding_model_path": ""}),
+                patch("smartharness.evaluation.create_model", return_value=ReplyingModel("")),
+                patch("smartharness.evaluation.execute_pipeline", return_value="7413"),
+                patch("builtins.print"),
+            ):
+                exit_code = main(["--seed", "--runners", "pipeline", "--only", "recall-port", "--output", str(output_path)])
+            report = json.loads(output_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(report["tasks_path"], str(RECALL_TASKS_PATH))
+        self.assertEqual(set(report["summary"]), {"pipeline", "pipeline+store"})
 
     def test_unknown_task_id_or_runner_fails_before_loading_the_model(self):
         with tempfile.TemporaryDirectory() as directory:

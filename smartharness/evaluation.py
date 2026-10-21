@@ -10,12 +10,17 @@ import tempfile
 import time
 from typing import Any
 
+from .embeddings import Embedder, get_embedder
+from .knowledge import KnowledgeStore
 from .pipeline import create_model, execute_pipeline, run_stage
 from .settings import default_settings_path, load_settings, validate_settings
 from .task_tree import execute_task_tree
 
 
-DEFAULT_TASKS_PATH = Path(__file__).resolve().parent.parent / "evals" / "tasks.json"
+EVALS_DIRECTORY = Path(__file__).resolve().parent.parent / "evals"
+DEFAULT_TASKS_PATH = EVALS_DIRECTORY / "tasks.json"
+RECALL_TASKS_PATH = EVALS_DIRECTORY / "recall_tasks.json"
+DEFAULT_SEED_PATH = EVALS_DIRECTORY / "seed.json"
 RUNNER_CHOICES = ("bare", "pipeline", "tree")
 # Runners that recall from the knowledge store, and so get a seeded run beside the empty one.
 STORE_RUNNERS = ("pipeline", "tree")
@@ -88,6 +93,31 @@ def validate_check(task_id: str, check: Any) -> None:
             raise ValueError(f"Task {task_id}: a regex check needs a 'pattern'.")
     elif not isinstance(check.get("value"), str) or not check["value"]:
         raise ValueError(f"Task {task_id}: a {kind} check needs a string in 'value'.")
+
+
+# ==============================================================================
+# Building a seeded knowledge store
+# ==============================================================================
+
+
+def build_seed_store(seed_path: str | Path, database_path: str | Path, embedder: Embedder | None = None) -> None:
+    """Fill a new knowledge store from a seed file of topics, sources, facts, and user memory."""
+    seed = json.loads(Path(seed_path).read_text(encoding="utf-8"))
+    if not isinstance(seed, dict) or not seed.get("facts"):
+        raise ValueError("The seed file must be a JSON object with a non-empty 'facts' list.")
+    store = KnowledgeStore(database_path, embedder)
+    for topic in seed.get("topics", []):
+        store.add_topic(topic["name"], parent=topic.get("parent"))
+    for source in seed.get("sources", []):
+        store.store_search_results(source["title"], [source], topic=source.get("topic"))
+    for fact in seed["facts"]:
+        store.add_fact(fact["topic"], fact["statement"], fact.get("source_url"), fact.get("confidence", 0.9))
+    for memory in seed.get("user_memory", []):
+        store.add_user_memory(memory["kind"], memory["statement"])
+    # Facts and topics get their vectors now, as the background worker would give them later.
+    if store.embedder is not None:
+        while items := store.items_to_embed(store.embedder.name, 64):
+            store.save_embeddings(store.embedder.name, items, store.embedder.embed_documents([body for _, _, body in items]))
 
 
 # ==============================================================================
@@ -228,6 +258,7 @@ def answer_with(runner: str, task: EvalTask, llm: Any, settings: dict[str, Any],
         max_search_results=settings["max_search_results"],
         mcp_servers=[],
         knowledge_db_path=str(Path(scratch_directory) / "knowledge.sqlite3"),
+        embedding_model_path=settings["embedding_model_path"],
         llm=llm,
         mode=task.mode,
         progress_callback=lambda label: None,
@@ -326,7 +357,7 @@ def main(argv: list[str] | None = None) -> int:
         prog="smartharness eval",
         description="Compare the bare model with the pipeline and the task tree on a fixed task set.",
     )
-    parser.add_argument("--tasks", default=str(DEFAULT_TASKS_PATH), help="Path to the JSON task set.")
+    parser.add_argument("--tasks", help="Path to the JSON task set (default: evals/tasks.json).")
     parser.add_argument("--settings", default=str(default_settings_path()), help="Path to the JSON settings file.")
     parser.add_argument(
         "--runners",
@@ -339,6 +370,13 @@ def main(argv: list[str] | None = None) -> int:
         "--seed-store",
         help="Also run the pipeline and task tree with a copy of this knowledge store, to measure what recall adds.",
     )
+    parser.add_argument(
+        "--seed",
+        nargs="?",
+        const=str(DEFAULT_SEED_PATH),
+        help="Build the seed store from this seed file (evals/seed.json when no file is named) and answer the "
+        "recall task set, unless --tasks names another.",
+    )
     parser.add_argument("--model-path", help="Path to a GGUF model (overrides settings.json).")
     args = parser.parse_args(argv)
 
@@ -346,6 +384,10 @@ def main(argv: list[str] | None = None) -> int:
     unknown = [name for name in runners if name not in RUNNER_CHOICES]
     if not runners or unknown:
         parser.error(f"--runners takes names from: {', '.join(RUNNER_CHOICES)}")
+    if args.seed and args.seed_store:
+        parser.error("--seed and --seed-store each name the seed store; pass one of them")
+    if args.tasks is None:
+        args.tasks = str(RECALL_TASKS_PATH if args.seed else DEFAULT_TASKS_PATH)
     try:
         settings = load_settings(args.settings)
         if args.model_path:
@@ -354,6 +396,8 @@ def main(argv: list[str] | None = None) -> int:
         tasks = load_tasks(args.tasks)
         if args.seed_store:
             args.seed_store = str(Path(args.seed_store).expanduser())
+        if args.seed and not Path(args.seed).is_file():
+            raise ValueError(f"No seed file at {args.seed}")
         if args.seed_store and not Path(args.seed_store).is_file():
             raise ValueError(f"No knowledge store at {args.seed_store}")
     except (OSError, ValueError) as error:
@@ -373,6 +417,19 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, RuntimeError, ValueError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
+    with tempfile.TemporaryDirectory(prefix="smartharness-seed-") as seed_directory:
+        if args.seed:
+            args.seed_store = str(Path(seed_directory) / "seed.sqlite3")
+            print(f"Building the seed store from {args.seed}...")
+            try:
+                build_seed_store(args.seed, args.seed_store, get_embedder(settings["embedding_model_path"]))
+            except (OSError, RuntimeError, ValueError, KeyError) as error:
+                print(f"Error: bad seed file: {error}", file=sys.stderr)
+                return 1
+        return run_and_report(args, tasks, runners, llm, settings)
+
+
+def run_and_report(args: argparse.Namespace, tasks: list[EvalTask], runners: list[str], llm: Any, settings: dict[str, Any]) -> int:
     results = run_eval(
         tasks,
         runners,
@@ -388,7 +445,8 @@ def main(argv: list[str] | None = None) -> int:
         report = {
             "model_path": settings["model_path"],
             "tasks_path": args.tasks,
-            "seed_store": args.seed_store,
+            "seed": args.seed,
+            "seed_store": args.seed_store if not args.seed else None,
             "summary": summary,
             "results": [{**asdict(result), "passed": result.passed} for result in results],
         }
