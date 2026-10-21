@@ -18,6 +18,7 @@ from smartharness.task_tree import (
     REVISE_NOTE,
     ROOT_COMBINE_PROMPT,
     SPLIT_PROMPT,
+    WRITE_PROMPT,
     TaskNode,
     TaskTree,
     execute_task_tree,
@@ -244,6 +245,17 @@ class DirectTaskTests(unittest.TestCase):
         correction = model.call("revise", "1")["input"]
         self.assertIn("No file was written", correction)
         self.assertIn("No test run passed", correction)
+
+    def test_writers_show_their_working_and_the_check_redoes_calculations(self):
+        _, model, _, _ = run_tree({
+            ("decide", "1"): decision("answer"),
+            ("write", "1"): "14 + 28 = 42.",
+        }, prompt="What is 14 + 28?")
+
+        self.assertIn("work it out step by step", model.call("write", "1")["system"])
+        self.assertIn("Redo any arithmetic, count, or date calculation", model.call("check", "1")["system"])
+        for prompt in (WRITE_PROMPT, COMBINE_PROMPT, ROOT_COMBINE_PROMPT):
+            self.assertIn("never give such a result as a bare number", prompt)
 
     def test_listed_facts_turn_an_answer_into_research(self):
         searches = []

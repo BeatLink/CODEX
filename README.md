@@ -101,6 +101,10 @@ top task's write or combine step is the final answer.
   the run carries on; the parent re-plans its remaining subtasks once with the
   failure in view. Its combine step says plainly what failed. Only an error in
   the top task fails the run.
+- **Calculations show their working.** Every writer works out arithmetic,
+  counts, and date calculations step by step before giving the result, since a
+  small model gets them wrong when it answers with a bare number, and the check
+  redoes them itself.
 - **Research is not left to the model's judgement.** A decision that lists
   outside facts to check is turned into research. The top task's own words are
   always searched first, a top-level answer gets one quick search unless the
