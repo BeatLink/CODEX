@@ -276,7 +276,7 @@ def run_task(
     result = RunResult(task_id=task.id, runner=label, checks_total=len(task.checks), attempt=attempt)
     started = time.monotonic()
     # Each run gets its own store, empty or a fresh copy of the seed, so no run sees what an earlier one stored.
-    with tempfile.TemporaryDirectory(prefix="smartharness-eval-") as scratch_directory:
+    with tempfile.TemporaryDirectory(prefix="codex-eval-") as scratch_directory:
         # The workspace is the filesystem root, so the knowledge store beside it stays out of the model's reach.
         workspace = Path(scratch_directory) / "workspace"
         try:
@@ -494,7 +494,7 @@ def format_result(result: RunResult, show_attempt: bool = False) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="smartharness eval",
+        prog="codex eval",
         description="Compare the bare model with the task tree on a fixed task set.",
     )
     parser.add_argument("--tasks", help="Path to the JSON task set (default: evals/tasks.json).")
@@ -565,7 +565,7 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, RuntimeError, ValueError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
-    with tempfile.TemporaryDirectory(prefix="smartharness-seed-") as seed_directory:
+    with tempfile.TemporaryDirectory(prefix="codex-seed-") as seed_directory:
         if args.seed:
             args.seed_store = str(Path(seed_directory) / "seed.sqlite3")
             print(f"Building the seed store from {args.seed}...")

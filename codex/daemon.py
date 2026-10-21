@@ -151,7 +151,7 @@ class HarnessDaemon:
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         if path.exists():
             if _socket_answers(path):
-                raise RuntimeError(f"A SmartHarness daemon is already listening on {path}.")
+                raise RuntimeError(f"A CODEX daemon is already listening on {path}.")
             path.unlink()
         self._server = _SocketServer(str(path), self)
         os.chmod(path, 0o600)
@@ -683,7 +683,7 @@ def _socket_answers(path: Path) -> bool:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run the SmartHarness daemon that interfaces connect to.")
+    parser = argparse.ArgumentParser(description="Run the CODEX daemon that interfaces connect to.")
     parser.add_argument(
         "--settings",
         default=str(default_settings_path()),
@@ -717,7 +717,7 @@ def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     harness.start_background_worker()
-    print(f"SmartHarness daemon listening on {args.socket}", file=sys.stderr, flush=True)
+    print(f"CODEX daemon listening on {args.socket}", file=sys.stderr, flush=True)
     try:
         server.serve_forever(poll_interval=0.2)
     finally:

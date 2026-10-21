@@ -23,7 +23,7 @@ from .settings import (  # noqa: E402
 from .task_view import TASK_STEP_PREFIX, task_detail_markdown, task_tree_lines  # noqa: E402
 
 
-APPLICATION_ID = "org.smartharness.SmartHarness"
+APPLICATION_ID = "org.codex.CODEX"
 FINAL_WAITING_TEXT = "Your final response will appear here."
 MODE_NAMES = {"auto": "Auto mode", "answer": "Answer mode", "draft": "Draft mode", "execute": "Execute mode"}
 STEPS_WAITING_TEXT = "Each step of each task will appear here as it runs."
@@ -332,7 +332,7 @@ class ClarificationDialog(Gtk.Window):
 # ==============================================================================
 
 
-class SmartHarnessWindow(Gtk.ApplicationWindow):
+class CodexWindow(Gtk.ApplicationWindow):
     def __init__(
         self,
         application: Gtk.Application,
@@ -341,7 +341,7 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         settings_overrides: dict[str, Any] | None = None,
         client: DaemonClient | None = None,
     ) -> None:
-        super().__init__(application=application, title="SmartHarness", default_width=1200, default_height=820)
+        super().__init__(application=application, title="CODEX", default_width=1200, default_height=820)
         self.settings = settings.copy()
         self.settings_path = Path(settings_path).expanduser() if settings_path else None
         self.settings_overrides = settings_overrides or {}
@@ -745,7 +745,7 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         elif event == DISCONNECTED_EVENT:
             if self._request_running:
                 self._fail_run("The daemon closed the connection.")
-            self._show_daemon_error("Lost the connection to the SmartHarness daemon.")
+            self._show_daemon_error("Lost the connection to the CODEX daemon.")
 
     def _call_daemon(
         self,
@@ -1233,21 +1233,21 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
 # ==============================================================================
 
 
-class SmartHarnessApplication(Gtk.Application):
+class CodexApplication(Gtk.Application):
     def __init__(self, settings: dict[str, Any], settings_path: str | Path | None = None) -> None:
         super().__init__(application_id=APPLICATION_ID, flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
         self.settings = settings
         self.settings_path = settings_path
-        self.window: SmartHarnessWindow | None = None
+        self.window: CodexWindow | None = None
 
     def do_activate(self) -> None:
         if self.window is None:
-            self.window = SmartHarnessWindow(self, self.settings, self.settings_path)
+            self.window = CodexWindow(self, self.settings, self.settings_path)
         self.window.present()
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Open the SmartHarness GTK interface.")
+    parser = argparse.ArgumentParser(description="Open the CODEX GTK interface.")
     parser.add_argument(
         "--settings",
         default=str(default_settings_path()),
@@ -1258,7 +1258,7 @@ def main(argv: list[str] | None = None) -> int:
         settings = load_settings(args.settings)
     except (OSError, ValueError) as error:
         parser.error(str(error))
-    return SmartHarnessApplication(settings, args.settings).run([sys.argv[0]])
+    return CodexApplication(settings, args.settings).run([sys.argv[0]])
 
 
 if __name__ == "__main__":

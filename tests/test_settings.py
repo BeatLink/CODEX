@@ -4,8 +4,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from smartharness import settings as settings_module
-from smartharness.settings import (
+from codex import settings as settings_module
+from codex.settings import (
     DEFAULT_SETTINGS,
     default_settings_path,
     mcp_servers_from_json,
@@ -77,7 +77,7 @@ class SettingsTests(unittest.TestCase):
             validate_settings(settings)
 
     def test_background_model_falls_back_to_the_main_model(self):
-        from smartharness.settings import background_model_key
+        from codex.settings import background_model_key
 
         settings = validate_settings(DEFAULT_SETTINGS.copy())
         self.assertEqual(

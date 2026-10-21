@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 from daemon_harness import RunningDaemon
 
-from smartharness.knowledge import KnowledgeStore
-from smartharness.settings import DEFAULT_SETTINGS
+from codex.knowledge import KnowledgeStore
+from codex.settings import DEFAULT_SETTINGS
 from user_config import setUpModule, tearDownModule  # The user's own config files never reach these tests.
 
 try:
@@ -17,7 +17,7 @@ try:
     gi.require_version("Gtk", "4.0")
     from gi.repository import Gdk, Gio, GLib, Gtk
 
-    from smartharness.gtk_app import LINK_TAG_PREFIX, SmartHarnessWindow, add_markdown_tags, render_markdown
+    from codex.gtk_app import LINK_TAG_PREFIX, CodexWindow, add_markdown_tags, render_markdown
 
     # init_check reports success even without a display, so the display itself is checked.
     DISPLAY_AVAILABLE = Gtk.init_check() and Gdk.Display.get_default() is not None
@@ -70,7 +70,7 @@ class WindowTests(unittest.TestCase):
     def setUpClass(cls):
         # An application registers on the session bus once, so every test shares it.
         cls.application = Gtk.Application(
-            application_id="org.smartharness.Tests", flags=Gio.ApplicationFlags.NON_UNIQUE
+            application_id="org.codex.Tests", flags=Gio.ApplicationFlags.NON_UNIQUE
         )
         cls.application.register(None)
 
@@ -82,7 +82,7 @@ class WindowTests(unittest.TestCase):
         self.settings["background_research_enabled"] = False
         self.daemon = RunningDaemon(self.settings)
         self.addCleanup(self.daemon.stop)
-        self.window = SmartHarnessWindow(self.application, self.settings, client=self.daemon.client())
+        self.window = CodexWindow(self.application, self.settings, client=self.daemon.client())
         self.addCleanup(self.window.destroy)
         wait_until(lambda: self.window.status.get_label() == "Ready")
 
@@ -93,7 +93,7 @@ class WindowTests(unittest.TestCase):
             return "# Done"
 
         self.window.prompt.get_buffer().set_text("Draft a plan")
-        with patch("smartharness.daemon.execute_task_tree", side_effect=fake_task_tree):
+        with patch("codex.daemon.execute_task_tree", side_effect=fake_task_tree):
             self.window.run_button.emit("clicked")
             wait_until(lambda: self.window.status.get_label() == "Complete")
 
@@ -118,7 +118,7 @@ class WindowTests(unittest.TestCase):
         self.window.status.connect("notify::label", record_status)
         self.window.mode_dropdown.set_selected(3)
         self.window.prompt.get_buffer().set_text("Fix the parser")
-        with patch("smartharness.daemon.execute_task_tree", side_effect=fake_task_tree):
+        with patch("codex.daemon.execute_task_tree", side_effect=fake_task_tree):
             self.window.run_button.emit("clicked")
             wait_until(lambda: self.window.status.get_label() == "Complete")
 
@@ -139,7 +139,7 @@ class WindowTests(unittest.TestCase):
             return "Pick A."
 
         self.window.prompt.get_buffer().set_text("Compare two designs")
-        with patch("smartharness.daemon.execute_task_tree", side_effect=fake_task_tree):
+        with patch("codex.daemon.execute_task_tree", side_effect=fake_task_tree):
             self.window.run_button.emit("clicked")
             wait_until(lambda: self.window.status.get_label() == "Complete")
 
@@ -172,7 +172,7 @@ class WindowTests(unittest.TestCase):
 
         self.window.discard_button.emit("clicked")
         wait_until(lambda: "Plan the trip" in self.window.resume_label.get_label())
-        with patch("smartharness.daemon.execute_task_tree", return_value="Trip planned.") as task_tree:
+        with patch("codex.daemon.execute_task_tree", return_value="Trip planned.") as task_tree:
             self.window.resume_button.emit("clicked")
             wait_until(lambda: self.window.status.get_label() == "Complete")
 
@@ -186,7 +186,7 @@ class WindowTests(unittest.TestCase):
             raise RuntimeError("tool exploded")
 
         self.window.prompt.get_buffer().set_text("Draft a plan")
-        with patch("smartharness.daemon.execute_task_tree", side_effect=failing_task_tree):
+        with patch("codex.daemon.execute_task_tree", side_effect=failing_task_tree):
             self.window.run_button.emit("clicked")
             wait_until(lambda: self.window.status.get_label() == "Run failed")
 
@@ -195,9 +195,9 @@ class WindowTests(unittest.TestCase):
         self.assertTrue(self.window.run_button.get_sensitive())
 
     def test_auto_size_fills_the_context_and_token_fields(self):
-        from smartharness.auto_size import SizeChoice
+        from codex.auto_size import SizeChoice
 
-        with patch("smartharness.daemon.auto_size", return_value=SizeChoice(14336, 3584, 1792, "Tiny")):
+        with patch("codex.daemon.auto_size", return_value=SizeChoice(14336, 3584, 1792, "Tiny")):
             self.window._auto_size()
             wait_until(lambda: self.window.number_fields["context_size"].get_value_as_int() == 14336)
 

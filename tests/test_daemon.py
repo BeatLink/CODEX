@@ -8,10 +8,10 @@ from unittest.mock import patch
 
 from daemon_harness import EventLog, RunningDaemon
 
-from smartharness.client import DaemonError
-from smartharness.daemon import BACKGROUND_MODEL_IDLE_SECONDS, HarnessDaemon
-from smartharness.knowledge import KnowledgeStore
-from smartharness.settings import DEFAULT_SETTINGS, load_settings
+from codex.client import DaemonError
+from codex.daemon import BACKGROUND_MODEL_IDLE_SECONDS, HarnessDaemon
+from codex.knowledge import KnowledgeStore
+from codex.settings import DEFAULT_SETTINGS, load_settings
 from user_config import setUpModule, tearDownModule  # The user's own config files never reach these tests.
 
 
@@ -37,7 +37,7 @@ class DaemonTests(unittest.TestCase):
             kwargs["stage_output_callback"]("Task 1 · Deciding", "token")
             return f"Answer to {prompt}"
 
-        with patch("smartharness.daemon.execute_task_tree", side_effect=fake_task_tree) as task_tree:
+        with patch("codex.daemon.execute_task_tree", side_effect=fake_task_tree) as task_tree:
             daemon = self.start()
             events = EventLog()
             client = daemon.client(events)
@@ -62,7 +62,7 @@ class DaemonTests(unittest.TestCase):
             late_status.append(daemon.client().call("status")["run"])
             return "Tree answer"
 
-        with patch("smartharness.daemon.execute_task_tree", side_effect=fake_task_tree) as task_tree:
+        with patch("codex.daemon.execute_task_tree", side_effect=fake_task_tree) as task_tree:
             daemon = self.start()
             events = EventLog()
             client = daemon.client(events)
@@ -84,7 +84,7 @@ class DaemonTests(unittest.TestCase):
         store.save_task_run(finished, {"nodes": []}, 1, 1)
         store.set_task_run_status(finished, "finished")
 
-        with patch("smartharness.daemon.execute_task_tree", return_value="Resumed answer") as task_tree:
+        with patch("codex.daemon.execute_task_tree", return_value="Resumed answer") as task_tree:
             daemon = self.start()
             events = EventLog()
             client = daemon.client(events)
@@ -114,7 +114,7 @@ class DaemonTests(unittest.TestCase):
             answers.append(kwargs["clarification_callback"]("Which format?"))
             return "done"
 
-        with patch("smartharness.daemon.execute_task_tree", side_effect=asking_task_tree):
+        with patch("codex.daemon.execute_task_tree", side_effect=asking_task_tree):
             daemon = self.start()
             owner_events, watcher_events = EventLog(), EventLog()
             owner = daemon.client(owner_events)
@@ -142,7 +142,7 @@ class DaemonTests(unittest.TestCase):
                 kwargs["stage_output_callback"]("Task 1 · Researching", "x")
                 time.sleep(0.01)
 
-        with patch("smartharness.daemon.execute_task_tree", side_effect=endless_task_tree):
+        with patch("codex.daemon.execute_task_tree", side_effect=endless_task_tree):
             daemon = self.start()
             events = EventLog()
             client = daemon.client(events)
@@ -165,7 +165,7 @@ class DaemonTests(unittest.TestCase):
             self.assertIsNone(client.call("status")["run"])
 
     def test_failed_run_reports_its_message(self):
-        with patch("smartharness.daemon.execute_task_tree", side_effect=RuntimeError("tool exploded")):
+        with patch("codex.daemon.execute_task_tree", side_effect=RuntimeError("tool exploded")):
             daemon = self.start()
             events = EventLog()
             daemon.client(events).call("run", prompt="Draft a plan")
@@ -186,14 +186,14 @@ class DaemonTests(unittest.TestCase):
             client.call("apply_settings", settings={"max_tool_calls": 50})
 
     def test_auto_size_counts_the_loaded_model_and_leaves_settings_alone(self):
-        from smartharness.auto_size import SizeChoice
+        from codex.auto_size import SizeChoice
 
         daemon = self.start()
         client = daemon.client()
         choice = SizeChoice(14336, 3584, 1792, "Tiny")
 
         with (
-            patch("smartharness.daemon.auto_size", return_value=choice) as sizer,
+            patch("codex.daemon.auto_size", return_value=choice) as sizer,
             patch.object(daemon.harness._model_cache, "has", return_value=True),
         ):
             result = client.call("auto_size", model_path="tiny.gguf", gpu_layers=-1)
@@ -203,13 +203,13 @@ class DaemonTests(unittest.TestCase):
         self.assertEqual(client.call("get_settings")["context_size"], self.settings["context_size"])
 
     def test_auto_size_sizes_a_separate_background_model_on_its_own(self):
-        from smartharness.auto_size import SizeChoice
+        from codex.auto_size import SizeChoice
 
         daemon = self.start()
         client = daemon.client()
         choices = {"tiny.gguf": SizeChoice(6144, 1536, 768, "Tiny"), "big.gguf": SizeChoice(16384, 4096, 2048, "Big")}
 
-        with patch("smartharness.daemon.auto_size", side_effect=lambda path, *args: choices[path]) as sizer:
+        with patch("codex.daemon.auto_size", side_effect=lambda path, *args: choices[path]) as sizer:
             shared = client.call("auto_size", model_path="tiny.gguf", gpu_layers=-1)
             separate = client.call(
                 "auto_size", model_path="tiny.gguf", gpu_layers=-1, background_model_path="big.gguf", background_gpu_layers=0
@@ -230,16 +230,16 @@ class DaemonTests(unittest.TestCase):
         self.assertIs(lock, harness._background_model_lock)
         self.assertIs(cache, harness._background_model_cache)
 
-        with patch("smartharness.model.create_model", return_value="big model"):
+        with patch("codex.model.create_model", return_value="big model"):
             cache.get("big.gguf", settings["context_size"], 0)
-        with patch("smartharness.daemon.time.monotonic", side_effect=[100.0, 100.0 + BACKGROUND_MODEL_IDLE_SECONDS]):
+        with patch("codex.daemon.time.monotonic", side_effect=[100.0, 100.0 + BACKGROUND_MODEL_IDLE_SECONDS]):
             harness._unload_idle_background_model(worked=False)
             self.assertTrue(cache.has("big.gguf", settings["context_size"], 0))
             harness._unload_idle_background_model(worked=False)
         self.assertFalse(cache.has("big.gguf", settings["context_size"], 0))
         self.assertEqual(harness._background_status, "Idle; background model unloaded")
 
-        with patch("smartharness.model.create_model", return_value="big model"):
+        with patch("codex.model.create_model", return_value="big model"):
             cache.get("big.gguf", settings["context_size"], 0)
         settings["background_model_path"] = ""
         harness._background_model(settings)
@@ -253,7 +253,7 @@ class DaemonTests(unittest.TestCase):
             researched.set()
             return True
 
-        with patch("smartharness.daemon.research_one_topic", side_effect=fake_research):
+        with patch("codex.daemon.research_one_topic", side_effect=fake_research):
             daemon = self.start(start_worker=True)
             client = daemon.client()
             with self.assertRaisesRegex(DaemonError, "Queue a topic"):

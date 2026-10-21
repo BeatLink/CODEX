@@ -4,9 +4,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from smartharness.background import learn_from_episodes, research_one_topic
-from smartharness.knowledge import KnowledgeStore
-from smartharness.settings import DEFAULT_SETTINGS
+from codex.background import learn_from_episodes, research_one_topic
+from codex.knowledge import KnowledgeStore
+from codex.settings import DEFAULT_SETTINGS
 
 
 class BackgroundResearchTests(unittest.TestCase):
@@ -29,8 +29,8 @@ class BackgroundResearchTests(unittest.TestCase):
                 return "SQLite includes full-text search. https://example.test/fts"
 
             with (
-                patch("smartharness.background.Toolbox", return_value=toolbox),
-                patch("smartharness.background.run_stage", side_effect=summarize),
+                patch("codex.background.Toolbox", return_value=toolbox),
+                patch("codex.background.run_stage", side_effect=summarize),
             ):
                 worked = research_one_topic(
                     settings,
@@ -61,9 +61,9 @@ class BackgroundResearchTests(unittest.TestCase):
             cache.get.return_value = "shared model"
 
             with (
-                patch("smartharness.background.Toolbox", return_value=toolbox),
-                patch("smartharness.background.run_stage", return_value="Summary") as run_stage,
-                patch("smartharness.background.create_model") as create_model,
+                patch("codex.background.Toolbox", return_value=toolbox),
+                patch("codex.background.run_stage", return_value="Summary") as run_stage,
+                patch("codex.background.create_model") as create_model,
             ):
                 research_one_topic(settings, model_cache=cache)
 
@@ -74,8 +74,8 @@ class BackgroundResearchTests(unittest.TestCase):
             settings.update(background_model_path="big.gguf", background_context_size=8192, background_gpu_layers=0)
             KnowledgeStore(settings["knowledge_db_path"]).enqueue_topic("SQLite WAL")
             with (
-                patch("smartharness.background.Toolbox", return_value=toolbox),
-                patch("smartharness.background.run_stage", return_value="Summary"),
+                patch("codex.background.Toolbox", return_value=toolbox),
+                patch("codex.background.run_stage", return_value="Summary"),
             ):
                 research_one_topic(settings, model_cache=cache)
 
@@ -87,7 +87,7 @@ class BackgroundResearchTests(unittest.TestCase):
             settings["knowledge_db_path"] = str(Path(directory) / "knowledge.db")
             settings["filesystem_root"] = directory
 
-            with patch("smartharness.background.create_model") as create_model:
+            with patch("codex.background.create_model") as create_model:
                 self.assertFalse(research_one_topic(settings))
 
             create_model.assert_not_called()
@@ -111,8 +111,8 @@ class BackgroundResearchTests(unittest.TestCase):
                 return "unreachable"
 
             with (
-                patch("smartharness.background.Toolbox", return_value=toolbox),
-                patch("smartharness.background.run_stage", side_effect=interrupt_summary),
+                patch("codex.background.Toolbox", return_value=toolbox),
+                patch("codex.background.run_stage", side_effect=interrupt_summary),
             ):
                 self.assertTrue(
                     research_one_topic(
@@ -154,9 +154,9 @@ class ExtractionTests(unittest.TestCase):
         replies = iter([page_facts, snippet_facts, overview])
 
         with (
-            patch("smartharness.background.Toolbox", return_value=toolbox),
-            patch("smartharness.background.summarize_web_page", return_value="FTS5 is an SQLite module.") as summarize,
-            patch("smartharness.background.run_stage", side_effect=lambda *args, **kwargs: next(replies)) as run_stage,
+            patch("codex.background.Toolbox", return_value=toolbox),
+            patch("codex.background.summarize_web_page", return_value="FTS5 is an SQLite module.") as summarize,
+            patch("codex.background.run_stage", side_effect=lambda *args, **kwargs: next(replies)) as run_stage,
         ):
             self.assertTrue(research_one_topic(self.settings, llm=object()))
 
@@ -180,7 +180,7 @@ class ExtractionTests(unittest.TestCase):
         self.assertEqual(self.store.queue_status()[0]["status"], "done")
 
     def test_the_same_page_under_a_second_address_is_read_once_and_the_next_page_instead(self):
-        from smartharness.background import _parse_overview
+        from codex.background import _parse_overview
 
         self.store.enqueue_topic("SQLite WAL")
         pages = {
@@ -197,9 +197,9 @@ class ExtractionTests(unittest.TestCase):
 
         toolbox.call.side_effect = call
         with (
-            patch("smartharness.background.Toolbox", return_value=toolbox),
-            patch("smartharness.background.summarize_web_page", return_value="Summary.") as summarize,
-            patch("smartharness.background.run_stage", return_value=json.dumps({"facts": []})),
+            patch("codex.background.Toolbox", return_value=toolbox),
+            patch("codex.background.summarize_web_page", return_value="Summary.") as summarize,
+            patch("codex.background.run_stage", return_value=json.dumps({"facts": []})),
         ):
             research_one_topic(self.settings, llm=object())
 
@@ -221,14 +221,14 @@ class ExtractionTests(unittest.TestCase):
         toolbox = unittest.mock.Mock()
         toolbox.call.return_value = "Tool error: RatelimitException: 202 Ratelimit"
 
-        with patch("smartharness.background.Toolbox", return_value=toolbox):
+        with patch("codex.background.Toolbox", return_value=toolbox):
             research_one_topic(self.settings, llm=object())
 
         self.assertEqual(self.store.queue_status()[0]["status"], "failed")
         self.assertIn("Web search failed: RatelimitException", self.store.queue_status()[0]["error"])
 
     def test_a_cut_off_snippet_loses_its_last_sentence_and_no_fact_may_end_cut_off(self):
-        from smartharness.background import _complete_sentences, _grounded_facts, _Source
+        from codex.background import _complete_sentences, _grounded_facts, _Source
 
         self.assertEqual(_complete_sentences("WAL is faster. WAL provides more ..."), "WAL is faster.")
         self.assertEqual(_complete_sentences("WAL provides more \u2026"), "WAL provides more")
@@ -240,7 +240,7 @@ class ExtractionTests(unittest.TestCase):
         )
 
     def test_summary_sentences_stating_values_no_source_has_are_dropped(self):
-        from smartharness.background import _grounded_summary, _Source
+        from codex.background import _grounded_summary, _Source
 
         sources = [_Source(1, "https://example.test/phone", "The PinePhone has a 5.95 inch screen.")]
         summary = _grounded_summary("The PinePhone has a 5.95 inch screen. It has a 5.7-inch touchscreen.", sources)
@@ -248,7 +248,7 @@ class ExtractionTests(unittest.TestCase):
         self.assertEqual(summary, "The PinePhone has a 5.95 inch screen.")
 
     def test_extracted_facts_are_checked_against_the_sources(self):
-        from smartharness.background import _grounded_facts, _Source
+        from codex.background import _grounded_facts, _Source
 
         sources = [
             _Source(1, "https://example.test/zig", "Zig 0.13.0 was released on 2024-06-07 with a new build system."),
@@ -277,7 +277,7 @@ class ExtractionTests(unittest.TestCase):
             "research_topics": ["clap argument parsing", "Rust"],
         })
 
-        with patch("smartharness.background.run_stage", return_value=reply) as run_stage:
+        with patch("codex.background.run_stage", return_value=reply) as run_stage:
             self.assertTrue(learn_from_episodes(self.settings, llm=object()))
 
         self.assertIn("Write my Rust CLI in clap", run_stage.call_args.args[2])
@@ -300,7 +300,7 @@ class ExtractionTests(unittest.TestCase):
             "research_topics": [],
         })
 
-        with patch("smartharness.background.run_stage", return_value=reply) as run_stage:
+        with patch("codex.background.run_stage", return_value=reply) as run_stage:
             learn_from_episodes(self.settings, llm=object())
 
         self.assertEqual(run_stage.call_count, 1)

@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from smartharness.auto_size import ModelShape, auto_size, choose_sizes, model_shape, read_gguf_metadata
+from codex.auto_size import ModelShape, auto_size, choose_sizes, model_shape, read_gguf_metadata
 
 MIB = 1024 * 1024
 
@@ -92,9 +92,9 @@ class ChooseSizesTests(unittest.TestCase):
 
     def test_refuses_when_the_gpu_is_present_but_unreadable(self):
         with (
-            patch("smartharness.auto_size.shutil.which", return_value="/bin/nvidia-smi"),
-            patch("smartharness.auto_size.subprocess.run", side_effect=OSError("crashed")),
-            patch("smartharness.auto_size.model_shape", return_value=self.shape),
+            patch("codex.auto_size.shutil.which", return_value="/bin/nvidia-smi"),
+            patch("codex.auto_size.subprocess.run", side_effect=OSError("crashed")),
+            patch("codex.auto_size.model_shape", return_value=self.shape),
         ):
             with self.assertRaisesRegex(ValueError, "GPU layers to 0"):
                 auto_size("model.gguf", -1)

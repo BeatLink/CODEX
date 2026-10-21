@@ -83,7 +83,7 @@ def load_questions(questions_path: str | Path) -> list[Question]:
 
 def score_recall(seed_path: str | Path, questions: list[Question], embedder: Embedder | None, label: str) -> Score:
     """Build a fresh store from the seed, then recall each question and record what came back."""
-    with tempfile.TemporaryDirectory(prefix="smartharness-recall-") as directory:
+    with tempfile.TemporaryDirectory(prefix="codex-recall-") as directory:
         database_path = Path(directory) / "seed.sqlite3"
         build_seed_store(seed_path, database_path, embedder)
         store = KnowledgeStore(database_path, embedder)
@@ -144,7 +144,7 @@ def format_failures(score: Score) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="smartharness recall-benchmark",
+        prog="codex recall-benchmark",
         description="Score recall on fixed questions with known relevant facts, by words alone and by meaning too.",
     )
     parser.add_argument("--seed", default=str(SEED_PATH), help="Seed file of made-up facts (default: evals/recall_benchmark_seed.json).")

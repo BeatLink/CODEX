@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from smartharness.recall_benchmark import (
+from codex.recall_benchmark import (
     QUESTIONS_PATH,
     SEED_PATH,
     Answer,

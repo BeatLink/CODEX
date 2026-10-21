@@ -3,9 +3,9 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from smartharness.client import DaemonClient
-from smartharness.daemon import HarnessDaemon
-from smartharness.settings import DEFAULT_KNOWLEDGE_DB_PATH
+from codex.client import DaemonClient
+from codex.daemon import HarnessDaemon
+from codex.settings import DEFAULT_KNOWLEDGE_DB_PATH
 
 
 class RunningDaemon:

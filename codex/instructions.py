@@ -9,7 +9,7 @@ from pathlib import Path
 # ==============================================================================
 
 # A folder's instructions file; the first of these names found in the folder is read.
-INSTRUCTIONS_FILE_NAMES = ("SMARTHARNESS.md", "AGENTS.md")
+INSTRUCTIONS_FILE_NAMES = ("CODEX.md", "AGENTS.md")
 
 # Instructions go into every model call, so they are kept short enough to leave room for the work itself.
 MAX_INSTRUCTIONS_CHARS = 4000
@@ -18,7 +18,7 @@ INSTRUCTIONS_LABEL = "Standing instructions from the user"
 
 
 def config_directory() -> Path:
-    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "smartharness"
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "codex"
 
 
 def global_instructions_path() -> Path:

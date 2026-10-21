@@ -2,7 +2,7 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-from smartharness.model import ModelCache, create_model, run_stage
+from codex.model import ModelCache, create_model, run_stage
 
 
 class RunStageTests(unittest.TestCase):
@@ -67,7 +67,7 @@ class RunStageTests(unittest.TestCase):
 
 class ModelCacheTests(unittest.TestCase):
     def test_cache_reuses_the_model_until_load_settings_change(self):
-        with patch("smartharness.model.create_model", side_effect=lambda *args: object()) as create_model:
+        with patch("codex.model.create_model", side_effect=lambda *args: object()) as create_model:
             cache = ModelCache()
             self.assertFalse(cache.has("model.gguf", 4096, -1))
             first = cache.get("model.gguf", 4096, -1)
@@ -81,7 +81,7 @@ class ModelCacheTests(unittest.TestCase):
     def test_a_cpu_model_keeps_its_cache_and_prompt_batches_off_the_gpu(self):
         llama_cpp = MagicMock()
         # A GPU load takes the shared GPU lock, which another program may be holding.
-        with patch.dict(sys.modules, {"llama_cpp": llama_cpp}), patch("smartharness.model.GPU_LOCK"):
+        with patch.dict(sys.modules, {"llama_cpp": llama_cpp}), patch("codex.model.GPU_LOCK"):
             create_model("model.gguf", 4096, 0)
             cpu = llama_cpp.Llama.call_args.kwargs
             create_model("model.gguf", 4096, -1)

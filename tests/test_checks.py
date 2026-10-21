@@ -1,6 +1,6 @@
 import unittest
 
-from smartharness.checks import (
+from codex.checks import (
     action_report_problems,
     calculation_problems,
     unbacked_claims,

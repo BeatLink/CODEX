@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from smartharness.tools import Toolbox
+from codex.tools import Toolbox
 
 
 class ToolboxTests(unittest.TestCase):
@@ -175,10 +175,10 @@ class ToolboxTests(unittest.TestCase):
         opener = FakeOpener()
         with (
             patch(
-                "smartharness.tools.socket.getaddrinfo",
+                "codex.tools.socket.getaddrinfo",
                 return_value=[(2, 1, 6, "", ("93.184.216.34", 443))],
             ),
-            patch("smartharness.tools.build_opener", return_value=opener),
+            patch("codex.tools.build_opener", return_value=opener),
         ):
             result = Toolbox(".").call(
                 "web_fetch",
@@ -195,7 +195,7 @@ class ToolboxTests(unittest.TestCase):
 
     def test_web_fetch_rejects_private_hosts(self):
         with patch(
-            "smartharness.tools.socket.getaddrinfo",
+            "codex.tools.socket.getaddrinfo",
             return_value=[(2, 1, 6, "", ("127.0.0.1", 443))],
         ):
             result = Toolbox(".").call(

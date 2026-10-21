@@ -6,10 +6,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from smartharness.context_budget import CONDENSED_MARKER
-from smartharness.knowledge import KnowledgeStore
-from smartharness.evidence import CONDENSE_PROMPT
-from smartharness.task_tree import (
+from codex.context_budget import CONDENSED_MARKER
+from codex.knowledge import KnowledgeStore
+from codex.evidence import CONDENSE_PROMPT
+from codex.task_tree import (
     _parse_subtasks,
     CHECK_PROMPT,
     COMBINE_PROMPT,
@@ -116,11 +116,11 @@ def run_tree(replies, prompt="Explain the plan", searches=None, **options):
         return NOTHING_FOUND
 
     with (
-        patch("smartharness.task_tree.run_stage", side_effect=model),
+        patch("codex.task_tree.run_stage", side_effect=model),
         # Condensing earlier results calls run_stage from the evidence module.
-        patch("smartharness.evidence.run_stage", side_effect=model),
-        patch("smartharness.task_tree.search_with_memory", side_effect=fake_search),
-        patch("smartharness.task_tree.run_tool_stage", side_effect=AssertionError("tool stage")),
+        patch("codex.evidence.run_stage", side_effect=model),
+        patch("codex.task_tree.search_with_memory", side_effect=fake_search),
+        patch("codex.task_tree.run_tool_stage", side_effect=AssertionError("tool stage")),
     ):
         result = execute_task_tree(
             prompt,
@@ -201,8 +201,8 @@ class DirectTaskTests(unittest.TestCase):
             return "Writing a.py failed."
 
         with (
-            patch("smartharness.task_tree.run_stage", side_effect=model),
-            patch("smartharness.task_tree.run_tool_stage", side_effect=failed_write),
+            patch("codex.task_tree.run_stage", side_effect=model),
+            patch("codex.task_tree.run_tool_stage", side_effect=failed_write),
         ):
             result = execute_task_tree(
                 "Fix a.py", llm=object(), progress_callback=lambda label: None,
@@ -228,8 +228,8 @@ class DirectTaskTests(unittest.TestCase):
             return "Read ranges.py."
 
         with (
-            patch("smartharness.task_tree.run_stage", side_effect=model),
-            patch("smartharness.task_tree.run_tool_stage", side_effect=record),
+            patch("codex.task_tree.run_stage", side_effect=model),
+            patch("codex.task_tree.run_tool_stage", side_effect=record),
         ):
             execute_task_tree(
                 "Fix ranges.py", llm=object(), progress_callback=lambda label: None,
@@ -270,8 +270,8 @@ class DirectTaskTests(unittest.TestCase):
             return "No action was needed."
 
         with (
-            patch("smartharness.task_tree.run_stage", side_effect=model),
-            patch("smartharness.task_tree.run_tool_stage", side_effect=record),
+            patch("codex.task_tree.run_stage", side_effect=model),
+            patch("codex.task_tree.run_tool_stage", side_effect=record),
         ):
             execute_task_tree(
                 "Fix ranges.py", llm=object(), progress_callback=lambda label: None,
@@ -303,9 +303,9 @@ class DirectTaskTests(unittest.TestCase):
             ("write", "1"): "A watch, per https://pine64.org.",
         })
         with (
-            patch("smartharness.task_tree.run_stage", side_effect=model),
-            patch("smartharness.task_tree.search_with_memory", side_effect=fake_search),
-            patch("smartharness.task_tree.run_tool_stage", side_effect=AssertionError("tool stage")),
+            patch("codex.task_tree.run_stage", side_effect=model),
+            patch("codex.task_tree.search_with_memory", side_effect=fake_search),
+            patch("codex.task_tree.run_tool_stage", side_effect=AssertionError("tool stage")),
         ):
             result = execute_task_tree("What is a PineTime?", llm=object(), progress_callback=lambda label: None)
 
@@ -328,12 +328,12 @@ class DirectTaskTests(unittest.TestCase):
             ("write", "1"): "WAL is a journal mode (https://docs.example/a).",
         })
         with (
-            patch("smartharness.task_tree.run_stage", side_effect=model),
+            patch("codex.task_tree.run_stage", side_effect=model),
             patch(
-                "smartharness.task_tree.search_with_memory",
+                "codex.task_tree.search_with_memory",
                 return_value=("Automatic web search result", "[]", False),
             ),
-            patch("smartharness.task_tree.run_tool_stage", side_effect=fake_tool_stage),
+            patch("codex.task_tree.run_tool_stage", side_effect=fake_tool_stage),
         ):
             result = execute_task_tree("Explain SQLite WAL", llm=object(), progress_callback=lambda label: None)
 
@@ -357,8 +357,8 @@ class DirectTaskTests(unittest.TestCase):
             return "no"
 
         with (
-            patch("smartharness.task_tree.run_stage", side_effect=model),
-            patch("smartharness.task_tree.run_tool_stage", side_effect=AssertionError("tool stage")),
+            patch("codex.task_tree.run_stage", side_effect=model),
+            patch("codex.task_tree.run_tool_stage", side_effect=AssertionError("tool stage")),
         ):
             execute_task_tree("/do Edit both files", llm=object(), allow_file_writes=True,
                               clarification_callback=answer, progress_callback=lambda label: None)
@@ -441,8 +441,8 @@ class DirectTaskTests(unittest.TestCase):
             ("revise", "1"): "Rust 1.80.0 shipped on July 25, 2024.",
         })
         with (
-            patch("smartharness.task_tree.run_stage", side_effect=model),
-            patch("smartharness.task_tree.search_with_memory", side_effect=found_rust),
+            patch("codex.task_tree.run_stage", side_effect=model),
+            patch("codex.task_tree.search_with_memory", side_effect=found_rust),
         ):
             result = execute_task_tree(
                 "What is the latest Rust?", llm=object(), progress_callback=lambda label: None, max_task_depth=0
@@ -467,7 +467,7 @@ class DirectTaskTests(unittest.TestCase):
             ("decide", "1"): [decision("answer", clarification="Which format?"), decision("answer")],
             ("write", "1"): "Done in Markdown.",
         })
-        with patch("smartharness.task_tree.run_stage", side_effect=model):
+        with patch("codex.task_tree.run_stage", side_effect=model):
             execute_task_tree(
                 "Write it up",
                 llm=object(),
@@ -753,7 +753,7 @@ class RecallTests(unittest.TestCase):
         with sqlite3.connect(self.database_path) as connection:
             connection.execute("UPDATE facts SET created_at = 0")
 
-        with patch("smartharness.task_tree.run_tool_stage", return_value="Findings.") as tool_stage:
+        with patch("codex.task_tree.run_tool_stage", return_value="Findings.") as tool_stage:
             model = ScriptedModel({
                 ("decide", "1"): decision("decompose", subtasks=[("Describe the newest version", []), ("Explain the rest", [])]),
                 ("decide", "1.1"): decision("research", queries=["zig release"]),
@@ -763,8 +763,8 @@ class RecallTests(unittest.TestCase):
                 ("combine", "1"): "Both.",
             })
             with (
-                patch("smartharness.task_tree.run_stage", side_effect=model),
-                patch("smartharness.task_tree.search_with_memory", return_value=NOTHING_FOUND),
+                patch("codex.task_tree.run_stage", side_effect=model),
+                patch("codex.task_tree.search_with_memory", return_value=NOTHING_FOUND),
             ):
                 execute_task_tree(
                     "Write a guide to a systems language", llm=object(), progress_callback=lambda label: None,
@@ -786,8 +786,8 @@ class RecallTests(unittest.TestCase):
             ("revise", "1"): "Rust is a language.",
         })
         with (
-            patch("smartharness.task_tree.run_stage", side_effect=model),
-            patch("smartharness.task_tree.search_with_memory", side_effect=found_rust),
+            patch("codex.task_tree.run_stage", side_effect=model),
+            patch("codex.task_tree.search_with_memory", side_effect=found_rust),
         ):
             execute_task_tree(
                 "What is the latest Rust?", llm=object(), progress_callback=lambda label: None,

@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest.mock import MagicMock, patch
 
-from smartharness.evidence import is_self_contained, requires_web_research, search_query, summarize_web_page
+from codex.evidence import is_self_contained, requires_web_research, search_query, summarize_web_page
 
 
 class RequestShapeTests(unittest.TestCase):
@@ -39,7 +39,7 @@ class PageSummaryTests(unittest.TestCase):
             calls.append((system_prompt, user_input, kwargs))
             return f"Summary {len(calls)}"
 
-        with patch("smartharness.evidence.run_stage", side_effect=fake_run_stage):
+        with patch("codex.evidence.run_stage", side_effect=fake_run_stage):
             result = summarize_web_page(
                 object(),
                 json.dumps(page),

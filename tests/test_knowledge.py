@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from smartharness.knowledge import _MIGRATIONS, KnowledgeStore
+from codex.knowledge import _MIGRATIONS, KnowledgeStore
 
 
 class KnowledgeStoreTests(unittest.TestCase):
@@ -73,7 +73,7 @@ class KnowledgeStoreTests(unittest.TestCase):
             topic="Topic",
         )
 
-        with patch("smartharness.knowledge.time.time", return_value=time.time() + 7200):
+        with patch("codex.knowledge.time.time", return_value=time.time() + 7200):
             queued = self.store.enqueue_due_topics(refresh_interval_hours=1)
 
         self.assertEqual(queued, 1)
@@ -85,11 +85,11 @@ class KnowledgeStoreTests(unittest.TestCase):
                 name, [{"title": name, "url": f"https://example.test/{name}", "snippet": f"{name} source."}], topic=name,
             )
         self.store.add_fact("Used", "Used topics come back often.")
-        with patch("smartharness.knowledge.time.time", return_value=time.time() + 10):
+        with patch("codex.knowledge.time.time", return_value=time.time() + 10):
             for _ in range(5):
                 self.store.recall("used topics come back often")
 
-        with patch("smartharness.knowledge.time.time", return_value=time.time() + 2400):
+        with patch("codex.knowledge.time.time", return_value=time.time() + 2400):
             queued = self.store.enqueue_due_topics(refresh_interval_hours=1)
 
         self.assertEqual(queued, 1)

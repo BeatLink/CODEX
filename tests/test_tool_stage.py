@@ -1,8 +1,8 @@
 import json
 import unittest
 
-from smartharness.tool_stage import run_tool_stage
-from smartharness.tools import TOOL_DEFINITIONS
+from codex.tool_stage import run_tool_stage
+from codex.tools import TOOL_DEFINITIONS
 
 
 class FakeToolbox:

@@ -13,13 +13,13 @@ from typing import Any
 def default_socket_path() -> Path:
     runtime_directory = os.environ.get("XDG_RUNTIME_DIR")
     if runtime_directory:
-        return Path(runtime_directory) / "smartharness" / "daemon.sock"
-    return Path(tempfile.gettempdir()) / f"smartharness-{os.getuid()}" / "daemon.sock"
+        return Path(runtime_directory) / "codex" / "daemon.sock"
+    return Path(tempfile.gettempdir()) / f"codex-{os.getuid()}" / "daemon.sock"
 
 
 def default_log_path() -> Path:
     state_directory = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
-    return state_directory / "smartharness" / "daemon.log"
+    return state_directory / "codex" / "daemon.log"
 
 
 def encode_message(message: dict[str, Any]) -> bytes:

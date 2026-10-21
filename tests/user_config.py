@@ -1,4 +1,4 @@
-"""Keep tests away from the user's own instructions and command files under ~/.config/smartharness."""
+"""Keep tests away from the user's own instructions and command files under ~/.config/codex."""
 
 import os
 import tempfile

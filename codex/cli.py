@@ -113,9 +113,9 @@ def main(argv: list[str] | None = None) -> int:
         return _resume(settings)
 
     if args.tui or (not args.prompt and sys.stdin.isatty()):
-        from .tui import SmartHarnessApp
+        from .tui import CodexApp
 
-        SmartHarnessApp(
+        CodexApp(
             settings,
             initial_prompt=" ".join(args.prompt).strip(),
             settings_path=args.settings,

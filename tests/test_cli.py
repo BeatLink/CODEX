@@ -5,29 +5,29 @@ from unittest.mock import patch
 
 from daemon_harness import RunningDaemon
 
-from smartharness.cli import main
-from smartharness.client import DaemonClient
-from smartharness.knowledge import KnowledgeStore
-from smartharness.settings import DEFAULT_SETTINGS
+from codex.cli import main
+from codex.client import DaemonClient
+from codex.knowledge import KnowledgeStore
+from codex.settings import DEFAULT_SETTINGS
 from user_config import setUpModule, tearDownModule  # The user's own config files never reach these tests.
 
 
 class CliTests(unittest.TestCase):
     def setUp(self):
         # These tests run the request in-process, as when no daemon is running.
-        no_daemon = patch("smartharness.cli.connect_to_daemon", side_effect=FileNotFoundError)
+        no_daemon = patch("codex.cli.connect_to_daemon", side_effect=FileNotFoundError)
         no_daemon.start()
         self.addCleanup(no_daemon.stop)
 
     def test_final_result_uses_markdown_renderer_in_terminal(self):
         result = "```python\nprint('hello')\n```"
         with (
-            patch("smartharness.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
-            patch("smartharness.cli.execute_task_tree", return_value=result),
+            patch("codex.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
+            patch("codex.cli.execute_task_tree", return_value=result),
             patch("sys.stdin.isatty", return_value=False),
             patch("sys.stdout.isatty", return_value=True),
-            patch("smartharness.cli.Console") as console,
-            patch("smartharness.cli.Markdown") as markdown,
+            patch("codex.cli.Console") as console,
+            patch("codex.cli.Markdown") as markdown,
             patch("builtins.print"),
         ):
             self.assertEqual(main(["prompt"]), 0)
@@ -39,8 +39,8 @@ class CliTests(unittest.TestCase):
         for arguments, expected in ((["prompt"], True), (["--no-show-thinking", "prompt"], False)):
             with self.subTest(arguments=arguments):
                 with (
-                    patch("smartharness.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
-                    patch("smartharness.cli.execute_task_tree", return_value="answer") as execute_task_tree,
+                    patch("codex.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
+                    patch("codex.cli.execute_task_tree", return_value="answer") as execute_task_tree,
                     patch("sys.stdin.isatty", return_value=False),
                     patch("builtins.print"),
                 ):
@@ -50,8 +50,8 @@ class CliTests(unittest.TestCase):
 
     def test_mode_option_overrides_the_setting(self):
         with (
-            patch("smartharness.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
-            patch("smartharness.cli.execute_task_tree", return_value="answer") as execute_task_tree,
+            patch("codex.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
+            patch("codex.cli.execute_task_tree", return_value="answer") as execute_task_tree,
             patch("sys.stdin.isatty", return_value=False),
             patch("builtins.print"),
         ):
@@ -62,8 +62,8 @@ class CliTests(unittest.TestCase):
     def test_a_request_runs_the_task_tree_with_its_limits(self):
         settings = {**DEFAULT_SETTINGS, "max_task_nodes": 9}
         with (
-            patch("smartharness.cli.load_settings", return_value=settings),
-            patch("smartharness.cli.execute_task_tree", return_value="tree answer") as task_tree,
+            patch("codex.cli.load_settings", return_value=settings),
+            patch("codex.cli.execute_task_tree", return_value="tree answer") as task_tree,
             patch("sys.stdin.isatty", return_value=False),
             patch("sys.stdout.isatty", return_value=False),
             patch("builtins.print") as printed,
@@ -81,8 +81,8 @@ class CliTests(unittest.TestCase):
             run_id = store.start_task_run("Plan the trip", {"max_task_depth": 2, "mode": "draft"})
             store.save_task_run(run_id, {"nodes": []}, 1, 3)
             with (
-                patch("smartharness.cli.load_settings", return_value=settings),
-                patch("smartharness.cli.execute_task_tree", return_value="Trip planned.") as task_tree,
+                patch("codex.cli.load_settings", return_value=settings),
+                patch("codex.cli.execute_task_tree", return_value="Trip planned.") as task_tree,
                 patch("sys.stdin.isatty", return_value=False),
                 patch("sys.stdout.isatty", return_value=False),
                 patch("builtins.print") as printed,
@@ -99,7 +99,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             settings = {**DEFAULT_SETTINGS, "knowledge_db_path": str(Path(directory) / "knowledge.db")}
             with (
-                patch("smartharness.cli.load_settings", return_value=settings),
+                patch("codex.cli.load_settings", return_value=settings),
                 patch("sys.stderr") as stderr,
             ):
                 self.assertEqual(main(["--resume"]), 1)
@@ -108,8 +108,8 @@ class CliTests(unittest.TestCase):
 
     def test_tui_subcommand_opens_interface_with_initial_prompt(self):
         with (
-            patch("smartharness.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
-            patch("smartharness.tui.SmartHarnessApp") as app,
+            patch("codex.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
+            patch("codex.tui.CodexApp") as app,
             patch("sys.stdin.isatty", return_value=False),
         ):
             self.assertEqual(main(["tui", "draft", "a", "plan"]), 0)
@@ -135,10 +135,10 @@ class CliTests(unittest.TestCase):
             return client
 
         with (
-            patch("smartharness.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
-            patch("smartharness.cli.connect_to_daemon", side_effect=connect),
-            patch("smartharness.cli.execute_task_tree") as local_task_tree,
-            patch("smartharness.daemon.execute_task_tree", return_value="daemon answer") as daemon_task_tree,
+            patch("codex.cli.load_settings", return_value=DEFAULT_SETTINGS.copy()),
+            patch("codex.cli.connect_to_daemon", side_effect=connect),
+            patch("codex.cli.execute_task_tree") as local_task_tree,
+            patch("codex.daemon.execute_task_tree", return_value="daemon answer") as daemon_task_tree,
             patch("sys.stdin.isatty", return_value=False),
             patch("sys.stdout.isatty", return_value=False),
             patch("builtins.print") as printed,

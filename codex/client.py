@@ -69,7 +69,7 @@ class DaemonClient:
     def call(self, method: str, **params: Any) -> Any:
         """Send one request and wait for its reply; never call this from on_event."""
         if not self.connected or self._socket is None:
-            raise DaemonError("Not connected to the SmartHarness daemon.")
+            raise DaemonError("Not connected to the CODEX daemon.")
         request_id = next(self._ids)
         pending = _PendingCall()
         with self._pending_lock:
@@ -151,7 +151,7 @@ def connect_to_daemon(
                 break
             time.sleep(0.1)
     raise DaemonError(
-        f"The SmartHarness daemon did not start; see {default_log_path()}."
+        f"The CODEX daemon did not start; see {default_log_path()}."
     )
 
 
@@ -159,7 +159,7 @@ def spawn_daemon(socket_path: Path, settings_path: str | Path | None = None) -> 
     command = [
         sys.executable,
         "-m",
-        "smartharness.daemon",
+        "codex.daemon",
         "--socket",
         str(socket_path),
         "--exit-when-unused",

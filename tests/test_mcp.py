@@ -6,9 +6,9 @@ import unittest
 from contextlib import asynccontextmanager
 from unittest.mock import patch
 
-from smartharness.mcp_tools import MCPToolbox
-from smartharness.tool_stage import run_tool_stage
-from smartharness.tools import Toolbox
+from codex.mcp_tools import MCPToolbox
+from codex.tool_stage import run_tool_stage
+from codex.tools import Toolbox
 
 
 class FakeSession:
@@ -201,7 +201,7 @@ class MCPToolboxTests(unittest.TestCase):
     def test_environment_placeholders_resolve_from_process_environment(self):
         modules, launches = install_fake_mcp()
         config = server_config()
-        config["env"] = {"DOCS_TOKEN": "${SMART_HARNESS_TEST_TOKEN}"}
+        config["env"] = {"DOCS_TOKEN": "${CODEX_TEST_TOKEN}"}
 
         async def exercise():
             async with MCPToolbox([config]):
@@ -210,7 +210,7 @@ class MCPToolboxTests(unittest.TestCase):
         with patch.dict(sys.modules, modules), patch.dict(
             "os.environ",
             {
-                "SMART_HARNESS_TEST_TOKEN": "test-secret",
+                "CODEX_TEST_TOKEN": "test-secret",
                 "UNRELATED_SECRET": "must-not-leak",
             },
         ):
@@ -226,7 +226,7 @@ class MCPToolboxTests(unittest.TestCase):
             "enabled": True,
             "transport": "http",
             "url": "http://127.0.0.1:37840/mcp",
-            "headers": {"Authorization": "Bearer ${SMART_HARNESS_TEST_TOKEN}"},
+            "headers": {"Authorization": "Bearer ${CODEX_TEST_TOKEN}"},
             "allowed_tools": ["lookup"],
         }
 
@@ -235,7 +235,7 @@ class MCPToolboxTests(unittest.TestCase):
                 return await toolbox.call("mcp__trilium__lookup", {"query": "notes"})
 
         with patch.dict(sys.modules, modules), patch.dict(
-            "os.environ", {"SMART_HARNESS_TEST_TOKEN": "test-secret"}
+            "os.environ", {"CODEX_TEST_TOKEN": "test-secret"}
         ):
             result = asyncio.run(exercise())
 

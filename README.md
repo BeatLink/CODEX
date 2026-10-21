@@ -1,10 +1,10 @@
-# SmartHarness
+# CODEX
 
 A harness that makes small, locally run LLMs more capable on tasks they would
 otherwise fumble.
 
 Small models struggle with long, multistep reasoning: they lose track of
-constraints, skip requirements, and invent facts. SmartHarness never asks the
+constraints, skip requirements, and invent facts. CODEX never asks the
 model to do the whole job at once. It works each request as a tree of tasks,
 gives the model one narrow goal per call, and passes forward only the results
 that call needs. Alongside the task tree, a local SQLite knowledge store keeps what the
@@ -16,16 +16,16 @@ a hosted model.
 
 ## Daemon and interfaces
 
-SmartHarness is split into a daemon and the interfaces that talk to it. The
-daemon (`smartharness-daemon`) owns the loaded model, runs requests, and runs
+CODEX is split into a daemon and the interfaces that talk to it. The
+daemon (`codex-daemon`) owns the loaded model, runs requests, and runs
 background research. Interfaces connect to it over a Unix socket at
-`$XDG_RUNTIME_DIR/smartharness/daemon.sock` and only show what it reports, so
+`$XDG_RUNTIME_DIR/codex/daemon.sock` and only show what it reports, so
 several can be open at once and all see the same run, queue, and settings.
 
 - The terminal and GTK interfaces start the daemon if none is running. A daemon
   started this way exits 30 seconds after the last interface disconnects, which
   also frees the model's memory; its output goes to
-  `~/.local/state/smartharness/daemon.log`. Run `smartharness-daemon` yourself
+  `~/.local/state/codex/daemon.log`. Run `codex-daemon` yourself
   to keep one running, and background research with it, until it gets
   `SIGTERM`. `--exit-when-unused SECONDS` gives it the same timeout.
 - A one-shot CLI run uses the daemon when one is running, so the model is
@@ -34,15 +34,15 @@ several can be open at once and all see the same run, queue, and settings.
   only that interface is asked clarification questions, and the run is
   cancelled if that interface disconnects.
 - Loading a model with layers on the GPU takes the lock file
-  `$XDG_RUNTIME_DIR/smartharness-gpu.lock` and holds it until that model is
+  `$XDG_RUNTIME_DIR/codex-gpu.lock` and holds it until that model is
   unloaded, so two programs never fill the GPU at once (llama.cpp aborts the
   whole process when the GPU runs out of memory). A load waits up to 30
   minutes for another holder, and an interface shows "Waiting for the GPU"
   meanwhile. Other programs can share the GPU the same way with
-  `flock "$XDG_RUNTIME_DIR/smartharness-gpu.lock" command`; SmartHarness
+  `flock "$XDG_RUNTIME_DIR/codex-gpu.lock" command`; CODEX
   started under such a command uses the lock it was given. Models with no GPU
   layers, such as the embedding model, never take it.
-  `SMARTHARNESS_GPU_LOCK` names another lock file, or turns the lock off when
+  `CODEX_GPU_LOCK` names another lock file, or turns the lock off when
   set empty.
 - The daemon reads `settings.json` when it starts. Relative paths in settings
   are resolved from the directory the daemon started in; the CLI sends its
@@ -137,7 +137,7 @@ top task's write or combine step is the final answer.
   `[instruction removed]`. A 4B model followed an appended instruction inside
   the fence every time; with those sentences removed it passed every hostile
   task. `evals/hostile_seed.json` and `evals/hostile_tasks.json` test this:
-  `smartharness eval --seed evals/hostile_seed.json --tasks evals/hostile_tasks.json`.
+  `codex eval --seed evals/hostile_seed.json --tasks evals/hostile_tasks.json`.
 
 `mode` limits what a request may do: in `answer` and `draft` mode the `act`
 approach is never offered, so nothing is changed, while `auto` (the default)
@@ -158,17 +158,17 @@ task that was cut off mid-way starts again from its decision. The clarification
 answer and the evidence gathered so far are restored, and the run works under
 the options it started with, not the current settings. The TUI and GTK
 interfaces offer Resume and Discard for the newest unfinished run, and
-`smartharness --resume` resumes it from the command line.
+`codex --resume` resumes it from the command line.
 
 ## Standing instructions
 
 Rules you write yourself go into every model call, after the request, and are
-never condensed or trimmed before the earlier results are. SmartHarness reads
+never condensed or trimmed before the earlier results are. CODEX reads
 two files, in this order:
 
-- `~/.config/smartharness/SMARTHARNESS.md` (under `$XDG_CONFIG_HOME` when it
+- `~/.config/codex/CODEX.md` (under `$XDG_CONFIG_HOME` when it
   is set), for rules that hold everywhere.
-- `SMARTHARNESS.md` in `filesystem_root`, or `AGENTS.md` when there is none,
+- `CODEX.md` in `filesystem_root`, or `AGENTS.md` when there is none,
   for rules about that folder, such as how its tests run.
 
 Together they are cut at 4000 characters, since a small model's window has
@@ -185,10 +185,10 @@ A prompt may start with a command. Besides the mode prefixes (`/ask`, `/plan`,
 | `/remember [kind] statement [Why: reason]` | Stores a memory you state yourself, without the model. The kind is `preference` (the default), `project`, `correction`, or `reference`. A `project` memory belongs to the current folder; the others hold everywhere. A stated memory outlasts a learned one it contradicts |
 | `/memories` | Lists the memories for the current folder, with their numbers |
 | `/forget number` or `/forget words` | Deletes one memory, by its number or by words from it; when several match, they are listed instead |
-| `/init` | Reads the folder and writes its `SMARTHARNESS.md`, or improves the one there. With file writes off, it replies with the text instead |
+| `/init` | Reads the folder and writes its `CODEX.md`, or improves the one there. With file writes off, it replies with the text instead |
 
 Define your own commands as Markdown files named after the command, in
-`~/.config/smartharness/commands/` or the folder's `.smartharness/commands/`
+`~/.config/codex/commands/` or the folder's `.codex/commands/`
 (which wins when both have one of the same name). `/review parser.py` runs
 `review.md`:
 
@@ -211,7 +211,7 @@ is.
 ### Knowledge store
 
 Knowledge lives in a SQLite database at `knowledge_db_path`
-(`~/.local/share/smartharness/knowledge.sqlite3` by default). It holds:
+(`~/.local/share/codex/knowledge.sqlite3` by default). It holds:
 
 - **Topics**, each with an optional parent topic, a priority, a summary, how
   often it has been used, and when it was last researched.
@@ -432,20 +432,20 @@ and optionally an embedding model at `./models/embedding.gguf` (see
 ## Usage
 
 ```bash
-smartharness "Explain how to design a local event logging daemon"
-echo "Summarize this design" | smartharness
-smartharness            # opens the TUI when run in a terminal
-smartharness --tui      # or: smartharness-tui
-python -m smartharness  # same as smartharness
-smartharness-gtk        # open the GTK interface
-smartharness-daemon     # run the daemon in the foreground
-smartharness --resume   # carry on the newest unfinished task tree run
-smartharness eval       # compare the bare model and the task tree
+codex "Explain how to design a local event logging daemon"
+echo "Summarize this design" | codex
+codex            # opens the TUI when run in a terminal
+codex --tui      # or: codex-tui
+python -m codex  # same as codex
+codex-gtk        # open the GTK interface
+codex-daemon     # run the daemon in the foreground
+codex --resume   # carry on the newest unfinished task tree run
+codex eval       # compare the bare model and the task tree
 ```
 
 ### Evaluation
 
-`smartharness eval` answers each task in `evals/tasks.json` with the bare model
+`codex eval` answers each task in `evals/tasks.json` with the bare model
 (one call with a plain system prompt) and with the task tree, both on one
 loaded model. Each answer is scored by checks that do not use
 the model: `contains`, `contains_any`, `not_contains`, `regex`, `not_regex`,
@@ -492,17 +492,17 @@ a model, the facts and topics are embedded as the store is built, and every
 run recalls by meaning as well as by words.
 
 ```bash
-smartharness eval --runners bare,tree --only stable-fact,python-bug
-smartharness eval --tasks my-tasks.json --output report.json
-smartharness eval --tasks evals/execute_tasks.json
-smartharness eval --runners tree --repeat 3 --output report.json
-smartharness eval --runners tree --seed-store ~/.local/share/smartharness/knowledge.sqlite3
-smartharness eval --seed --runners tree
+codex eval --runners bare,tree --only stable-fact,python-bug
+codex eval --tasks my-tasks.json --output report.json
+codex eval --tasks evals/execute_tasks.json
+codex eval --runners tree --repeat 3 --output report.json
+codex eval --runners tree --seed-store ~/.local/share/codex/knowledge.sqlite3
+codex eval --seed --runners tree
 ```
 
 ### Recall benchmark
 
-`smartharness recall-benchmark` scores recall itself, with no chat model. It
+`codex recall-benchmark` scores recall itself, with no chat model. It
 builds a store from the made-up facts in `evals/recall_benchmark_seed.json`,
 asks each question in `evals/recall_benchmark.json`, and compares the five
 facts recalled with the ones each question expects. Questions come in four
@@ -551,7 +551,7 @@ The TUI has four pages:
 
 ### GTK interface
 
-`smartharness-gtk` has the same four pages in a GTK 4 window that follows the
+`codex-gtk` has the same four pages in a GTK 4 window that follows the
 desktop's GTK theme. On the Workbench page the list on the left shows the
 live task tree and a Steps page with every step's output; choosing an entry shows its output, and choosing a task shows
 its deliverable, state, note, and result. The final answer's
@@ -563,7 +563,7 @@ package and dev shell provide.
 ## Configuration
 
 Settings are read from `settings.json` in the current directory, then from the
-one beside the package, then from `~/.config/smartharness/settings.json` (under
+one beside the package, then from `~/.config/codex/settings.json` (under
 `$XDG_CONFIG_HOME` when it is set). Use `--settings path/to/file.json` to pick
 another. Unknown keys are rejected.
 
@@ -584,7 +584,7 @@ another. Unknown keys are rejected.
 	"mode": "auto",
 	"max_task_depth": 3,
 	"max_task_nodes": 20,
-	"knowledge_db_path": "~/.local/share/smartharness/knowledge.sqlite3",
+	"knowledge_db_path": "~/.local/share/codex/knowledge.sqlite3",
 	"embedding_model_path": "./models/embedding.gguf",
 	"background_research_enabled": true,
 	"background_model_path": "",
@@ -694,27 +694,27 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 
 | Path | Contents |
 | --- | --- |
-| `smartharness/task_tree.py` | The task tree: deciding, gathering, writing, checking, and splitting tasks |
-| `smartharness/model.py` | Loading the model and making one call to it |
-| `smartharness/evidence.py` | Searching with memory, recall formatting, page summaries, and the research queue |
-| `smartharness/checks.py` | Checks on a result that do not rely on the model |
-| `smartharness/tool_stage.py` | The tool-calling loop each task's gather step runs |
-| `smartharness/tools.py` | Built-in tools and their path and URL checks |
-| `smartharness/mcp_tools.py` | MCP client for stdio and HTTP servers |
-| `smartharness/context_budget.py` | Fitting each call's input into the context window |
-| `smartharness/knowledge.py` | SQLite knowledge store, queue, and graph |
-| `smartharness/recall_benchmark.py` | Scoring recall against questions with known relevant facts |
-| `smartharness/embeddings.py` | The embedding model used to find facts and topics by meaning |
-| `smartharness/background.py` | One background research job |
-| `smartharness/consolidation.py` | One background consolidation step: merging, re-filing, and pruning the store |
-| `smartharness/settings.py` | Defaults and validation |
-| `smartharness/daemon.py` | The daemon: model, runs, background worker, and socket server |
-| `smartharness/client.py`, `smartharness/protocol.py` | Connecting to the daemon, starting it, and the message format |
-| `smartharness/cli.py`, `smartharness/tui.py` | Command line and Textual interface |
-| `smartharness/gtk_app.py` | GTK 4 interface |
-| `smartharness/evaluation.py`, `evals/tasks.json` | The eval harness and its fixed task set |
+| `codex/task_tree.py` | The task tree: deciding, gathering, writing, checking, and splitting tasks |
+| `codex/model.py` | Loading the model and making one call to it |
+| `codex/evidence.py` | Searching with memory, recall formatting, page summaries, and the research queue |
+| `codex/checks.py` | Checks on a result that do not rely on the model |
+| `codex/tool_stage.py` | The tool-calling loop each task's gather step runs |
+| `codex/tools.py` | Built-in tools and their path and URL checks |
+| `codex/mcp_tools.py` | MCP client for stdio and HTTP servers |
+| `codex/context_budget.py` | Fitting each call's input into the context window |
+| `codex/knowledge.py` | SQLite knowledge store, queue, and graph |
+| `codex/recall_benchmark.py` | Scoring recall against questions with known relevant facts |
+| `codex/embeddings.py` | The embedding model used to find facts and topics by meaning |
+| `codex/background.py` | One background research job |
+| `codex/consolidation.py` | One background consolidation step: merging, re-filing, and pruning the store |
+| `codex/settings.py` | Defaults and validation |
+| `codex/daemon.py` | The daemon: model, runs, background worker, and socket server |
+| `codex/client.py`, `codex/protocol.py` | Connecting to the daemon, starting it, and the message format |
+| `codex/cli.py`, `codex/tui.py` | Command line and Textual interface |
+| `codex/gtk_app.py` | GTK 4 interface |
+| `codex/evaluation.py`, `evals/tasks.json` | The eval harness and its fixed task set |
 | `evals/seed.json`, `evals/recall_tasks.json` | The seed store's made-up facts and the tasks only recall can answer |
-| `smartharness/task_view.py` | Task tree lines and task details shared by the interfaces |
+| `codex/task_view.py` | Task tree lines and task details shared by the interfaces |
 
 See [docs/architecture.md](docs/architecture.md) for how these parts fit together.
 

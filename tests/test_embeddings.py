@@ -6,10 +6,10 @@ import unittest.mock
 from pathlib import Path
 from unittest.mock import patch
 
-from smartharness.background import index_knowledge
-from smartharness.embeddings import Embedder, normalize
-from smartharness.knowledge import KnowledgeStore, _fuse_rankings
-from smartharness.settings import DEFAULT_SETTINGS
+from codex.background import index_knowledge
+from codex.embeddings import Embedder, normalize
+from codex.knowledge import KnowledgeStore, _fuse_rankings
+from codex.settings import DEFAULT_SETTINGS
 
 # Words that mean the same thing share a dimension, so the fake model "understands" paraphrases.
 CONCEPTS = {
@@ -137,7 +137,7 @@ class EmbeddingRetrievalTests(unittest.TestCase):
             self.store.add_fact("Rust", f"Cargo fact {number}.")
         settings = {**DEFAULT_SETTINGS, "knowledge_db_path": str(self.database_path), "embedding_model_path": "fake.gguf"}
 
-        with patch("smartharness.background.get_embedder", return_value=self.embedder):
+        with patch("codex.background.get_embedder", return_value=self.embedder):
             passes = 0
             while index_knowledge(settings):
                 passes += 1
@@ -165,7 +165,7 @@ class EmbeddingRetrievalTests(unittest.TestCase):
 
 class EmbedderTests(unittest.TestCase):
     def test_a_repeated_query_is_embedded_once(self):
-        from smartharness.embeddings import QUERY_INSTRUCTION, Embedder
+        from codex.embeddings import QUERY_INSTRUCTION, Embedder
 
         embedder = Embedder("unused.gguf")
         model = unittest.mock.Mock()

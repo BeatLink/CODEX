@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from smartharness.cli import main as cli_main
-from smartharness.evaluation import (
+from codex.cli import main as cli_main
+from codex.evaluation import (
     DEFAULT_SEED_PATH,
     DEFAULT_TASKS_PATH,
     EVALS_DIRECTORY,
@@ -24,8 +24,8 @@ from smartharness.evaluation import (
     summarize,
     task_pass_counts,
 )
-from smartharness.knowledge import KnowledgeStore
-from smartharness.settings import DEFAULT_SETTINGS
+from codex.knowledge import KnowledgeStore
+from codex.settings import DEFAULT_SETTINGS
 from user_config import setUpModule, tearDownModule  # The user's own config files never reach these tests.
 
 
@@ -151,7 +151,7 @@ class RunTaskTests(unittest.TestCase):
             return "4"
 
         task = EvalTask(id="sum", prompt="What is 2 + 2?", checks=[{"type": "contains", "value": "4"}], mode="answer")
-        with patch("smartharness.evaluation.execute_task_tree", side_effect=fake_tree):
+        with patch("codex.evaluation.execute_task_tree", side_effect=fake_tree):
             result = run_task(task, "tree", ReplyingModel(""), DEFAULT_SETTINGS)
 
         self.assertTrue(result.passed)
@@ -174,7 +174,7 @@ class RunTaskTests(unittest.TestCase):
         task = EvalTask(id="seed", prompt="What was stored?", checks=[{"type": "contains", "value": "seeded"}])
         with tempfile.TemporaryDirectory() as directory:
             seed_path = write_seed_store(directory)
-            with patch("smartharness.evaluation.execute_task_tree", side_effect=fake_tree):
+            with patch("codex.evaluation.execute_task_tree", side_effect=fake_tree):
                 result = run_task(task, "tree", ReplyingModel(""), DEFAULT_SETTINGS, seed_store=seed_path)
             with sqlite3.connect(seed_path) as connection:
                 remaining = connection.execute("SELECT COUNT(*) FROM notes").fetchone()[0]
@@ -188,7 +188,7 @@ class RunTaskTests(unittest.TestCase):
         task = EvalTask(id="sum", prompt="What is 2 + 2?", checks=[{"type": "contains", "value": "4"}])
         with tempfile.TemporaryDirectory() as directory:
             seed_path = write_seed_store(directory)
-            with patch("smartharness.evaluation.execute_task_tree", return_value="4"):
+            with patch("codex.evaluation.execute_task_tree", return_value="4"):
                 results = run_eval([task], ["bare", "tree"], ReplyingModel("4"), DEFAULT_SETTINGS, seed_store=seed_path)
 
         self.assertEqual(
@@ -198,7 +198,7 @@ class RunTaskTests(unittest.TestCase):
 
     def test_a_failing_run_is_recorded_as_an_error_and_scores_nothing(self):
         task = EvalTask(id="sum", prompt="What is 2 + 2?", checks=[{"type": "not_contains", "value": "5"}])
-        with patch("smartharness.evaluation.execute_task_tree", side_effect=RuntimeError("token limit")):
+        with patch("codex.evaluation.execute_task_tree", side_effect=RuntimeError("token limit")):
             result = run_task(task, "tree", ReplyingModel(""), DEFAULT_SETTINGS)
 
         self.assertEqual(result.error, "RuntimeError: token limit")
@@ -318,7 +318,7 @@ class FileTaskTests(unittest.TestCase):
             (root / "test_ranges.py").write_text("changed", encoding="utf-8")
             return "Done."
 
-        with patch("smartharness.evaluation.execute_task_tree", side_effect=fake_tree):
+        with patch("codex.evaluation.execute_task_tree", side_effect=fake_tree):
             result = run_task(ranges_task(), "tree", ReplyingModel(""), DEFAULT_SETTINGS)
 
         self.assertTrue(seen["allow_file_writes"] and seen["enable_test_execution"])
@@ -335,8 +335,8 @@ class CommandLineTests(unittest.TestCase):
             tasks_path = write_tasks(directory, [TASK, {**TASK, "id": "other"}])
             output_path = Path(directory) / "report.json"
             with (
-                patch("smartharness.evaluation.load_settings", return_value=DEFAULT_SETTINGS.copy()),
-                patch("smartharness.evaluation.create_model", return_value=ReplyingModel("4")),
+                patch("codex.evaluation.load_settings", return_value=DEFAULT_SETTINGS.copy()),
+                patch("codex.evaluation.create_model", return_value=ReplyingModel("4")),
                 patch("builtins.print"),
             ):
                 exit_code = cli_main([
@@ -356,8 +356,8 @@ class CommandLineTests(unittest.TestCase):
             tasks_path = write_tasks(directory, [TASK])
             output_path = Path(directory) / "report.json"
             with (
-                patch("smartharness.evaluation.load_settings", return_value=DEFAULT_SETTINGS.copy()),
-                patch("smartharness.evaluation.create_model", return_value=ReplyingModel("4")) as create_model,
+                patch("codex.evaluation.load_settings", return_value=DEFAULT_SETTINGS.copy()),
+                patch("codex.evaluation.create_model", return_value=ReplyingModel("4")) as create_model,
                 patch("builtins.print"),
             ):
                 exit_code = main(["--tasks", str(tasks_path), "--runners", "bare", "--repeat", "2", "--output", str(output_path)])
@@ -376,9 +376,9 @@ class CommandLineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output_path = Path(directory) / "report.json"
             with (
-                patch("smartharness.evaluation.load_settings", return_value={**DEFAULT_SETTINGS, "embedding_model_path": ""}),
-                patch("smartharness.evaluation.create_model", return_value=ReplyingModel("")),
-                patch("smartharness.evaluation.execute_task_tree", return_value="7413"),
+                patch("codex.evaluation.load_settings", return_value={**DEFAULT_SETTINGS, "embedding_model_path": ""}),
+                patch("codex.evaluation.create_model", return_value=ReplyingModel("")),
+                patch("codex.evaluation.execute_task_tree", return_value="7413"),
                 patch("builtins.print"),
             ):
                 exit_code = main(["--seed", "--runners", "tree", "--only", "recall-port", "--output", str(output_path)])
@@ -392,8 +392,8 @@ class CommandLineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             tasks_path = write_tasks(directory, [TASK])
             with (
-                patch("smartharness.evaluation.load_settings", return_value=DEFAULT_SETTINGS.copy()),
-                patch("smartharness.evaluation.create_model") as create_model,
+                patch("codex.evaluation.load_settings", return_value=DEFAULT_SETTINGS.copy()),
+                patch("codex.evaluation.create_model") as create_model,
                 patch("builtins.print"),
             ):
                 self.assertEqual(main(["--tasks", str(tasks_path), "--only", "missing"]), 1)

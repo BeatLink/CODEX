@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "smartharness"
+name = "codex"
 version = "0.1.0"
 description = "A staged prompt harness for locally run language models"
 readme = "README.md"
@@ -11,10 +11,10 @@ requires-python = ">=3.10"
 dependencies = ["llama-cpp-python>=0.3.0", "ddgs>=9.0.0", "mcp>=1.0.0,<2", "rich>=13.0.0", "sqlite-vec>=0.1.6", "textual>=0.80.0"]
 
 [project.scripts]
-smartharness = "smartharness.cli:main"
-smartharness-tui = "smartharness.tui:main"
-smartharness-daemon = "smartharness.daemon:main"
-smartharness-gtk = "smartharness.gtk_app:main"
+codex = "codex.cli:main"
+codex-tui = "codex.tui:main"
+codex-daemon = "codex.daemon:main"
+codex-gtk = "codex.gtk_app:main"
 
 [tool.setuptools.packages.find]
-include = ["smartharness*"]
+include = ["codex*"]

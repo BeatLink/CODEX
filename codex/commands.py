@@ -120,7 +120,7 @@ class Command:
 def command_directories(filesystem_root: str | Path) -> list[Path]:
     """Return where command files live, the folder's own last so they win over global ones of the same name."""
     root = Path(filesystem_root).expanduser().resolve()
-    return [config_directory() / "commands", root / ".smartharness" / "commands"]
+    return [config_directory() / "commands", root / ".codex" / "commands"]
 
 
 def load_commands(filesystem_root: str | Path) -> dict[str, Command]:

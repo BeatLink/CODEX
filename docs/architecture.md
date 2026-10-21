@@ -1,13 +1,13 @@
 # Architecture
 
-How SmartHarness is put together: which process owns what, how one request flows through the model,
+How CODEX is put together: which process owns what, how one request flows through the model,
 and how the knowledge store and the background worker grow memory between requests. The README
 covers usage and settings; this document covers structure.
 
 ## The idea in one paragraph
 
 A small local model does badly when asked to do a whole job in one call, and it cannot tell when it
-does not know something. SmartHarness therefore never sends it the whole job. Each request is worked
+does not know something. CODEX therefore never sends it the whole job. Each request is worked
 as a tree of narrow tasks, each model call sees only the input it needs, replies that drive control
 flow are forced into JSON by a grammar, and facts are taken from evidence the harness gathered
 rather than from the model's memory. A SQLite knowledge store keeps that evidence between requests,
@@ -19,9 +19,9 @@ and a background worker uses idle time to turn it into facts, topic summaries an
  TUI (Textual)   GTK 4 app   one-shot CLI
        \             |           /
         \            |          /          one JSON object per line
-         +--- Unix socket: $XDG_RUNTIME_DIR/smartharness/daemon.sock ---+
+         +--- Unix socket: $XDG_RUNTIME_DIR/codex/daemon.sock ---+
                              |
-                     smartharness-daemon
+                     codex-daemon
          +-------------------+---------------------+
          | socket server     | run thread          | background thread
          | (one thread per   | (one request at a   | (research and learning
@@ -35,37 +35,37 @@ and a background worker uses idle time to turn it into facts, topic summaries an
                          KnowledgeStore (SQLite, WAL mode)
 ```
 
-- **The daemon** ([daemon.py](../smartharness/daemon.py)) owns the loaded model, the settings, the
+- **The daemon** ([daemon.py](../codex/daemon.py)) owns the loaded model, the settings, the
   active run and the background worker. Interfaces hold no state of their own; they render the
   events the daemon broadcasts, so several can watch the same run.
-- **Interfaces** ([tui.py](../smartharness/tui.py), [gtk_app.py](../smartharness/gtk_app.py),
-  [cli.py](../smartharness/cli.py)) connect through [client.py](../smartharness/client.py) and start
+- **Interfaces** ([tui.py](../codex/tui.py), [gtk_app.py](../codex/gtk_app.py),
+  [cli.py](../codex/cli.py)) connect through [client.py](../codex/client.py) and start
   a daemon when none answers. A one-shot CLI run without a daemon runs the request in-process and
   never starts the background worker.
-- **The protocol** ([protocol.py](../smartharness/protocol.py)) is newline-delimited JSON: requests
+- **The protocol** ([protocol.py](../codex/protocol.py)) is newline-delimited JSON: requests
   `{"id", "method", "params"}`, replies `{"id", "result" | "error"}`, and unsolicited
   `{"event", "data"}` lines such as `run.token` and `run.tree`.
 - **One model, one lock.** A run holds the model lock for its whole duration. The background worker
   takes the same lock for one model call at a time and checks before every step and every streamed
   token whether a run has started; if so it raises out, puts its job back in the queue, and releases
   the lock. A foreground request therefore waits for at most one token.
-- **ModelCache** ([model.py](../smartharness/model.py)) keeps one `Llama` instance and reloads
+- **ModelCache** ([model.py](../codex/model.py)) keeps one `Llama` instance and reloads
   it only when the model path, context size or GPU layers change.
 - **A separate background model** (`background_model_path`) has its own `ModelCache` and lock, so
   it never evicts the main model. It still gives way to a run in the same way, and the daemon
   unloads it after five minutes without background work.
-- **The GPU lock** ([gpu_lock.py](../smartharness/gpu_lock.py)) is shared with other programs: a
-  model with GPU layers takes an exclusive `flock` on `$XDG_RUNTIME_DIR/smartharness-gpu.lock` when
+- **The GPU lock** ([gpu_lock.py](../codex/gpu_lock.py)) is shared with other programs: a
+  model with GPU layers takes an exclusive `flock` on `$XDG_RUNTIME_DIR/codex-gpu.lock` when
   it loads and releases it when the last such model in the process is freed. A process started
   under `flock` reuses the descriptor it inherited instead of waiting on itself.
 
 ## How a request runs
 
-Every request is worked as a tree of tasks by [task_tree.py](../smartharness/task_tree.py): the
+Every request is worked as a tree of tasks by [task_tree.py](../codex/task_tree.py): the
 model decides, task by task, whether to answer, research, read files, act, or split. It builds on
-[model.py](../smartharness/model.py) for loading the model and making calls,
-[evidence.py](../smartharness/evidence.py) for searching, recall and page summaries, and
-[checks.py](../smartharness/checks.py) for the checks that do not rely on the model.
+[model.py](../codex/model.py) for loading the model and making calls,
+[evidence.py](../codex/evidence.py) for searching, recall and page summaries, and
+[checks.py](../codex/checks.py) for the checks that do not rely on the model.
 
 ### Task tree
 
@@ -120,7 +120,7 @@ crashing it.
 
 ### Context budget
 
-[context_budget.py](../smartharness/context_budget.py) counts tokens with the model's own
+[context_budget.py](../codex/context_budget.py) counts tokens with the model's own
 tokenizer. Each call's budget is the context size minus its reply budget, the system prompt and a
 template reserve. Short JSON replies get smaller reply budgets (1024 for decisions, 512 for checks)
 so their input has more room. When input overflows, the largest unpinned sections are first
@@ -129,19 +129,19 @@ overflows is trimmed. The original request and the current task are pinned.
 
 ### Tools
 
-[tools.py](../smartharness/tools.py) holds the built-in tools: `web_search` (DDGS), `web_fetch`
+[tools.py](../codex/tools.py) holds the built-in tools: `web_search` (DDGS), `web_fetch`
 (public addresses only, rechecked after redirects), `list_directory`, `read_file`, `write_file`
 (only with `allow_file_writes`) and `run_tests` (only with `enable_test_execution`). File paths must
-stay under `filesystem_root`, and sensitive file names are refused. [mcp_tools.py](../smartharness/mcp_tools.py)
+stay under `filesystem_root`, and sensitive file names are refused. [mcp_tools.py](../codex/mcp_tools.py)
 adds tools from configured MCP servers, limited to each server's `allowed_tools`.
 
-[tool_stage.py](../smartharness/tool_stage.py) runs the tool-calling loop for a task's gather step,
+[tool_stage.py](../codex/tool_stage.py) runs the tool-calling loop for a task's gather step,
 with an allow or block list per approach and at most `max_tool_calls` calls. Fetched pages are
 summarized in chunks for a focus the model supplies, and the chunk summaries are merged.
 
 ### Untrusted text
 
-[context_budget.py](../smartharness/context_budget.py) renders every section whose heading is in
+[context_budget.py](../codex/context_budget.py) renders every section whose heading is in
 `UNTRUSTED_HEADINGS` (search results, stored facts, recalled memory, tool findings, sources and
 subtopic summaries in background calls) between `<untrusted-data>` tags, after removing any such
 tag from the text and replacing each sentence that gives the reader orders with
@@ -162,7 +162,7 @@ The model's own verdicts are backed by deterministic checks, applied in the task
 
 ## Knowledge store
 
-[knowledge.py](../smartharness/knowledge.py) is one SQLite file (`knowledge_db_path`) in WAL mode,
+[knowledge.py](../codex/knowledge.py) is one SQLite file (`knowledge_db_path`) in WAL mode,
 opened per operation. The schema is versioned with `PRAGMA user_version`; each migration commits
 with its version bump, and a database newer than the code is refused.
 
@@ -196,7 +196,7 @@ There are two read paths, used at different moments:
    or three of them for a longer prompt (stopwords removed, at most twelve terms), those sharing
    the most terms first. When fewer than five match, recall walks the topic tree: it takes the most
    specific topic whose whole name appears in the query and fills up from facts in that topic and
-   its subtopics. With an embedding model ([embeddings.py](../smartharness/embeddings.py)), the
+   its subtopics. With an embedding model ([embeddings.py](../codex/embeddings.py)), the
    query is also embedded and compared with every fact's vector through sqlite-vec; facts above a
    similarity floor are merged with the word matches by reciprocal rank fusion, and when no topic
    is named, the topic closest in meaning supplies the branch. Each recalled fact carries its chain of ancestor topics and their
@@ -240,7 +240,7 @@ loop:
     worked → wait 0.2 s, else wait poll interval
 ```
 
-`research_one_topic` ([background.py](../smartharness/background.py)) claims the highest-priority
+`research_one_topic` ([background.py](../codex/background.py)) claims the highest-priority
 pending job and:
 
 1. Runs `web_search` on the topic name, then fetches and summarizes the first two different result
@@ -266,7 +266,7 @@ each that has no facts yet is queued. The episodes are marked processed even whe
 
 ### Consolidation
 
-`consolidate_knowledge` ([consolidation.py](../smartharness/consolidation.py)) does one small piece
+`consolidate_knowledge` ([consolidation.py](../codex/consolidation.py)) does one small piece
 of tidying per pass, so it yields to a run as quickly as research does.
 
 1. **Without the model** (`KnowledgeStore.tidy`): break topic parent loops, merge topics whose names
@@ -317,7 +317,7 @@ research_queue ─► research_one_topic (idle time) ─► facts, summaries, gr
 
 ## Limits on the development laptop
 
-SmartHarness is developed on a Lenovo IdeaPad Gaming 3: an RTX 3050 Ti Mobile with 4 GB of VRAM
+CODEX is developed on a Lenovo IdeaPad Gaming 3: an RTX 3050 Ti Mobile with 4 GB of VRAM
 (the display runs on the AMD iGPU, so the card is free for models), a Ryzen 5 5600H and 27 GiB of
 DDR4. The limits found there shape the settings and what was left out.
 
@@ -325,7 +325,7 @@ DDR4. The limits found there shape the settings and what was left out.
   runs; from 7,168 to 10,240 the model loads but the process aborts with a CUDA error once a long
   prompt arrives, and from 12,288 the context cannot be created. A context that loads is therefore
   no proof that it fits. `settings.json` uses 6,144, and the 560 MiB fixed reserve in
-  [auto_size.py](../smartharness/auto_size.py) is fitted to these results (measured 2026-10-20).
+  [auto_size.py](../codex/auto_size.py) is fitted to these results (measured 2026-10-20).
 - **No draft model or prompt lookup.** In llama-cpp-python 0.3.36 any draft model forces
   `logits_all`, a context × vocabulary float array: with Qwen3.5's 248,320-token vocabulary that is
   5.7 GiB of RAM at 6,144 tokens, and the card would compute logits for every prompt token while

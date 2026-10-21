@@ -9,8 +9,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from smartharness.gpu_lock import LOCK_PATH_VARIABLE, GpuLock
-from smartharness.model import create_model
+from codex.gpu_lock import LOCK_PATH_VARIABLE, GpuLock
+from codex.model import create_model
 
 REPOSITORY = Path(__file__).resolve().parent.parent
 
@@ -62,7 +62,7 @@ class GpuLockTests(unittest.TestCase):
 
     def test_a_program_started_under_flock_reuses_the_lock_it_inherited(self):
         script = (
-            "from smartharness.gpu_lock import GpuLock\n"
+            "from codex.gpu_lock import GpuLock\n"
             "lock = GpuLock(); lock.acquire(timeout=2); lock.release(); print('acquired')\n"
         )
         result = subprocess.run(
@@ -89,7 +89,7 @@ class ModelLockTests(unittest.TestCase):
 
         with (
             patch.dict(sys.modules, {"llama_cpp": types.SimpleNamespace(Llama=FakeLlama)}),
-            patch("smartharness.model.GPU_LOCK") as lock,
+            patch("codex.model.GPU_LOCK") as lock,
         ):
             create_model("model.gguf", 2048, 0)
             lock.acquire.assert_not_called()

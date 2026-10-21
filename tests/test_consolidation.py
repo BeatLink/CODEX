@@ -5,9 +5,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from smartharness.consolidation import NEW_PARENT, TOP_LEVEL, consolidate_knowledge
-from smartharness.knowledge import KnowledgeStore
-from smartharness.settings import DEFAULT_SETTINGS
+from codex.consolidation import NEW_PARENT, TOP_LEVEL, consolidate_knowledge
+from codex.knowledge import KnowledgeStore
+from codex.settings import DEFAULT_SETTINGS
 
 
 def verdict(choice: str, key: str = "verdict") -> str:
@@ -26,7 +26,7 @@ class ConsolidationTestCase(unittest.TestCase):
     def consolidate(self, *replies: str, **options):
         """Run one consolidation pass with the model giving these replies, returning the pass result and the calls."""
         answers = iter(replies)
-        with patch("smartharness.background.run_stage", side_effect=lambda *args, **kwargs: next(answers)) as run_stage:
+        with patch("codex.background.run_stage", side_effect=lambda *args, **kwargs: next(answers)) as run_stage:
             worked = consolidate_knowledge(self.settings, llm=object(), **options)
         return worked, run_stage.call_args_list
 
@@ -440,7 +440,7 @@ class ModelCheckTests(ConsolidationTestCase):
             kwargs["on_token"]("partial")
             return verdict("same subject")
 
-        with patch("smartharness.background.run_stage", side_effect=interrupt):
+        with patch("codex.background.run_stage", side_effect=interrupt):
             self.assertTrue(consolidate_knowledge(self.settings, should_pause=lambda: active["prompt"], llm=object()))
 
         self.assertEqual(set(self.topic_names()), {"SQLite", "SQLite FTS5"})

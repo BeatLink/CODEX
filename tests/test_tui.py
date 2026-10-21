@@ -21,9 +21,9 @@ from textual.widgets import (
 
 from daemon_harness import RunningDaemon
 
-from smartharness.knowledge import KnowledgeStore
-from smartharness.settings import DEFAULT_SETTINGS, load_settings
-from smartharness.tui import ClarificationScreen, SmartHarnessApp
+from codex.knowledge import KnowledgeStore
+from codex.settings import DEFAULT_SETTINGS, load_settings
+from codex.tui import ClarificationScreen, CodexApp
 from user_config import setUpModule, tearDownModule  # The user's own config files never reach these tests.
 
 
@@ -36,7 +36,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             settings = {**settings, "knowledge_db_path": str(Path(directory.name) / "knowledge.db")}
         daemon = RunningDaemon(settings, settings_path, start_worker=start_worker)
         self.addCleanup(daemon.stop)
-        return SmartHarnessApp(settings, client=daemon.client(), **options)
+        return CodexApp(settings, client=daemon.client(), **options)
 
     async def test_app_mounts_prompt_task_tree_and_response_controls(self):
         app = self.app(initial_prompt="Draft a plan")
@@ -119,7 +119,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             kwargs["stage_output_callback"]("Task 1 · Writing", "Step output")
             return "Worker response"
 
-        with patch("smartharness.daemon.execute_task_tree", side_effect=fake_task_tree):
+        with patch("codex.daemon.execute_task_tree", side_effect=fake_task_tree):
             async with app.run_test(size=(120, 42)) as pilot:
                 await connected(pilot, app)
                 app._start_run()
@@ -139,7 +139,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             modes.append(kwargs["mode"])
             return "Done"
 
-        with patch("smartharness.daemon.execute_task_tree", side_effect=fake_task_tree):
+        with patch("codex.daemon.execute_task_tree", side_effect=fake_task_tree):
             async with app.run_test(size=(120, 42)) as pilot:
                 await connected(pilot, app)
                 app.query_one("#mode", Select).value = "execute"
@@ -156,7 +156,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             answers.append(kwargs["clarification_callback"]("Which city?"))
             return "Booked."
 
-        with patch("smartharness.daemon.execute_task_tree", side_effect=asking_task_tree):
+        with patch("codex.daemon.execute_task_tree", side_effect=asking_task_tree):
             async with app.run_test(size=(120, 42)) as pilot:
                 await connected(pilot, app)
                 app._start_run()
@@ -177,7 +177,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             settings_path = Path(directory) / "settings.json"
             app = self.app(settings, settings_path, start_worker=True)
 
-            with patch("smartharness.daemon.research_one_topic", return_value=False) as research:
+            with patch("codex.daemon.research_one_topic", return_value=False) as research:
                 async with app.run_test(size=(140, 48)) as pilot:
                     await connected(pilot, app)
                     await pilot.click("#--content-tab-background-page")
@@ -231,7 +231,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(saved["mcp_servers"][0]["name"], "docs")
 
     async def test_auto_size_fills_context_and_token_limits(self):
-        from smartharness.auto_size import SizeChoice
+        from codex.auto_size import SizeChoice
 
         settings = DEFAULT_SETTINGS.copy()
         settings["background_research_enabled"] = False
@@ -242,7 +242,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             await connected(pilot, app)
             await pilot.click("#--content-tab-options-page")
             await pilot.pause()
-            with patch("smartharness.daemon.auto_size", return_value=choice) as sizer:
+            with patch("codex.daemon.auto_size", return_value=choice) as sizer:
                 app.query_one("#auto-size", Button).press()
                 await pilot.pause()
 
@@ -320,7 +320,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 kwargs["stage_output_callback"]("Task 1 · Writing", "token ")
                 time.sleep(0.01)
 
-        with patch("smartharness.daemon.execute_task_tree", side_effect=endless_task_tree):
+        with patch("codex.daemon.execute_task_tree", side_effect=endless_task_tree):
             async with app.run_test(size=(120, 42)) as pilot:
                 await connected(pilot, app)
                 app._start_run()
@@ -343,7 +343,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             kwargs["progress_callback"]("Task 1.2 · Acting")
             raise RuntimeError("tool exploded")
 
-        with patch("smartharness.daemon.execute_task_tree", side_effect=failing_task_tree):
+        with patch("codex.daemon.execute_task_tree", side_effect=failing_task_tree):
             async with app.run_test(size=(120, 42)) as pilot:
                 await connected(pilot, app)
                 app._start_run()
@@ -388,7 +388,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             kwargs["progress_callback"]("Task 1.1 · Checking")
             return "Pick A."
 
-        with patch("smartharness.daemon.execute_task_tree", side_effect=fake_task_tree):
+        with patch("codex.daemon.execute_task_tree", side_effect=fake_task_tree):
             async with app.run_test(size=(120, 42)) as pilot:
                 await connected(pilot, app)
                 app._start_run()
@@ -429,7 +429,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
                 store.set_task_run_status(run_id, "stopped")
             app = self.app(settings=settings)
 
-            with patch("smartharness.daemon.execute_task_tree", return_value="Trip planned.") as task_tree:
+            with patch("codex.daemon.execute_task_tree", return_value="Trip planned.") as task_tree:
                 async with app.run_test(size=(120, 42)) as pilot:
                     await connected(pilot, app)
                     self.assertTrue(app.query_one("#resume-bar").display)
@@ -449,7 +449,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
     async def test_ctrl_r_runs_the_prompt(self):
         app = self.app(initial_prompt="Draft a plan")
 
-        with patch("smartharness.daemon.execute_task_tree", return_value="Shortcut response"):
+        with patch("codex.daemon.execute_task_tree", return_value="Shortcut response"):
             async with app.run_test(size=(120, 42)) as pilot:
                 await connected(pilot, app)
                 await pilot.press("ctrl+r")

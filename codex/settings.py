@@ -16,9 +16,9 @@ MAX_TASK_DEPTH = 3
 MAX_TASK_NODES = 20
 DEFAULT_SETTINGS_PATH = Path(__file__).resolve().parent.parent / "settings.json"
 USER_SETTINGS_PATH = (
-    Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "smartharness" / "settings.json"
+    Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "codex" / "settings.json"
 )
-DEFAULT_KNOWLEDGE_DB_PATH = "~/.local/share/smartharness/knowledge.sqlite3"
+DEFAULT_KNOWLEDGE_DB_PATH = "~/.local/share/codex/knowledge.sqlite3"
 DEFAULT_EMBEDDING_MODEL_PATH = "./models/embedding.gguf"
 DEFAULT_SETTINGS = {
     "model_path": DEFAULT_MODEL_PATH,

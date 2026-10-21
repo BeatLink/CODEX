@@ -149,8 +149,8 @@ class ClarificationScreen(ModalScreen[str]):
         self.dismiss("")
 
 
-class SmartHarnessApp(App[None]):
-    TITLE = "SmartHarness"
+class CodexApp(App[None]):
+    TITLE = "CODEX"
     SUB_TITLE = "LOCAL MODEL WORKBENCH"
     BINDINGS = [
         ("ctrl+r", "run_prompt", "Run prompt"),
@@ -754,7 +754,7 @@ class SmartHarnessApp(App[None]):
         if saved is None:
             return
         self.settings = saved["settings"]
-        self.notify(f"Settings saved to {saved['path']}.", title="SmartHarness")
+        self.notify(f"Settings saved to {saved['path']}.", title="CODEX")
 
     def _show_settings(self, settings: dict[str, Any]) -> None:
         self.settings = settings.copy()
@@ -860,7 +860,7 @@ class SmartHarnessApp(App[None]):
 
     def _show_daemon_error(self, message: str) -> None:
         self.query_one("#status", Static).update("Daemon unavailable")
-        self.notify(message, title="SmartHarness daemon", severity="error", timeout=10)
+        self.notify(message, title="CODEX daemon", severity="error", timeout=10)
 
     def _show_daemon_status(self, status: dict[str, Any]) -> None:
         self._show_settings(status["settings"])
@@ -921,17 +921,17 @@ class SmartHarnessApp(App[None]):
         elif event == DISCONNECTED_EVENT:
             if self._request_running:
                 self._fail_run("The daemon closed the connection.")
-            self._show_daemon_error("Lost the connection to the SmartHarness daemon.")
+            self._show_daemon_error("Lost the connection to the CODEX daemon.")
 
     def _call_daemon(self, method: str, **params: Any) -> Any:
         """Call the daemon from the interface thread and report a failure; returns None when it fails."""
         if self.client is None:
-            self.notify("Not connected to the daemon yet.", title="SmartHarness", severity="warning")
+            self.notify("Not connected to the daemon yet.", title="CODEX", severity="warning")
             return None
         try:
             return self.client.call(method, **params)
         except DaemonError as error:
-            self.notify(str(error), title="SmartHarness daemon", severity="error")
+            self.notify(str(error), title="CODEX daemon", severity="error")
             return None
 
     # ==========================================================================
@@ -1031,7 +1031,7 @@ class SmartHarnessApp(App[None]):
         self.copy_to_clipboard(self._last_answer)
         self.notify(
             "Sent the answer to the terminal clipboard. Terminals without OSC 52 support ignore it.",
-            title="SmartHarness",
+            title="CODEX",
         )
 
     def _show_output_pane(self) -> None:
@@ -1139,7 +1139,7 @@ class SmartHarnessApp(App[None]):
 
     def _fail_run(self, message: str) -> None:
         self._stop_run(f"**Run failed**\n\n{message}", "Run failed")
-        self.notify(message, title="SmartHarness error", severity="error", timeout=8)
+        self.notify(message, title="CODEX error", severity="error", timeout=8)
 
     def _cancelled_run(self) -> None:
         self._stop_run("_Run cancelled._", "Cancelled")
@@ -1351,7 +1351,7 @@ class SmartHarnessApp(App[None]):
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Open the SmartHarness terminal interface.")
+    parser = argparse.ArgumentParser(description="Open the CODEX terminal interface.")
     parser.add_argument(
         "--settings",
         default=str(default_settings_path()),
@@ -1362,5 +1362,5 @@ def main(argv: list[str] | None = None) -> int:
         settings = load_settings(args.settings)
     except (OSError, ValueError) as error:
         parser.error(str(error))
-    SmartHarnessApp(settings, settings_path=args.settings).run()
+    CodexApp(settings, settings_path=args.settings).run()
     return 0

@@ -63,12 +63,12 @@
     {
       packages.${system} = {
         default = app;
-        smartharness = app;
+        codex = app;
       };
 
       apps.${system}.default = {
         type = "app";
-        program = "${app}/bin/smartharness";
+        program = "${app}/bin/codex";
       };
 
       devShells.${system}.default = pkgs.mkShell {

@@ -8,7 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 # llama.cpp aborts the whole process when the GPU runs out of memory, so every GPU load takes this lock.
-LOCK_PATH_VARIABLE = "SMARTHARNESS_GPU_LOCK"
+LOCK_PATH_VARIABLE = "CODEX_GPU_LOCK"
 
 # How long a load waits for another program to free the GPU before it gives up.
 WAIT_TIMEOUT_SECONDS = 1800
@@ -21,7 +21,7 @@ def lock_path() -> Path | None:
     if configured is not None:
         return Path(configured) if configured.strip() else None
     runtime_directory = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
-    return Path(runtime_directory) / "smartharness-gpu.lock"
+    return Path(runtime_directory) / "codex-gpu.lock"
 
 
 def _inherited_descriptor(path: Path) -> int | None:

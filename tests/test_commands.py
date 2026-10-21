@@ -4,9 +4,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from smartharness.commands import expand_command, load_commands, run_memory_command
-from smartharness.knowledge import KnowledgeStore
-from smartharness.task_tree import execute_task_tree
+from codex.commands import expand_command, load_commands, run_memory_command
+from codex.knowledge import KnowledgeStore
+from codex.task_tree import execute_task_tree
 from user_config import setUpModule, tearDownModule  # The user's own config files never reach these tests.
 
 
@@ -69,7 +69,7 @@ class MemoryCommandTests(CommandTestCase):
         self.assertIn("No memories yet", run_memory_command("/memories", self.store, str(self.root)))
 
     def test_the_runner_answers_memory_commands_without_a_model(self):
-        with patch("smartharness.task_tree.load_model", side_effect=AssertionError("model loaded")):
+        with patch("codex.task_tree.load_model", side_effect=AssertionError("model loaded")):
             reply = execute_task_tree("/remember Prefers short answers", knowledge_db_path=str(self.database),
                                       filesystem_root=str(self.root))
         self.assertIn("Prefers short answers", reply)
@@ -78,7 +78,7 @@ class MemoryCommandTests(CommandTestCase):
 
 class UserCommandTests(CommandTestCase):
     def test_a_command_file_fills_in_its_arguments_and_picks_its_mode(self):
-        self.write_command(self.config / "smartharness" / "commands", "review", (
+        self.write_command(self.config / "codex" / "commands", "review", (
             "---\ndescription: Review some code\nmode: draft\n---\nReview this for bugs: $ARGUMENTS\n"
         ))
 
@@ -88,8 +88,8 @@ class UserCommandTests(CommandTestCase):
         )
 
     def test_the_folder_s_command_wins_and_arguments_follow_a_template_without_a_place(self):
-        self.write_command(self.config / "smartharness" / "commands", "summary", "Summarize globally.")
-        self.write_command(self.root / ".smartharness" / "commands", "summary", "Summarize this folder.")
+        self.write_command(self.config / "codex" / "commands", "summary", "Summarize globally.")
+        self.write_command(self.root / ".codex" / "commands", "summary", "Summarize this folder.")
 
         self.assertEqual(load_commands(self.root)["summary"].mode, None)
         self.assertEqual(
@@ -111,7 +111,7 @@ class UserCommandTests(CommandTestCase):
         self.assertIn("AGENTS.md already exists", expand_command("/init", self.root, False)[1])
 
     def test_the_runner_works_the_expanded_prompt(self):
-        self.write_command(self.root / ".smartharness" / "commands", "explain", "---\nmode: answer\n---\nExplain $ARGUMENTS simply.")
+        self.write_command(self.root / ".codex" / "commands", "explain", "---\nmode: answer\n---\nExplain $ARGUMENTS simply.")
         inputs = []
 
         def fake_run_stage(llm, system_prompt, user_input, **kwargs):
@@ -122,8 +122,8 @@ class UserCommandTests(CommandTestCase):
             return "Simply put."
 
         with (
-            patch("smartharness.task_tree.run_stage", side_effect=fake_run_stage),
-            patch("smartharness.task_tree.search_with_memory", return_value=("Automatic web search result", "[]", False)),
+            patch("codex.task_tree.run_stage", side_effect=fake_run_stage),
+            patch("codex.task_tree.search_with_memory", return_value=("Automatic web search result", "[]", False)),
         ):
             execute_task_tree("/explain recursion", llm=object(), filesystem_root=str(self.root),
                               progress_callback=lambda label: None)
