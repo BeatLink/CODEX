@@ -101,7 +101,7 @@
 ## in progress
 
 - [ ] Name topics like chat titles and place renamed topics again during consolidation
-- [ ] Keep a CPU-only model's context cache and prompt batches off the GPU
+- [x] Keep a CPU-only model's context cache and prompt batches off the GPU
 
 ## implemented
 
