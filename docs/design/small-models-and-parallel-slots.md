@@ -39,8 +39,8 @@ in quality, because the main model still decides every token.
   of `Llama` takes a `LlamaDraftModel` object, and the only built-in one is
   `LlamaPromptLookupDecoding`, which drafts by copying text from the prompt instead of running a
   second model. A real draft model in-process needs a custom `LlamaDraftModel` subclass.
-- Prompt lookup costs no memory and suits stages that quote their input, such as revise and
-  summaries, so it is the cheapest first step in the current in-process loading in `pipeline.py`.
+- Prompt lookup needs no second model and suits stages that quote their input, such as revise and
+  summaries, but in-process it costs a full logits array; see Decisions.
 
 Possible settings: `draft_model_path` (empty means off) and `draft_tokens` (how many tokens to
 propose per step).
@@ -85,10 +85,13 @@ inside the daemon. That is only worth doing for work whose calls do not depend o
 The stage chain would still use one slot at a time. Slots split the context, so a request's slot
 would get less context than it does now unless the total grows to match.
 
-## Suggested order
+## Decisions
 
-1. Move to a larger model and re-run Auto size.
-2. Turn on prompt lookup decoding; add a real draft model, counted in Auto size, once the model runs
-   under `llama-server`.
-3. Only if side jobs are still slow, move model loading to `llama-server` with a few slots, giving
-   the foreground request one full-size slot and sharing the rest among side jobs.
+1. The larger 4B quant is in use; see [model-selection-and-background-model.md](model-selection-and-background-model.md).
+2. Do not turn on prompt lookup decoding in-process. With any draft model, llama-cpp-python 0.3.36
+   forces `logits_all`, which keeps a context × vocabulary float array: with Qwen3.5's 248,320-token
+   vocabulary that is 5.7 GiB of RAM at 6,144 tokens, and the GPU must also compute logits for every
+   prompt token, on a card already at its largest working context.
+3. Do not add a real draft model, parallel slots or `llama-server` for now. The 4 GB GPU already runs
+   at its largest working context, slots would split it, and a draft model's weights would compete
+   for the same memory.

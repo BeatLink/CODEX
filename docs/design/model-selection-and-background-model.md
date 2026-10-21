@@ -12,7 +12,7 @@ Status report, written 2026-10-20. Covers which model SmartHarness runs on this 
 | Disk | `/Storage` is ZFS; ZFS ARC is capped at 4 GiB but was seen at 5 GiB |
 | Runtime | llama-cpp-python 0.3.36 with CUDA, from `flake.nix` |
 
-`nvidia-smi` segfaults on this machine, so `auto_size.free_gpu_bytes()` may not be able to read free VRAM. To see which processes hold the GPU, look for `nvidia-uvm` in `/proc/<pid>/fd`.
+`nvidia-smi` segfaulted on this machine during this work but reads free VRAM again. To see which processes hold the GPU, look for `nvidia-uvm` in `/proc/<pid>/fd`.
 
 ## Model files
 
@@ -122,7 +122,8 @@ The 35B model needs about 17.5 GB of RAM on the CPU, or 12–16 GB with the Q2 o
 
 **Tests.** Settings validation for the new keys. Background loading uses the `background_*` settings. Two caches don't share a lock when the paths differ. The idle unload releases the model. Use a fake model factory, as the existing tests do.
 
-## Decisions waiting on the user
+## Decisions
 
-1. Build the separate background model as designed above.
-2. Investigate the Attic server on heimdall. This is outside this repo.
+1. Build the separate background model, but run a dense model on the CPU rather than the 35B-A3B. The MoE model needs more RAM than is free and would run slower here; a 9B Q4_K_M (5.7 GB) fits.
+2. Do not offload MoE experts to RAM.
+3. Finish tree reorganisation by renaming topics during consolidation; merging and re-filing are already done there.
