@@ -9,7 +9,7 @@
 
 - [x] Work each request as a tree of tasks that the model decides, decomposes, checks, and re-plans
 - [x] Resume an unfinished task tree after the daemon restarts
-- [ ] Show each task's result when its row is chosen in the interfaces
+- [x] Show each task's result when its row is chosen in the interfaces
 - [ ] Subagents / refinement loops
 - [ ] Tool calling
 - [ ] Web search

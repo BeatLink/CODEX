@@ -406,8 +406,9 @@ The TUI has four pages:
 - **Workbench**: write a request, pick a mode, and run it with **Ctrl+R** or
   the Run button, and stop it with the Cancel button. For a task tree run the
   sidebar shows the live tree with each task's state (WAIT, NOW, DONE, WARN for
-  unverified, FAIL), and the Output tab's Steps tab streams every step under its
-  own heading; for a pipeline run the sidebar lists the eight stages and each
+  unverified, FAIL), the Output tab's Steps tab streams every step under its
+  own heading, and choosing a task in the tree opens the Task tab with its
+  deliverable, state, note, and result; for a pipeline run the sidebar lists the eight stages and each
   has its own output tab. The Final tab shows the Markdown answer, which can be
   copied.
   Clarification questions appear as a dialog. When a task tree run was left
@@ -428,7 +429,8 @@ The TUI has four pages:
 `smartharness-gtk` has the same four pages in a GTK 4 window that follows the
 desktop's GTK theme. On the Workbench page the list on the left shows each
 stage's state, or for a task tree run the live tree and a Steps page with every
-step's output; choosing an entry shows its output. The final answer's
+step's output; choosing an entry shows its output, and choosing a task shows
+its deliverable, state, note, and result. The final answer's
 Markdown is shown with headings, emphasis, code, and lists styled, and web
 links open in the browser when clicked. **Ctrl+R**
 or **Ctrl+Enter** runs the request. It needs PyGObject and GTK 4, which the Nix
