@@ -65,9 +65,17 @@ class ChooseSizesTests(unittest.TestCase):
 
     def test_fits_context_into_free_gpu_memory(self):
         choice = choose_sizes(self.shape, 4096 * MIB, 9000 * MIB, -1)
-        self.assertEqual(choice.context_size, 15360)
-        self.assertEqual((choice.max_tokens, choice.background_max_tokens), (3840, 1920))
+        self.assertEqual(choice.context_size, 21504)
+        self.assertEqual((choice.max_tokens, choice.background_max_tokens), (5376, 2688))
         self.assertIn("GPU", choice.explanation)
+
+    def test_matches_the_contexts_measured_on_a_4_gb_gpu(self):
+        # Measured with a full window: the Q4_K_XL file runs at 6144 and aborts at 7168; Q3_K_M runs at 15360.
+        q4_k_xl = ModelShape("Qwen3.5-4B UD-Q4_K_XL", 262144, 2_912_109_728, 64 * 1024)
+        q3_k_m = ModelShape("Qwen3.5-4B Q3_K_M", 262144, 2_293_388_448, 64 * 1024)
+
+        self.assertEqual(choose_sizes(q4_k_xl, 3760 * MIB, None, -1).context_size, 6144)
+        self.assertEqual(choose_sizes(q3_k_m, 3760 * MIB, None, -1).context_size, 15360)
 
     def test_counts_the_loaded_model_as_free(self):
         busy = choose_sizes(self.shape, 1078 * MIB, None, -1)

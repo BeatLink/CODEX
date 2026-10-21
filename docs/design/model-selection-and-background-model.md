@@ -52,7 +52,7 @@ Measured on 2026-10-20 with nothing else on the GPU. Each size was loaded with `
 
 Between 7,168 and 10,240 the Q4_K_XL file loads but aborts the whole process once a long prompt arrives, so a context that only loads is not proof that it fits.
 
-**Decision:** keep UD-Q4_K_XL at **6,144** tokens. `settings.json` has `context_size: 6144`, `max_tokens: 1536`, and `background_max_tokens: 768`, keeping the same quarter and eighth of the window as before. `auto_size` suggests 2,048 for this file, which is safe but well below what runs.
+**Decision:** keep UD-Q4_K_XL at **6,144** tokens. `settings.json` has `context_size: 6144`, `max_tokens: 1536`, and `background_max_tokens: 768`, keeping the same quarter and eighth of the window as before. `auto_size` now reproduces these results: its fixed reserve is fitted to them (560 MiB, no extra headroom fraction), so with the 3,760 MiB an idle card reports it suggests 6,144 for Q4_K_XL and 15,360 for Q3_K_M.
 
 ## Expected speeds
 

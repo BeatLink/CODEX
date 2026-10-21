@@ -17,9 +17,10 @@ GGUF_ARRAY = 9
 # Tokens llama.cpp processes per batch, which sizes its attention scratch buffer.
 BATCH_TOKENS = 512
 
-# Memory set aside for the runtime's fixed buffers and anything else sharing the device.
-FIXED_RESERVE_BYTES = 512 * 1024 * 1024
-HEADROOM_FRACTION = 0.10
+# Memory the runtime needs beyond the weights and the per-token cache, fitted to measurements on a
+# 4 GB RTX 3050 Ti reporting 3760 MiB free: a 2.71 GiB file ran at 6144 tokens and aborted at 7168,
+# and a 2.14 GiB file ran at 15360.
+FIXED_RESERVE_BYTES = 560 * 1024 * 1024
 
 # Small models lose track of long inputs and every stage re-reads its whole input, so stop here.
 MAX_AUTO_CONTEXT = 32_768
@@ -180,7 +181,7 @@ def choose_sizes(
         free = shape.file_bytes + shape.bytes_per_token * MIN_AUTO_CONTEXT + FIXED_RESERVE_BYTES
     free += reclaimed
 
-    spare = free * (1 - HEADROOM_FRACTION) - shape.file_bytes - FIXED_RESERVE_BYTES
+    spare = free - shape.file_bytes - FIXED_RESERVE_BYTES
     fits = int(max(0, spare) // shape.bytes_per_token)
     limit = min(fits, shape.trained_context, MAX_AUTO_CONTEXT)
     context_size = max(MIN_AUTO_CONTEXT, limit // CONTEXT_STEP * CONTEXT_STEP)
