@@ -472,9 +472,9 @@ PARENT_SUMMARY_PROMPT = (
 
 
 def _refresh_parent_summary(store: KnowledgeStore, model: _BackgroundModel, parent: str) -> None:
-    """Rewrite a parent topic's summary from its children's summaries."""
+    """Rewrite a grouping topic's summary from its children's summaries; a researched topic keeps its own."""
     children = store.child_summaries(parent)
-    if not children:
+    if not children or store.is_researched(parent):
         return
     # The schema keeps the reply to the summary itself, so no tokens go on thinking out loud.
     try:

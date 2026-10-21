@@ -165,12 +165,11 @@ def _name_topic(store: KnowledgeStore, model: _BackgroundModel, settings: dict[s
     if name and _is_title(name) and name != topic["name"]:
         new_name = store.rename_topic(topic["id"], name)
         report(f"Renamed {topic['name']} to {new_name}")
-        if not topic["facts"]:
-            # Research under the query or sentence found nothing to keep, so the new name gets its own search.
-            try:
-                store.enqueue_topic(new_name, max_pending=settings["background_max_pending_jobs"])
-            except ValueError:
-                pass
+        # A search for the title finds better sources than one for the query or sentence it replaces.
+        try:
+            store.enqueue_topic(new_name, max_pending=settings["background_max_pending_jobs"])
+        except ValueError:
+            pass
     return True
 
 

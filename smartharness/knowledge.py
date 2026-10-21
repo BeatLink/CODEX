@@ -622,6 +622,13 @@ class KnowledgeStore:
                 (row["id"], row["title"], f"{row['snippet']} {summary}", url),
             )
 
+    def is_researched(self, topic: str) -> bool:
+        """Return whether a topic has sources of its own, so its summary comes from research rather than its subtopics."""
+        with self._connect() as connection:
+            return connection.execute(
+                "SELECT 1 FROM sources s JOIN topics t ON t.id = s.topic_id WHERE t.name = ? COLLATE NOCASE LIMIT 1", (topic,)
+            ).fetchone() is not None
+
     def child_summaries(self, parent: str) -> list[tuple[str, str]]:
         with self._connect() as connection:
             rows = connection.execute(
@@ -1108,7 +1115,10 @@ class KnowledgeStore:
             return topic
 
     def placement_candidates(self, topic_id: int, limit: int = 20) -> list[dict[str, Any]]:
-        """Return the topics this one could sit under, the most related first, with the current parent kept in."""
+        """Return the topics this one could sit under, the most related first, with the current parent kept in.
+
+        A topic with no summary tells the model nothing about what it covers, so it is left out.
+        """
         with self._connect() as connection:
             topic = connection.execute("SELECT name, summary, parent_id FROM topics WHERE id = ?", (topic_id,)).fetchone()
             if topic is None:
@@ -1116,7 +1126,7 @@ class KnowledgeStore:
             excluded = self._descendant_ids(connection, topic_id) | {topic_id}
             rows = [
                 dict(row) for row in connection.execute("SELECT id, name, summary, parent_id FROM topics")
-                if row["id"] not in excluded
+                if row["id"] not in excluded and (row["summary"] or row["id"] == topic["parent_id"])
             ]
         terms = _comparison_terms(f"{topic['name']} {topic['summary']}")
 
@@ -1131,17 +1141,13 @@ class KnowledgeStore:
         return sorted(rows, key=rank)[:limit]
 
     def next_topic_to_name(self) -> dict[str, Any] | None:
-        """Return the most used topic named after its search query or too long for a title, with its best facts.
-
-        Topics with neither a summary nor facts wait, since there is nothing yet to name them from.
-        """
+        """Return the most used topic named after its search query or too long for a title, with its best facts."""
         with self._connect() as connection:
             row = connection.execute(
                 "SELECT t.id, t.name, t.summary FROM topics t "
                 "WHERE (EXISTS (SELECT 1 FROM sources s WHERE s.query = t.name COLLATE NOCASE) "
                 "OR length(t.name) > ? OR length(t.name) - length(replace(t.name, ' ', '')) >= ?) "
                 "AND NOT EXISTS (SELECT 1 FROM consolidation_checks c WHERE c.kind = 'name' AND c.first_id = t.id) "
-                "AND (t.summary != '' OR EXISTS (SELECT 1 FROM facts f WHERE f.topic_id = t.id AND f.status = 'active')) "
                 "ORDER BY t.use_count DESC, t.id LIMIT 1",
                 (MAX_TOPIC_NAME_CHARS, MAX_TOPIC_NAME_WORDS),
             ).fetchone()
@@ -1183,16 +1189,18 @@ class KnowledgeStore:
             return name
 
     def remove_unsupported_topic(self, topic_id: int) -> bool:
-        """Delete a topic that holds no active facts and no subtopics, keeping its sources; return whether it went."""
+        """Delete a topic that holds no active facts, keeping its sources and lifting its subtopics into its place; return whether it went."""
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT name FROM topics t WHERE id = ? "
-                "AND NOT EXISTS (SELECT 1 FROM facts f WHERE f.topic_id = t.id AND f.status = 'active') "
-                "AND NOT EXISTS (SELECT 1 FROM topics c WHERE c.parent_id = t.id)",
+                "SELECT name, parent_id FROM topics t WHERE id = ? "
+                "AND NOT EXISTS (SELECT 1 FROM facts f WHERE f.topic_id = t.id AND f.status = 'active')",
                 (topic_id,),
             ).fetchone()
             if row is None:
                 return False
+            for child in connection.execute("SELECT id FROM topics WHERE parent_id = ?", (topic_id,)).fetchall():
+                self._set_parent(connection, child["id"], row["parent_id"])
+                connection.execute("UPDATE topics SET placed_at = NULL WHERE id = ?", (child["id"],))
             self._delete_topic(connection, topic_id, row["name"])
             return True
 

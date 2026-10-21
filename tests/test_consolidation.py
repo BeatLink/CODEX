@@ -168,6 +168,29 @@ class ModelCheckTests(ConsolidationTestCase):
         self.assertEqual(list(self.topic_names()), ["SQLite"])
         self.assertEqual(len(self.store.sources()), 1)
 
+    def test_a_topic_that_names_no_subject_lifts_its_subtopics_into_its_place(self):
+        sentence = "Regarding the screen size mentioned before, it could not be verified."
+        self.store.add_topic("PineTime")
+        self.store.add_topic(sentence, parent="PineTime")
+        self.store.add_topic("Screen notes", parent=sentence)
+        self.store.add_fact("Screen notes", "Screens are measured diagonally.")
+        self.store.add_fact("PineTime", "The PineTime is a smartwatch.")
+        self.store.set_topic_summary(sentence, "Fact checking.")
+        self.place_every_topic()
+
+        self.consolidate(json.dumps({"reason": "No subject is named.", "name": ""}))
+
+        self.assertEqual(self.topic_names(), {"PineTime": None, "Screen notes": "PineTime"})
+
+    def test_a_query_topic_with_no_summary_or_facts_is_still_named(self):
+        query = "can you search the internet for information about the pinetime smartwatch"
+        self.store.store_search_results(query, [{"title": "Watch", "url": "https://example.test/watch", "snippet": "A watch."}], topic=query)
+        self.place_every_topic()
+
+        self.consolidate(json.dumps({"reason": "It asks about the PineTime.", "name": "PineTime"}))
+
+        self.assertEqual(list(self.topic_names()), ["PineTime"])
+
     def test_a_renamed_topic_with_no_facts_is_researched_under_its_new_name(self):
         query = "what is the pinephone"
         self.store.store_search_results(query, [{"title": "Phone", "url": "https://example.test/phone", "snippet": "A phone."}], topic=query, summary="A Linux phone.")
@@ -262,6 +285,8 @@ class ModelCheckTests(ConsolidationTestCase):
 
     def test_a_topic_is_moved_under_the_parent_the_model_picks(self):
         self.store.add_fact("Databases", "Databases hold data.")
+        self.store.set_topic_summary("Databases", "Systems that store data.")
+        self.store.add_fact("Notes", "Notes are written down.")
         self.store.add_fact("Web frameworks", "Frameworks serve pages.")
         self.store.add_fact("PostgreSQL", "PostgreSQL is a relational database.")
         self.store.add_topic("PostgreSQL", parent="Web frameworks")
@@ -272,6 +297,7 @@ class ModelCheckTests(ConsolidationTestCase):
         worked, calls = self.consolidate(verdict("Databases", key="parent"), json.dumps({"summary": "Databases overview."}))
 
         self.assertTrue(worked)
+        # Notes has no summary, so nothing tells the model what it covers.
         self.assertEqual(
             set(calls[0].kwargs["json_schema"]["properties"]["parent"]["enum"]),
             {TOP_LEVEL, "Databases", "Web frameworks"},
@@ -280,8 +306,28 @@ class ModelCheckTests(ConsolidationTestCase):
         edges = [(edge["source"], edge["relation"], edge["target"]) for edge in self.store.graph()]
         self.assertNotIn(("Web frameworks", "contains", "PostgreSQL"), edges)
 
+    def test_a_researched_parent_keeps_its_own_summary_when_a_topic_moves_under_it(self):
+        self.store.store_search_results("pinephone", [{"title": "Phone", "url": "https://example.test/phone", "snippet": "A phone."}], topic="PinePhone", summary="A Linux phone made by Pine64.")
+        self.store.add_fact("Owner forums", "The community meets on Matrix.")
+        self.store.set_topic_summary("Owner forums", "Where PinePhone owners talk.")
+        self.store.add_fact("PinePhone", "The PinePhone runs Linux.")
+        self.place_every_topic()
+        with self.store._connect() as connection:
+            connection.execute("UPDATE topics SET placed_at = NULL WHERE name = 'Owner forums'")
+            connection.execute("INSERT INTO consolidation_checks VALUES ('name', (SELECT id FROM topics WHERE name = 'PinePhone'), (SELECT id FROM topics WHERE name = 'PinePhone'), 'PinePhone', 0)")
+
+        worked, calls = self.consolidate(verdict("PinePhone", key="parent"))
+
+        self.assertTrue(worked)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(self.topic_names()["Owner forums"], "PinePhone")
+        with self.store._connect() as connection:
+            summary = connection.execute("SELECT summary FROM topics WHERE name = 'PinePhone'").fetchone()["summary"]
+        self.assertEqual(summary, "A Linux phone made by Pine64.")
+
     def test_a_researched_topic_can_name_a_new_parent_made_where_it_sits(self):
         self.store.add_fact("Hardware", "Hardware is physical computing equipment.")
+        self.store.set_topic_summary("Hardware", "Physical computing equipment.")
         self.store.add_fact("PineTime", "The PineTime is a smartwatch made by Pine64.")
         self.store.store_search_results("pinephone linux phone", [{"title": "Phone", "url": "https://example.test/phone", "snippet": "A phone."}], topic="PinePhone", summary="A Linux phone made by Pine64.")
         self.store.add_topic("PinePhone", parent="Hardware")
@@ -299,6 +345,7 @@ class ModelCheckTests(ConsolidationTestCase):
 
     def test_a_topic_never_researched_cannot_name_a_new_parent(self):
         self.store.add_fact("Hardware", "Hardware is physical computing equipment.")
+        self.store.set_topic_summary("Hardware", "Physical computing equipment.")
         self.store.add_topic("Pine64", parent="PineTime")
         self.store.add_fact("Pine64", "Pine64 makes single-board computers.")
         self.store.add_fact("PineTime", "The PineTime is a smartwatch.")
