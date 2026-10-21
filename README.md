@@ -294,7 +294,8 @@ can read your files.
 While the daemon runs, a background worker uses idle time to grow the store.
 For each queued topic it:
 
-1. Searches the web, then fetches and summarizes the first two result pages.
+1. Searches the web, then fetches and summarizes the first two result pages,
+   skipping one whose text matches a page already read.
 2. Numbers every page summary and search snippet, then asks the model, through
    small JSON schemas, for facts from each page on its own and from the
    snippets together, each citing its source number and a confidence. A last

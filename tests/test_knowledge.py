@@ -189,14 +189,16 @@ class KnowledgeStoreTests(unittest.TestCase):
     def test_recall_brings_the_relationships_of_entities_a_fact_names(self):
         self.store.store_search_results("fts5", [{"url": "https://example.test/fts", "title": "FTS5", "snippet": "FTS5."}])
         self.store.add_fact("SQLite", "FTS5 supports bm25 ranking.")
+        self.store.store_search_results("fts5 docs", [{"url": "https://example.test/docs", "title": "FTS5", "snippet": "FTS5."}])
         self.store.add_relationship("FTS5", "extends", "SQLite", "https://example.test/fts")
+        self.store.add_relationship("FTS5", "extends", "SQLite", "https://example.test/docs")
         self.store.add_relationship("Cargo", "builds", "Rust")
         self.store.add_relationship("FTS", "precedes", "FTS4")
 
         relationships = self.store.recall("FTS5 bm25 ranking")["relationships"]
 
         self.assertEqual(relationships, [
-            {"subject": "FTS5", "relation": "extends", "object": "SQLite", "source_url": "https://example.test/fts"},
+            {"subject": "FTS5", "relation": "extends", "object": "SQLite", "source_url": "https://example.test/docs"},
         ])
 
     def test_recall_fills_up_from_the_branch_of_the_topic_the_query_names(self):

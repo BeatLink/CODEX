@@ -178,6 +178,43 @@ class ExtractionTests(unittest.TestCase):
         self.assertEqual(self.store.sources()[0]["summary"], "FTS5 is an SQLite module.")
         self.assertEqual(self.store.queue_status()[0]["status"], "done")
 
+    def test_the_same_page_under_a_second_address_is_read_once_and_the_next_page_instead(self):
+        from smartharness.background import _parse_overview
+
+        self.store.enqueue_topic("SQLite WAL")
+        pages = {
+            "https://sqlite.org/wal.html": "WAL is a journal mode.",
+            "https://sqlite.org/wal.html?source=post_page-----2c7f": "WAL  is a journal\nmode.",
+            "https://example.test/wal": "WAL lets readers run beside a writer.",
+        }
+        toolbox = unittest.mock.Mock()
+
+        def call(name, arguments):
+            if name == "web_search":
+                return json.dumps([{"title": "WAL", "url": url, "snippet": "WAL."} for url in pages])
+            return json.dumps({"url": arguments["url"], "title": "WAL", "text": pages[arguments["url"]]})
+
+        toolbox.call.side_effect = call
+        with (
+            patch("smartharness.background.Toolbox", return_value=toolbox),
+            patch("smartharness.background._summarize_web_page", return_value="Summary.") as summarize,
+            patch("smartharness.background.run_stage", return_value=json.dumps({"facts": []})),
+        ):
+            research_one_topic(self.settings, llm=object())
+
+        self.assertEqual(summarize.call_count, 2)
+        self.assertNotIn("post_page", summarize.call_args_list[1].args[1])
+
+        overview = _parse_overview(json.dumps({"summary": "", "parent_topic": "", "relationships": [
+            {"subject": "SQLite WAL", "relation": "implemented_in", "object": "SQLite", "source": 1},
+            {"subject": "sqlite wal", "relation": "implemented_in", "object": "SQLite", "source": 2},
+            {"subject": "SQLite WAL", "relation": "described_by", "object": "sqlite.org", "source": 1},
+        ]}), {1: "https://sqlite.org/wal.html", 2: "https://example.test/wal"})
+        self.assertEqual([relationship[:3] for relationship in overview.relationships], [
+            ("SQLite WAL", "implemented_in", "SQLite"),
+            ("SQLite WAL", "described_by", "sqlite.org"),
+        ])
+
     def test_extracted_facts_are_checked_against_the_sources(self):
         from smartharness.background import _grounded_facts, _Source
 

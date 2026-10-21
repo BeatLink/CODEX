@@ -240,14 +240,16 @@ loop:
 `research_one_topic` ([background.py](../smartharness/background.py)) claims the highest-priority
 pending job and:
 
-1. Runs `web_search` on the topic name, then fetches and summarizes the first two result pages.
+1. Runs `web_search` on the topic name, then fetches and summarizes the first two different result
+   pages; one whose text matches a page already read, such as the same address with a tracking query,
+   is skipped.
 2. Numbers every page summary and search snippet as a source, then extracts up to five facts from
    each page on its own and from the snippets together, each with a source number and a
    `low`/`medium`/`high` confidence (stored as 0.3, 0.6, 0.9). Small groups keep each reply short,
    and one group failing loses only its own facts. Each fact is then held to the sources: one
    stating a version or date that no source contains is dropped, and one whose values or half of
    whose words are missing from the source it cites, or that cites none, drops to low confidence.
-3. Makes one overview call for the topic summary, up to five entity relationships, and a parent
+3. Makes one overview call for the topic summary, up to five distinct entity relationships, and a parent
    topic, offering the existing top-level topics so the model can reuse one.
 4. Stores the sources, page summaries, facts and relationships, files the topic under its parent,
    and rewrites the parent's summary from its children's.

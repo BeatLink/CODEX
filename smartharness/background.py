@@ -232,12 +232,19 @@ def _parse_overview(reply: str, urls: dict[int, str]) -> _Overview:
         return _Overview(summary=reply)
     if not isinstance(data, dict):
         return _Overview(summary=reply)
-    relationships = [
-        (item["subject"].strip(), item["relation"].strip(), item["object"].strip(), urls.get(item.get("source")))
-        for item in data.get("relationships") or []
-        if isinstance(item, dict)
-        and all(isinstance(item.get(key), str) and item[key].strip() for key in ("subject", "relation", "object"))
-    ]
+    relationships = []
+    seen = set()
+    for item in data.get("relationships") or []:
+        if not isinstance(item, dict) or not all(
+            isinstance(item.get(key), str) and item[key].strip() for key in ("subject", "relation", "object")
+        ):
+            continue
+        subject, relation, target = (item[key].strip() for key in ("subject", "relation", "object"))
+        # A small model often repeats one relationship once per source, which would use up the list.
+        key = (subject.casefold(), relation.casefold(), target.casefold())
+        if key not in seen:
+            seen.add(key)
+            relationships.append((subject, relation, target, urls.get(item.get("source"))))
     return _Overview(
         summary=str(data.get("summary") or "").strip(),
         relationships=relationships,
@@ -268,6 +275,16 @@ def _grounded_facts(
             confidence = min(confidence, CONFIDENCE_LEVELS["low"])
         grounded.append((statement, url, confidence))
     return grounded
+
+
+def _page_text(page_json: str) -> str:
+    """Return a fetched page's text with its spacing evened out, for telling whether two addresses are one page."""
+    try:
+        page = json.loads(page_json)
+    except json.JSONDecodeError:
+        return page_json
+    text = page.get("text") if isinstance(page, dict) else None
+    return " ".join(text.split()) if isinstance(text, str) else page_json
 
 
 def _shorten_page(page_json: str, max_chars: int) -> str:
@@ -350,13 +367,24 @@ def research_one_topic(
             raise RuntimeError("Web search returned no usable results.")
 
         page_summaries: dict[str, str] = {}
-        for result in results[:BACKGROUND_PAGES_PER_TOPIC]:
-            url = str(result.get("url", ""))
+        page_texts: set[str] = set()
+        for result in results:
+            if len(page_summaries) >= BACKGROUND_PAGES_PER_TOPIC:
+                break
+            url = str(result.get("url", "")) if isinstance(result, dict) else ""
+            if not url:
+                continue
             model.check_pause()
             report(f"Reading {url}")
             page = toolbox.call("web_fetch", {"url": url})
             if page.startswith("Tool error"):
                 continue
+            # The same page often comes back under a second address, such as one with a tracking query.
+            text = _page_text(page)
+            if text in page_texts:
+                report(f"Skipped {url}, the same page as one already read")
+                continue
+            page_texts.add(text)
             try:
                 page_summaries[url] = model.summarize_page(_shorten_page(page, model.context_size * 2), topic)
             except (RuntimeError, ValueError):

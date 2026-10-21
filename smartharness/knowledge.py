@@ -1434,15 +1434,16 @@ class KnowledgeStore:
         if not node_ids:
             return []
         marks = ", ".join("?" * len(node_ids))
+        # One relationship backed by several sources is stored once per source but recalled once, citing the newest.
         edges = connection.execute(
-            "SELECT a.label AS subject, e.relation, b.label AS object, s.url AS source_url "
+            "SELECT a.label AS subject, e.relation, b.label AS object, s.url AS source_url, MAX(e.id) AS newest "
             "FROM graph_edges e JOIN graph_nodes a ON a.id = e.source_node_id "
             "JOIN graph_nodes b ON b.id = e.target_node_id LEFT JOIN sources s ON s.id = e.source_id "
             f"WHERE a.kind = 'entity' AND b.kind = 'entity' AND (e.source_node_id IN ({marks}) OR e.target_node_id IN ({marks})) "
-            "ORDER BY e.id DESC LIMIT ?",
+            "GROUP BY e.source_node_id, e.relation, e.target_node_id ORDER BY newest DESC LIMIT ?",
             (*node_ids, *node_ids, MAX_RECALLED_RELATIONSHIPS),
         ).fetchall()
-        return [dict(edge) for edge in edges]
+        return [{key: edge[key] for key in ("subject", "relation", "object", "source_url")} for edge in edges]
 
     @staticmethod
     def _topic_path(connection: sqlite3.Connection, topic_id: int) -> list[dict[str, str]]:
