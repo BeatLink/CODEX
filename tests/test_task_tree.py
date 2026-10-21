@@ -212,10 +212,14 @@ class DirectTaskTests(unittest.TestCase):
         self.assertEqual(result, "The change to a.py could not be made: file access is read-only.")
         self.assertIn("No file was written", model.call("revise", "1")["input"])
 
-    def test_an_execute_request_that_would_only_read_files_acts_instead(self):
+    def test_an_execute_subtask_that_would_only_read_files_acts_instead(self):
         model = ScriptedModel({
-            ("decide", "1"): decision("files"),
-            ("write", "1"): "The bug is on line 3.",
+            ("decide", "1"): decision("decompose", subtasks=[("Read ranges.py", []), ("Explain the bug", [1])]),
+            ("decide", "1.1"): decision("files"),
+            ("decide", "1.2"): decision("answer"),
+            ("write", "1.1"): "The function returns range(start, end).",
+            ("write", "1.2"): "The bug is on line 3.",
+            ("combine", "1"): "The bug is on line 3.",
         })
         approaches = []
 
@@ -229,7 +233,7 @@ class DirectTaskTests(unittest.TestCase):
         ):
             execute_task_tree(
                 "Fix ranges.py", llm=object(), progress_callback=lambda label: None,
-                allow_file_writes=True, mode="execute", max_task_depth=0,
+                allow_file_writes=True, mode="execute",
             )
 
         # Acting blocks only the web tools, so the task can both read and write files.
@@ -256,6 +260,26 @@ class DirectTaskTests(unittest.TestCase):
         self.assertIn("Redo any arithmetic, count, or date calculation", model.call("check", "1")["system"])
         for prompt in (WRITE_PROMPT, COMBINE_PROMPT, ROOT_COMBINE_PROMPT):
             self.assertIn("never give such a result as a bare number", prompt)
+
+    def test_an_execute_request_acts_or_splits_at_the_top_with_room_to_read_write_and_test(self):
+        model = ScriptedModel({("decide", "1"): decision("act"), ("write", "1"): "Wrote nothing."})
+        budgets = []
+
+        def record(llm, system_prompt, user_input, toolbox, **kwargs):
+            budgets.append(kwargs["max_tool_calls"])
+            return "No action was needed."
+
+        with (
+            patch("smartharness.task_tree.run_stage", side_effect=model),
+            patch("smartharness.task_tree.run_tool_stage", side_effect=record),
+        ):
+            execute_task_tree(
+                "Fix ranges.py", llm=object(), progress_callback=lambda label: None,
+                allow_file_writes=True, mode="execute", max_tool_calls=3,
+            )
+
+        self.assertEqual(model.call("decide", "1")["json_schema"]["properties"]["approach"]["enum"], ["act", "decompose"])
+        self.assertEqual(budgets, [8])
 
     def test_listed_facts_turn_an_answer_into_research(self):
         searches = []

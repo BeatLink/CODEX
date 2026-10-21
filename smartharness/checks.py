@@ -19,7 +19,7 @@ _CLAIMED_CHANGE = re.compile(
 )
 # Phrases such as "all tests now pass", which a report must not use unless a test run passed.
 _CLAIMED_PASSING_TESTS = re.compile(
-    r"\btests?\b[^.!?\n]{0,40}\b(?:pass|passes|passed|passing|succeed\w*)\b", re.IGNORECASE
+    r"\btests?\b(?:[^.!?\n]|\.(?=\w)){0,80}\b(?:pass|passes|passed|passing|succeed\w*)\b", re.IGNORECASE
 )
 
 _NEGATION = re.compile(r"\b(?:no|not|nothing|none|never|without)\b|n't\b", re.IGNORECASE)
@@ -28,8 +28,10 @@ _NEGATION = re.compile(r"\b(?:no|not|nothing|none|never|without)\b|n't\b", re.IG
 def _claims(pattern: re.Pattern[str], report: str) -> bool:
     """Say whether the report makes the claim in a sentence that does not negate it, as "nothing was edited" does."""
     for match in pattern.finditer(report):
-        sentence_start = max(report.rfind(mark, 0, match.start()) for mark in ".!?\n") + 1
-        if not _NEGATION.search(report[sentence_start:match.end()]):
+        sentence_start = max(report.rfind(mark, 0, match.start()) for mark in (". ", "!", "?", "\n")) + 1
+        ends = [report.find(mark, match.end()) for mark in (". ", "!", "?", "\n")]
+        sentence_end = min([end for end in ends if end != -1], default=len(report))
+        if not _NEGATION.search(report[sentence_start:sentence_end]):
             return True
     return False
 

@@ -55,6 +55,8 @@ MIN_SUBTASKS = 2
 MAX_SUBTASKS = 5
 MAX_REPLANS_PER_TASK = 1
 MAX_FACTS_TO_CHECK = 5
+# Reading, changing, and testing files takes more tool calls than a search does.
+MIN_ACT_TOOL_CALLS = 8
 
 # Replies that are short by design get a smaller budget, leaving more of the window for their input.
 DECISION_MAX_TOKENS = 1024
@@ -868,9 +870,11 @@ class TaskTreeRun:
             self.publish()
 
     def approaches_for(self, node: TaskNode) -> list[str]:
-        approaches = ["answer", "research", "files"]
-        if self.can_act:
-            approaches.append("act")
+        if self.mode == "execute" and self.can_act and node.parent is None:
+            # An execute request is there to change things, so its top task acts or splits.
+            approaches = ["act"]
+        else:
+            approaches = ["answer", "research", "files"] + (["act"] if self.can_act else [])
         if self.tree.room_for(node) >= MIN_SUBTASKS:
             approaches.append("decompose")
         return approaches
@@ -1012,6 +1016,7 @@ class TaskTreeRun:
             "act": {"blocked_tools": {"web_search", "web_fetch"}, "mcp_servers": self.mcp_servers},
         }[decision.approach]
         actions_before = len(self.toolbox.action_log)
+        tool_calls = max(self.max_tool_calls, MIN_ACT_TOOL_CALLS) if decision.approach == "act" else self.max_tool_calls
         findings = run_tool_stage(
             self.llm,
             system_prompt,
@@ -1019,7 +1024,7 @@ class TaskTreeRun:
             self.toolbox,
             max_tokens=self.max_tokens,
             temperature=self.temperature,
-            max_tool_calls=self.max_tool_calls,
+            max_tool_calls=tool_calls,
             on_token=self.token_callback_for(label),
             context_size=self.context_size,
             **tool_options,

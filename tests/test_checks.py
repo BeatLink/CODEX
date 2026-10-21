@@ -58,6 +58,9 @@ class ActionReportTests(unittest.TestCase):
         )
         self.assertEqual(unbacked_claims("The bug is that range excludes the end.", []), [])
         self.assertEqual(unbacked_claims("Nothing was edited, and the tests did not pass.", []), [])
+        self.assertEqual(unbacked_claims("Wrote nothing.", []), [])
+        long_claim = "The test `test_default_timeout` in `test_app_settings.py` was run and passed."
+        self.assertEqual(len(unbacked_claims(long_claim, [])), 1)
 
 
 if __name__ == "__main__":
