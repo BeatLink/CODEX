@@ -24,6 +24,7 @@ from smartharness.task_tree import (
     parse_check,
     parse_decision,
 )
+from user_config import setUpModule, tearDownModule  # The user's own config files never reach these tests.
 
 
 def decision(approach, facts=(), queries=(), subtasks=(), clarification=None):

@@ -7,6 +7,7 @@ from unittest.mock import patch
 from smartharness.commands import expand_command, load_commands, run_memory_command
 from smartharness.knowledge import KnowledgeStore
 from smartharness.task_tree import execute_task_tree
+from user_config import setUpModule, tearDownModule  # The user's own config files never reach these tests.
 
 
 class CommandTestCase(unittest.TestCase):

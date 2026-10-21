@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from smartharness.instructions import INSTRUCTIONS_LABEL, MAX_INSTRUCTIONS_CHARS, load_instructions
 from smartharness.task_tree import execute_task_tree
+from user_config import setUpModule, tearDownModule  # The user's own config files never reach these tests.
 
 
 class InstructionsTests(unittest.TestCase):

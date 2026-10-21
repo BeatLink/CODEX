@@ -9,6 +9,7 @@ from smartharness.cli import main
 from smartharness.client import DaemonClient
 from smartharness.knowledge import KnowledgeStore
 from smartharness.settings import DEFAULT_SETTINGS
+from user_config import setUpModule, tearDownModule  # The user's own config files never reach these tests.
 
 
 class CliTests(unittest.TestCase):

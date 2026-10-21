@@ -12,6 +12,7 @@ from smartharness.client import DaemonError
 from smartharness.daemon import BACKGROUND_MODEL_IDLE_SECONDS, HarnessDaemon
 from smartharness.knowledge import KnowledgeStore
 from smartharness.settings import DEFAULT_SETTINGS, load_settings
+from user_config import setUpModule, tearDownModule  # The user's own config files never reach these tests.
 
 
 class DaemonTests(unittest.TestCase):
