@@ -543,6 +543,12 @@ class ModelCache:
             self._key = (model_path, context_size, gpu_layers)
         return self._model
 
+    def unload(self) -> bool:
+        """Drop the loaded model to give its memory back, returning whether one was loaded."""
+        loaded = self._model is not None
+        self._model, self._key = None, None
+        return loaded
+
 
 def run_stage(
     llm: Any,

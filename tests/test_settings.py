@@ -68,6 +68,23 @@ class SettingsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "background_research_enabled"):
             validate_settings(settings)
 
+    def test_background_model_falls_back_to_the_main_model(self):
+        from smartharness.settings import background_model_key
+
+        settings = validate_settings(DEFAULT_SETTINGS.copy())
+        self.assertEqual(
+            background_model_key(settings),
+            (settings["model_path"], settings["context_size"], settings["gpu_layers"]),
+        )
+        settings = validate_settings({**DEFAULT_SETTINGS, "background_model_path": " ./models/big.gguf "})
+        self.assertEqual(background_model_key(settings), ("./models/big.gguf", settings["context_size"], 0))
+        settings["background_context_size"] = 8192
+        self.assertEqual(background_model_key(settings), ("./models/big.gguf", 8192, 0))
+
+        for name, value in (("background_model_path", None), ("background_gpu_layers", -2), ("background_context_size", -1)):
+            with self.assertRaisesRegex(ValueError, name):
+                validate_settings({**DEFAULT_SETTINGS, name: value})
+
     def test_mcp_servers_require_stdio_and_an_allowlist(self):
         settings = DEFAULT_SETTINGS.copy()
         settings["mcp_servers"] = [

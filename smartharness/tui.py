@@ -555,6 +555,17 @@ class SmartHarnessApp(App[None]):
                 classes="wrapped-field",
                 id="knowledge-db-path",
             )
+            yield Label("Background GGUF model (empty uses the main model)", classes="field-label")
+            yield TextArea(
+                self.settings["background_model_path"],
+                soft_wrap=True,
+                classes="wrapped-field",
+                id="background-model-path",
+            )
+            yield from self._number_fields(
+                ("Context (0 uses the main one)", "background-context-size", "background_context_size"),
+                ("GPU layers", "background-gpu-layers", "background_gpu_layers"),
+            )
 
             yield Static("MCP SERVERS", classes="eyebrow section-heading")
             yield Label("A JSON list of servers; see the README for the fields each one needs.", classes="field-label")
@@ -696,6 +707,9 @@ class SmartHarnessApp(App[None]):
                 "background_max_tokens": self._int_setting("background-max-tokens"),
                 "background_max_pending_jobs": self._int_setting("background-queue-cap"),
                 "background_prune_after_days": self._int_setting("background-prune-days"),
+                "background_model_path": self.query_one("#background-model-path", TextArea).text,
+                "background_context_size": self._int_setting("background-context-size"),
+                "background_gpu_layers": self._int_setting("background-gpu-layers"),
                 "mcp_servers": mcp_servers_from_json(self.query_one("#mcp-servers", TextArea).text),
             }
         )
@@ -732,6 +746,7 @@ class SmartHarnessApp(App[None]):
             ("model-path", "model_path"),
             ("filesystem-root", "filesystem_root"),
             ("knowledge-db-path", "knowledge_db_path"),
+            ("background-model-path", "background_model_path"),
         ):
             self.query_one(f"#{selector}", TextArea).text = settings[name]
         for selector, name in (
@@ -748,6 +763,8 @@ class SmartHarnessApp(App[None]):
             ("background-max-tokens", "background_max_tokens"),
             ("background-queue-cap", "background_max_pending_jobs"),
             ("background-prune-days", "background_prune_after_days"),
+            ("background-context-size", "background_context_size"),
+            ("background-gpu-layers", "background_gpu_layers"),
         ):
             self.query_one(f"#{selector}", Input).value = str(settings[name])
         for selector, name in (
@@ -765,6 +782,7 @@ class SmartHarnessApp(App[None]):
         """Fill the context and token limits from the model file and free memory, ready to apply or save."""
         try:
             gpu_layers = self._int_setting("gpu-layers")
+            background_gpu_layers = self._int_setting("background-gpu-layers")
         except ValueError as error:
             self.notify(str(error), title="Invalid settings", severity="error")
             return
@@ -772,14 +790,18 @@ class SmartHarnessApp(App[None]):
             "auto_size",
             model_path=self.query_one("#model-path", TextArea).text.strip(),
             gpu_layers=gpu_layers,
+            background_model_path=self.query_one("#background-model-path", TextArea).text.strip(),
+            background_gpu_layers=background_gpu_layers,
         )
         if choice is None:
             return
         self.query_one("#context-size", Input).value = str(choice["context_size"])
         self.query_one("#max-tokens", Input).value = str(choice["max_tokens"])
         self.query_one("#background-max-tokens", Input).value = str(choice["background_max_tokens"])
+        self.query_one("#background-context-size", Input).value = str(choice["background_context_size"])
         self.notify(
             f"{choice['explanation']}. Context {choice['context_size']}, max tokens {choice['max_tokens']},"
+            f" background context {choice['background_context_size']},"
             f" background max tokens {choice['background_max_tokens']}. Apply or save to use them.",
             title="Auto size",
             timeout=15,

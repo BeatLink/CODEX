@@ -69,6 +69,17 @@ class BackgroundResearchTests(unittest.TestCase):
 
             create_model.assert_not_called()
             self.assertEqual(run_stage.call_args.args[0], "shared model")
+            self.assertEqual(cache.get.call_args.args, (settings["model_path"], settings["context_size"], settings["gpu_layers"]))
+
+            settings.update(background_model_path="big.gguf", background_context_size=8192, background_gpu_layers=0)
+            KnowledgeStore(settings["knowledge_db_path"]).enqueue_topic("SQLite WAL")
+            with (
+                patch("smartharness.background.Toolbox", return_value=toolbox),
+                patch("smartharness.background.run_stage", return_value="Summary"),
+            ):
+                research_one_topic(settings, model_cache=cache)
+
+            self.assertEqual(cache.get.call_args.args, ("big.gguf", 8192, 0))
 
     def test_worker_does_not_load_model_when_queue_is_empty(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -228,6 +228,7 @@ class TuiTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(app.query_one("#context-size", Input).value, "14336")
             self.assertEqual(app.query_one("#max-tokens", Input).value, "3584")
             self.assertEqual(app.query_one("#background-max-tokens", Input).value, "1792")
+            self.assertEqual(app.query_one("#background-context-size", Input).value, "0")
             self.assertEqual(app.settings["context_size"], DEFAULT_SETTINGS["context_size"])
 
     async def test_knowledge_page_browses_topics_sources_and_graph(self):

@@ -175,6 +175,7 @@ class WindowTests(unittest.TestCase):
 
         self.assertEqual(self.window.number_fields["max_tokens"].get_value_as_int(), 3584)
         self.assertEqual(self.window.number_fields["background_max_tokens"].get_value_as_int(), 1792)
+        self.assertEqual(self.window.number_fields["background_context_size"].get_value_as_int(), 0)
 
     def test_saving_options_writes_the_daemon_settings_file(self):
         self.window.number_fields["max_tool_calls"].set_value(7)

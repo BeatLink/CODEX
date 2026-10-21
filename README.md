@@ -310,6 +310,12 @@ the worker.
 resource use, and `background_max_pending_jobs` bounds the backlog. Set
 `background_research_enabled` to `false` to pause it.
 
+Background work runs on the main model unless `background_model_path` names
+another GGUF file. That model gets its own cache, so the two never evict each
+other, and loads with `background_gpu_layers` (default 0, the CPU) and
+`background_context_size` (0 uses `context_size`). It still stops as soon as a
+request starts, and it is unloaded after five minutes without background work.
+
 ### Background consolidation
 
 With no research queued and no requests left to learn from, the worker tidies
@@ -437,6 +443,9 @@ another. Unknown keys are rejected.
 	"max_task_nodes": 20,
 	"knowledge_db_path": "~/.local/share/smartharness/knowledge.sqlite3",
 	"background_research_enabled": true,
+	"background_model_path": "",
+	"background_context_size": 0,
+	"background_gpu_layers": 0,
 	"background_poll_interval_seconds": 10,
 	"background_refresh_interval_hours": 168,
 	"background_max_tokens": 512,
@@ -467,7 +476,9 @@ Precedence, lowest first: built-in defaults, the settings file, the
 `max_tokens` is reserved for the reply in most stages, so it must leave room
 for input within `context_size`. **Auto size** in Options picks the largest
 context that fits in memory, up to 32768 tokens, then gives a quarter of it to
-`max_tokens` and an eighth to `background_max_tokens`.
+`max_tokens` and an eighth to `background_max_tokens`. With a separate
+background model, it sizes that model on its own device as well and sets
+`background_context_size` and `background_max_tokens` from it.
 
 ## Tools and safety
 

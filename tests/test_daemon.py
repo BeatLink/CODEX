@@ -9,7 +9,7 @@ from unittest.mock import patch
 from daemon_harness import EventLog, RunningDaemon
 
 from smartharness.client import DaemonError
-from smartharness.daemon import HarnessDaemon
+from smartharness.daemon import BACKGROUND_MODEL_IDLE_SECONDS, HarnessDaemon
 from smartharness.knowledge import KnowledgeStore
 from smartharness.settings import DEFAULT_SETTINGS, load_settings
 
@@ -170,6 +170,49 @@ class DaemonTests(unittest.TestCase):
         self.assertEqual(result["context_size"], 14336)
         self.assertEqual(sizer.call_args.args, ("tiny.gguf", -1, self.settings["context_size"]))
         self.assertEqual(client.call("get_settings")["context_size"], self.settings["context_size"])
+
+    def test_auto_size_sizes_a_separate_background_model_on_its_own(self):
+        from smartharness.auto_size import SizeChoice
+
+        daemon = self.start()
+        client = daemon.client()
+        choices = {"tiny.gguf": SizeChoice(6144, 1536, 768, "Tiny"), "big.gguf": SizeChoice(16384, 4096, 2048, "Big")}
+
+        with patch("smartharness.daemon.auto_size", side_effect=lambda path, *args: choices[path]) as sizer:
+            shared = client.call("auto_size", model_path="tiny.gguf", gpu_layers=-1)
+            separate = client.call(
+                "auto_size", model_path="tiny.gguf", gpu_layers=-1, background_model_path="big.gguf", background_gpu_layers=0
+            )
+
+        self.assertEqual((shared["background_context_size"], shared["background_max_tokens"]), (0, 768))
+        self.assertEqual((separate["background_context_size"], separate["background_max_tokens"]), (16384, 2048))
+        self.assertEqual(separate["context_size"], 6144)
+        self.assertEqual(sizer.call_args.args, ("big.gguf", 0, None))
+
+    def test_a_separate_background_model_gets_its_own_cache_and_is_unloaded_when_idle(self):
+        harness = HarnessDaemon(self.settings, self.settings_path)
+        settings = harness.get_settings()
+        self.assertEqual(harness._background_model(settings), (harness._model_lock, harness._model_cache))
+
+        settings["background_model_path"] = "big.gguf"
+        lock, cache = harness._background_model(settings)
+        self.assertIs(lock, harness._background_model_lock)
+        self.assertIs(cache, harness._background_model_cache)
+
+        with patch("smartharness.pipeline.create_model", return_value="big model"):
+            cache.get("big.gguf", settings["context_size"], 0)
+        with patch("smartharness.daemon.time.monotonic", side_effect=[100.0, 100.0 + BACKGROUND_MODEL_IDLE_SECONDS]):
+            harness._unload_idle_background_model(worked=False)
+            self.assertTrue(cache.has("big.gguf", settings["context_size"], 0))
+            harness._unload_idle_background_model(worked=False)
+        self.assertFalse(cache.has("big.gguf", settings["context_size"], 0))
+        self.assertEqual(harness._background_status, "Idle; background model unloaded")
+
+        with patch("smartharness.pipeline.create_model", return_value="big model"):
+            cache.get("big.gguf", settings["context_size"], 0)
+        settings["background_model_path"] = ""
+        harness._background_model(settings)
+        self.assertFalse(cache.has("big.gguf", settings["context_size"], 0))
 
     def test_research_now_runs_a_queued_topic_while_idle_research_is_paused(self):
         researched = threading.Event()

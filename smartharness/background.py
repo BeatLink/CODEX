@@ -7,7 +7,7 @@ from typing import Any
 from .context_budget import fit_sections_to_tokens, input_token_budget, render_sections, token_counter
 from .knowledge import USER_MEMORY_KINDS, KnowledgeStore, _search_terms, _shares_half_the_terms
 from .pipeline import ModelCache, _summarize_web_page, _unsupported_values, create_model, queue_research_topic, run_stage
-from .settings import MAX_TOKENS, TEMPERATURE
+from .settings import MAX_TOKENS, TEMPERATURE, background_model_key
 from .tools import Toolbox
 
 # Pages fetched and summarized per topic, beyond the search snippets.
@@ -114,6 +114,7 @@ class _BackgroundModel:
         self.model_lock = model_lock
         self.model_cache = model_cache
         self.max_tokens = settings.get("background_max_tokens", MAX_TOKENS)
+        self.model_path, self.context_size, self.gpu_layers = background_model_key(settings)
 
     def check_pause(self) -> None:
         if self.should_pause is not None and self.should_pause():
@@ -122,7 +123,7 @@ class _BackgroundModel:
     def _load(self) -> Any:
         if self.llm is None:
             load = self.model_cache.get if self.model_cache is not None else create_model
-            self.llm = load(self.settings["model_path"], self.settings["context_size"], self.settings["gpu_layers"])
+            self.llm = load(self.model_path, self.context_size, self.gpu_layers)
         return self.llm
 
     def _locked(self) -> Any:
@@ -150,7 +151,7 @@ class _BackgroundModel:
     def fit(self, system_prompt: str, sections: list[tuple[str, str]], pinned: int = 1) -> str:
         """Render the input sections, trimmed so they fit beside the prompt and the reply."""
         count_tokens = token_counter(self._load())
-        budget = input_token_budget(self.settings["context_size"], self.max_tokens, count_tokens, system_prompt)
+        budget = input_token_budget(self.context_size, self.max_tokens, count_tokens, system_prompt)
         return render_sections(fit_sections_to_tokens(sections, budget, count_tokens, pinned))
 
     def summarize_page(self, page_json: str, topic: str) -> str:
@@ -163,7 +164,7 @@ class _BackgroundModel:
                 f"Background research on: {topic}",
                 self.max_tokens,
                 TEMPERATURE,
-                self.settings["context_size"],
+                self.context_size,
             )
 
 
@@ -356,7 +357,7 @@ def research_one_topic(
             if page.startswith("Tool error"):
                 continue
             try:
-                page_summaries[url] = model.summarize_page(_shorten_page(page, settings["context_size"] * 2), topic)
+                page_summaries[url] = model.summarize_page(_shorten_page(page, model.context_size * 2), topic)
             except (RuntimeError, ValueError):
                 # One unreadable page should not lose the rest of the topic's research.
                 continue

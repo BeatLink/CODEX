@@ -65,8 +65,8 @@
 - [x] Queue background research from the user's recorded projects
 - [ ] Compare differently worded duplicate topics and facts during consolidation, once embeddings exist
 - [ ] Rename topics named after raw search queries during consolidation
-- [ ] Run background work on its own model, with its own settings, cache and lock, unloaded when idle
-- [ ] Size the background model against free RAM in Auto size
+- [x] Run background work on its own model, with its own settings, cache and lock, unloaded when idle
+- [x] Size the background model against free RAM in Auto size
 - [x] Add SQLite-backed knowledge storage with schema initialization and version guard
 - [x] Add full-text knowledge retrieval and source provenance/freshness metadata
 - [x] Add SQLite graph tables for topics, entities, and relationships

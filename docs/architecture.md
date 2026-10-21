@@ -51,6 +51,9 @@ and a background worker uses idle time to turn it into facts, topic summaries an
   the lock. A foreground request therefore waits for at most one token.
 - **ModelCache** ([pipeline.py](../smartharness/pipeline.py)) keeps one `Llama` instance and reloads
   it only when the model path, context size or GPU layers change.
+- **A separate background model** (`background_model_path`) has its own `ModelCache` and lock, so
+  it never evicts the main model. It still gives way to a run in the same way, and the daemon
+  unloads it after five minutes without background work.
 
 ## How a request runs
 

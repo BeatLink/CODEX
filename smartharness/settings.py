@@ -38,6 +38,10 @@ DEFAULT_SETTINGS = {
     "mcp_servers": [],
     "knowledge_db_path": DEFAULT_KNOWLEDGE_DB_PATH,
     "background_research_enabled": True,
+    # An empty path runs background work on the main model; a context size of 0 uses the main one.
+    "background_model_path": "",
+    "background_context_size": 0,
+    "background_gpu_layers": 0,
     "background_poll_interval_seconds": 10,
     "background_refresh_interval_hours": 168,
     "background_max_tokens": 512,
@@ -118,9 +122,19 @@ def validate_settings(values: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("knowledge_db_path must be a non-empty path string.")
     if not isinstance(values["background_research_enabled"], bool):
         raise ValueError("background_research_enabled must be a boolean.")
+    if not isinstance(values["background_model_path"], str):
+        raise ValueError("background_model_path must be a path string, or empty to use model_path.")
+    values["background_model_path"] = values["background_model_path"].strip()
+    if (
+        isinstance(values["background_gpu_layers"], bool)
+        or not isinstance(values["background_gpu_layers"], int)
+        or values["background_gpu_layers"] < -1
+    ):
+        raise ValueError("background_gpu_layers must be -1 or a non-negative integer.")
     for name, minimum, maximum in (
         ("max_task_depth", 0, 6),
         ("max_task_nodes", 1, 60),
+        ("background_context_size", 0, 1048576),
         ("background_poll_interval_seconds", 1, 3600),
         ("background_refresh_interval_hours", 1, 8760),
         ("background_max_tokens", 32, 4096),
@@ -136,6 +150,17 @@ def validate_settings(values: dict[str, Any]) -> dict[str, Any]:
     values["mcp_servers"] = validate_mcp_servers(values["mcp_servers"])
     values["temperature"] = float(values["temperature"])
     return values
+
+
+def background_model_key(settings: dict[str, Any]) -> tuple[str, int, int]:
+    """Return the model path, context size and GPU layers that background work loads."""
+    if not settings["background_model_path"]:
+        return settings["model_path"], settings["context_size"], settings["gpu_layers"]
+    return (
+        settings["background_model_path"],
+        settings["background_context_size"] or settings["context_size"],
+        settings["background_gpu_layers"],
+    )
 
 
 def mcp_servers_to_json(servers: list[dict[str, Any]]) -> str:

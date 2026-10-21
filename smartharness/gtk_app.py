@@ -56,10 +56,15 @@ BACKGROUND_NUMBER_FIELDS = (
     ("Queue cap", "background_max_pending_jobs", 1, 1000, 1, 0),
     ("Prune after days", "background_prune_after_days", 1, 3650, 1, 0),
 )
+BACKGROUND_MODEL_NUMBER_FIELDS = (
+    ("Context size (0 uses the main one)", "background_context_size", 0, 1048576, 256, 0),
+    ("GPU layers", "background_gpu_layers", -1, 1000, 1, 0),
+)
 PATH_FIELDS = (
     ("GGUF model path", "model_path"),
     ("Filesystem root", "filesystem_root"),
     ("SQLite database", "knowledge_db_path"),
+    ("Background GGUF model (empty uses the main model)", "background_model_path"),
 )
 SWITCH_FIELDS = (
     ("Allow the model to create and replace files", "allow_file_writes"),
@@ -542,6 +547,8 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         page.append(section_heading("Background research"))
         page.append(self._number_grid(BACKGROUND_NUMBER_FIELDS))
         page.append(self._path_field("knowledge_db_path"))
+        page.append(self._path_field("background_model_path"))
+        page.append(self._number_grid(BACKGROUND_MODEL_NUMBER_FIELDS))
         page.append(section_heading("MCP servers"))
         page.append(field_label("A JSON list of servers; see the README for the fields each one needs."))
         self.mcp_servers = Gtk.TextView(monospace=True, wrap_mode=Gtk.WrapMode.WORD_CHAR, top_margin=8, bottom_margin=8, left_margin=8, right_margin=8)
@@ -821,10 +828,11 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         """Fill the context and token limits from the model file and free memory, ready to apply or save."""
 
         def fill(choice: dict[str, Any]) -> None:
-            for name in ("context_size", "max_tokens", "background_max_tokens"):
+            for name in ("context_size", "max_tokens", "background_max_tokens", "background_context_size"):
                 self.number_fields[name].set_value(choice[name])
             self.notify_user(
                 f"{choice['explanation']}. Context {choice['context_size']}, max tokens {choice['max_tokens']},"
+                f" background context {choice['background_context_size']},"
                 f" background max tokens {choice['background_max_tokens']}. Apply or save to use them."
             )
 
@@ -833,6 +841,8 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
             fill,
             model_path=self.path_entries["model_path"].get_text().strip(),
             gpu_layers=self.number_fields["gpu_layers"].get_value_as_int(),
+            background_model_path=self.path_entries["background_model_path"].get_text().strip(),
+            background_gpu_layers=self.number_fields["background_gpu_layers"].get_value_as_int(),
         )
 
     def _set_background_switch(self, active: bool) -> None:

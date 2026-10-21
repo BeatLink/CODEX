@@ -6,6 +6,7 @@ import socket
 import socketserver
 import sys
 import threading
+import time
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Callable
@@ -16,8 +17,11 @@ from .consolidation import consolidate_knowledge
 from .knowledge import KnowledgeStore
 from .pipeline import ModelCache, execute_pipeline
 from .protocol import decode_message, default_socket_path, encode_message
-from .settings import default_settings_path, load_settings, save_settings, validate_settings
+from .settings import background_model_key, default_settings_path, load_settings, save_settings, validate_settings
 from .task_tree import execute_task_tree
+
+# A separate background model is unloaded after this long without background work, to give its memory back.
+BACKGROUND_MODEL_IDLE_SECONDS = 300
 
 
 class RunCancelled(Exception):
@@ -104,6 +108,10 @@ class HarnessDaemon:
         self._clarification_ids = itertools.count(1)
         self._model_lock = threading.Lock()
         self._model_cache = ModelCache()
+        # A background model other than the main one gets its own cache and lock, so neither evicts the other.
+        self._background_model_lock = threading.Lock()
+        self._background_model_cache = ModelCache()
+        self._background_idle_since: float | None = None
         self._knowledge_stores: dict[str, KnowledgeStore] = {}
         self._stop = threading.Event()
         self._worker_wakeup = threading.Event()
@@ -278,13 +286,31 @@ class HarnessDaemon:
         return {"settings": saved, "path": str(self.settings_path)}
 
     def auto_size(
-        self, connection: ClientConnection | None = None, model_path: str = "", gpu_layers: int = -1
+        self,
+        connection: ClientConnection | None = None,
+        model_path: str = "",
+        gpu_layers: int = -1,
+        background_model_path: str = "",
+        background_gpu_layers: int = 0,
     ) -> dict[str, Any]:
-        """Suggest a context size and token limits for a model on this machine, without applying them."""
+        """Suggest a context size and token limits for the models on this machine, without applying them.
+
+        With a separate background model, its context and reply limit are sized for that model on its own device.
+        """
         settings = self.get_settings()
         model_path = model_path or settings["model_path"]
         loaded = self._model_cache.has(model_path, settings["context_size"], gpu_layers)
-        return asdict(auto_size(model_path, gpu_layers, settings["context_size"] if loaded else None))
+        choice = asdict(auto_size(model_path, gpu_layers, settings["context_size"] if loaded else None))
+        choice["background_context_size"] = 0
+        background_model_path = background_model_path.strip()
+        if background_model_path:
+            _, loaded_context, _ = background_model_key(settings)
+            loaded = self._background_model_cache.has(background_model_path, loaded_context, background_gpu_layers)
+            background = auto_size(background_model_path, background_gpu_layers, loaded_context if loaded else None)
+            choice["background_context_size"] = background.context_size
+            choice["background_max_tokens"] = background.background_max_tokens
+            choice["explanation"] += f"; background {background.explanation}"
+        return choice
 
     def set_background_enabled(self, connection: ClientConnection | None = None, enabled: bool = True) -> dict[str, Any]:
         return self.apply_settings(connection, {"background_research_enabled": bool(enabled)})
@@ -478,9 +504,31 @@ class HarnessDaemon:
         with self._lock:
             return self._run is not None
 
+    def _background_model(self, settings: dict[str, Any]) -> tuple[threading.Lock, ModelCache]:
+        """Return the lock and cache background work uses, freeing a separate model it no longer needs."""
+        if background_model_key(settings) == (settings["model_path"], settings["context_size"], settings["gpu_layers"]):
+            with self._background_model_lock:
+                self._background_model_cache.unload()
+            return self._model_lock, self._model_cache
+        return self._background_model_lock, self._background_model_cache
+
+    def _unload_idle_background_model(self, worked: bool) -> None:
+        if worked:
+            self._background_idle_since = None
+            return
+        now = time.monotonic()
+        if self._background_idle_since is None:
+            self._background_idle_since = now
+        elif now - self._background_idle_since >= BACKGROUND_MODEL_IDLE_SECONDS:
+            with self._background_model_lock:
+                unloaded = self._background_model_cache.unload()
+            if unloaded:
+                self._set_background_status("Idle; background model unloaded")
+
     def _background_loop(self) -> None:
         while not self._stop.is_set():
             settings = self.get_settings()
+            worked = False
             manual_run_requested = self._background_run_requested.is_set()
             if not settings["background_research_enabled"] and not manual_run_requested:
                 self._set_background_status("Paused")
@@ -496,12 +544,13 @@ class HarnessDaemon:
                         settings["background_refresh_interval_hours"],
                         settings["background_max_pending_jobs"],
                     )
+                    model_lock, model_cache = self._background_model(settings)
                     worker_options = {
                         "on_progress": self._set_background_status,
                         "on_token": self._append_background_token,
                         "should_pause": lambda: self._run_is_active() or self._stop.is_set(),
-                        "model_lock": self._model_lock,
-                        "model_cache": self._model_cache,
+                        "model_lock": model_lock,
+                        "model_cache": model_cache,
                     }
                     # Queued research comes first, then learning from past requests, then tidying the store.
                     worked = (
@@ -519,6 +568,7 @@ class HarnessDaemon:
                 except Exception as error:
                     self._set_background_status(f"Worker error: {error}")
                     wait_seconds = settings["background_poll_interval_seconds"]
+            self._unload_idle_background_model(worked)
             self._worker_wakeup.wait(wait_seconds)
             self._worker_wakeup.clear()
 
