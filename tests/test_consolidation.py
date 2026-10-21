@@ -117,6 +117,19 @@ class ModelCheckTests(ConsolidationTestCase):
         self.assertNotIn("how do i use fts5 in sqlite", {edge["target"] for edge in self.store.graph()})
         self.assertIsNone(self.store.next_topic_to_name())
 
+    def test_a_renamed_topic_and_its_subtopics_are_placed_again(self):
+        self.search_topic("what is the pinephone", "The PinePhone is a Linux phone.")
+        self.store.add_topic("PinePhone screen", parent="what is the pinephone")
+        self.store.add_fact("PinePhone screen", "The PinePhone screen is 5.95 inches.")
+        self.store.add_fact("SQLite", "SQLite is small.")
+        self.place_every_topic()
+
+        self.consolidate(json.dumps({"reason": "It is about the PinePhone.", "name": "PinePhone"}))
+
+        with self.store._connect() as connection:
+            unplaced = {row["name"] for row in connection.execute("SELECT name FROM topics WHERE placed_at IS NULL")}
+        self.assertEqual(unplaced, {"PinePhone", "PinePhone screen"})
+
     def test_a_query_topic_given_an_existing_name_is_merged_into_that_topic(self):
         self.store.add_fact("SQLite FTS5", "FTS5 supports ranking.")
         self.search_topic("fts5 full text search sqlite", "FTS5 adds full-text search to SQLite.")

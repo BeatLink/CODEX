@@ -368,7 +368,8 @@ Then the model gives each topic still called by the search query that found it,
 or with a name over five words or 40 characters, such as "how do i use fts5 in
 sqlite", a title as short as a chat title, such as "SQLite FTS5", from its
 summary and facts. A name that another topic already has merges the two, and
-each topic is named once. A renamed topic with no facts is researched again
+each topic is named once. A renamed topic and its subtopics are placed again,
+since they were placed under the old name. A renamed topic with no facts is researched again
 under its new name, and one that names no subject at all, such as a sentence
 copied from an answer, is removed when it holds no facts or subtopics; its
 sources stay.

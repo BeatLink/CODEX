@@ -1158,7 +1158,10 @@ class KnowledgeStore:
             return topic
 
     def rename_topic(self, topic_id: int, name: str) -> str:
-        """Rename a topic, or fold it into the topic that already has that name; return the name it ends up under."""
+        """Rename a topic, or fold it into the topic that already has that name; return the name it ends up under.
+
+        The topic and its subtopics were placed under the old name, so they are due to be placed again.
+        """
         name = self._clean_text(name, "topic", 200)
         with self._connect() as connection:
             old_name = connection.execute("SELECT name FROM topics WHERE id = ?", (topic_id,)).fetchone()["name"]
@@ -1167,7 +1170,9 @@ class KnowledgeStore:
             ).fetchone()
             if other is not None:
                 self._merge_topic_into(connection, other["id"], topic_id)
+                connection.execute("UPDATE topics SET placed_at = NULL WHERE id = ? OR parent_id = ?", (other["id"], other["id"]))
                 return other["name"]
+            connection.execute("UPDATE topics SET placed_at = NULL WHERE id = ? OR parent_id = ?", (topic_id, topic_id))
             old_node = self._node_id(connection, "topic", old_name)
             connection.execute("UPDATE topics SET name = ? WHERE id = ?", (name, topic_id))
             new_node = self._node_id(connection, "topic", name)
