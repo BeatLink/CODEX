@@ -2,7 +2,6 @@
 
 ## postponed
 
-- [ ]
 - [ ] Purge the removed LM Studio notes (`docs/design/lm-studio-models-and-settings.md`, commits 46b2616 and 538c143) from the public history
 
 ## Planned
@@ -11,9 +10,9 @@
 - [x] Resume an unfinished task tree after the daemon restarts
 - [x] Show each task's result when its row is chosen in the interfaces
 - [ ] Subagents / refinement loops
-- [ ] Tool calling
-- [ ] Web search
-- [ ] Local filesystem access
+- [x] Tool calling
+- [x] Web search
+- [x] Local filesystem access
 - [ ] Add patch-based edits and Git diff/status tools
 - [ ] Add a bounded command runner for targeted checks
 - [ ] Iterate code changes from verification failures
@@ -80,18 +79,25 @@
 - [x] Add visual TUI browser for stored topics, facts, sources, and graph relationships
 - [x] Add focused tests for SQLite storage, graph queries, retrieval, worker scheduling, and TUI views
 - [x] Document storage, background worker, configuration, and privacy/resource behavior
+- [ ] Run the eval harness with the knowledge store empty and filled to measure what recall adds
+- [ ] Score recall against a fixed set of questions with known relevant facts
+- [ ] Cap the knowledge store's size and evict the least used facts, pages, and episodes
+- [ ] Mark recalled and fetched text as untrusted in every prompt and test it against hostile pages
+- [ ] Rate-limit background fetches per domain, honour robots.txt, and cap fetches per day
+- [ ] Back up, export, and reset the knowledge store, and delete a single fact or memory from the interfaces
+- [ ] Let the user mark a recalled fact wrong, lowering its confidence and queueing a recheck
+- [ ] Show background job metrics and how often recalled facts are cited in answers
+- [ ] Take the shared GPU lock in the daemon before loading a model
+- [ ] Test schema migrations from every earlier knowledge store version
 
 ## in progress
 
-- [ ]
+- [ ] Name topics like chat titles and place renamed topics again during consolidation
+- [ ] Keep a CPU-only model's context cache and prompt batches off the GPU
 
 ## implemented
 
-- [ ]
-
 ## tested
-
-- [ ]
 
 ## finalized
 
