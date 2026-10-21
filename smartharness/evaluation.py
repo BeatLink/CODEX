@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass, field
 import json
 from pathlib import Path
 import re
+import sqlite3
 import sys
 import tempfile
 import time
@@ -16,6 +17,9 @@ from .task_tree import execute_task_tree
 
 DEFAULT_TASKS_PATH = Path(__file__).resolve().parent.parent / "evals" / "tasks.json"
 RUNNER_CHOICES = ("bare", "pipeline", "tree")
+# Runners that recall from the knowledge store, and so get a seeded run beside the empty one.
+STORE_RUNNERS = ("pipeline", "tree")
+SEEDED_SUFFIX = "+store"
 BARE_SYSTEM_PROMPT = "You are a helpful assistant. Answer the user's request."
 # Execute mode is left out because its tasks would need files to work on.
 EVAL_MODES = ("auto", "answer", "draft")
@@ -160,14 +164,23 @@ class RunResult:
         return not self.error and self.checks_passed == self.checks_total
 
 
-def run_task(task: EvalTask, runner: str, llm: Any, settings: dict[str, Any]) -> RunResult:
+def run_task(
+    task: EvalTask,
+    runner: str,
+    llm: Any,
+    settings: dict[str, Any],
+    seed_store: str | Path | None = None,
+) -> RunResult:
     """Answer one task with one runner and score the answer, recording a failure as an error."""
     counting_model = CountingModel(llm)
-    result = RunResult(task_id=task.id, runner=runner, checks_total=len(task.checks))
+    label = runner + SEEDED_SUFFIX if seed_store is not None else runner
+    result = RunResult(task_id=task.id, runner=label, checks_total=len(task.checks))
     started = time.monotonic()
-    # Each run gets an empty knowledge store, so no runner recalls what an earlier task found.
+    # Each run gets its own store, empty or a fresh copy of the seed, so no run sees what an earlier one stored.
     with tempfile.TemporaryDirectory(prefix="smartharness-eval-") as scratch_directory:
         try:
+            if seed_store is not None:
+                copy_store(seed_store, Path(scratch_directory) / "knowledge.sqlite3")
             result.answer = answer_with(runner, task, counting_model, settings, scratch_directory)
         except Exception as error:
             result.error = f"{type(error).__name__}: {error}"
@@ -181,6 +194,19 @@ def run_task(task: EvalTask, runner: str, llm: Any, settings: dict[str, Any]) ->
             else:
                 result.failed_checks.append(describe_check(check))
     return result
+
+
+def copy_store(seed_store: str | Path, destination: Path) -> None:
+    """Copy a knowledge store with SQLite's backup, which also takes what its write-ahead log holds."""
+    if not Path(seed_store).is_file():
+        raise FileNotFoundError(f"No knowledge store at {seed_store}")
+    source = sqlite3.connect(seed_store)
+    target = sqlite3.connect(destination)
+    try:
+        source.backup(target)
+    finally:
+        target.close()
+        source.close()
 
 
 def answer_with(runner: str, task: EvalTask, llm: Any, settings: dict[str, Any], scratch_directory: str) -> str:
@@ -221,17 +247,29 @@ def answer_with(runner: str, task: EvalTask, llm: Any, settings: dict[str, Any],
 # ==============================================================================
 
 
+def runner_labels(runners: list[str], seed_store: str | Path | None) -> list[str]:
+    """List each runner, followed by its seeded run when a seed store is given and it recalls from one."""
+    labels = []
+    for runner in runners:
+        labels.append(runner)
+        if seed_store is not None and runner in STORE_RUNNERS:
+            labels.append(runner + SEEDED_SUFFIX)
+    return labels
+
+
 def run_eval(
     tasks: list[EvalTask],
     runners: list[str],
     llm: Any,
     settings: dict[str, Any],
     on_result: Callable[[RunResult], None] | None = None,
+    seed_store: str | Path | None = None,
 ) -> list[RunResult]:
     results = []
     for task in tasks:
-        for runner in runners:
-            result = run_task(task, runner, llm, settings)
+        for label in runner_labels(runners, seed_store):
+            runner = label.removesuffix(SEEDED_SUFFIX)
+            result = run_task(task, runner, llm, settings, seed_store if label != runner else None)
             results.append(result)
             if on_result is not None:
                 on_result(result)
@@ -257,11 +295,11 @@ def summarize(results: list[RunResult], runners: list[str]) -> dict[str, dict[st
 
 
 def format_summary(summary: dict[str, dict[str, Any]]) -> str:
-    header = f"{'runner':<10} {'tasks':>9} {'checks':>9} {'errors':>6} {'seconds':>9} {'calls':>6} {'tokens':>8}"
+    header = f"{'runner':<14} {'tasks':>9} {'checks':>9} {'errors':>6} {'seconds':>9} {'calls':>6} {'tokens':>8}"
     lines = [header, "-" * len(header)]
     for runner, totals in summary.items():
         lines.append(
-            f"{runner:<10} {totals['tasks_passed']:>4}/{totals['tasks']:<4} "
+            f"{runner:<14} {totals['tasks_passed']:>4}/{totals['tasks']:<4} "
             f"{totals['checks_passed']:>4}/{totals['checks_total']:<4} {totals['errors']:>6} "
             f"{totals['seconds']:>9.1f} {totals['model_calls']:>6} {totals['completion_tokens']:>8}"
         )
@@ -297,6 +335,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--only", help="Comma-separated task ids to run instead of the whole set.")
     parser.add_argument("--output", help="Write every answer and score to this JSON file.")
+    parser.add_argument(
+        "--seed-store",
+        help="Also run the pipeline and task tree with a copy of this knowledge store, to measure what recall adds.",
+    )
     parser.add_argument("--model-path", help="Path to a GGUF model (overrides settings.json).")
     args = parser.parse_args(argv)
 
@@ -310,6 +352,10 @@ def main(argv: list[str] | None = None) -> int:
             settings["model_path"] = args.model_path
         settings = validate_settings(settings)
         tasks = load_tasks(args.tasks)
+        if args.seed_store:
+            args.seed_store = str(Path(args.seed_store).expanduser())
+        if args.seed_store and not Path(args.seed_store).is_file():
+            raise ValueError(f"No knowledge store at {args.seed_store}")
     except (OSError, ValueError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
@@ -327,14 +373,22 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, RuntimeError, ValueError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
-    results = run_eval(tasks, runners, llm, settings, on_result=lambda result: print(format_result(result), flush=True))
-    summary = summarize(results, runners)
+    results = run_eval(
+        tasks,
+        runners,
+        llm,
+        settings,
+        on_result=lambda result: print(format_result(result), flush=True),
+        seed_store=args.seed_store,
+    )
+    summary = summarize(results, runner_labels(runners, args.seed_store))
     print()
     print(format_summary(summary))
     if args.output:
         report = {
             "model_path": settings["model_path"],
             "tasks_path": args.tasks,
+            "seed_store": args.seed_store,
             "summary": summary,
             "results": [{**asdict(result), "passed": result.passed} for result in results],
         }

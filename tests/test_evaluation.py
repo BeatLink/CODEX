@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +13,7 @@ from smartharness.evaluation import (
     check_passes,
     load_tasks,
     main,
+    run_eval,
     run_task,
     summarize,
 )
@@ -34,6 +36,15 @@ class ReplyingModel:
 def write_tasks(directory, tasks):
     path = Path(directory) / "tasks.json"
     path.write_text(json.dumps(tasks), encoding="utf-8")
+    return path
+
+
+def write_seed_store(directory):
+    path = Path(directory) / "seed.sqlite3"
+    with sqlite3.connect(path) as connection:
+        connection.execute("CREATE TABLE notes (text TEXT)")
+        connection.execute("INSERT INTO notes VALUES ('seeded')")
+    connection.close()
     return path
 
 
@@ -112,6 +123,42 @@ class RunTaskTests(unittest.TestCase):
         self.assertIsInstance(seen["llm"], CountingModel)
         self.assertFalse(Path(seen["filesystem_root"]).exists())
 
+    def test_a_seeded_run_answers_from_a_copy_of_the_seed_store(self):
+        def fake_pipeline(prompt, **options):
+            with sqlite3.connect(options["knowledge_db_path"]) as connection:
+                text = connection.execute("SELECT text FROM notes").fetchone()[0]
+                connection.execute("DELETE FROM notes")
+            connection.close()
+            return text
+
+        task = EvalTask(id="seed", prompt="What was stored?", checks=[{"type": "contains", "value": "seeded"}])
+        with tempfile.TemporaryDirectory() as directory:
+            seed_path = write_seed_store(directory)
+            with patch("smartharness.evaluation.execute_pipeline", side_effect=fake_pipeline):
+                result = run_task(task, "pipeline", ReplyingModel(""), DEFAULT_SETTINGS, seed_store=seed_path)
+            with sqlite3.connect(seed_path) as connection:
+                remaining = connection.execute("SELECT COUNT(*) FROM notes").fetchone()[0]
+            connection.close()
+
+        self.assertTrue(result.passed)
+        self.assertEqual(result.runner, "pipeline+store")
+        self.assertEqual(remaining, 1)
+
+    def test_a_seed_store_adds_a_seeded_run_for_each_runner_that_recalls(self):
+        task = EvalTask(id="sum", prompt="What is 2 + 2?", checks=[{"type": "contains", "value": "4"}])
+        with tempfile.TemporaryDirectory() as directory:
+            seed_path = write_seed_store(directory)
+            with (
+                patch("smartharness.evaluation.execute_pipeline", return_value="4"),
+                patch("smartharness.evaluation.execute_task_tree", return_value="4"),
+            ):
+                results = run_eval([task], ["bare", "pipeline", "tree"], ReplyingModel("4"), DEFAULT_SETTINGS, seed_store=seed_path)
+
+        self.assertEqual(
+            [result.runner for result in results],
+            ["bare", "pipeline", "pipeline+store", "tree", "tree+store"],
+        )
+
     def test_a_failing_run_is_recorded_as_an_error_and_scores_nothing(self):
         task = EvalTask(id="sum", prompt="What is 2 + 2?", checks=[{"type": "not_contains", "value": "5"}])
         with patch("smartharness.evaluation.execute_task_tree", side_effect=RuntimeError("token limit")):
@@ -165,6 +212,8 @@ class CommandLineTests(unittest.TestCase):
                 patch("builtins.print"),
             ):
                 self.assertEqual(main(["--tasks", str(tasks_path), "--only", "missing"]), 1)
+                with patch("sys.stderr"):
+                    self.assertEqual(main(["--tasks", str(tasks_path), "--seed-store", str(Path(directory) / "none")]), 1)
                 with self.assertRaises(SystemExit), patch("sys.stderr"):
                     main(["--tasks", str(tasks_path), "--runners", "bare,magic"])
 

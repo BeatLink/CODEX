@@ -437,9 +437,15 @@ filesystem root, with no MCP servers, so no task sees what an earlier one found
 or the user's own files. Web search stays on. Tasks use the `auto`, `answer`,
 or `draft` mode; execute mode is not covered yet.
 
+`--seed-store PATH` measures what recall adds: the pipeline and the task tree
+each run once more, as `pipeline+store` and `tree+store`, starting from a fresh
+copy of that knowledge store, such as the one in `knowledge_db_path`. The copy
+is made with SQLite's backup, so the seed store itself is never changed.
+
 ```bash
 smartharness eval --runners bare,tree --only stable-fact,python-bug
 smartharness eval --tasks my-tasks.json --output report.json
+smartharness eval --runners pipeline --seed-store ~/.local/share/smartharness/knowledge.sqlite3
 ```
 
 ### Terminal interface
