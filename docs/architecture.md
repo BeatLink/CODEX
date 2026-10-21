@@ -171,6 +171,7 @@ with its version bump, and a database newer than the code is refused.
 | `user_memory` | Preferences, projects and corrections about the user, `active` or `superseded` |
 | `episodes` | Each finished request: prompt, mode, checklist or tree outline, answer, outcome, tree snapshot |
 | `knowledge_search` | FTS5 index over sources (title, snippet plus summary, URL) |
+| `embeddings` | One vector per fact and topic, with the model and text it was made from |
 | `memory_search` | FTS5 index over facts and episodes |
 | `graph_nodes`, `graph_edges` | Topic, source and entity nodes; `contains`, `supported_by` and extracted relations, each edge optionally tied to a source |
 | `research_queue` | Jobs per topic: pending, running, done or failed, at most one pending per topic |
@@ -192,7 +193,10 @@ There are two read paths, used at different moments:
    or three of them for a longer prompt (stopwords removed, at most twelve terms), those sharing
    the most terms first. When fewer than five match, recall walks the topic tree: it takes the most
    specific topic whose whole name appears in the query and fills up from facts in that topic and
-   its subtopics. Each recalled fact carries its chain of ancestor topics and their
+   its subtopics. With an embedding model ([embeddings.py](../smartharness/embeddings.py)), the
+   query is also embedded and compared with every fact's vector through sqlite-vec; facts above a
+   similarity floor are merged with the word matches by reciprocal rank fusion, and when no topic
+   is named, the topic closest in meaning supplies the branch. Each recalled fact carries its chain of ancestor topics and their
    summaries, and the recalled facts bring up to five graph relationships of the entities they
    name. The result is formatted as a "Remembered context" section, and recall bumps the use
    counts of what it returned. In a task tree, each subtask adds the facts its own prompt recalls,
@@ -227,6 +231,7 @@ loop:
     re-queue topics researched longer ago than background_refresh_interval_hours
       (half that for topics recalled five times and used since; most used first)
     research_one_topic()       — if a job was pending
+    or index_knowledge()       — if facts or topics lack a vector (CPU embedding model)
     or learn_from_episodes()   — if unprocessed episodes exist
     or consolidate_knowledge() — if anything is left to tidy
     worked → wait 0.2 s, else wait poll interval
@@ -302,12 +307,14 @@ research_queue ─► research_one_topic (idle time) ─► facts, summaries, pa
 
 These are properties of the code as it stands, recorded so changes can be measured against them.
 
-- **Retrieval is lexical only.** Both read paths use FTS5 plus a shared-terms filter, so a
-  paraphrase that shares no words with a stored fact finds nothing.
+- **Source search is lexical.** Recall finds facts and topics by meaning, but the stored-sources
+  lookup before a web search still needs shared words.
+- **Vector search is brute force.** Every recall compares the query with every stored vector; fine
+  for thousands of facts, slow for millions.
 - **The pipeline recalls once, on the whole prompt.** Only the task tree recalls for each subtask
   and search query.
-- **Branch routing needs the topic's name.** Recall only enters a branch whose name the query
-  states word for word, so a question about a subject in other words never reaches its branch.
+- **Branch routing picks one branch.** Recall enters only the most specific named topic, or the
+  single closest one in meaning, even when the question spans several.
 - **The graph is read one step out.** Recall adds the relationships of entities a recalled fact
   names, but never follows them further or uses them to find facts.
 - **Stale facts are flagged, not retired.** A fact whose source expired is recalled with a warning

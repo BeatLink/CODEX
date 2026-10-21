@@ -14,6 +14,7 @@ from .context_budget import (
     render_sections,
     token_counter,
 )
+from .embeddings import get_embedder
 from .knowledge import KnowledgeStore
 from .settings import CONTEXT_SIZE, DEFAULT_MODEL_PATH, MAX_TOKENS, MODE_CHOICES, TEMPERATURE
 from .tool_stage import run_tool_stage
@@ -912,6 +913,7 @@ def execute_pipeline(
     progress_callback: Callable[[str], None] | None = None,
     stage_output_callback: Callable[[str, str], None] | None = None,
     knowledge_db_path: str | None = None,
+    embedding_model_path: str = "",
     llm: Any = None,
     model_cache: ModelCache | None = None,
     max_pending_research_jobs: int = 100,
@@ -925,7 +927,9 @@ def execute_pipeline(
         raise ValueError("The prompt cannot be empty.")
     if isinstance(max_tool_calls, bool) or not isinstance(max_tool_calls, int) or not 1 <= max_tool_calls <= 10:
         raise ValueError("max_tool_calls must be an integer from 1 to 10.")
-    knowledge_store = KnowledgeStore(knowledge_db_path) if knowledge_db_path else None
+    knowledge_store = (
+        KnowledgeStore(knowledge_db_path, get_embedder(embedding_model_path)) if knowledge_db_path else None
+    )
     found_urls: set[str] = set()
     toolbox = build_toolbox(
         filesystem_root,

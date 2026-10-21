@@ -5,6 +5,13 @@ import time
 from pathlib import Path
 from typing import Any
 
+from .embeddings import Embedder, pack
+
+try:
+    import sqlite_vec
+except ImportError:
+    sqlite_vec = None
+
 # Common words that would match almost any stored snippet, so they never count as a search term.
 _SEARCH_STOPWORDS = frozenset(
     """
@@ -141,6 +148,16 @@ _MIGRATIONS = (
         updated_at REAL NOT NULL
     );
     """,
+    """
+    CREATE TABLE embeddings (
+        kind TEXT NOT NULL,
+        item_id INTEGER NOT NULL,
+        model TEXT NOT NULL,
+        body TEXT NOT NULL,
+        vector BLOB NOT NULL,
+        PRIMARY KEY (kind, item_id)
+    );
+    """,
 )
 
 MEMORY_KINDS = ("fact", "episode")
@@ -206,8 +223,24 @@ SOURCE_TTL_SECONDS = 7 * 24 * 3600
 # Graph relationships recalled beside the facts that name their entities.
 MAX_RECALLED_RELATIONSHIPS = 5
 
+# Cosine similarity a stored item needs to the query to count as related; unrelated text scores about 0.3.
+FACT_SIMILARITY = 0.45
+TOPIC_SIMILARITY = 0.5
+
+# Reciprocal rank fusion's damping constant: higher values weigh the top ranks less.
+FUSION_RANK_OFFSET = 60
+
 # A remembered fact is one short sentence, so a long request can only ever share a few words with it.
 RECALL_MIN_SHARED_TERMS = 3
+
+
+def _fuse_rankings(*rankings: list[int]) -> list[int]:
+    """Merge ranked lists of ids by reciprocal rank, so an item near the top of either comes first."""
+    scores: dict[int, float] = {}
+    for ranking in rankings:
+        for rank, item_id in enumerate(dict.fromkeys(ranking)):
+            scores[item_id] = scores.get(item_id, 0.0) + 1.0 / (FUSION_RANK_OFFSET + rank)
+    return sorted(scores, key=lambda item_id: -scores[item_id])
 
 
 class _ClosingConnection(sqlite3.Connection):
@@ -219,8 +252,10 @@ class _ClosingConnection(sqlite3.Connection):
 
 
 class KnowledgeStore:
-    def __init__(self, database_path: str | Path):
+    def __init__(self, database_path: str | Path, embedder: Embedder | None = None):
         self.path = Path(database_path).expanduser()
+        # Vectors are searched with sqlite-vec, so without it retrieval stays lexical.
+        self.embedder = embedder if sqlite_vec is not None else None
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as connection:
             schema_version = connection.execute("PRAGMA user_version").fetchone()[0]
@@ -235,6 +270,10 @@ class KnowledgeStore:
         connection = sqlite3.connect(self.path, timeout=10, factory=_ClosingConnection)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
+        if sqlite_vec is not None:
+            connection.enable_load_extension(True)
+            sqlite_vec.load(connection)
+            connection.enable_load_extension(False)
         return connection
 
     def add_topic(self, name: str, parent: str | None = None, priority: int | None = None) -> int:
@@ -701,8 +740,10 @@ class KnowledgeStore:
             "relationships": [],
         }
         terms = _search_terms(query)
+        query_vector = self._query_vector(query)
         now = time.time()
         with self._connect() as connection:
+            lexical_fact_ids = []
             if terms:
                 rows = connection.execute(
                     "SELECT m.kind, m.item_id, m.body FROM memory_search m "
@@ -715,10 +756,8 @@ class KnowledgeStore:
                 # The sort is stable, so items sharing as many terms keep their FTS5 rank order.
                 ranked = sorted((pair for pair in counted if pair[0] >= needed), key=lambda pair: -pair[0])
                 for _, row in ranked:
-                    if row["kind"] == "fact" and len(recalled["facts"]) < limit:
-                        fact = self._recalled_fact(connection, row["item_id"], now)
-                        if fact:
-                            recalled["facts"].append(fact)
+                    if row["kind"] == "fact":
+                        lexical_fact_ids.append(row["item_id"])
                     elif row["kind"] == "episode" and len(recalled["episodes"]) < min(limit, 3):
                         episode = connection.execute(
                             "SELECT id, prompt, task_type, outcome, created_at FROM episodes WHERE id = ?",
@@ -726,12 +765,22 @@ class KnowledgeStore:
                         ).fetchone()
                         if episode:
                             recalled["episodes"].append(dict(episode))
-                if len(recalled["facts"]) < limit:
-                    shown = {fact["id"] for fact in recalled["facts"]}
-                    for fact_id in self._branch_fact_ids(connection, terms, shown, limit - len(recalled["facts"])):
-                        fact = self._recalled_fact(connection, fact_id, now)
-                        if fact:
-                            recalled["facts"].append(fact)
+            vector_fact_ids = self._similar_items(connection, "fact", query_vector, limit * 4, FACT_SIMILARITY)
+            for fact_id in _fuse_rankings(lexical_fact_ids, vector_fact_ids):
+                if len(recalled["facts"]) == limit:
+                    break
+                fact = self._recalled_fact(connection, fact_id, now)
+                if fact:
+                    recalled["facts"].append(fact)
+            if len(recalled["facts"]) < limit:
+                shown = {fact["id"] for fact in recalled["facts"]}
+                branch_ids = self._branch_fact_ids(
+                    connection, terms, shown, limit - len(recalled["facts"]), query_vector
+                )
+                for fact_id in branch_ids:
+                    fact = self._recalled_fact(connection, fact_id, now)
+                    if fact:
+                        recalled["facts"].append(fact)
             recalled["relationships"] = self._relationships_named_in(
                 connection, [fact["statement"] for fact in recalled["facts"]]
             )
@@ -1224,6 +1273,62 @@ class KnowledgeStore:
             raise ValueError(f"{name} must be a non-empty string.")
         return value.strip()[:maximum]
 
+    # ==========================================================================
+    # Embeddings
+    # ==========================================================================
+
+    def _query_vector(self, query: str) -> list[float] | None:
+        if self.embedder is None or not query.strip():
+            return None
+        try:
+            return self.embedder.embed_query(query)
+        except (RuntimeError, ValueError, OSError):
+            # A model that will not load or run leaves retrieval lexical rather than failing the request.
+            return None
+
+    def items_to_embed(self, model: str, limit: int) -> list[tuple[str, int, str]]:
+        """Return facts and topics with no vector from this model, or whose text changed since theirs was made."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT kind, item_id, body FROM ("
+                "SELECT 'fact' AS kind, f.id AS item_id, f.statement AS body FROM facts f WHERE f.status = 'active' "
+                "UNION ALL SELECT 'topic', t.id, t.name || ': ' || t.summary FROM topics t"
+                ") items WHERE NOT EXISTS (SELECT 1 FROM embeddings e WHERE e.kind = items.kind "
+                "AND e.item_id = items.item_id AND e.model = ? AND e.body = items.body) LIMIT ?",
+                (model, limit),
+            ).fetchall()
+        return [(row["kind"], row["item_id"], row["body"]) for row in rows]
+
+    def save_embeddings(self, model: str, items: list[tuple[str, int, str]], vectors: list[list[float]]) -> None:
+        with self._connect() as connection:
+            connection.executemany(
+                "INSERT INTO embeddings(kind, item_id, model, body, vector) VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(kind, item_id) DO UPDATE SET model = excluded.model, body = excluded.body, "
+                "vector = excluded.vector",
+                [(kind, item_id, model, body, pack(vector)) for (kind, item_id, body), vector in zip(items, vectors)],
+            )
+
+    @staticmethod
+    def _similar_items(
+        connection: sqlite3.Connection,
+        kind: str,
+        query_vector: list[float] | None,
+        limit: int,
+        minimum_similarity: float,
+    ) -> list[int]:
+        """Return the items of one kind closest in meaning to the query, closest first.
+
+        Vectors of another length come from a different model and are skipped until re-embedded.
+        """
+        if query_vector is None:
+            return []
+        rows = connection.execute(
+            "SELECT item_id, 1 - vec_distance_cosine(vector, ?) AS similarity FROM embeddings "
+            "WHERE kind = ? AND length(vector) = ? ORDER BY similarity DESC LIMIT ?",
+            (pack(query_vector), kind, 4 * len(query_vector), limit),
+        ).fetchall()
+        return [row["item_id"] for row in rows if row["similarity"] >= minimum_similarity]
+
     @classmethod
     def _recalled_fact(cls, connection: sqlite3.Connection, fact_id: int, now: float) -> dict[str, Any] | None:
         """Load an active fact with its source, its age, and the chain of topics above it."""
@@ -1242,17 +1347,28 @@ class KnowledgeStore:
         return {**dict(fact), "stale": bool(fact["stale"]), "topic_path": cls._topic_path(connection, fact["topic_id"])}
 
     @classmethod
-    def _branch_fact_ids(cls, connection: sqlite3.Connection, terms: list[str], shown: set[int], limit: int) -> list[int]:
+    def _branch_fact_ids(
+        cls,
+        connection: sqlite3.Connection,
+        terms: list[str],
+        shown: set[int],
+        limit: int,
+        query_vector: list[float] | None = None,
+    ) -> list[int]:
         """Return the best facts from the branch of the most specific topic the query names.
 
         A topic counts as named when every word of its name is among the query's terms, so a
         fact under it is found even when it shares too few words with the query to match itself.
+        When the query names none, the topic closest to it in meaning is used instead.
         """
         named = []
         for topic in connection.execute("SELECT id, name FROM topics").fetchall():
             name_terms = _search_terms(topic["name"])
             if name_terms and all(term in terms for term in name_terms):
                 named.append((len(name_terms), topic["id"]))
+        if not named:
+            closest = cls._similar_items(connection, "topic", query_vector, 1, TOPIC_SIMILARITY)
+            named = [(0, topic_id) for topic_id in closest]
         if not named:
             return []
         most_specific = max(count for count, _ in named)

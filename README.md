@@ -239,6 +239,7 @@ Knowledge lives in a SQLite database at `knowledge_db_path`
   clarification, the answer, and how it ended (answered directly, passed the
   critique, revised, or failed).
 - **Full-text indexes** (FTS5) over sources, and over facts and episodes.
+- **Embeddings** of facts and topics, for finding them by meaning.
 - **A graph** of nodes and labelled edges. Topics link to child topics
   (`contains`) and to their sources (`supported_by`); entity relationships can
   carry the source that supports them.
@@ -250,7 +251,10 @@ prompt's search terms, or three of them for a longer prompt, ignoring common
 words; those sharing the most terms come first. When fewer than five match and
 the request names a stored topic (every word of the topic's name appears in
 it), the rest come from that topic and its subtopics, most relevant, trusted,
-and used first. These go to every later step as
+and used first. With an embedding model (see below), facts are also found by
+meaning, even when they share no words with the request, and the two rankings
+are merged; when the request names no topic, the topic closest in meaning
+supplies the branch. These go to every later step as
 "Remembered context", and each recall counts towards that fact's and topic's use
 count. In a task tree, each subtask also recalls facts for its own prompt, and
 each search query recalls facts for itself; facts that answer every query of a
@@ -260,6 +264,17 @@ source was retrieved; once that source has expired, the fact is marked as
 possibly out of date, no longer lets a task skip its web research, and its
 topic is queued for fresh research. When the run ends, it is recorded as an
 episode.
+
+### Search by meaning
+
+`embedding_model_path` (`./models/embedding.gguf` by default) points at a small
+embedding model, run on the CPU so the GPU stays with the chat model.
+[Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF)
+in Q8_0 (about 640 MB) is the one this was built with. While idle, the
+background worker embeds facts and topics in batches of eight, and embeds a
+topic again when its summary changes. Vectors are stored in the knowledge
+database and searched with sqlite-vec. Without the file, or if it fails to
+load, search stays word-based.
 
 Every web search the pipeline runs is stored under a topic named after its
 query. A stored source is reused only while it has not expired and shares at
@@ -389,7 +404,9 @@ With pip, in a Python 3.10+ environment:
 pip install -e .
 ```
 
-Then put a GGUF model at `./models/model.gguf`, or point `model_path` at one.
+Then put a GGUF model at `./models/model.gguf`, or point `model_path` at one,
+and optionally an embedding model at `./models/embedding.gguf` (see
+[Search by meaning](#search-by-meaning)).
 
 ## Usage
 
@@ -466,6 +483,7 @@ another. Unknown keys are rejected.
 	"max_task_depth": 3,
 	"max_task_nodes": 20,
 	"knowledge_db_path": "~/.local/share/smartharness/knowledge.sqlite3",
+	"embedding_model_path": "./models/embedding.gguf",
 	"background_research_enabled": true,
 	"background_model_path": "",
 	"background_context_size": 0,
@@ -572,6 +590,7 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 | `smartharness/mcp_tools.py` | MCP client for stdio and HTTP servers |
 | `smartharness/context_budget.py` | Fitting stage input into the context window |
 | `smartharness/knowledge.py` | SQLite knowledge store, queue, and graph |
+| `smartharness/embeddings.py` | The embedding model used to find facts and topics by meaning |
 | `smartharness/background.py` | One background research job |
 | `smartharness/consolidation.py` | One background consolidation step: merging, re-filing, and pruning the store |
 | `smartharness/settings.py` | Defaults and validation |

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .auto_size import auto_size
-from .background import learn_from_episodes, research_one_topic
+from .background import index_knowledge, learn_from_episodes, research_one_topic
 from .consolidation import consolidate_knowledge
 from .knowledge import RESUMABLE_TASK_RUN_STATUSES, KnowledgeStore
 from .pipeline import ModelCache, execute_pipeline
@@ -485,6 +485,7 @@ class HarnessDaemon:
                         allow_file_writes=settings["allow_file_writes"],
                         mcp_servers=settings["mcp_servers"],
                         knowledge_db_path=settings["knowledge_db_path"],
+                        embedding_model_path=settings["embedding_model_path"],
                         max_pending_research_jobs=settings["background_max_pending_jobs"],
                         mode=settings["mode"],
                         **callbacks,
@@ -609,9 +610,10 @@ class HarnessDaemon:
                         "model_lock": model_lock,
                         "model_cache": model_cache,
                     }
-                    # Queued research comes first, then learning from past requests, then tidying the store.
+                    # Queued research comes first, then indexing what it found, learning from past requests, and tidying.
                     worked = (
                         research_one_topic(settings, **worker_options)
+                        or index_knowledge(settings, **worker_options)
                         or learn_from_episodes(settings, **worker_options)
                         or consolidate_knowledge(settings, **worker_options)
                     )

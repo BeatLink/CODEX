@@ -13,6 +13,7 @@
   "max_task_depth": 3,
   "max_task_nodes": 20,
   "knowledge_db_path": "~/.local/share/smartharness/knowledge.sqlite3",
+  "embedding_model_path": "./models/embedding.gguf",
   "background_research_enabled": true,
   "background_poll_interval_seconds": 10,
   "background_refresh_interval_hours": 168,

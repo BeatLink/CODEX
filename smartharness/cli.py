@@ -15,7 +15,7 @@ from .knowledge import KnowledgeStore
 from .task_tree import execute_task_tree
 
 
-PATH_SETTINGS = ("model_path", "filesystem_root", "knowledge_db_path")
+PATH_SETTINGS = ("model_path", "filesystem_root", "knowledge_db_path", "embedding_model_path")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -138,6 +138,7 @@ def main(argv: list[str] | None = None) -> int:
                 allow_file_writes=settings["allow_file_writes"],
                 mcp_servers=settings["mcp_servers"],
                 knowledge_db_path=settings["knowledge_db_path"],
+                embedding_model_path=settings["embedding_model_path"],
                 max_pending_research_jobs=settings["background_max_pending_jobs"],
                 mode=settings["mode"],
                 show_thinking=settings["show_thinking"],
@@ -212,7 +213,8 @@ def _run_with_daemon(
     # The daemon may have started elsewhere, so paths are sent resolved from this directory.
     settings = {
         **settings,
-        **{name: str(Path(settings[name]).expanduser().resolve()) for name in PATH_SETTINGS},
+        # An empty path means a feature is off, so it stays empty.
+        **{name: str(Path(settings[name]).expanduser().resolve()) for name in PATH_SETTINGS if settings[name]},
     }
     try:
         if resume_run_id is not None:

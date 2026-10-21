@@ -54,7 +54,7 @@
 - [x] Merge duplicate topics and user memories and re-file topics under better parents in the background
 - [x] Track memory usage counts
 - [x] Refresh topics by usage and staleness
-- [ ] Add embedding retrieval with sqlite-vec and combine it with FTS5 ranking
+- [x] Add embedding retrieval with sqlite-vec and combine it with FTS5 ranking
 - [x] Count recalled memory as evidence in the task tree's URL and value checks, as the pipeline does
 - [x] Recall memory for each task's own prompt and search queries, not only once for the whole request
 - [x] Rank recalled facts by FTS5 score and term overlap instead of requiring half the prompt's terms

@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .context_budget import fit_sections_to_tokens, input_token_budget, render_sections, token_counter
+from .embeddings import get_embedder
 from .knowledge import USER_MEMORY_KINDS, KnowledgeStore, _search_terms, _shares_half_the_terms
 from .pipeline import ModelCache, _summarize_web_page, _unsupported_values, create_model, queue_research_topic, run_stage
 from .settings import MAX_TOKENS, TEMPERATURE, background_model_key
@@ -509,4 +510,40 @@ def learn_from_episodes(
     for episode in episodes:
         store.mark_episode_processed(episode["id"])
     report(f"Learned {learned} thing(s) about the user and queued {queued} topic(s) for research")
+    return True
+
+
+# ==============================================================================
+# Indexing for search by meaning
+# ==============================================================================
+
+# Facts and topics embedded per pass; a small batch keeps a waiting request from waiting long.
+EMBEDDING_BATCH_SIZE = 8
+
+
+def index_knowledge(
+    settings: dict[str, Any],
+    on_progress: Callable[[str], None] | None = None,
+    should_pause: Callable[[], bool] | None = None,
+    **_model_options: Any,
+) -> bool:
+    """Embed one batch of facts and topics that have no vector yet, returning False when none are left."""
+    embedder = get_embedder(settings["embedding_model_path"])
+    if embedder is None:
+        return False
+    store = KnowledgeStore(settings["knowledge_db_path"], embedder)
+    if store.embedder is None:
+        return False
+    items = store.items_to_embed(embedder.name, EMBEDDING_BATCH_SIZE)
+    if not items or (should_pause is not None and should_pause()):
+        return False
+    report = on_progress or (lambda message: None)
+    report(f"Indexing {len(items)} fact(s) and topic(s) for search by meaning")
+    try:
+        vectors = embedder.embed_documents([body for _, _, body in items])
+    except (RuntimeError, ValueError, OSError) as error:
+        # A model that cannot load leaves search lexical; the other background work still runs.
+        report(f"Indexing failed: {error}")
+        return False
+    store.save_embeddings(embedder.name, items, vectors)
     return True

@@ -19,6 +19,7 @@ USER_SETTINGS_PATH = (
     Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "smartharness" / "settings.json"
 )
 DEFAULT_KNOWLEDGE_DB_PATH = "~/.local/share/smartharness/knowledge.sqlite3"
+DEFAULT_EMBEDDING_MODEL_PATH = "./models/embedding.gguf"
 DEFAULT_SETTINGS = {
     "model_path": DEFAULT_MODEL_PATH,
     "context_size": CONTEXT_SIZE,
@@ -37,6 +38,8 @@ DEFAULT_SETTINGS = {
     "max_task_nodes": MAX_TASK_NODES,
     "mcp_servers": [],
     "knowledge_db_path": DEFAULT_KNOWLEDGE_DB_PATH,
+    # Facts and topics are found by meaning with this model; an empty or missing file keeps search lexical.
+    "embedding_model_path": DEFAULT_EMBEDDING_MODEL_PATH,
     "background_research_enabled": True,
     # An empty path runs background work on the main model; a context size of 0 uses the main one.
     "background_model_path": "",
@@ -120,6 +123,9 @@ def validate_settings(values: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"runner must be one of: {', '.join(RUNNERS)}.")
     if not isinstance(values["knowledge_db_path"], str) or not values["knowledge_db_path"].strip():
         raise ValueError("knowledge_db_path must be a non-empty path string.")
+    if not isinstance(values["embedding_model_path"], str):
+        raise ValueError("embedding_model_path must be a path string, or empty to search by words only.")
+    values["embedding_model_path"] = values["embedding_model_path"].strip()
     if not isinstance(values["background_research_enabled"], bool):
         raise ValueError("background_research_enabled must be a boolean.")
     if not isinstance(values["background_model_path"], str):

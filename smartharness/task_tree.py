@@ -9,6 +9,7 @@ from datetime import date
 from typing import Any
 
 from .context_budget import condense_sections, input_token_budget, render_sections, token_counter
+from .embeddings import get_embedder
 from .knowledge import MAX_RECALLED_RELATIONSHIPS, KnowledgeStore
 from .pipeline import (
     MAX_SEARCH_QUERIES,
@@ -1144,7 +1145,8 @@ class TaskTreeRun:
 RESUMABLE_OPTIONS = (
     "model_path", "context_size", "gpu_layers", "max_tokens", "temperature", "filesystem_root",
     "max_tool_calls", "max_search_results", "enable_test_execution", "allow_file_writes", "mcp_servers",
-    "knowledge_db_path", "max_pending_research_jobs", "max_task_depth", "max_task_nodes", "mode",
+    "knowledge_db_path", "embedding_model_path", "max_pending_research_jobs", "max_task_depth", "max_task_nodes",
+    "mode",
 )
 
 
@@ -1167,6 +1169,7 @@ def execute_task_tree(
     stage_output_callback: Callable[[str, str], None] | None = None,
     tree_callback: Callable[[list[dict[str, Any]]], None] | None = None,
     knowledge_db_path: str | None = None,
+    embedding_model_path: str = "",
     llm: Any = None,
     model_cache: ModelCache | None = None,
     max_pending_research_jobs: int = 100,
@@ -1189,7 +1192,9 @@ def execute_task_tree(
         raise ValueError("The prompt cannot be empty.")
     if isinstance(max_tool_calls, bool) or not isinstance(max_tool_calls, int) or not 1 <= max_tool_calls <= 10:
         raise ValueError("max_tool_calls must be an integer from 1 to 10.")
-    knowledge_store = KnowledgeStore(knowledge_db_path) if knowledge_db_path else None
+    knowledge_store = (
+        KnowledgeStore(knowledge_db_path, get_embedder(embedding_model_path)) if knowledge_db_path else None
+    )
     saved_run = None
     if resume_run_id is not None:
         saved_run = knowledge_store.task_run(resume_run_id) if knowledge_store else None

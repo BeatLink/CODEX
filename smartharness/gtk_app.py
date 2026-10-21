@@ -71,6 +71,7 @@ PATH_FIELDS = (
     ("GGUF model path", "model_path"),
     ("Filesystem root", "filesystem_root"),
     ("SQLite database", "knowledge_db_path"),
+    ("Embedding GGUF model (empty searches by words only)", "embedding_model_path"),
     ("Background GGUF model (empty uses the main model)", "background_model_path"),
 )
 SWITCH_FIELDS = (
@@ -584,6 +585,7 @@ class SmartHarnessWindow(Gtk.ApplicationWindow):
         page.append(section_heading("Background research"))
         page.append(self._number_grid(BACKGROUND_NUMBER_FIELDS))
         page.append(self._path_field("knowledge_db_path"))
+        page.append(self._path_field("embedding_model_path"))
         page.append(self._path_field("background_model_path"))
         page.append(self._number_grid(BACKGROUND_MODEL_NUMBER_FIELDS))
         page.append(section_heading("MCP servers"))

@@ -582,6 +582,13 @@ class SmartHarnessApp(App[None]):
                 classes="wrapped-field",
                 id="knowledge-db-path",
             )
+            yield Label("Embedding GGUF model (empty searches by words only)", classes="field-label")
+            yield TextArea(
+                self.settings["embedding_model_path"],
+                soft_wrap=True,
+                classes="wrapped-field",
+                id="embedding-model-path",
+            )
             yield Label("Background GGUF model (empty uses the main model)", classes="field-label")
             yield TextArea(
                 self.settings["background_model_path"],
@@ -732,6 +739,7 @@ class SmartHarnessApp(App[None]):
                 "max_task_depth": self._int_setting("max-task-depth"),
                 "max_task_nodes": self._int_setting("max-task-nodes"),
                 "knowledge_db_path": self.query_one("#knowledge-db-path", TextArea).text,
+                "embedding_model_path": self.query_one("#embedding-model-path", TextArea).text,
                 "background_research_enabled": self.query_one("#background-enabled", Checkbox).value,
                 "background_poll_interval_seconds": self._int_setting("background-poll-seconds"),
                 "background_refresh_interval_hours": self._int_setting("background-refresh-hours"),
@@ -777,6 +785,7 @@ class SmartHarnessApp(App[None]):
             ("model-path", "model_path"),
             ("filesystem-root", "filesystem_root"),
             ("knowledge-db-path", "knowledge_db_path"),
+            ("embedding-model-path", "embedding_model_path"),
             ("background-model-path", "background_model_path"),
         ):
             self.query_one(f"#{selector}", TextArea).text = settings[name]
