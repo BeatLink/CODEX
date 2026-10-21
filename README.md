@@ -461,6 +461,31 @@ smartharness eval --runners pipeline --seed-store ~/.local/share/smartharness/kn
 smartharness eval --seed --runners pipeline,tree
 ```
 
+### Recall benchmark
+
+`smartharness recall-benchmark` scores recall itself, with no chat model. It
+builds a store from the made-up facts in `evals/recall_benchmark_seed.json`,
+asks each question in `evals/recall_benchmark.json`, and compares the five
+facts recalled with the ones each question expects. Questions come in four
+kinds: ones that share words with their fact, paraphrases that share none,
+ones that should bring up several facts, and unrelated ones that should bring
+up nothing. It runs once by words alone and once with the embedding model, and
+reports each kind's pass rate, the share of expected facts found, the mean
+reciprocal rank, and the time per recall. `--words-only` skips the embedding
+run and `--show-failures` lists what each failed question recalled.
+
+On 2026-10-21, with Qwen3-Embedding-0.6B on a busy CPU:
+
+| | Words only | With meaning |
+| --- | --- | --- |
+| Shared words | 100% | 100% |
+| Paraphrase | 0% | 100% |
+| Several facts | 50% | 100% |
+| Unrelated (nothing recalled) | 100% | 100% |
+| Expected facts found | 38% | 100% |
+| Mean reciprocal rank | 0.35 | 0.91 |
+| Seconds per recall | 0.00 | 2.29 |
+
 ### Terminal interface
 
 The TUI has four pages:
@@ -630,6 +655,7 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 | `smartharness/mcp_tools.py` | MCP client for stdio and HTTP servers |
 | `smartharness/context_budget.py` | Fitting stage input into the context window |
 | `smartharness/knowledge.py` | SQLite knowledge store, queue, and graph |
+| `smartharness/recall_benchmark.py` | Scoring recall against questions with known relevant facts |
 | `smartharness/embeddings.py` | The embedding model used to find facts and topics by meaning |
 | `smartharness/background.py` | One background research job |
 | `smartharness/consolidation.py` | One background consolidation step: merging, re-filing, and pruning the store |

@@ -80,7 +80,7 @@
 - [x] Add focused tests for SQLite storage, graph queries, retrieval, worker scheduling, and TUI views
 - [x] Document storage, background worker, configuration, and privacy/resource behavior
 - [ ] Run the eval harness with the knowledge store empty and filled to measure what recall adds
-- [ ] Score recall against a fixed set of questions with known relevant facts
+- [x] Score recall against a fixed set of questions with known relevant facts
 - [ ] Cap the knowledge store's size and evict the least used facts, pages, and episodes
 - [ ] Mark recalled and fetched text as untrusted in every prompt and test it against hostile pages
 - [ ] Rate-limit background fetches per domain, honour robots.txt, and cap fetches per day

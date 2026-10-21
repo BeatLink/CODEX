@@ -27,6 +27,10 @@ def main(argv: list[str] | None = None) -> int:
         from .evaluation import main as eval_main
 
         return eval_main(argv[1:])
+    if argv and argv[0] == "recall-benchmark":
+        from .recall_benchmark import main as recall_benchmark_main
+
+        return recall_benchmark_main(argv[1:])
     parser = argparse.ArgumentParser(description="Run a staged local LLM prompt harness.")
     parser.add_argument(
         "prompt",

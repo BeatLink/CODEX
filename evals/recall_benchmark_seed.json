@@ -1,0 +1,43 @@
+{
+  "topics": [
+    {"name": "Marrowgate Observatory"},
+    {"name": "Lantern telescope", "parent": "Marrowgate Observatory"},
+    {"name": "Brine archive", "parent": "Marrowgate Observatory"},
+    {"name": "Quillfeather pipeline", "parent": "Marrowgate Observatory"},
+    {"name": "Fennick Robotics"},
+    {"name": "Thistle arm", "parent": "Fennick Robotics"},
+    {"name": "Gossamer firmware", "parent": "Fennick Robotics"},
+    {"name": "Larkspur build farm", "parent": "Fennick Robotics"},
+    {"name": "Cobble language"}
+  ],
+  "facts": [
+    {"topic": "Lantern telescope", "statement": "The Lantern telescope has a 2.4 metre primary mirror."},
+    {"topic": "Lantern telescope", "statement": "The Lantern telescope sits at 3,180 metres on Mount Aubrel."},
+    {"topic": "Lantern telescope", "statement": "Observing time on the Lantern telescope is allocated every April by the Tern committee."},
+    {"topic": "Lantern telescope", "statement": "The Lantern dome closes automatically when wind exceeds 15 metres per second."},
+    {"topic": "Brine archive", "statement": "The Brine archive keeps raw exposures for twelve years before deleting them."},
+    {"topic": "Brine archive", "statement": "Brine stores calibrated images in Zarr format on a Ceph cluster."},
+    {"topic": "Brine archive", "statement": "Researchers request Brine data through the Sounding web portal."},
+    {"topic": "Brine archive", "statement": "Brine replicates every night to a tape library in Orkney Hall."},
+    {"topic": "Quillfeather pipeline", "statement": "Quillfeather removes cosmic-ray hits with a median stack of five frames."},
+    {"topic": "Quillfeather pipeline", "statement": "Quillfeather is written in Julia and scheduled with Airflow."},
+    {"topic": "Quillfeather pipeline", "statement": "A Quillfeather nightly run takes about three hours on 64 cores."},
+    {"topic": "Quillfeather pipeline", "statement": "Quillfeather flags any frame whose seeing is worse than 1.8 arcseconds."},
+    {"topic": "Thistle arm", "statement": "The Thistle arm has six joints and lifts at most 4 kilograms."},
+    {"topic": "Thistle arm", "statement": "Thistle's gripper uses a vacuum cup for flat parts and fingers for the rest."},
+    {"topic": "Thistle arm", "statement": "A Thistle arm must be recalibrated after every 400 hours of operation."},
+    {"topic": "Thistle arm", "statement": "Thistle stops within 30 milliseconds when its light curtain is broken."},
+    {"topic": "Gossamer firmware", "statement": "Gossamer firmware runs on an RP2040 microcontroller."},
+    {"topic": "Gossamer firmware", "statement": "Gossamer updates are signed with Ed25519 keys held by the release team."},
+    {"topic": "Gossamer firmware", "statement": "Gossamer rolls back to the previous image if the new one fails to boot three times."},
+    {"topic": "Gossamer firmware", "statement": "Gossamer talks to the controller over CAN bus at 500 kbit/s."},
+    {"topic": "Larkspur build farm", "statement": "The Larkspur build farm has 40 runners managed by Buildkite."},
+    {"topic": "Larkspur build farm", "statement": "Larkspur caches compiled objects in an sccache bucket for fourteen days."},
+    {"topic": "Larkspur build farm", "statement": "A Larkspur job that runs longer than 90 minutes is cancelled."},
+    {"topic": "Larkspur build farm", "statement": "Larkspur runners are reimaged from a golden image every Sunday night."},
+    {"topic": "Cobble language", "statement": "Cobble is a garbage-collected language that compiles to WebAssembly."},
+    {"topic": "Cobble language", "statement": "Cobble modules are fetched by the tool named trowel."},
+    {"topic": "Cobble language", "statement": "Cobble reports a type error when a match expression misses a case."},
+    {"topic": "Cobble language", "statement": "Cobble strings are immutable UTF-8 byte sequences."}
+  ]
+}
