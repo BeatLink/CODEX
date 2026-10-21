@@ -744,6 +744,23 @@ def queue_research_topic(knowledge_store: KnowledgeStore | None, topic: str, max
         pass
 
 
+# Rejected claims queued for research per check, so one bad answer cannot flood the queue.
+MAX_QUEUED_CLAIMS = 3
+
+
+def queue_unsupported_claims(
+    knowledge_store: KnowledgeStore | None,
+    text: str,
+    unsupported_values: list[str],
+    max_pending: int,
+) -> None:
+    """Queue each sentence stating a value no evidence holds, so the background worker looks the claim up."""
+    sentences = re.split(r"(?<=[.!?])\s+", _CODE_BLOCK.sub(" ", text))
+    claims = [sentence for sentence in sentences if any(value in sentence for value in unsupported_values)]
+    for claim in claims[:MAX_QUEUED_CLAIMS]:
+        queue_research_topic(knowledge_store, _search_query(claim), max_pending)
+
+
 def queue_stale_topics(
     knowledge_store: KnowledgeStore | None,
     facts: list[dict[str, Any]],
@@ -1321,7 +1338,11 @@ def execute_pipeline(
 
     def value_problems(text: str) -> list[str]:
         # Only researched answers are held to their evidence; arithmetic and rewriting produce new numbers.
-        return _value_problems(_unsupported_values(text, f"{user_prompt}\n{evidence}")) if researched else []
+        if not researched:
+            return []
+        unsupported = _unsupported_values(text, f"{user_prompt}\n{evidence}")
+        queue_unsupported_claims(knowledge_store, text, unsupported, max_pending_research_jobs)
+        return _value_problems(unsupported)
 
     if not analysis.runs_critique:
         # Without a model critique, checks that need no model decide whether the draft gets one revision.

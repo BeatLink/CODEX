@@ -632,6 +632,30 @@ class RecallTests(unittest.TestCase):
         self.assertIn("Zig", [job["topic"] for job in self.store.queue_status() if job["status"] == "pending"])
 
 
+    def test_a_claim_stating_an_unfound_version_is_queued_for_research(self):
+        def found_rust(query, store, toolbox, max_pending):
+            return "Local knowledge result", '[{"summary": "Rust 1.80.0 shipped on 2024-07-25."}]', True
+
+        model = ScriptedModel({
+            ("decide", "1"): decision("research", queries=["latest rust"]),
+            ("write", "1"): "Rust is a language. Rust 1.85.0 is the newest release.",
+            ("revise", "1"): "Rust is a language.",
+        })
+        with (
+            patch("smartharness.task_tree.run_stage", side_effect=model),
+            patch("smartharness.task_tree.search_with_memory", side_effect=found_rust),
+        ):
+            execute_task_tree(
+                "What is the latest Rust?", llm=object(), progress_callback=lambda label: None,
+                max_task_depth=0, knowledge_db_path=self.database_path,
+            )
+
+        self.assertEqual(
+            [job["topic"] for job in self.store.queue_status()],
+            ["Rust 1.85.0 is the newest release."],
+        )
+
+
 class EpisodeTests(unittest.TestCase):
     def test_finished_tree_is_recorded_with_the_episode(self):
         with tempfile.TemporaryDirectory() as directory:

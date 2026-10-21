@@ -206,6 +206,8 @@ There are two read paths, used at different moments:
 - Every web search's results are stored as sources under a topic named after the query, and that
   topic is queued for background research unless it already has facts.
 - Every page summary that `web_fetch` produces is saved on its source.
+- Every sentence a check rejects for stating a version or date found in no evidence is queued as a
+  research topic, up to three per check.
 - The finished request is saved as an episode, with the task tree snapshot for tree runs.
 
 ## Background worker
@@ -307,4 +309,4 @@ These are properties of the code as it stands, recorded so changes can be measur
 - **Topics are named after raw search queries.** Consolidation merges and re-files them, but only
   pairs that share half their words are ever compared, so differently worded duplicates stay apart.
 - **Refresh is by age and recall.** Topics are re-queued when their research is old or a recalled
-  fact's source has expired, but not from claims a check rejected.
+  fact's source has expired, but not because they keep coming up in requests.

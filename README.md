@@ -292,10 +292,12 @@ The worker yields to foreground work. It takes the shared model lock for one
 model call at a time, checks before every step and every generated token
 whether a prompt has started, and if so puts its job back in the queue.
 
-Topics reach the queue in two ways. Every search during a request is queued
-unless its topic already has facts: one that found results is turned into
-facts, and one that found nothing is tried again later. A page fetched during a
-request keeps its summary in the store as well. Otherwise, add topics on
+Topics reach the queue from requests and by hand. Every search during a request
+is queued unless its topic already has facts: one that found results is turned
+into facts, and one that found nothing is tried again later. A sentence that a
+check rejects for stating a version or date found in no evidence is queued as
+well, up to three per check, so the claim gets looked up. A page fetched during
+a request keeps its summary in the store as well. Otherwise, add topics on
 the Background page: **Queue topic** adds one to the queue, and **Research now** starts it at once, even
 while idle research is paused. The worker stops when the daemon exits. One-shot
 CLI runs without a daemon read and write the knowledge store but do not start

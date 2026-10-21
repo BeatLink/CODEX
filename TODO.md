@@ -47,7 +47,8 @@
 - [x] Queue background research from searches that found nothing
 - [x] Save fetched page summaries and queue successful searches for fact extraction
 - [x] Answer from stored summaries without searching again
-- [ ] Queue background research from unsupported claims and recurring topics
+- [x] Queue background research from unsupported claims
+- [ ] Queue background research from topics that keep coming up in requests
 - [x] Fetch full pages during background research, not snippets only
 - [x] Merge duplicate facts, flag contradictions, and prune unused facts in the background
 - [x] Merge duplicate topics and user memories and re-file topics under better parents in the background
