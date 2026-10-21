@@ -195,11 +195,20 @@ def _number_sources(results: list[Any], page_summaries: dict[str, str]) -> tuple
         _Source(
             len(pages) + number,
             str(result.get("url", "")),
-            f"{result.get('title', '')}: {result.get('snippet', '')}",
+            f"{result.get('title', '')}: {_complete_sentences(str(result.get('snippet', '')))}",
         )
         for number, result in enumerate((result for result in results if isinstance(result, dict)), start=1)
     ]
     return pages, snippets
+
+
+def _complete_sentences(snippet: str) -> str:
+    """Drop the cut-off sentence at the end of a search snippet, so it is not taken for a whole fact."""
+    snippet = snippet.strip()
+    if not snippet.endswith(("...", "\u2026")):
+        return snippet
+    end = max(snippet.rfind(mark) for mark in (". ", "! ", "? "))
+    return snippet[: end + 1] if end > 0 else snippet.rstrip(".\u2026 ")
 
 
 def _render_sources(sources: list[_Source]) -> list[tuple[str, str]]:
@@ -267,7 +276,8 @@ def _grounded_facts(
     everything = "\n".join(source.text for source in sources)
     grounded = []
     for statement, url, confidence in facts:
-        if _unsupported_values(statement, everything):
+        # A statement ending in an ellipsis was copied from a cut-off snippet and is not a whole fact.
+        if _unsupported_values(statement, everything) or statement.rstrip().endswith(("...", "\u2026")):
             continue
         cited = "\n".join(texts.get(url, [])) if url else ""
         terms = _search_terms(statement)
@@ -362,7 +372,12 @@ def research_one_topic(
             "web_search",
             {"query": topic, "max_results": settings["max_search_results"]},
         )
-        results = json.loads(raw_results)
+        if raw_results.startswith("Tool error"):
+            raise RuntimeError(f"Web search failed: {raw_results.removeprefix('Tool error:').strip()}")
+        try:
+            results = json.loads(raw_results)
+        except json.JSONDecodeError as error:
+            raise RuntimeError("Web search returned output that is not a result list.") from error
         if not isinstance(results, list) or not results:
             raise RuntimeError("Web search returned no usable results.")
 
@@ -387,8 +402,9 @@ def research_one_topic(
             page_texts.add(text)
             try:
                 page_summaries[url] = model.summarize_page(_shorten_page(page, model.context_size * 2), topic)
-            except (RuntimeError, ValueError):
+            except (RuntimeError, ValueError) as error:
                 # One unreadable page should not lose the rest of the topic's research.
+                report(f"Could not summarize {url}: {error}")
                 continue
 
         report("Extracting facts")

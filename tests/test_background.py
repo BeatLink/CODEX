@@ -215,6 +215,29 @@ class ExtractionTests(unittest.TestCase):
             ("SQLite WAL", "described_by", "sqlite.org"),
         ])
 
+    def test_a_failed_search_says_so_in_the_job_error(self):
+        self.store.enqueue_topic("SQLite WAL")
+        toolbox = unittest.mock.Mock()
+        toolbox.call.return_value = "Tool error: RatelimitException: 202 Ratelimit"
+
+        with patch("smartharness.background.Toolbox", return_value=toolbox):
+            research_one_topic(self.settings, llm=object())
+
+        self.assertEqual(self.store.queue_status()[0]["status"], "failed")
+        self.assertIn("Web search failed: RatelimitException", self.store.queue_status()[0]["error"])
+
+    def test_a_cut_off_snippet_loses_its_last_sentence_and_no_fact_may_end_cut_off(self):
+        from smartharness.background import _complete_sentences, _grounded_facts, _Source
+
+        self.assertEqual(_complete_sentences("WAL is faster. WAL provides more ..."), "WAL is faster.")
+        self.assertEqual(_complete_sentences("WAL provides more \u2026"), "WAL provides more")
+        self.assertEqual(_complete_sentences("WAL is faster."), "WAL is faster.")
+        sources = [_Source(1, "https://sqlite.org/wal.html", "WAL is faster. WAL provides more concurrency.")]
+        self.assertEqual(
+            _grounded_facts([("WAL is faster.", "https://sqlite.org/wal.html", 0.9), ("WAL provides more ...", "https://sqlite.org/wal.html", 0.9)], sources),
+            [("WAL is faster.", "https://sqlite.org/wal.html", 0.9)],
+        )
+
     def test_extracted_facts_are_checked_against_the_sources(self):
         from smartharness.background import _grounded_facts, _Source
 

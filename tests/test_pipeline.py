@@ -1078,5 +1078,30 @@ class ModelCacheTests(unittest.TestCase):
         self.assertEqual((gpu["offload_kqv"], gpu["op_offload"]), (True, True))
 
 
+class TokenLimitTests(unittest.TestCase):
+    def test_a_cut_off_summary_keeps_its_complete_sentences_and_anything_else_fails(self):
+        from unittest.mock import MagicMock
+
+        from smartharness.pipeline import _summarize_web_page, run_stage
+
+        llm = MagicMock()
+        llm.create_chat_completion.return_value = {
+            "choices": [{"finish_reason": "length", "message": {"content": "WAL is faster. Readers do not block wri"}}]
+        }
+
+        with self.assertRaisesRegex(RuntimeError, "token limit"):
+            run_stage(llm, "System", "Input")
+        self.assertEqual(run_stage(llm, "System", "Input", keep_cut_off=True), "WAL is faster.")
+        page = json.dumps({"url": "https://sqlite.org/wal.html", "title": "WAL", "text": "x" * 9000})
+        summary = _summarize_web_page(llm, page, "WAL", "Background research", 768, 0.1, 6144)
+        self.assertTrue(summary.endswith("Summary: WAL is faster."))
+
+        llm.create_chat_completion.return_value = {
+            "choices": [{"finish_reason": "length", "message": {"content": "Readers do not block wri"}}]
+        }
+        with self.assertRaisesRegex(RuntimeError, "token limit"):
+            run_stage(llm, "System", "Input", keep_cut_off=True)
+
+
 if __name__ == "__main__":
     unittest.main()

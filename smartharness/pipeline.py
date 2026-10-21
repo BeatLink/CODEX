@@ -589,7 +589,9 @@ def run_stage(
     temperature: float = TEMPERATURE,
     on_token: Callable[[str], None] | None = None,
     json_schema: dict[str, Any] | None = None,
+    keep_cut_off: bool = False,
 ) -> str:
+    """Run one model call; with keep_cut_off, a prose reply that hits the token limit keeps its complete sentences."""
     request = {
         "messages": [
             {"role": "system", "content": system_prompt},
@@ -630,11 +632,15 @@ def run_stage(
         raise RuntimeError("The model returned no completion choices.")
 
     choice = choices[0]
+    content = choice.get("message", {}).get("content")
+    if choice.get("finish_reason") == "length" and keep_cut_off and isinstance(content, str):
+        end = max(content.rfind(mark) for mark in (". ", ".\n", "! ", "? "))
+        if end > 0:
+            return content[: end + 1].strip()
     if choice.get("finish_reason") == "length":
         raise RuntimeError(
             "A pipeline stage reached the token limit; raise max_tokens (background_max_tokens for background research) or context_size, or use Auto size in Options."
         )
-    content = choice.get("message", {}).get("content")
     if not isinstance(content, str) or not content.strip():
         raise RuntimeError("The model returned an empty completion.")
     return content.strip()
@@ -715,6 +721,8 @@ def _summarize_web_page(
             f"Webpage material:\n{material}",
             max_tokens=summary_tokens,
             temperature=temperature,
+            # A summary cut short still holds what it covered, which beats losing the page.
+            keep_cut_off=True,
         )
 
     page_chunks = [text[index:index + chunk_size] for index in range(0, len(text), chunk_size)]
