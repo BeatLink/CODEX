@@ -289,7 +289,9 @@ projects, and corrections. It is told to leave out secrets and personal
 identifiers. The same call names up to three general subjects that would help
 with the ongoing work the requests show, and each one with no facts yet is
 queued for research. It also re-queues topics whose research is older than
-`background_refresh_interval_hours`.
+`background_refresh_interval_hours`, or half that for a topic recalled at least
+five times and used since it was last researched; topics used since their last
+research, and the most used, go first.
 
 The worker yields to foreground work. It takes the shared model lock for one
 model call at a time, checks before every step and every generated token

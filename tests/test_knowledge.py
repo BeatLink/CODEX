@@ -79,6 +79,22 @@ class KnowledgeStoreTests(unittest.TestCase):
         self.assertEqual(queued, 1)
         self.assertEqual(self.store.queue_status()[0]["status"], "pending")
 
+    def test_often_used_topics_are_refreshed_in_half_the_time(self):
+        for name in ("Used", "Unused"):
+            self.store.store_search_results(
+                name, [{"title": name, "url": f"https://example.test/{name}", "snippet": f"{name} source."}], topic=name,
+            )
+        self.store.add_fact("Used", "Used topics come back often.")
+        with patch("smartharness.knowledge.time.time", return_value=time.time() + 10):
+            for _ in range(5):
+                self.store.recall("used topics come back often")
+
+        with patch("smartharness.knowledge.time.time", return_value=time.time() + 2400):
+            queued = self.store.enqueue_due_topics(refresh_interval_hours=1)
+
+        self.assertEqual(queued, 1)
+        self.assertEqual([job["topic"] for job in self.store.queue_status()], ["Used"])
+
     def test_pending_job_count_is_hard_limited(self):
         first_id = self.store.enqueue_topic("First", max_pending=1)
 

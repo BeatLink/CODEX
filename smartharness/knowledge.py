@@ -181,6 +181,9 @@ def _shares_half_the_terms(terms: list[str], text: str) -> bool:
     return _shared_term_count(terms, text) >= (len(terms) + 1) // 2
 
 
+# A topic recalled this often, and used since it was last researched, is refreshed in half the time.
+OFTEN_USED_TOPIC_COUNT = 5
+
 # How long a stored search result is trusted before it should be looked up again.
 SOURCE_TTL_SECONDS = 7 * 24 * 3600
 
@@ -283,7 +286,9 @@ class KnowledgeStore:
             return dict(row)
 
     def enqueue_due_topics(self, refresh_interval_hours: int, max_pending: int = 100) -> int:
+        """Queue topics whose research is old, refreshing often-used ones sooner and ahead of the rest."""
         cutoff = time.time() - refresh_interval_hours * 3600
+        often_used_cutoff = time.time() - refresh_interval_hours * 1800
         with self._connect() as connection:
             pending_count = connection.execute(
                 "SELECT COUNT(*) FROM research_queue WHERE status = 'pending'"
@@ -294,10 +299,13 @@ class KnowledgeStore:
             topic_ids = connection.execute(
                 "SELECT id FROM topics t WHERE EXISTS "
                 "(SELECT 1 FROM sources s WHERE s.topic_id = t.id) "
-                "AND (t.last_researched_at IS NULL OR t.last_researched_at <= ?) "
+                "AND (t.last_researched_at IS NULL OR t.last_researched_at <= ? "
+                "OR (t.use_count >= ? AND t.last_used_at > t.last_researched_at AND t.last_researched_at <= ?)) "
                 "AND NOT EXISTS (SELECT 1 FROM research_queue q WHERE q.topic_id = t.id "
-                "AND q.status = 'pending') ORDER BY t.priority DESC, t.name LIMIT ?",
-                (cutoff, available_slots),
+                "AND q.status = 'pending') "
+                "ORDER BY t.priority DESC, COALESCE(t.last_used_at > t.last_researched_at, 0) DESC, "
+                "t.use_count DESC, t.name LIMIT ?",
+                (cutoff, OFTEN_USED_TOPIC_COUNT, often_used_cutoff, available_slots),
             ).fetchall()
             connection.executemany(
                 "INSERT OR IGNORE INTO research_queue(topic_id, requested_at) VALUES (?, ?)",

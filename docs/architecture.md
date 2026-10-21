@@ -225,6 +225,7 @@ loop:
   a run is active                → wait 1 s
   otherwise:
     re-queue topics researched longer ago than background_refresh_interval_hours
+      (half that for topics recalled five times and used since; most used first)
     research_one_topic()       — if a job was pending
     or learn_from_episodes()   — if unprocessed episodes exist
     or consolidate_knowledge() — if anything is left to tidy
@@ -313,5 +314,5 @@ These are properties of the code as it stands, recorded so changes can be measur
   and dates, so a paraphrase that changes a claim's meaning but keeps its words still passes.
 - **Topics are named after raw search queries.** Consolidation merges and re-files them, but only
   pairs that share half their words are ever compared, so differently worded duplicates stay apart.
-- **Refresh is by age and recall.** Topics are re-queued when their research is old or a recalled
-  fact's source has expired, but not because they keep coming up in requests.
+- **Use counts only grow.** A topic recalled often long ago still counts as often used, so its
+  refreshes stay frequent as long as it is used at all.
