@@ -277,7 +277,8 @@ For each queued topic it:
    under its parent, and rewrites the parent's summary from its children's.
 
 When a fact is recalled later, it comes with the chain of topics above it and
-their summaries, so the model gets the broader picture in a few lines.
+their summaries, so the model gets the broader picture in a few lines, and with
+up to five stored relationships of the named things it mentions.
 
 With no research queued, the worker reads recent requests that have not been
 processed yet and remembers what they show about the user: preferences,

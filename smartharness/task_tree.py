@@ -9,7 +9,7 @@ from datetime import date
 from typing import Any
 
 from .context_budget import condense_sections, input_token_budget, render_sections, token_counter
-from .knowledge import KnowledgeStore
+from .knowledge import MAX_RECALLED_RELATIONSHIPS, KnowledgeStore
 from .pipeline import (
     MAX_SEARCH_QUERIES,
     MAX_SEARCH_QUERY_CHARS,
@@ -373,6 +373,10 @@ class TaskTree:
         return "\n".join(lines)
 
 
+def _unique(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return list({json.dumps(item, sort_keys=True): item for item in items}.values())
+
+
 def _clean(text: Any) -> str:
     return " ".join(str(text).split()) if isinstance(text, str) else ""
 
@@ -537,7 +541,7 @@ class TaskTreeRun:
         self.summarize = section_summarizer(llm, temperature, context_size, self.count_tokens)
         self.condensed: set[tuple[str, str]] = set()
         self.today = date.today().isoformat()
-        self.recalled: dict[str, list[dict[str, Any]]] = {"user": [], "facts": [], "episodes": []}
+        self.recalled: dict[str, list[dict[str, Any]]] = {"user": [], "facts": [], "episodes": [], "relationships": []}
         self.task_memory: dict[str, tuple[str, set[int]]] = {}
         self.recalled_facts = False
         self.local_knowledge_used = False
@@ -671,15 +675,17 @@ class TaskTreeRun:
     def task_recall(self, node: TaskNode) -> tuple[str, set[int]]:
         if node.id not in self.task_memory:
             facts = list(self.recalled["facts"])
+            relationships = list(self.recalled["relationships"])
             if node.parent is not None and self.knowledge_store is not None:
                 known = {fact["id"] for fact in facts}
-                own = self.knowledge_store.recall(node.prompt, include_user=False)["facts"]
-                queue_stale_topics(self.knowledge_store, own, self.max_pending_research_jobs)
+                own = self.knowledge_store.recall(node.prompt, include_user=False)
+                queue_stale_topics(self.knowledge_store, own["facts"], self.max_pending_research_jobs)
                 # A subtask is narrower than the request, so its own matches come first.
-                facts = [*(fact for fact in own if fact["id"] not in known), *facts][:MAX_FACTS_PER_TASK]
-                self.recalled_facts = self.recalled_facts or bool(own)
+                facts = [*(fact for fact in own["facts"] if fact["id"] not in known), *facts][:MAX_FACTS_PER_TASK]
+                relationships = _unique([*own["relationships"], *relationships])[:MAX_RECALLED_RELATIONSHIPS]
+                self.recalled_facts = self.recalled_facts or bool(own["facts"])
             self.task_memory[node.id] = (
-                _format_recall({**self.recalled, "facts": facts}),
+                _format_recall({**self.recalled, "facts": facts, "relationships": relationships}),
                 {fact["id"] for fact in facts},
             )
         return self.task_memory[node.id]
@@ -813,15 +819,16 @@ class TaskTreeRun:
             facts = []
             if self.knowledge_store is not None:
                 # A short query matches stored facts that the whole request was too long to match.
-                facts = [
-                    fact for fact in self.knowledge_store.recall(query, include_user=False)["facts"]
-                    if fact["id"] not in shown
-                ]
+                recalled = self.knowledge_store.recall(query, include_user=False)
+                facts = [fact for fact in recalled["facts"] if fact["id"] not in shown]
                 queue_stale_topics(self.knowledge_store, facts, self.max_pending_research_jobs)
                 if facts:
                     shown.update(fact["id"] for fact in facts)
                     self.recalled_facts = True
-                    evidence.append((f"Stored facts for '{query}'", _format_recall({"facts": facts})))
+                    evidence.append((
+                        f"Stored facts for '{query}'",
+                        _format_recall({"facts": facts, "relationships": recalled["relationships"]}),
+                    ))
             label, text, from_summary = search_with_memory(
                 query, self.knowledge_store, self.toolbox, self.max_pending_research_jobs
             )

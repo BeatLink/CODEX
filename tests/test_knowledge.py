@@ -169,6 +169,19 @@ class KnowledgeStoreTests(unittest.TestCase):
         self.assertFalse(facts["Zig releases ship a new Zig build system."]["stale"])
         self.assertIsNotNone(facts["Zig releases ship a new Zig build system."]["retrieved_at"])
 
+    def test_recall_brings_the_relationships_of_entities_a_fact_names(self):
+        self.store.store_search_results("fts5", [{"url": "https://example.test/fts", "title": "FTS5", "snippet": "FTS5."}])
+        self.store.add_fact("SQLite", "FTS5 supports bm25 ranking.")
+        self.store.add_relationship("FTS5", "extends", "SQLite", "https://example.test/fts")
+        self.store.add_relationship("Cargo", "builds", "Rust")
+        self.store.add_relationship("FTS", "precedes", "FTS4")
+
+        relationships = self.store.recall("FTS5 bm25 ranking")["relationships"]
+
+        self.assertEqual(relationships, [
+            {"subject": "FTS5", "relation": "extends", "object": "SQLite", "source_url": "https://example.test/fts"},
+        ])
+
     def test_recalled_fact_carries_its_chain_of_parent_summaries(self):
         self.store.add_topic("SQLite", parent="Databases")
         self.store.add_topic("SQLite FTS5", parent="SQLite")

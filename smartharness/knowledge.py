@@ -184,6 +184,9 @@ def _shares_half_the_terms(terms: list[str], text: str) -> bool:
 # How long a stored search result is trusted before it should be looked up again.
 SOURCE_TTL_SECONDS = 7 * 24 * 3600
 
+# Graph relationships recalled beside the facts that name their entities.
+MAX_RECALLED_RELATIONSHIPS = 5
+
 # A remembered fact is one short sentence, so a long request can only ever share a few words with it.
 RECALL_MIN_SHARED_TERMS = 3
 
@@ -625,6 +628,7 @@ class KnowledgeStore:
             "user": self.user_memories(limit=10) if include_user else [],
             "facts": [],
             "episodes": [],
+            "relationships": [],
         }
         terms = _search_terms(query)
         now = time.time()
@@ -665,6 +669,9 @@ class KnowledgeStore:
                         ).fetchone()
                         if episode:
                             recalled["episodes"].append(dict(episode))
+            recalled["relationships"] = self._relationships_named_in(
+                connection, [fact["statement"] for fact in recalled["facts"]]
+            )
             # Usage counts let the background worker refresh and keep what is actually used.
             connection.executemany(
                 "UPDATE facts SET use_count = use_count + 1, last_used_at = ? WHERE id = ?",
@@ -1107,6 +1114,31 @@ class KnowledgeStore:
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{name} must be a non-empty string.")
         return value.strip()[:maximum]
+
+    @staticmethod
+    def _relationships_named_in(connection: sqlite3.Connection, statements: list[str]) -> list[dict[str, Any]]:
+        """Return the graph relationships of every entity a statement names, one step out."""
+        if not statements:
+            return []
+        text = " ".join(statements).casefold()
+        rows = connection.execute(
+            "SELECT id, label FROM graph_nodes WHERE kind = 'entity' AND length(label) >= 2 AND instr(?, lower(label)) > 0",
+            (text,),
+        ).fetchall()
+        # instr also finds a name inside a longer word, so only whole-word matches count.
+        node_ids = [row["id"] for row in rows if re.search(rf"(?<!\w){re.escape(row['label'].casefold())}(?!\w)", text)]
+        if not node_ids:
+            return []
+        marks = ", ".join("?" * len(node_ids))
+        edges = connection.execute(
+            "SELECT a.label AS subject, e.relation, b.label AS object, s.url AS source_url "
+            "FROM graph_edges e JOIN graph_nodes a ON a.id = e.source_node_id "
+            "JOIN graph_nodes b ON b.id = e.target_node_id LEFT JOIN sources s ON s.id = e.source_id "
+            f"WHERE a.kind = 'entity' AND b.kind = 'entity' AND (e.source_node_id IN ({marks}) OR e.target_node_id IN ({marks})) "
+            "ORDER BY e.id DESC LIMIT ?",
+            (*node_ids, *node_ids, MAX_RECALLED_RELATIONSHIPS),
+        ).fetchall()
+        return [dict(edge) for edge in edges]
 
     @staticmethod
     def _topic_path(connection: sqlite3.Connection, topic_id: int) -> list[dict[str, str]]:

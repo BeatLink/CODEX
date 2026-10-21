@@ -188,7 +188,8 @@ There are two read paths, used at different moments:
    user memories, plus facts and past episodes whose text shares half the prompt's search terms,
    or three of them for a longer prompt (stopwords removed, at most twelve terms), those sharing
    the most terms first. Each recalled fact carries its chain of ancestor topics and their
-   summaries. The result is formatted as a "Remembered context" section, and recall bumps the use
+   summaries, and the recalled facts bring up to five graph relationships of the entities they
+   name. The result is formatted as a "Remembered context" section, and recall bumps the use
    counts of what it returned. In a task tree, each subtask adds the facts its own prompt recalls,
    and each search query recalls facts as a "Stored facts" evidence section; when facts or stored
    summaries answer every query of a task, its tool loop is skipped. A fact whose source has
@@ -296,8 +297,8 @@ These are properties of the code as it stands, recorded so changes can be measur
   and search query.
 - **The topic tree decorates results but does not route them.** Facts are found by flat search and
   then given their ancestor summaries; nothing walks the tree from the top to pick a branch.
-- **The graph is write-only.** Relationships are stored and shown in the Knowledge browser, but no
-  request reads them.
+- **The graph is read one step out.** Recall adds the relationships of entities a recalled fact
+  names, but never follows them further or uses them to find facts.
 - **Stale facts are flagged, not retired.** A fact whose source expired is recalled with a warning
   and its topic is re-researched, but it stays `active` until a newer fact contradicts it.
 - **Fact grounding is lexical.** A fact is checked against its source by shared words, versions

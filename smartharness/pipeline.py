@@ -467,6 +467,12 @@ def _format_recall(recalled: dict[str, list[dict[str, Any]]]) -> str:
             parts.append("Broader topic overviews:\n" + "\n".join(
                 f"- {name}: {' '.join(summary.split())[:600]}" for name, summary in overviews.items()
             ))
+    if recalled.get("relationships"):
+        parts.append("Related things (from earlier research):\n" + "\n".join(
+            f"- {edge['subject']} {edge['relation']} {edge['object']}"
+            + (f" [{edge['source_url']}]" if edge.get("source_url") else "")
+            for edge in recalled["relationships"]
+        ))
     if recalled.get("episodes"):
         parts.append("Similar past requests:\n" + "\n".join(
             f"- {' '.join(episode['prompt'].split())[:200]} ({episode['task_type']}; {episode['outcome']})"

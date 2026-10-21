@@ -935,10 +935,11 @@ class MemoryTests(unittest.TestCase):
             ("How do I filter a list?", "answer", "Use a list comprehension.", "answered directly"),
         )
 
-    def test_recalled_fact_shows_its_topic_path_and_overview(self):
+    def test_recalled_fact_shows_its_topic_path_overview_and_relationships(self):
         self.store.add_topic("SQLite", parent="Databases")
         self.store.set_topic_summary("Databases", "Ways to store data.")
         self.store.add_fact("SQLite", "SQLite stores a database in one file.", confidence=0.9)
+        self.store.add_relationship("SQLite", "is written in", "C")
         stage_inputs = []
         results = iter([route_json("answer"), "Answer"])
 
@@ -962,6 +963,7 @@ class MemoryTests(unittest.TestCase):
             stage_inputs[0],
         )
         self.assertIn("Broader topic overviews:\n- Databases: Ways to store data.", stage_inputs[0])
+        self.assertIn("Related things (from earlier research):\n- SQLite is written in C", stage_inputs[0])
 
     def test_search_that_finds_nothing_is_queued_for_background_research(self):
         results = iter([route_json("answer", needs_research=True, queries=["obscure library 9.1 release"]), "Answer"])
