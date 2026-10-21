@@ -31,7 +31,7 @@
     "mode": "answer",
     "prompt": "Why does this Python function return the wrong result for average([2, 3])?\n\n```python\ndef average(values):\n    total = 0\n    for value in values:\n        total += value\n        return total / len(values)\n```",
     "checks": [
-      {"type": "contains_any", "values": ["indent", "inside the loop", "within the loop", "in the loop"]},
+      {"type": "regex", "pattern": "indent|(inside|within|in) the .{0,6}loop"},
       {"type": "contains", "value": "return"}
     ]
   },
@@ -103,7 +103,7 @@
     "mode": "answer",
     "prompt": "What did the 2019 paper 'Quantum Gravel Sorting with Recursive Ferrets' by J. Plimbottom conclude?",
     "checks": [
-      {"type": "contains_any", "values": ["not aware", "no record", "could not find", "couldn't find", "cannot find", "can't find", "does not appear", "doesn't appear", "not able to find", "unable to find", "no information", "not familiar", "does not exist", "doesn't exist", "fictional", "could not verify", "couldn't verify"]}
+      {"type": "contains_any", "values": ["not aware", "no record", "could not find", "couldn't find", "cannot find", "can't find", "does not appear", "doesn't appear", "not able to find", "unable to find", "no information", "not familiar", "does not exist", "doesn't exist", "fictional", "could not verify", "couldn't verify", "could not be verified", "cannot be verified", "no evidence"]}
     ]
   }
 ]
