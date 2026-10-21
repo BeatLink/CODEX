@@ -400,7 +400,10 @@ community" for "PinePhone", are never offered. A researched
 topic may instead name a broader subject the tree lacks, such as "Pine64" for
 "PinePhone" beside "PineTime"; that topic is made where this one sat and is
 placed in its own turn, and a topic made this way never names one above itself.
-When a topic moves, the summaries of its new and old parents are rewritten.
+A move under an existing topic happens only when a second, separate question,
+asked as a pair comparison with the moving topic first, also finds that topic
+broader. When a topic moves, the summaries of its new and old parents are
+rewritten.
 Research never files a topic itself, so the tree is shaped only here.
 
 ## Installation

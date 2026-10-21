@@ -300,11 +300,34 @@ def _place_topic(store: KnowledgeStore, model: _BackgroundModel, settings: dict[
         choice = parent["name"]
     else:
         parent = next((candidate for candidate in candidates if candidate["name"] == choice), None)
+        if parent is not None and parent["id"] != topic["parent_id"] and not _confirm_broader(store, model, topic, parent, report):
+            return True
     if store.set_topic_parent(topic["id"], parent["id"] if parent else None):
         report(f"Moved {topic['name']} under {choice}")
         for name in (parent["name"] if parent else None, topic["parent"]):
             if name:
                 _refresh_parent_summary(store, model, name)
+    return True
+
+
+def _confirm_broader(store: KnowledgeStore, model: _BackgroundModel, topic: dict[str, Any], parent: dict[str, Any], report: Callable[[str], None]) -> bool:
+    """Ask again, as a pair comparison, whether the chosen parent is broader, so one slip by the model cannot file a broad topic under a narrow one."""
+    # The moving topic goes first, so a model that leans towards 'first is broader' refuses the move rather than making a wrong one.
+    verdict = _ask(
+        model,
+        TOPIC_PAIR_PROMPT,
+        [
+            (f"First topic: {topic['name']}", topic["summary"][:600] or "No summary yet."),
+            (f"Second topic: {parent['name']}", parent["summary"][:600] or "No summary yet."),
+        ],
+        "verdict",
+        TOPIC_VERDICTS,
+        _verdict_schema(TOPIC_VERDICTS),
+        report,
+    )
+    if verdict != "second is broader":
+        report(f"Kept {topic['name']} where it is, since {parent['name']} was not confirmed as broader")
+        return False
     return True
 
 

@@ -326,7 +326,7 @@ class ModelCheckTests(ConsolidationTestCase):
         with self.store._connect() as connection:
             connection.execute("UPDATE topics SET placed_at = NULL WHERE name = 'PostgreSQL'")
 
-        worked, calls = self.consolidate(verdict("Databases", key="parent"), json.dumps({"summary": "Databases overview."}))
+        worked, calls = self.consolidate(verdict("Databases", key="parent"), verdict("second is broader"), json.dumps({"summary": "Databases overview."}))
 
         self.assertTrue(worked)
         # Notes has no summary, so nothing tells the model what it covers.
@@ -348,10 +348,10 @@ class ModelCheckTests(ConsolidationTestCase):
             connection.execute("UPDATE topics SET placed_at = NULL WHERE name = 'Owner forums'")
             connection.execute("INSERT INTO consolidation_checks VALUES ('name', (SELECT id FROM topics WHERE name = 'PinePhone'), (SELECT id FROM topics WHERE name = 'PinePhone'), 'PinePhone', 0)")
 
-        worked, calls = self.consolidate(verdict("PinePhone", key="parent"))
+        worked, calls = self.consolidate(verdict("PinePhone", key="parent"), verdict("second is broader"))
 
         self.assertTrue(worked)
-        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(calls), 2)
         self.assertEqual(self.topic_names()["Owner forums"], "PinePhone")
         with self.store._connect() as connection:
             summary = connection.execute("SELECT summary FROM topics WHERE name = 'PinePhone'").fetchone()["summary"]
@@ -385,7 +385,7 @@ class ModelCheckTests(ConsolidationTestCase):
         with self.store._connect() as connection:
             connection.execute("UPDATE topics SET placed_at = NULL WHERE name = 'Pine64'")
 
-        worked, calls = self.consolidate(verdict("Hardware", key="parent"), json.dumps({"summary": "Hardware."}), json.dumps({"summary": "PineTime."}))
+        worked, calls = self.consolidate(verdict("Hardware", key="parent"), verdict("second is broader"), json.dumps({"summary": "Hardware."}), json.dumps({"summary": "PineTime."}))
 
         self.assertTrue(worked)
         self.assertNotIn(NEW_PARENT, calls[0].kwargs["json_schema"]["properties"]["parent"]["enum"])
@@ -399,6 +399,21 @@ class ModelCheckTests(ConsolidationTestCase):
         candidates = self.store.placement_candidates(self.store.add_topic("PinePhone"))
 
         self.assertEqual({candidate["name"] for candidate in candidates}, {"Pine64"})
+
+    def test_a_parent_the_pair_check_does_not_confirm_as_broader_leaves_the_topic_where_it_is(self):
+        self.store.add_fact("PineTime", "The PineTime is a smartwatch.")
+        self.store.set_topic_summary("PineTime", "A smartwatch.")
+        self.store.add_fact("Hardware", "Hardware is physical equipment.")
+        self.store.set_topic_summary("Hardware", "Physical computing equipment.")
+        self.place_every_topic()
+        with self.store._connect() as connection:
+            connection.execute("UPDATE topics SET placed_at = NULL WHERE name = 'Hardware'")
+
+        worked, calls = self.consolidate(verdict("PineTime", key="parent"), verdict("first is broader"))
+
+        self.assertTrue(worked)
+        self.assertIn("First topic: Hardware", calls[1].args[2])
+        self.assertEqual(self.topic_names(), {"PineTime": None, "Hardware": None})
 
     def test_a_topic_is_never_offered_its_own_subtopics_as_a_parent(self):
         self.store.add_fact("Databases", "Databases hold data.")

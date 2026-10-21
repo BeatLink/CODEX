@@ -282,7 +282,8 @@ of tidying per pass, so it yields to a run as quickly as research does.
    facts, and removing it when the model finds no subject and it holds no facts or subtopics),
    compare two topics (same subject, one broader, or different), re-place one topic under the
    narrowest of up to 20 related topics, the top level, or, for a researched topic, a new broader
-   subject made where it sat, compare two facts under one topic (same, contradict, different), and
+   subject made where it sat (a move under an existing topic needs a second, pair-comparison call
+   to agree that topic is broader), compare two facts under one topic (same, contradict, different), and
    compare two user memories. Candidate pairs must share at least half their words, or, for topics
    and facts under one topic, have embeddings with a cosine similarity of at least 0.75. Every reply is a short reason
    and a verdict from a schema enum, and each verdict is stored in `consolidation_checks` so a pair
