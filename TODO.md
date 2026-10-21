@@ -92,6 +92,7 @@
 - [x] Mark recalled and fetched text as untrusted in every prompt and test it against hostile pages
 - [ ] Rate-limit background fetches per domain, honour robots.txt, and cap fetches per day
 - [ ] Back up, export, and reset the knowledge store, and delete a single fact or memory from the interfaces
+- [ ] Stop the task tree applying a recalled fact about a similarly named thing (it gives the ingest service's port for the query service in about half the seeded recall-not-stored runs); a one-call subject check in the check step caught it in every probe
 - [ ] Let the user mark a recalled fact wrong, lowering its confidence and queueing a recheck
 - [ ] Show background job metrics and how often recalled facts are cited in answers
 - [x] Take the shared GPU lock in the daemon before loading a model
