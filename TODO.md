@@ -62,7 +62,7 @@
 - [x] Give facts an expiry from their source and recheck them when their topic is refreshed
 - [x] Check that an extracted fact's numbers, dates, and distinctive words appear in the source it cites
 - [x] Queue background research from the user's recorded projects
-- [ ] Compare differently worded duplicate topics and facts during consolidation, once embeddings exist
+- [x] Compare differently worded duplicate topics and facts during consolidation, once embeddings exist
 - [x] Rename topics named after raw search queries during consolidation
 - [x] Run background work on its own model, with its own settings, cache and lock, unloaded when idle
 - [x] Size the background model against free RAM in Auto size

@@ -15,6 +15,9 @@ EMBEDDING_CONTEXT_SIZE = 2048
 # Characters kept from one text, well inside the window.
 MAX_TEXT_CHARS = 4000
 
+# Threads for the embedding model; a busy machine slows it far more with many threads than with few.
+EMBEDDING_THREADS = 2
+
 # Query vectors kept, since one request looks up the same words for several of its tasks.
 QUERY_CACHE_SIZE = 64
 
@@ -40,6 +43,8 @@ class Embedder:
                 n_gpu_layers=0,
                 offload_kqv=False,
                 n_ctx=EMBEDDING_CONTEXT_SIZE,
+                n_threads=EMBEDDING_THREADS,
+                n_threads_batch=EMBEDDING_THREADS,
                 verbose=False,
             )
         return self._model

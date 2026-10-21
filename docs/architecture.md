@@ -273,7 +273,8 @@ of tidying per pass, so it yields to a run as quickly as research does.
    name), compare two topics (same subject, one
    broader, or different), re-place one topic under the narrowest of up to 20 related topics or the
    top level, compare two facts under one topic (same, contradict, different), and compare two user
-   memories. Candidate pairs must share at least half their words. Every reply is a short reason
+   memories. Candidate pairs must share at least half their words, or, for topics and facts
+   under one topic, have embeddings with a cosine similarity of at least 0.75. Every reply is a short reason
    and a verdict from a schema enum, and each verdict is stored in `consolidation_checks` so a pair
    is asked about only once.
 

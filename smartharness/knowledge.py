@@ -227,6 +227,10 @@ MAX_RECALLED_RELATIONSHIPS = 5
 FACT_SIMILARITY = 0.45
 TOPIC_SIMILARITY = 0.5
 
+# Cosine similarity at which two topics or two facts under one topic are worth comparing as duplicates;
+# paraphrases scored 0.81 to 0.98 with Qwen3-Embedding-0.6B, and related but different texts about 0.55.
+DUPLICATE_SIMILARITY = 0.75
+
 # Reciprocal rank fusion's damping constant: higher values weigh the top ranks less.
 FUSION_RANK_OFFSET = 60
 
@@ -867,10 +871,37 @@ class KnowledgeStore:
                             overlap = max(overlap, SIMILAR_OVERLAP)
                     if overlap >= SIMILAR_OVERLAP:
                         candidates[(first_id, second_id)] = overlap
+        # Pairs worded differently but close in meaning are compared too.
+        for first_id, second_id, similarity in self._similar_pairs(kind):
+            if first_id in items and second_id in items and (first_id, second_id) not in checked:
+                if kind == "topic" and (
+                    first_id == items[second_id]["parent_id"] or second_id == items[first_id]["parent_id"]
+                ):
+                    continue
+                candidates[(first_id, second_id)] = max(candidates.get((first_id, second_id), 0.0), similarity)
         if not candidates:
             return None
         first_id, second_id = min(candidates, key=lambda pair: (-candidates[pair], pair))
         return items[first_id], items[second_id]
+
+    def _similar_pairs(self, kind: str) -> list[tuple[int, int, float]]:
+        """Return pairs of topics, or of facts under one topic, whose vectors are close, lower id first."""
+        if sqlite_vec is None or kind not in ("topic", "fact"):
+            return []
+        same_group = (
+            "JOIN facts fa ON fa.id = a.item_id JOIN facts fb ON fb.id = b.item_id AND fb.topic_id = fa.topic_id "
+            if kind == "fact" else ""
+        )
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT a.item_id AS first_id, b.item_id AS second_id, "
+                "1 - vec_distance_cosine(a.vector, b.vector) AS similarity "
+                f"FROM embeddings a JOIN embeddings b ON b.kind = a.kind AND b.item_id > a.item_id "
+                f"AND b.model = a.model AND length(b.vector) = length(a.vector) {same_group}"
+                "WHERE a.kind = ? AND 1 - vec_distance_cosine(a.vector, b.vector) >= ?",
+                (kind, DUPLICATE_SIMILARITY),
+            ).fetchall()
+        return [(row["first_id"], row["second_id"], row["similarity"]) for row in rows]
 
     def record_check(self, kind: str, first_id: int, second_id: int, verdict: str) -> None:
         first_id, second_id = sorted((first_id, second_id))

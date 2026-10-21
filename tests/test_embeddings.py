@@ -97,6 +97,22 @@ class EmbeddingRetrievalTests(unittest.TestCase):
         )
         self.assertEqual(len(self.store.items_to_embed("another.gguf", 100)), 2)
 
+    def test_consolidation_compares_facts_worded_differently_but_alike_in_meaning(self):
+        self.store.add_fact("Web frameworks", "FastAPI endpoints use async.")
+        self.store.add_fact("Web frameworks", "Web API handlers never block the event loop.")
+        self.store.add_fact("Rust", "Web API handlers never block the event loop in Rust.")
+        self.assertIsNone(self.store.next_unchecked_pair("fact"))
+        self.index_everything()
+
+        first, second = self.store.next_unchecked_pair("fact")
+
+        self.assertEqual(
+            {first["statement"], second["statement"]},
+            {"FastAPI endpoints use async.", "Web API handlers never block the event loop."},
+        )
+        self.store.record_check("fact", first["id"], second["id"], "different")
+        self.assertIsNone(self.store.next_unchecked_pair("fact"))
+
     def test_rankings_are_fused_so_an_item_high_in_either_comes_first(self):
         self.assertEqual(_fuse_rankings([1, 2, 3], [3, 4]), [3, 1, 2, 4])
 

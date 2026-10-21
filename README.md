@@ -273,8 +273,10 @@ embedding model, run on the CPU so the GPU stays with the chat model.
 in Q8_0 (about 640 MB) is the one this was built with. While idle, the
 background worker embeds facts and topics in batches of eight, and embeds a
 topic again when its summary changes. Vectors are stored in the knowledge
-database and searched with sqlite-vec. Without the file, or if it fails to
-load, search stays word-based.
+database and searched with sqlite-vec. Consolidation also compares topics,
+and facts under one topic, whose vectors are close, so duplicates worded
+differently are merged too. Without the file, or if it fails to load, search
+stays word-based.
 
 Every web search the pipeline runs is stored under a topic named after its
 query. A stored source is reused only while it has not expired and shares at
