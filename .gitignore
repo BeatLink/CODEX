@@ -1,6 +1,11 @@
 # Models
 models/
 
+# Electron / TypeScript build state
+node_modules/
+dist/
+coverage/
+
 # Claude Code local state
 .claude/
 
