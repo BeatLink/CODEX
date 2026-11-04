@@ -3,122 +3,167 @@
 
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CODEX Electron</title>
-    <style>
-        :root {
-            color-scheme: dark;
-            --bg: #0f172a;
-            --panel: #111827;
-            --panel-alt: #1f2937;
-            --line: #334155;
-            --text: #e2e8f0;
-            --muted: #94a3b8;
-            --accent: #38bdf8;
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            margin: 0;
-            min-height: 100vh;
-            display: grid;
-            place-items: center;
-            background: radial-gradient(circle at top, #111827, var(--bg));
-            color: var(--text);
-            font: 15px/1.5 'Segoe UI', sans-serif;
-        }
-
-        .shell {
-            width: min(980px, calc(100vw - 48px));
-            border: 1px solid var(--line);
-            border-radius: 18px;
-            overflow: hidden;
-            background: rgba(17, 24, 39, 0.9);
-            box-shadow: 0 30px 90px rgba(15, 23, 42, 0.7);
-        }
-
-        .topbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 18px 22px;
-            border-bottom: 1px solid var(--line);
-            background: rgba(15, 23, 42, 0.8);
-        }
-
-        .brand {
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            font-size: 12px;
-            color: var(--muted);
-        }
-
-        .status {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            background: rgba(56, 189, 248, 0.08);
-            border: 1px solid rgba(56, 189, 248, 0.32);
-            border-radius: 999px;
-            padding: 8px 14px;
-            color: #bae6fd;
-        }
-
-        .dot {
-            width: 9px;
-            height: 9px;
-            border-radius: 50%;
-            background: #22c55e;
-            box-shadow: 0 0 8px rgba(34, 197, 94, 0.8);
-        }
-
-        .content {
-            padding: 26px 24px 30px;
-        }
-
-        h1 {
-            margin: 0 0 8px;
-            font-size: clamp(2rem, 4vw, 3rem);
-        }
-
-        p {
-            margin: 0;
-            color: var(--muted);
-        }
-
-        pre {
-            margin-top: 20px;
-            padding: 18px 20px;
-            border-radius: 12px;
-            border: 1px solid var(--line);
-            background: rgba(15, 23, 42, 0.8);
-            color: #dbeafe;
-            overflow: auto;
-        }
-    </style>
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta name="color-scheme" content="dark light" />
+    <title>CODEX</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="app.js"></script>
 </head>
 
 <body>
-    <main class="shell">
-        <header class="topbar">
-            <div class="brand">CODEX Electron</div>
-            <div class="status"><span class="dot"></span> ready</div>
-        </header>
-        <section class="content">
-            <h1>Desktop shell bootstrapped</h1>
-            <p>
-                This renderer is intentionally lightweight while the TypeScript daemon bridge is being staged behind it.
-            </p>
-            <pre>{
-  "protocol": "JSON line daemon",
-  "backend": "Python CODEX daemon (compat layer)",
-  "frontend": "Electron renderer shell"
-}</pre>
+    <header class="topbar">
+        <div class="brand">CODEX</div>
+        <nav class="tabs" role="tablist" aria-label="Pages">
+            <button class="tab" role="tab" data-page="workbench" aria-selected="true">Workbench</button>
+            <button class="tab" role="tab" data-page="background" aria-selected="false">Background</button>
+            <button class="tab" role="tab" data-page="knowledge" aria-selected="false">Knowledge</button>
+            <button class="tab" role="tab" data-page="options" aria-selected="false">Options</button>
+        </nav>
+        <div class="background-pill" title="Background research">
+            <span id="background-dot" class="dot"></span>
+            <span id="background-pill-text" class="pill-text">Idle</span>
+            <button id="background-toggle" class="small">Pause</button>
+        </div>
+        <div id="connection" class="connection" data-state="connecting">Connecting</div>
+    </header>
+
+    <div id="notice" class="notice" role="status" hidden>
+        <span id="notice-text"></span>
+        <button id="notice-close" class="flat" aria-label="Close">×</button>
+    </div>
+
+    <main>
+        <!-- Workbench -->
+        <section id="page-workbench" class="page workbench">
+            <aside class="sidebar">
+                <h2 class="eyebrow">Task tree</h2>
+                <div class="phase-list">
+                    <button class="phase" data-phase="steps">Steps</button>
+                    <button class="phase" data-phase="final">Final answer</button>
+                </div>
+                <ol id="task-list" class="task-list" role="listbox" aria-label="Tasks"></ol>
+                <p id="task-empty" class="muted small-text">Tasks appear here once a request is planned.</p>
+                <p id="run-status" class="run-status">Connecting to the daemon...</p>
+            </aside>
+
+            <div class="work">
+                <section class="request">
+                    <label for="prompt" class="eyebrow">Your request</label>
+                    <div class="prompt-wrap">
+                        <textarea id="prompt" rows="4" spellcheck="true"
+                            placeholder="Ask, draft or change something. Type / for commands."></textarea>
+                        <ul id="command-suggestions" class="suggestions" role="listbox" hidden></ul>
+                    </div>
+                    <div class="actions">
+                        <select id="mode" title="Answer a question, draft writing or a plan, or execute file changes"></select>
+                        <button id="run" class="primary" title="Run the request (Ctrl+Enter or Ctrl+R)">Run</button>
+                        <button id="cancel" disabled>Cancel</button>
+                        <button id="clear">Clear</button>
+                        <button id="copy" disabled>Copy answer</button>
+                        <span class="muted small-text hint">Ctrl+Enter runs</span>
+                    </div>
+                    <div id="resume-bar" class="resume-bar" hidden>
+                        <span id="resume-text"></span>
+                        <button id="resume-run" class="primary">Resume</button>
+                        <button id="discard-run">Discard</button>
+                    </div>
+                </section>
+
+                <section class="output-area">
+                    <h2 id="phase-title" class="eyebrow">Final answer</h2>
+                    <div id="output-steps" class="output steps" hidden></div>
+                    <div id="output-task" class="output markdown" hidden></div>
+                    <div id="output-final" class="output markdown"></div>
+                </section>
+            </div>
+        </section>
+
+        <!-- Background -->
+        <section id="page-background" class="page padded" hidden>
+            <h2 class="eyebrow">Background research</h2>
+            <p id="background-status" class="accent-text">Idle</p>
+            <label class="switch-row">
+                <input type="checkbox" id="background-enabled" />
+                <span>Enable idle research</span>
+            </label>
+            <div class="topic-row">
+                <label class="field grow">
+                    <span class="field-label">Research topic</span>
+                    <input id="research-topic" type="text" placeholder="Topic to research" />
+                </label>
+                <label class="field narrow">
+                    <span class="field-label">Priority</span>
+                    <input id="research-priority" type="number" value="0" min="-1000" max="1000" step="1" />
+                </label>
+                <button id="queue-topic">Queue topic</button>
+                <button id="research-now" class="primary">Research now</button>
+            </div>
+            <div class="background-grid">
+                <div class="panel-column">
+                    <h2 class="eyebrow">Queue</h2>
+                    <pre id="background-queue" class="panel mono">No research jobs</pre>
+                </div>
+                <div class="panel-column grow">
+                    <h2 class="eyebrow">Model output</h2>
+                    <div id="background-output" class="panel output steps">Waiting for background work...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Knowledge -->
+        <section id="page-knowledge" class="page padded knowledge" hidden>
+            <div class="search-row">
+                <input id="knowledge-search" type="search" placeholder="Search stored evidence, then press Enter" />
+                <button id="search-knowledge">Search</button>
+                <button id="refresh-knowledge">Refresh</button>
+            </div>
+            <div class="knowledge-browser">
+                <ul id="topic-list" class="panel topic-list" role="listbox" aria-label="Topics"></ul>
+                <div class="panel-column grow">
+                    <h2 id="sources-title" class="eyebrow">Sources</h2>
+                    <div id="knowledge-detail" class="panel output markdown">Select a topic or search stored evidence.</div>
+                </div>
+            </div>
+            <div class="knowledge-lower">
+                <div class="panel-column grow">
+                    <h2 class="eyebrow">Facts</h2>
+                    <div id="knowledge-facts" class="panel output markdown"></div>
+                </div>
+                <div class="panel-column grow">
+                    <h2 class="eyebrow">Graph relationships</h2>
+                    <div id="knowledge-graph" class="panel output markdown"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Options -->
+        <section id="page-options" class="page options" hidden>
+            <form id="options-form" class="options-form" novalidate></form>
+            <div class="options-buttons">
+                <button id="apply-options" class="primary">Apply</button>
+                <button id="save-options">Save settings</button>
+                <button id="auto-size">Auto size</button>
+                <span id="settings-path" class="muted small-text"></span>
+            </div>
         </section>
     </main>
+
+    <dialog id="clarification-dialog" class="dialog">
+        <form method="dialog" id="clarification-form">
+            <p id="clarification-eyebrow" class="eyebrow">Clarification</p>
+            <p id="clarification-question" class="question"></p>
+            <pre id="clarification-plan" class="panel mono plan" hidden></pre>
+            <label class="field">
+                <span id="clarification-label" class="field-label">Your response</span>
+                <textarea id="clarification-answer" rows="3"></textarea>
+            </label>
+            <div class="dialog-buttons">
+                <button type="button" id="clarification-skip">Skip</button>
+                <button type="submit" id="clarification-submit" class="primary">Continue</button>
+            </div>
+        </form>
+    </dialog>
 </body>
 
 </html>

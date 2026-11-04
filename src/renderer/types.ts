@@ -1,0 +1,122 @@
+// The shapes of the daemon's replies and events that the window reads, with the protocol's own snake_case keys.
+
+export type Settings = Record<string, unknown> & {
+    mode: string;
+    model_path: string;
+    filesystem_root: string;
+    allow_file_writes: boolean;
+    background_research_enabled: boolean;
+    mcp_servers: unknown[];
+};
+
+export type TaskNode = {
+    id: string;
+    prompt: string;
+    deliverable: string;
+    status: string;
+    approach?: string | null;
+    depends_on?: string[];
+    note?: string | null;
+    result?: string | null;
+    result_shortened?: boolean;
+};
+
+export type RunSnapshot = {
+    run_id: number;
+    prompt: string;
+    tree: TaskNode[];
+    progress: string[];
+    outputs: Record<string, string>;
+};
+
+export type UnfinishedRun = {
+    id: number;
+    prompt: string;
+    status: string;
+    tasks_done: number;
+    tasks_total: number;
+    started_at?: number;
+    updated_at?: number;
+};
+
+export type Status = {
+    settings: Settings;
+    settings_path: string;
+    run: RunSnapshot | null;
+    background: { status: string; output: string };
+    unfinished_runs: UnfinishedRun[];
+};
+
+export type Topic = {
+    id: number;
+    name: string;
+    parent_id: number | null;
+    parent?: string | null;
+    priority?: number;
+    last_researched_at?: number | null;
+    source_count: number;
+};
+
+export type Source = {
+    id?: number;
+    title?: string | null;
+    url: string;
+    snippet?: string;
+    summary?: string;
+    query?: string;
+    retrieved_at: number;
+    topic?: string | null;
+};
+
+export type Fact = {
+    id: number;
+    statement: string;
+    confidence: number;
+    status: string;
+    topic: string;
+    source_url?: string | null;
+};
+
+export type GraphEdge = {
+    source: string;
+    relation: string;
+    target: string;
+    source_kind?: string;
+    target_kind?: string;
+    evidence_url: string | null;
+};
+
+export type Knowledge = {
+    topics: Topic[];
+    sources: Source[];
+    graph: GraphEdge[];
+    facts?: Fact[];
+};
+
+export type ResearchJob = {
+    id: number;
+    topic: string;
+    status: string;
+    requested_at?: number;
+    error: string | null;
+};
+
+export type SizeChoice = {
+    context_size: number;
+    max_tokens: number;
+    background_max_tokens: number;
+    background_context_size: number;
+    explanation: string;
+};
+
+export type UserCommand = { name: string; description: string; mode: string | null };
+
+export type CodexApi = {
+    connect(): Promise<{ socket_path: string; started: boolean }>;
+    request<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>;
+    onEvent(listener: (event: string, data: Record<string, unknown>) => void): () => void;
+    openDialog(options?: { title?: string; defaultPath?: string; directory?: boolean; filters?: Array<{ name: string; extensions: string[] }> }): Promise<string | null>;
+    saveDialog(options?: { title?: string; defaultPath?: string; filters?: Array<{ name: string; extensions: string[] }> }): Promise<string | null>;
+    copyText(text: string): Promise<boolean>;
+    listCommands(filesystemRoot: string): Promise<UserCommand[]>;
+};
