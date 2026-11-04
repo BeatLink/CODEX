@@ -81,7 +81,6 @@ function parserSpec(): ParserSpec {
         positional: { name: 'prompt', help: 'Prompt text. Omit it to enter a prompt interactively.' },
         options: [
             { name: 'settings', kind: 'string', default: defaultSettingsPath(), help: 'Path to the JSON settings file.' },
-            { name: 'tui', kind: 'flag', help: 'Open the interactive terminal interface.' },
             { name: 'model-path', kind: 'string', help: 'Path to a GGUF model (overrides settings.json and MODEL_PATH).' },
             { name: 'context-size', kind: 'int' },
             { name: 'gpu-layers', kind: 'int' },
@@ -109,16 +108,15 @@ function parserSpec(): ParserSpec {
     };
 }
 
-const UNAVAILABLE_COMMANDS: Record<string, string> = {
-    tui: 'The terminal interface is not part of this version; open the CODEX window instead.',
-    eval: 'The eval command is not part of this version.',
-    'recall-benchmark': 'The recall-benchmark command is not part of this version.',
+// Subcommands that hand the rest of the command line to their own parser.
+const SUBCOMMANDS: Record<string, () => Promise<{ main: (argv: string[]) => Promise<number> }>> = {
+    eval: () => import('../core/evaluation.js'),
+    'recall-benchmark': () => import('../core/recallBenchmark.js'),
 };
 
 export async function main(argv: string[] = process.argv.slice(2), io: CliEnvironment = processEnvironment()): Promise<number> {
-    if (argv.length > 0 && Object.hasOwn(UNAVAILABLE_COMMANDS, argv[0])) {
-        io.printError(`Error: ${UNAVAILABLE_COMMANDS[argv[0]]}`);
-        return 1;
+    if (argv.length > 0 && Object.hasOwn(SUBCOMMANDS, argv[0])) {
+        return (await SUBCOMMANDS[argv[0]]()).main(argv.slice(1));
     }
     const spec = parserSpec();
     const usageFailure = (message: string): number => {
@@ -178,10 +176,6 @@ export async function main(argv: string[] = process.argv.slice(2), io: CliEnviro
 
     if (values.resume) {
         return resume(settings, io);
-    }
-    if (values.tui) {
-        io.printError(`Error: ${UNAVAILABLE_COMMANDS.tui}`);
-        return 1;
     }
 
     let prompt = parsed.positionals.join(' ').trim();

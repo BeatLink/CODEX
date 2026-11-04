@@ -145,13 +145,11 @@ describe('codex command', () => {
         expect(io.errors.join('')).toContain('no unfinished task tree run');
     });
 
-    it('explains that the terminal interface is not available', async () => {
+    it('hands the eval command to the eval harness', async () => {
         const io = fakeEnvironment();
 
-        expect(await main(['tui', 'draft', 'a', 'plan'], io)).toBe(1);
-        expect(await main(['--tui'], io)).toBe(1);
+        expect(await main(['eval', '--help'], io)).toBe(0);
 
-        expect(io.errors.every((line) => line.includes('terminal interface'))).toBe(true);
         expect(io.executeTaskTree).not.toHaveBeenCalled();
     });
 
