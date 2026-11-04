@@ -1,65 +1,219 @@
 import { describe, expect, it } from 'vitest';
 
-import { runToolStage, textToolCalls } from './toolStage.js';
+import type { ChatCompletion, ChatCompletionRequest, ChatModel, ToolDefinition } from './model.js';
+import { pythonJsonLength, runToolStage, textToolCalls } from './toolStage.js';
+import { TOOL_DEFINITIONS } from './tools.js';
 
-describe('toolStage', () => {
-    it('parses XML and JSON tool calls from assistant text', () => {
-        const xml = '<tool_call>\n<function=lookup>\n<parameter=term>\nalpha\n</parameter>\n</function>\n</tool_call>';
-        const json = '{"name": "lookup", "arguments": {"term": "beta"}}';
+// Records each call and answers it with the given output.
+class FakeToolbox {
+    readonly toolDefinitions: ToolDefinition[] = TOOL_DEFINITIONS;
+    readonly calls: Array<[string, unknown]> = [];
 
-        const xmlParsed = textToolCalls(xml, [
-            { function: { name: 'lookup', parameters: { type: 'object', properties: { term: { type: 'string' } } } } },
-        ]);
-        const jsonParsed = textToolCalls(json, [
-            { function: { name: 'lookup', parameters: { type: 'object', properties: { term: { type: 'string' } } } } },
-        ]);
+    constructor(private readonly answer: (name: string, argumentsGiven: Record<string, unknown>) => string = () => 'sample tool output') {}
 
-        expect(xmlParsed).toHaveLength(1);
-        expect(jsonParsed).toHaveLength(1);
-        expect(xmlParsed[0].function.name).toBe('lookup');
-        expect(jsonParsed[0].function.name).toBe('lookup');
+    async call(name: string, argumentsGiven: unknown): Promise<string> {
+        this.calls.push([name, argumentsGiven]);
+        return this.answer(name, argumentsGiven as Record<string, unknown>);
+    }
+}
+
+// Replays one reply per call; a reply given as tokens is streamed through on_token.
+class FakeModel implements ChatModel {
+    readonly requests: ChatCompletionRequest[] = [];
+
+    constructor(private readonly replies: Array<ChatCompletion | { tokens: string[] }>) {}
+
+    async createChatCompletion(request: ChatCompletionRequest): Promise<ChatCompletion> {
+        this.requests.push({ ...request, messages: structuredClone(request.messages) });
+        const reply = this.replies.shift();
+        if (reply === undefined) {
+            throw new Error('No reply left.');
+        }
+        if ('tokens' in reply) {
+            reply.tokens.forEach((token) => request.on_token?.(token));
+            return { content: reply.tokens.join(''), tool_calls: [], finish_reason: 'stop' };
+        }
+        return reply;
+    }
+}
+
+function toolCallReply(callId = 'call-1', name = 'read_file', argumentsGiven: Record<string, unknown> = { path: 'notes.txt' }): ChatCompletion {
+    return { content: '', tool_calls: [{ id: callId, type: 'function', function: { name, arguments: JSON.stringify(argumentsGiven) } }], finish_reason: 'tool_calls' };
+}
+
+function textReply(content: string): ChatCompletion {
+    return { content, tool_calls: [], finish_reason: 'stop' };
+}
+
+// ============================================================================
+// The stage
+// ============================================================================
+
+describe('tool stage', () => {
+    it('summarizes a fetched page before it returns to the loop', async () => {
+        const toolbox = new FakeToolbox((_name, given) =>
+            JSON.stringify({ url: 'https://example.test/page', title: 'Page title', text: 'FULL PAGE CONTENT THAT MUST NOT ENTER THE MAIN LOOP', focus: given.focus }),
+        );
+        const model = new FakeModel([toolCallReply('call-1', 'web_fetch', { url: 'https://example.test/page', focus: 'the date' }), textReply('Research complete.')]);
+        const summarized: Array<[string, string, string]> = [];
+
+        const result = await runToolStage(model, 'Research only.', 'Find the publication date.', toolbox, 200, 0.1, 3, {
+            allowedTools: new Set(['web_fetch']),
+            pageSummarizer: async (pageJson, focus, requestContext) => {
+                summarized.push([pageJson, focus, requestContext]);
+                return 'Source URL: https://example.test/page\nRelevant date: 2026';
+            },
+        });
+
+        expect(model.requests[0].tools?.map((tool) => tool.function.name)).toEqual(['web_fetch']);
+        const returnedToModel = model.requests[1].messages.at(-1)?.content ?? '';
+        expect(returnedToModel).toContain('Relevant date: 2026');
+        expect(returnedToModel).not.toContain('FULL PAGE CONTENT');
+        expect(summarized[0][1]).toBe('the date');
+        expect(summarized[0][2]).toContain('Find the publication date');
+        expect(result).toContain('Relevant date: 2026');
     });
 
-    it('runs tool calls and returns the final model response', async () => {
-        const calls: string[] = [];
-        const llm = {
-            createChatCompletion: (request: Record<string, unknown>) => {
-                if (calls.length === 0) {
-                    calls.push('first');
-                    return {
-                        choices: [{
-                            finish_reason: null,
-                            message: {
-                                tool_calls: [{
-                                    id: 'call-1',
-                                    type: 'function',
-                                    function: { name: 'lookup', arguments: '{"term":"alpha"}' },
-                                }],
-                            },
-                        }],
-                    };
-                }
-                return {
-                    choices: [{
-                        finish_reason: 'stop',
-                        message: { content: 'Done.' },
-                    }],
-                };
-            },
-        };
+    it('says when no summarizer can read a fetched page', async () => {
+        const toolbox = new FakeToolbox(() => '{"url": "https://example.test/"}');
+        const model = new FakeModel([toolCallReply('call-1', 'web_fetch', { url: 'https://example.test/' }), textReply('Done.')]);
 
-        const toolbox = {
-            call: (name: string, args: Record<string, unknown>) => {
-                if (name === 'lookup') {
-                    return `Looked up ${String((args as { term?: string }).term ?? '')}`;
-                }
-                return `Tool ${name} ran`;
-            },
-            toolDefinitions: [{ function: { name: 'lookup', parameters: { type: 'object', properties: { term: { type: 'string' } } } } }],
-        };
+        const result = await runToolStage(model, 'Research.', 'Read it.', toolbox, 200, 0.1, 3);
 
-        const result = await runToolStage(llm as any, 'system', 'query', toolbox as any, 64, 0.2, 2);
-        expect(result).toContain('Done');
-        expect(result).toContain('Looked up alpha');
+        expect(result).toContain('Tool error: webpage summarization is unavailable.');
+    });
+
+    it('does not offer blocked tools', async () => {
+        const model = new FakeModel([textReply('No research tools available.')]);
+
+        await runToolStage(model, 'Execute planned actions.', 'Update the requested file.', new FakeToolbox(), 200, 0.1, 3, {
+            blockedTools: new Set(['web_search', 'web_fetch']),
+        });
+
+        const offered = new Set(model.requests[0].tools?.map((tool) => tool.function.name));
+        expect(offered.has('web_search')).toBe(false);
+        expect(offered.has('web_fetch')).toBe(false);
+        expect(offered.has('write_file')).toBe(true);
+    });
+
+    it('refuses a call to a tool the stage does not allow', async () => {
+        const toolbox = new FakeToolbox();
+        const model = new FakeModel([toolCallReply('call-1', 'write_file', { path: 'a', content: 'b' }), textReply('Done.')]);
+
+        const result = await runToolStage(model, 'Research.', 'Look.', toolbox, 200, 0.1, 3, { allowedTools: new Set(['read_file']) });
+
+        expect(toolbox.calls).toEqual([]);
+        expect(result).toContain("Tool error: tool 'write_file' is not allowed in this stage.");
+    });
+
+    it('streams the reply through the token callback', async () => {
+        const toolbox = new FakeToolbox();
+        const model = new FakeModel([toolCallReply(), { tokens: ['Here ', 'it is.'] }]);
+        const streamed: string[] = [];
+
+        const result = await runToolStage(model, 'Use tools when useful.', 'Read notes.txt.', toolbox, 200, 0.1, 3, {
+            onToken: (token) => streamed.push(token),
+        });
+
+        expect(toolbox.calls).toEqual([['read_file', { path: 'notes.txt' }]]);
+        expect(streamed).toEqual(['Here ', 'it is.']);
+        expect(model.requests[0].on_token).toBeTypeOf('function');
+        expect(result).toContain('Here it is.');
+    });
+
+    it('runs a tool and returns its fenced result to the model', async () => {
+        const toolbox = new FakeToolbox();
+        const model = new FakeModel([toolCallReply(), textReply('Here is the result.')]);
+
+        const result = await runToolStage(model, 'Use tools when useful.', 'Read notes.txt.', toolbox, 200, 0.1, 3);
+
+        expect(toolbox.calls).toEqual([['read_file', { path: 'notes.txt' }]]);
+        const last = model.requests[1].messages.at(-1);
+        expect(last?.role).toBe('tool');
+        expect(last?.tool_call_id).toBe('call-1');
+        expect(last?.content).toBe('<untrusted-data>\nsample tool output\n</untrusted-data>');
+        expect(model.requests[1].messages[2].tool_calls?.[0].function.name).toBe('read_file');
+        expect(result).toContain('sample tool output');
+    });
+
+    it('runs a tool call written as Qwen XML text', async () => {
+        const toolbox = new FakeToolbox();
+        const written =
+            'I will save it.\n<tool_call>\n<function=write_file>\n<parameter=path>\nanswer.txt\n</parameter>\n' +
+            '<parameter=content>\n42\n</parameter>\n</function>\n</tool_call>';
+        const model = new FakeModel([textReply(written), textReply('Saved answer.txt.')]);
+
+        const result = await runToolStage(model, 'Use tools when useful.', 'Save 42.', toolbox, 200, 0.1, 3);
+
+        // A string parameter keeps its text even when it looks like a number.
+        expect(toolbox.calls).toEqual([['write_file', { path: 'answer.txt', content: '42' }]]);
+        const replayed = model.requests[1].messages[2];
+        expect(replayed.content).toBe('I will save it.');
+        expect(replayed.tool_calls?.[0].function.name).toBe('write_file');
+        expect(result).toContain('Saved answer.txt.');
+    });
+
+    it('runs a tool call written as JSON text with typed arguments', async () => {
+        const toolbox = new FakeToolbox();
+        const written = '<tool_call>\n{"name": "web_search", "arguments": {"query": "sqlite wal", "max_results": 3}}\n</tool_call>';
+        const model = new FakeModel([textReply(written), textReply('Found it.')]);
+
+        await runToolStage(model, 'Use tools when useful.', 'Search.', toolbox, 200, 0.1, 3);
+
+        expect(toolbox.calls).toEqual([['web_search', { query: 'sqlite wal', max_results: 3 }]]);
+    });
+
+    it('stops after the tool-call limit and keeps the results', async () => {
+        const toolbox = new FakeToolbox();
+        const model = new FakeModel([toolCallReply('call-1'), toolCallReply('call-2')]);
+
+        const result = await runToolStage(model, 'Use tools when useful.', 'Read notes.txt.', toolbox, 200, 0.1, 1);
+
+        expect(model.requests[1].tool_choice).toBe('none');
+        expect(toolbox.calls).toHaveLength(1);
+        expect(result).toContain('tool-call limit was reached');
+        expect(result).toContain('sample tool output');
+    });
+
+    it('trims tool output to the context window', async () => {
+        const toolbox = new FakeToolbox(() => 'z'.repeat(50_000));
+        const model = new FakeModel([toolCallReply('call-1'), textReply('Done.')]);
+
+        await runToolStage(model, 'Use tools when useful.', 'Read notes.txt.', toolbox, 1024, 0.1, 1, { contextSize: 2048 });
+
+        const sent = model.requests[1];
+        const sentChars = sent.messages.reduce((total, message) => total + pythonJsonLength(message), 0) + pythonJsonLength(sent.tools);
+        expect(sentChars).toBeLessThanOrEqual((2048 - 1024) * 3);
+    });
+
+    it('reports bad arguments, a cut-off reply, an empty reply and a bad limit', async () => {
+        const badArguments = new FakeModel([
+            { content: '', tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'read_file', arguments: '{' } }], finish_reason: 'tool_calls' },
+            textReply('Sorry.'),
+        ]);
+
+        expect(await runToolStage(badArguments, 'S.', 'U.', new FakeToolbox(), 200, 0.1, 3)).toContain('Tool error: invalid JSON arguments:');
+        await expect(runToolStage(new FakeModel([{ content: 'x', tool_calls: [], finish_reason: 'length' }]), 'S.', 'U.', new FakeToolbox(), 200, 0.1, 3)).rejects.toThrow(
+            /reached the token limit/,
+        );
+        await expect(runToolStage(new FakeModel([textReply('  ')]), 'S.', 'U.', new FakeToolbox(), 200, 0.1, 3)).rejects.toThrow('The model returned an empty tool-stage response.');
+        await expect(runToolStage(new FakeModel([]), 'S.', 'U.', new FakeToolbox(), 200, 0.1, 11)).rejects.toThrow('max_tool_calls must be between 1 and 10.');
+    });
+});
+
+// ============================================================================
+// Text tool calls
+// ============================================================================
+
+describe('text tool calls', () => {
+    it('reads untyped parameters as JSON when they parse and skips broken blocks', () => {
+        const content = '<tool_call><function=unknown_tool><parameter=count>\n7\n</parameter><parameter=word>\nseven\n</parameter></function></tool_call><tool_call>{broken</tool_call>';
+
+        const calls = textToolCalls(content, TOOL_DEFINITIONS);
+
+        expect(calls).toHaveLength(1);
+        expect(calls[0]).toEqual({ id: 'text-call-1', type: 'function', function: { name: 'unknown_tool', arguments: '{"count":7,"word":"seven"}' } });
+        expect(textToolCalls(null, TOOL_DEFINITIONS)).toEqual([]);
+        expect(textToolCalls('<tool_call>{"name": "read_file", "arguments": []}', TOOL_DEFINITIONS)[0].function.arguments).toBe('{}');
     });
 });

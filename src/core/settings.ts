@@ -1,22 +1,49 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+// The settings file: its defaults, where it lives, and the checks every value must pass.
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// ============================================================================
+// Defaults
+// ============================================================================
 
 export const DEFAULT_MODEL_PATH = './models/model.gguf';
 export const CONTEXT_SIZE = 4096;
 export const MAX_TOKENS = 2048;
 export const TEMPERATURE = 0.1;
 export const MODE_CHOICES = ['auto', 'answer', 'draft', 'execute'] as const;
+// Settings that no longer do anything, which a settings file may still hold and loading drops.
 export const RETIRED_SETTINGS = ['runner'] as const;
 export const MAX_TASK_DEPTH = 3;
 export const MAX_TASK_NODES = 20;
-export const DEFAULT_SETTINGS_PATH = join(process.cwd(), 'settings.json');
-export const USER_SETTINGS_PATH = join(homedir(), '.config', 'codex', 'settings.json');
+export const DEFAULT_SETTINGS_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'settings.json');
+export const USER_SETTINGS_PATH = join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'codex', 'settings.json');
 export const DEFAULT_KNOWLEDGE_DB_PATH = '~/.local/share/codex/knowledge.sqlite3';
 export const DEFAULT_EMBEDDING_MODEL_PATH = './models/embedding.gguf';
 
-export type Mode = typeof MODE_CHOICES[number];
-export type McpTransport = 'stdio' | 'http';
+export type Mode = (typeof MODE_CHOICES)[number];
+
+export type StdioServerSettings = {
+    name: string;
+    enabled: boolean;
+    transport: 'stdio';
+    command: string;
+    args: string[];
+    env: Record<string, string>;
+    allowed_tools: string[];
+};
+
+export type HttpServerSettings = {
+    name: string;
+    enabled: boolean;
+    transport: 'http';
+    url: string;
+    headers: Record<string, string>;
+    allowed_tools: string[];
+};
+
+export type McpServerSettings = StdioServerSettings | HttpServerSettings;
 
 export type Settings = {
     model_path: string;
@@ -34,7 +61,7 @@ export type Settings = {
     mode: Mode;
     max_task_depth: number;
     max_task_nodes: number;
-    mcp_servers: Array<Record<string, unknown>>;
+    mcp_servers: McpServerSettings[];
     knowledge_db_path: string;
     embedding_model_path: string;
     background_research_enabled: boolean;
@@ -49,7 +76,7 @@ export type Settings = {
     background_max_store_megabytes: number;
 };
 
-export const DEFAULT_SETTINGS: Settings = {
+export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
     model_path: DEFAULT_MODEL_PATH,
     context_size: CONTEXT_SIZE,
     gpu_layers: -1,
@@ -60,6 +87,7 @@ export const DEFAULT_SETTINGS: Settings = {
     max_tool_calls: 5,
     max_search_results: 5,
     enable_test_execution: false,
+    // In an interactive run, the user approves a run's file changes, test runs, and MCP calls before they happen.
     confirm_actions: true,
     show_thinking: true,
     mode: 'auto',
@@ -67,8 +95,10 @@ export const DEFAULT_SETTINGS: Settings = {
     max_task_nodes: MAX_TASK_NODES,
     mcp_servers: [],
     knowledge_db_path: DEFAULT_KNOWLEDGE_DB_PATH,
+    // Facts and topics are found by meaning with this model; an empty or missing file keeps search lexical.
     embedding_model_path: DEFAULT_EMBEDDING_MODEL_PATH,
     background_research_enabled: true,
+    // An empty path runs background work on the main model; a context size of 0 uses the main one.
     background_model_path: '',
     background_context_size: 0,
     background_gpu_layers: 0,
@@ -78,118 +108,143 @@ export const DEFAULT_SETTINGS: Settings = {
     background_max_pending_jobs: 100,
     background_prune_after_days: 90,
     background_max_store_megabytes: 1024,
-};
+} satisfies Settings);
 
-export function default_settings_path(): string {
-    const local = join(process.cwd(), 'settings.json');
-    const candidates = [local, DEFAULT_SETTINGS_PATH, USER_SETTINGS_PATH];
-    for (const candidate of candidates) {
-        if (existsSync(candidate)) return candidate;
+// ============================================================================
+// Paths
+// ============================================================================
+
+// Turn a leading ~ into the home folder, as a shell would.
+export function expandUser(path: string): string {
+    if (path === '~') {
+        return homedir();
     }
-    return USER_SETTINGS_PATH;
+    if (path.startsWith('~/')) {
+        return join(homedir(), path.slice(2));
+    }
+    return path;
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-        throw new TypeError('Expected an object.');
+function isFile(path: string): boolean {
+    try {
+        return statSync(path).isFile();
+    } catch {
+        return false;
     }
-    return value as Record<string, unknown>;
 }
 
-export function load_settings(settings_path: string | Record<string, unknown>): Settings {
-    if (typeof settings_path === 'string' || settings_path instanceof String) {
-        const filePath = String(settings_path);
-        if (!existsSync(filePath)) {
-            if (filePath === DEFAULT_SETTINGS_PATH || filePath === USER_SETTINGS_PATH) {
-                return { ...DEFAULT_SETTINGS };
-            }
-            throw new Error(`Settings file not found: ${filePath}`);
+// Pick the settings file: one in the working folder, then the one beside the program, then the user's own.
+export function defaultSettingsPath(options: { bundledPath?: string; userPath?: string } = {}): string {
+    const localSettingsPath = join(process.cwd(), 'settings.json');
+    for (const path of [localSettingsPath, options.bundledPath ?? DEFAULT_SETTINGS_PATH]) {
+        if (isFile(path)) {
+            return path;
         }
-        const text = readFileSync(filePath, 'utf8');
-        let parsed: unknown;
-        try {
-            parsed = JSON.parse(text);
-        } catch (error) {
-            throw new Error(`Invalid JSON in settings file: ${(error as Error).message}`);
-        }
-        return validate_settings(asRecord(parsed));
     }
-
-    return validate_settings({ ...DEFAULT_SETTINGS, ...asRecord(settings_path) });
+    return options.userPath ?? USER_SETTINGS_PATH;
 }
 
-export function save_settings(settings_path: string, values: Partial<Settings>): Settings {
-    const validated = validate_settings({ ...DEFAULT_SETTINGS, ...values });
-    const target = settings_path;
-    mkdirSync(target.includes('/') ? target.slice(0, target.lastIndexOf('/')) : '.', { recursive: true });
-    writeFileSync(target, `${JSON.stringify(validated, null, 2)}\n`, 'utf8');
+// ============================================================================
+// Loading and saving
+// ============================================================================
+
+export function loadSettings(settingsPath: string): Settings {
+    let text: string;
+    try {
+        text = readFileSync(settingsPath, 'utf-8');
+    } catch (error) {
+        const missing = (error as NodeJS.ErrnoException).code === 'ENOENT';
+        if (missing && [resolve(DEFAULT_SETTINGS_PATH), resolve(USER_SETTINGS_PATH)].includes(resolve(settingsPath))) {
+            return structuredClone(DEFAULT_SETTINGS) as Settings;
+        }
+        throw error;
+    }
+    let settings: unknown;
+    try {
+        settings = JSON.parse(text);
+    } catch (error) {
+        throw new Error(`Invalid JSON in settings file: ${(error as Error).message}`);
+    }
+    if (!isObject(settings)) {
+        throw new Error('The settings file must contain a JSON object.');
+    }
+
+    const kept = Object.fromEntries(Object.entries(settings).filter(([key]) => !(RETIRED_SETTINGS as readonly string[]).includes(key)));
+    const unknownKeys = Object.keys(kept).filter((key) => !(key in DEFAULT_SETTINGS));
+    if (unknownKeys.length > 0) {
+        throw new Error(`Unknown setting(s): ${unknownKeys.sort().join(', ')}`);
+    }
+    return validateSettings({ ...structuredClone(DEFAULT_SETTINGS), ...kept });
+}
+
+export function saveSettings(settingsPath: string, values: Record<string, unknown>): Settings {
+    const validated = validateSettings(values);
+    const path = expandUser(settingsPath);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, `${JSON.stringify(validated, null, 2)}\n`, 'utf-8');
     return validated;
 }
 
-export function validate_settings(values: Record<string, unknown>): Settings {
-    const merged = { ...DEFAULT_SETTINGS, ...values } as Record<string, unknown>;
-    for (const key of RETIRED_SETTINGS) {
-        delete (merged as any)[key];
-    }
+// ============================================================================
+// Checks
+// ============================================================================
 
-    const unknown = Object.keys(merged).filter((key) => !(key in DEFAULT_SETTINGS));
-    if (unknown.length > 0) {
-        throw new Error(`Unknown setting(s): ${unknown.sort().join(', ')}`);
-    }
+function isObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
-    const result: Record<string, unknown> = { ...DEFAULT_SETTINGS, ...merged };
+function isInteger(value: unknown): value is number {
+    return typeof value === 'number' && Number.isInteger(value);
+}
 
-    if (typeof result.model_path !== 'string' || !String(result.model_path).trim()) {
+// Check every setting and return a copy with paths trimmed and the MCP servers filled in.
+export function validateSettings(input: Record<string, unknown>): Settings {
+    const values: Record<string, unknown> = { ...input };
+    const modelPath = values.model_path;
+    if (typeof modelPath !== 'string' || !modelPath.trim()) {
         throw new Error('model_path must be a non-empty string.');
     }
     for (const name of ['context_size', 'max_tokens']) {
-        const value = result[name];
-        if (typeof value === 'boolean' || !Number.isInteger(value) || Number(value) <= 0) {
+        const value = values[name];
+        if (!isInteger(value) || value <= 0) {
             throw new Error(`${name} must be a positive integer.`);
         }
     }
-    if (typeof result.gpu_layers !== 'number' || Number.isNaN(result.gpu_layers) || result.gpu_layers < -1 || !Number.isInteger(result.gpu_layers)) {
+    if (!isInteger(values.gpu_layers) || values.gpu_layers < -1) {
         throw new Error('gpu_layers must be -1 or a non-negative integer.');
     }
-    if (typeof result.temperature !== 'number' || result.temperature < 0 || Number.isNaN(result.temperature)) {
+    if (typeof values.temperature !== 'number' || Number.isNaN(values.temperature) || values.temperature < 0) {
         throw new Error('temperature must be a non-negative number.');
     }
-    if (typeof result.filesystem_root !== 'string' || !String(result.filesystem_root).trim()) {
+    if (typeof values.filesystem_root !== 'string' || !values.filesystem_root.trim()) {
         throw new Error('filesystem_root must be a non-empty path string.');
     }
-    if (typeof result.allow_file_writes !== 'boolean') {
-        throw new Error('allow_file_writes must be a boolean.');
+    for (const name of ['allow_file_writes', 'enable_test_execution', 'confirm_actions', 'show_thinking']) {
+        if (typeof values[name] !== 'boolean') {
+            throw new Error(`${name} must be a boolean.`);
+        }
     }
-    if (typeof result.enable_test_execution !== 'boolean') {
-        throw new Error('enable_test_execution must be a boolean.');
-    }
-    if (typeof result.confirm_actions !== 'boolean') {
-        throw new Error('confirm_actions must be a boolean.');
-    }
-    if (typeof result.show_thinking !== 'boolean') {
-        throw new Error('show_thinking must be a boolean.');
-    }
-    if (!MODE_CHOICES.includes(String(result.mode) as Mode)) {
+    if (!(MODE_CHOICES as readonly unknown[]).includes(values.mode)) {
         throw new Error(`mode must be one of: ${MODE_CHOICES.join(', ')}.`);
     }
-    if (typeof result.knowledge_db_path !== 'string' || !String(result.knowledge_db_path).trim()) {
+    if (typeof values.knowledge_db_path !== 'string' || !values.knowledge_db_path.trim()) {
         throw new Error('knowledge_db_path must be a non-empty path string.');
     }
-    if (typeof result.embedding_model_path !== 'string') {
+    if (typeof values.embedding_model_path !== 'string') {
         throw new Error('embedding_model_path must be a path string, or empty to search by words only.');
     }
-    result.embedding_model_path = String(result.embedding_model_path).trim();
-    if (typeof result.background_research_enabled !== 'boolean') {
+    values.embedding_model_path = values.embedding_model_path.trim();
+    if (typeof values.background_research_enabled !== 'boolean') {
         throw new Error('background_research_enabled must be a boolean.');
     }
-    if (typeof result.background_model_path !== 'string') {
+    if (typeof values.background_model_path !== 'string') {
         throw new Error('background_model_path must be a path string, or empty to use model_path.');
     }
-    result.background_model_path = String(result.background_model_path).trim();
-    if (typeof result.background_gpu_layers !== 'number' || Number.isNaN(result.background_gpu_layers) || result.background_gpu_layers < -1 || !Number.isInteger(result.background_gpu_layers)) {
+    values.background_model_path = values.background_model_path.trim();
+    if (!isInteger(values.background_gpu_layers) || values.background_gpu_layers < -1) {
         throw new Error('background_gpu_layers must be -1 or a non-negative integer.');
     }
-    for (const [name, minimum, maximum] of [
+    const ranges: Array<[string, number, number]> = [
         ['max_task_depth', 0, 6],
         ['max_task_nodes', 1, 60],
         ['background_context_size', 0, 1048576],
@@ -199,138 +254,158 @@ export function validate_settings(values: Record<string, unknown>): Settings {
         ['background_max_pending_jobs', 1, 1000],
         ['background_prune_after_days', 1, 3650],
         ['background_max_store_megabytes', 16, 1048576],
-    ] as const) {
-        const value = result[name];
-        if (typeof value !== 'number' || !Number.isInteger(value) || value < minimum || value > maximum) {
+    ];
+    for (const [name, minimum, maximum] of ranges) {
+        const value = values[name];
+        if (!isInteger(value) || value < minimum || value > maximum) {
             throw new Error(`${name} must be an integer from ${minimum} to ${maximum}.`);
         }
     }
     for (const name of ['max_tool_calls', 'max_search_results']) {
-        const value = result[name];
-        if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 10) {
+        const value = values[name];
+        if (!isInteger(value) || value < 1 || value > 10) {
             throw new Error(`${name} must be an integer from 1 to 10.`);
         }
     }
-
-    result.temperature = Number(result.temperature);
-    result.mcp_servers = validate_mcp_servers(result.mcp_servers);
-    return result as Settings;
+    values.mcp_servers = validateMcpServers(values.mcp_servers);
+    return values as Settings;
 }
 
-export function background_model_key(settings: Settings): [string, number, number] {
+// Return the model path, context size and GPU layers that background work loads.
+export function backgroundModelKey(settings: Settings): [string, number, number] {
     if (!settings.background_model_path) {
         return [settings.model_path, settings.context_size, settings.gpu_layers];
     }
     return [settings.background_model_path, settings.background_context_size || settings.context_size, settings.background_gpu_layers];
 }
 
-export function mcp_servers_to_json(servers: Array<Record<string, unknown>>): string {
+// ============================================================================
+// MCP servers
+// ============================================================================
+
+export function mcpServersToJson(servers: McpServerSettings[]): string {
     return JSON.stringify(servers, null, 2);
 }
 
-export function mcp_servers_from_json(text: string): Array<Record<string, unknown>> {
-    const trimmed = text.trim();
-    if (!trimmed) return [];
+// Read the MCP server list an interface lets the user edit as JSON.
+export function mcpServersFromJson(text: string): McpServerSettings[] {
+    let servers: unknown;
     try {
-        const parsed = JSON.parse(trimmed);
-        return validate_mcp_servers(parsed);
+        servers = JSON.parse(text.trim() || '[]');
     } catch (error) {
         throw new Error(`MCP servers must be valid JSON: ${(error as Error).message}`);
     }
+    return validateMcpServers(servers);
 }
 
-export function validate_mcp_servers(servers: unknown): Array<Record<string, unknown>> {
+const ALLOWED_SERVER_FIELDS = new Set(['name', 'enabled', 'transport', 'command', 'args', 'env', 'url', 'headers', 'allowed_tools']);
+const TRANSPORT_FIELDS: Record<string, string[]> = {
+    stdio: ['command', 'args', 'env'],
+    http: ['url', 'headers'],
+};
+
+export function validateMcpServers(servers: unknown): McpServerSettings[] {
     if (!Array.isArray(servers)) {
         throw new Error('mcp_servers must be a list.');
     }
 
-    const validated: Array<Record<string, unknown>> = [];
-    const seen = new Set<string>();
-    const allowedFields = new Set(['name', 'enabled', 'transport', 'command', 'args', 'env', 'url', 'headers', 'allowed_tools']);
-    const transportFields: Record<string, Set<string>> = {
-        stdio: new Set(['command', 'args', 'env']),
-        http: new Set(['url', 'headers']),
-    };
-
-    for (let index = 0; index < servers.length; index += 1) {
-        const server = servers[index];
-        if (!server || typeof server !== 'object' || Array.isArray(server)) {
+    const validated: McpServerSettings[] = [];
+    const seenNames = new Set<string>();
+    servers.forEach((server: unknown, index) => {
+        if (!isObject(server)) {
             throw new Error(`mcp_servers[${index}] must be an object.`);
         }
-        const record = server as Record<string, unknown>;
-        const unknownFields = Object.keys(record).filter((key) => !allowedFields.has(key));
+        const unknownFields = Object.keys(server).filter((key) => !ALLOWED_SERVER_FIELDS.has(key));
         if (unknownFields.length > 0) {
             throw new Error(`Unknown field(s) in mcp_servers[${index}]: ${unknownFields.sort().join(', ')}`);
         }
 
-        const name = typeof record.name === 'string' ? record.name : '';
-        if (!name) {
-            throw new Error(`mcp_servers[${index}] must have a name.`);
+        const name = server.name;
+        if (typeof name !== 'string' || !/^[A-Za-z0-9_-]{1,32}$/.test(name)) {
+            throw new Error(`mcp_servers[${index}].name must be 1-32 letters, numbers, '_' or '-'.`);
         }
-        if (seen.has(name)) {
-            throw new Error(`Duplicate MCP server name: ${name}`);
+        if (seenNames.has(name)) {
+            throw new Error(`MCP server names must be unique: ${name}.`);
         }
-        seen.add(name);
+        seenNames.add(name);
 
-        const transport = (typeof record.transport === 'string' ? record.transport : null) ?? 'stdio';
-        if (transport !== 'stdio' && transport !== 'http') {
-            throw new Error(`Unsupported transport: ${transport}`);
+        const enabled = server.enabled ?? true;
+        if (typeof enabled !== 'boolean') {
+            throw new Error(`MCP server '${name}' enabled must be a boolean.`);
+        }
+        const transport = server.transport ?? 'stdio';
+        if (typeof transport !== 'string' || !(transport in TRANSPORT_FIELDS)) {
+            throw new Error(`MCP server '${name}' uses unsupported transport '${String(transport)}'.`);
+        }
+        const otherFields = Object.entries(TRANSPORT_FIELDS)
+            .filter(([kind]) => kind !== transport)
+            .flatMap(([, fields]) => fields)
+            .filter((field) => field in server);
+        if (otherFields.length > 0) {
+            throw new Error(`MCP server '${name}' uses ${transport} transport and cannot set: ${otherFields.sort().join(', ')}.`);
         }
 
-        const validatedServer: Record<string, unknown> = {
-            name,
-            enabled: typeof record.enabled === 'boolean' ? record.enabled : true,
-            transport,
-        };
+        const allowedTools = server.allowed_tools ?? [];
+        if (
+            !Array.isArray(allowedTools) ||
+            allowedTools.some((tool) => typeof tool !== 'string' || !tool) ||
+            allowedTools.length !== new Set(allowedTools).size
+        ) {
+            throw new Error(`MCP server '${name}' allowed_tools must be a unique list of names.`);
+        }
+        if (enabled && allowedTools.length === 0) {
+            throw new Error(`MCP server '${name}' must allow at least one tool when enabled.`);
+        }
 
-        if (transport === 'stdio') {
-            if (typeof record.command !== 'string' || !record.command.trim()) {
-                throw new Error(`mcp_servers[${index}] requires a command for stdio transport.`);
-            }
-            validatedServer.command = record.command;
-            if (record.args !== undefined) {
-                if (!Array.isArray(record.args) || record.args.some((arg) => typeof arg !== 'string')) {
-                    throw new Error(`mcp_servers[${index}].args must be an array of strings.`);
-                }
-                validatedServer.args = record.args;
-            }
-            if (record.env !== undefined) {
-                if (!record.env || typeof record.env !== 'object' || Array.isArray(record.env)) {
-                    throw new Error(`mcp_servers[${index}].env must be an object.`);
-                }
-                validatedServer.env = record.env;
-            }
-            if (record.url !== undefined) {
-                throw new Error(`mcp_servers[${index}] cannot set: url`);
-            }
+        if (transport === 'http') {
+            validated.push({ name, enabled, transport, ...validateHttpConnection(name, server), allowed_tools: allowedTools as string[] });
         } else {
-            if (typeof record.url !== 'string' || !/^https?:\/\//.test(record.url)) {
-                throw new Error(`mcp_servers[${index}] url must be a valid http URL.`);
-            }
-            validatedServer.url = record.url;
-            if (record.command !== undefined) throw new Error(`mcp_servers[${index}] cannot set: command`);
-            if (record.args !== undefined) throw new Error(`mcp_servers[${index}] cannot set: args`);
-            if (record.headers !== undefined) {
-                if (!record.headers || typeof record.headers !== 'object' || Array.isArray(record.headers)) {
-                    throw new Error(`mcp_servers[${index}].headers must be an object.`);
-                }
-                const badHeader = Object.keys(record.headers as Record<string, unknown>).find((header) => !/^[A-Za-z0-9-]+$/.test(header));
-                if (badHeader) {
-                    throw new Error(`mcp_servers[${index}] header name is invalid: ${badHeader}`);
-                }
-                validatedServer.headers = record.headers;
-            }
+            validated.push({ name, enabled, transport: 'stdio', ...validateStdioConnection(name, server), allowed_tools: allowedTools as string[] });
         }
-
-        const allowedTools = Array.isArray(record.allowed_tools) ? record.allowed_tools : [];
-        if (!allowedTools.length) {
-            throw new Error('mcp_servers entries must include at least one tool in allowed_tools.');
-        }
-        if (!allowedTools.every((tool) => typeof tool === 'string' && tool.trim())) {
-            throw new Error('allowed_tools must contain non-empty strings.');
-        }
-        validatedServer.allowed_tools = allowedTools;
-        validated.push(validatedServer);
-    }
+    });
     return validated;
+}
+
+function validateStdioConnection(name: string, server: Record<string, unknown>): { command: string; args: string[]; env: Record<string, string> } {
+    const command = server.command;
+    if (typeof command !== 'string' || !command.trim()) {
+        throw new Error(`MCP server '${name}' command must be a non-empty string.`);
+    }
+    const args = server.args ?? [];
+    if (!Array.isArray(args) || args.some((arg) => typeof arg !== 'string')) {
+        throw new Error(`MCP server '${name}' args must be a list of strings.`);
+    }
+    const env = server.env ?? {};
+    if (!isObject(env)) {
+        throw new Error(`MCP server '${name}' env must be an object of strings.`);
+    }
+    for (const [key, value] of Object.entries(env)) {
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+            throw new Error(`MCP server '${name}' has an invalid environment variable name.`);
+        }
+        if (typeof value !== 'string') {
+            throw new Error(`MCP server '${name}' environment values must be strings.`);
+        }
+    }
+    return { command, args: args as string[], env: env as Record<string, string> };
+}
+
+function validateHttpConnection(name: string, server: Record<string, unknown>): { url: string; headers: Record<string, string> } {
+    const url = server.url;
+    if (typeof url !== 'string' || !/^https?:\/\/[^\s/]+(\/\S*)?$/.test(url)) {
+        throw new Error(`MCP server '${name}' url must be an http:// or https:// address.`);
+    }
+    const headers = server.headers ?? {};
+    if (!isObject(headers)) {
+        throw new Error(`MCP server '${name}' headers must be an object of strings.`);
+    }
+    for (const [key, value] of Object.entries(headers)) {
+        if (!/^[A-Za-z0-9-]+$/.test(key)) {
+            throw new Error(`MCP server '${name}' has an invalid header name.`);
+        }
+        if (typeof value !== 'string') {
+            throw new Error(`MCP server '${name}' header values must be strings.`);
+        }
+    }
+    return { url, headers: headers as Record<string, string> };
 }

@@ -1,128 +1,187 @@
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import {
     DEFAULT_SETTINGS,
-    background_model_key,
-    load_settings,
-    mcp_servers_from_json,
-    mcp_servers_to_json,
-    validate_settings,
+    backgroundModelKey,
+    defaultSettingsPath,
+    loadSettings,
+    mcpServersFromJson,
+    mcpServersToJson,
+    validateSettings,
 } from './settings.js';
 
-describe('settings', () => {
-    it('defaults and validates the common fields', () => {
-        expect(DEFAULT_SETTINGS.show_thinking).toBe(true);
-        expect(DEFAULT_SETTINGS.mode).toBe('auto');
+const folders: string[] = [];
 
-        expect(() => validate_settings({ ...DEFAULT_SETTINGS, show_thinking: 'yes' as any })).toThrow(/show_thinking/i);
-        expect(() => validate_settings({ ...DEFAULT_SETTINGS, mode: 'chat' as any })).toThrow(/mode/i);
-        expect(() => validate_settings({ ...DEFAULT_SETTINGS, max_task_depth: 7 })).toThrow(/max_task_depth/i);
-        expect(() => validate_settings({ ...DEFAULT_SETTINGS, max_task_nodes: 0 })).toThrow(/max_task_nodes/i);
+function temporaryFolder(): string {
+    const folder = realpathSync(mkdtempSync(join(tmpdir(), 'codex-settings-')));
+    folders.push(folder);
+    return folder;
+}
+
+function withServers(servers: unknown[]): Record<string, unknown> {
+    return { ...DEFAULT_SETTINGS, mcp_servers: servers };
+}
+
+afterEach(() => {
+    for (const folder of folders.splice(0)) {
+        rmSync(folder, { recursive: true, force: true });
+    }
+});
+
+// ============================================================================
+// Settings
+// ============================================================================
+
+describe('settings', () => {
+    it('shows thinking by default and needs a boolean for it', () => {
+        expect(DEFAULT_SETTINGS.show_thinking).toBe(true);
+
+        expect(() => validateSettings({ ...DEFAULT_SETTINGS, show_thinking: 'yes' })).toThrow(/show_thinking/);
     });
 
-    it('ignores retired settings and keeps a boolean test flag', () => {
-        const loaded = load_settings({
-            runner: 'pipeline',
-            mode: 'draft',
-        } as any);
+    it('uses the auto mode by default and needs a known mode', () => {
+        expect(DEFAULT_SETTINGS.mode).toBe('auto');
+
+        expect(() => validateSettings({ ...DEFAULT_SETTINGS, mode: 'chat' })).toThrow(/mode/);
+    });
+
+    it('checks the task tree limits', () => {
+        expect(() => validateSettings({ ...DEFAULT_SETTINGS, max_task_depth: 7 })).toThrow(/max_task_depth/);
+        expect(() => validateSettings({ ...DEFAULT_SETTINGS, max_task_nodes: 0 })).toThrow(/max_task_nodes/);
+    });
+
+    it('loads a settings file that still names a runner without it', () => {
+        const path = join(temporaryFolder(), 'settings.json');
+        writeFileSync(path, '{"runner": "pipeline", "mode": "draft"}', 'utf-8');
+
+        const loaded = loadSettings(path);
 
         expect(loaded).not.toHaveProperty('runner');
         expect(loaded.mode).toBe('draft');
-        expect(() => validate_settings({ ...DEFAULT_SETTINGS, enable_test_execution: 'yes' as any })).toThrow(/enable_test_execution/i);
     });
 
-    it('validates background behavior and model fallbacks', () => {
-        const settings = validate_settings(DEFAULT_SETTINGS);
-        expect(background_model_key(settings)).toEqual([settings.model_path, settings.context_size, settings.gpu_layers]);
+    it('refuses unknown settings and broken JSON in a file', () => {
+        const folder = temporaryFolder();
+        const unknown = join(folder, 'unknown.json');
+        const broken = join(folder, 'broken.json');
+        writeFileSync(unknown, '{"colour": "blue"}', 'utf-8');
+        writeFileSync(broken, '{', 'utf-8');
 
-        const alt = validate_settings({ ...DEFAULT_SETTINGS, background_model_path: ' ./models/big.gguf ' });
-        expect(background_model_key(alt)).toEqual(['./models/big.gguf', alt.context_size, 0]);
-        const sized = { ...alt, background_context_size: 8192 };
-        expect(background_model_key(sized)).toEqual(['./models/big.gguf', 8192, 0]);
-
-        expect(() => validate_settings({ ...DEFAULT_SETTINGS, background_model_path: null as any })).toThrow(/background_model_path/i);
-        expect(() => validate_settings({ ...DEFAULT_SETTINGS, background_gpu_layers: -2 })).toThrow(/background_gpu_layers/i);
-        expect(() => validate_settings({ ...DEFAULT_SETTINGS, background_context_size: -1 })).toThrow(/background_context_size/i);
+        expect(() => loadSettings(unknown)).toThrow('Unknown setting(s): colour');
+        expect(() => loadSettings(broken)).toThrow(/Invalid JSON in settings file/);
+        expect(() => loadSettings(join(folder, 'missing.json'))).toThrow(/ENOENT/);
     });
 
-    it('requires MCP servers to have the right transport, headers, and allowed tools', () => {
-        const validated = validate_settings({
-            ...DEFAULT_SETTINGS,
-            mcp_servers: [{
-                name: 'local_docs',
-                command: 'uvx',
-                args: ['example-mcp-server'],
-                allowed_tools: ['search_docs'],
-            }],
-        });
+    it('needs booleans for test runs and file writes, which are off by default', () => {
+        expect(DEFAULT_SETTINGS.allow_file_writes).toBe(false);
+
+        expect(() => validateSettings({ ...DEFAULT_SETTINGS, enable_test_execution: 'yes' })).toThrow(/enable_test_execution/);
+        expect(() => validateSettings({ ...DEFAULT_SETTINGS, allow_file_writes: 'yes' })).toThrow(/allow_file_writes/);
+    });
+
+    it('bounds the background settings', () => {
+        expect(() => validateSettings({ ...DEFAULT_SETTINGS, background_poll_interval_seconds: 0 })).toThrow(/background_poll_interval_seconds/);
+        expect(() => validateSettings({ ...DEFAULT_SETTINGS, background_research_enabled: 'yes' })).toThrow(/background_research_enabled/);
+    });
+
+    it('runs background work on the main model unless another is set', () => {
+        const settings = validateSettings({ ...DEFAULT_SETTINGS });
+        expect(backgroundModelKey(settings)).toEqual([settings.model_path, settings.context_size, settings.gpu_layers]);
+
+        const other = validateSettings({ ...DEFAULT_SETTINGS, background_model_path: ' ./models/big.gguf ' });
+        expect(backgroundModelKey(other)).toEqual(['./models/big.gguf', other.context_size, 0]);
+        other.background_context_size = 8192;
+        expect(backgroundModelKey(other)).toEqual(['./models/big.gguf', 8192, 0]);
+
+        expect(() => validateSettings({ ...DEFAULT_SETTINGS, background_model_path: null })).toThrow(/background_model_path/);
+        expect(() => validateSettings({ ...DEFAULT_SETTINGS, background_gpu_layers: -2 })).toThrow(/background_gpu_layers/);
+        expect(() => validateSettings({ ...DEFAULT_SETTINGS, background_context_size: -1 })).toThrow(/background_context_size/);
+    });
+
+    it('falls back to the user config file', () => {
+        const folder = temporaryFolder();
+        const userPath = join(folder, 'config', 'settings.json');
+        const previous = process.cwd();
+        process.chdir(folder);
+
+        try {
+            const options = { bundledPath: join(folder, 'missing.json'), userPath };
+            expect(defaultSettingsPath(options)).toBe(userPath);
+            writeFileSync('settings.json', '{}', 'utf-8');
+            expect(defaultSettingsPath(options)).toBe(join(folder, 'settings.json'));
+        } finally {
+            process.chdir(previous);
+        }
+    });
+});
+
+// ============================================================================
+// MCP servers
+// ============================================================================
+
+describe('mcp servers', () => {
+    it('defaults to stdio and enabled', () => {
+        const validated = validateSettings(
+            withServers([{ name: 'local_docs', command: 'uvx', args: ['example-mcp-server'], allowed_tools: ['search_docs'] }]),
+        );
 
         expect(validated.mcp_servers[0].transport).toBe('stdio');
         expect(validated.mcp_servers[0].enabled).toBe(true);
+    });
 
-        expect(() => validate_settings({
-            ...DEFAULT_SETTINGS,
-            mcp_servers: [{
-                name: 'remote',
-                transport: 'sse',
-                url: 'http://127.0.0.1:8000/sse',
-                allowed_tools: ['search'],
-            }],
-        })).toThrow(/unsupported transport/i);
+    it('refuses an unsupported transport', () => {
+        const servers = [{ name: 'remote', transport: 'sse', url: 'http://127.0.0.1:8000/sse', allowed_tools: ['search'] }];
 
-        const httpValidated = validate_settings({
-            ...DEFAULT_SETTINGS,
-            mcp_servers: [{
+        expect(() => validateSettings(withServers(servers))).toThrow(/unsupported transport/);
+    });
+
+    it('takes a url and headers for an http server', () => {
+        const servers = [
+            {
                 name: 'trilium',
                 transport: 'http',
                 url: 'http://127.0.0.1:37840/mcp',
                 headers: { Authorization: 'Bearer ${TRILIUM_ETAPI_TOKEN}' },
                 allowed_tools: ['search_notes'],
-            }],
-        });
-        expect(httpValidated.mcp_servers[0].url).toBe('http://127.0.0.1:37840/mcp');
-        expect('command' in httpValidated.mcp_servers[0]).toBe(false);
+            },
+        ];
 
-        expect(() => validate_settings({
-            ...DEFAULT_SETTINGS,
-            mcp_servers: [{ name: 'empty', command: 'server', allowed_tools: [] }],
-        })).toThrow(/at least one tool/i);
+        const validated = validateSettings(withServers(servers)).mcp_servers[0];
+
+        expect(validated).toMatchObject({ url: 'http://127.0.0.1:37840/mcp' });
+        expect(validated).not.toHaveProperty('command');
     });
 
-    it('reads JSON back and validates it', () => {
-        const servers = [{
-            name: 'docs',
-            transport: 'stdio',
-            command: 'docs-mcp-server',
-            allowed_tools: ['search_docs'],
-        }];
+    it('refuses stdio fields, bad urls and bad header names on an http server', () => {
+        const cases: Array<[Record<string, unknown>, RegExp]> = [
+            [{ url: 'http://127.0.0.1/mcp', command: 'server' }, /cannot set: command/],
+            [{ url: 'file:///tmp/socket' }, /url must be/],
+            [{ url: 'http://127.0.0.1/mcp', headers: { 'Bad Header': 'x' } }, /header name/],
+        ];
 
-        const readBack = mcp_servers_from_json(mcp_servers_to_json(servers));
-        expect(readBack[0].allowed_tools).toEqual(['search_docs']);
-        expect(mcp_servers_from_json('  ')).toEqual([]);
-        expect(() => mcp_servers_from_json('[{')).toThrow(/valid JSON/i);
-    });
-
-    it('falls back to the current or user settings file path', () => {
-        const dir = mkdtempSync(join(tmpdir(), 'codex-settings-'));
-        const userPath = join(dir, 'config', 'settings.json');
-        const start = process.cwd();
-
-        try {
-            process.chdir(dir);
-            const originalDefault = process.env.XDG_CONFIG_HOME;
-            process.env.XDG_CONFIG_HOME = join(dir, 'config');
-            writeFileSync(join(dir, 'settings.json'), '{}', 'utf8');
-            expect(load_settings(join(dir, 'settings.json'))).toBeTruthy();
-            const result = join(dir, 'settings.json');
-            expect(result).toBeTruthy();
-            process.env.XDG_CONFIG_HOME = originalDefault;
-        } finally {
-            process.chdir(start);
-            rmSync(dir, { recursive: true, force: true });
+        for (const [server, message] of cases) {
+            const servers = [{ name: 'remote', transport: 'http', allowed_tools: ['search'], ...server }];
+            expect(() => validateSettings(withServers(servers))).toThrow(message);
         }
+    });
+
+    it('needs an enabled server to allow at least one tool', () => {
+        const servers = [{ name: 'empty', command: 'server', allowed_tools: [] }];
+
+        expect(() => validateSettings(withServers(servers))).toThrow(/at least one tool/);
+    });
+
+    it('reads edited JSON back and checks it', () => {
+        const servers = [{ name: 'docs', transport: 'stdio', command: 'docs-mcp-server', allowed_tools: ['search_docs'] }];
+
+        const readBack = mcpServersFromJson(mcpServersToJson(servers as never));
+
+        expect(readBack[0].allowed_tools).toEqual(['search_docs']);
+        expect(mcpServersFromJson('  ')).toEqual([]);
+        expect(() => mcpServersFromJson('[{')).toThrow(/valid JSON/);
     });
 });

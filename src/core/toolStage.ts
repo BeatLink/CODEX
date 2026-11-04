@@ -1,38 +1,67 @@
-export type ToolParameter = {
-    type?: string;
-    properties?: Record<string, { type?: string;[key: string]: unknown }>;
+// A model call that may use tools: the model asks for tools, gets their results, and answers within the call budget.
+import { inputCharBudget, untrustedBlock } from './contextBudget.js';
+import { MCPToolbox } from './mcpTools.js';
+import type { ChatCompletionRequest, ChatMessage, ChatModel, ToolCall, ToolDefinition } from './model.js';
+import type { McpServerSettings } from './settings.js';
+
+// ============================================================================
+// Limits
+// ============================================================================
+
+export const MAX_TOOL_HISTORY_CHARS = 8_000;
+
+// The part of a toolbox the stage uses, so the built-in toolbox or a stand-in can serve.
+export type ToolboxLike = {
+    toolDefinitions: ToolDefinition[];
+    call(name: string, argumentsGiven: unknown): Promise<string> | string;
 };
 
-export type ToolDefinition = {
-    function?: {
-        name?: string;
-        parameters?: {
-            type?: string;
-            properties?: Record<string, ToolParameter>;
-        };
-    };
+export type PageSummarizer = (pageJson: string, focus: string, requestContext: string) => Promise<string> | string;
+
+export type ToolStageOptions = {
+    mcpServers?: McpServerSettings[] | null;
+    onToken?: ((token: string) => void) | null;
+    allowedTools?: Set<string> | null;
+    pageSummarizer?: PageSummarizer | null;
+    blockedTools?: Set<string> | null;
+    contextSize?: number | null;
+    signal?: AbortSignal;
 };
 
-export type ToolCall = {
-    id: string;
-    type: 'function';
-    function: {
-        name: string;
-        arguments: string;
-    };
-};
+// Measure a value as Python's json.dumps writes it, with spaced separators and escaped non-ASCII, so budgets match.
+export function pythonJsonLength(value: unknown): number {
+    return pythonJson(value).length;
+}
 
-export type ToolBoxLike = {
-    call: (name: string, args: Record<string, unknown>) => string;
-    toolDefinitions?: ToolDefinition[];
-};
+function pythonJson(value: unknown): string {
+    if (value === null || value === undefined) {
+        return 'null';
+    }
+    if (typeof value === 'string') {
+        return JSON.stringify(value).replace(/[\u0080-￿]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+        return String(value);
+    }
+    if (Array.isArray(value)) {
+        return `[${value.map(pythonJson).join(', ')}]`;
+    }
+    const entries = Object.entries(value as Record<string, unknown>).filter(([, item]) => item !== undefined);
+    return `{${entries.map(([key, item]) => `${pythonJson(key)}: ${pythonJson(item)}`).join(', ')}}`;
+}
 
-const _TEXT_TOOL_CALL = /<tool_call>\s*([\s\S]*?)(?:<\/tool_call>|$)/g;
-const _XML_FUNCTION = /<function=([^>\s]+)>([\s\S]*?)(?:<\/function>|$)/g;
-const _XML_PARAMETER = /<parameter=([^>\s]+)>\n?([\s\S]*?)\n?<\/parameter>/g;
+// ============================================================================
+// Tool calls written as text
+// ============================================================================
 
-function parameterValue(value: string, parameterType?: string): unknown {
-    if (parameterType === 'string' || parameterType === undefined) {
+// Qwen models write tool calls as text that the chat template does not turn into tool calls.
+const TEXT_TOOL_CALL = /<tool_call>\s*([\s\S]*?)\s*(?:<\/tool_call>|$)/g;
+const XML_FUNCTION = /<function=([^>\s]+)>([\s\S]*?)(?:<\/function>|$)/;
+const XML_PARAMETER = /<parameter=([^>\s]+)>\n?([\s\S]*?)\n?<\/parameter>/g;
+
+// Keep a string parameter as written, and read any other type as JSON when it parses.
+function parameterValue(value: string, parameterType: unknown): unknown {
+    if (parameterType === 'string') {
         return value;
     }
     try {
@@ -42,288 +71,225 @@ function parameterValue(value: string, parameterType?: string): unknown {
     }
 }
 
-function jsonToolBlocks(content: string): string[] {
-    const blocks: string[] = [];
-    let cursor = 0;
-
-    while (cursor < content.length) {
-        const start = content.indexOf('{', cursor);
-        if (start === -1) {
-            break;
-        }
-
-        let depth = 0;
-        let inString = false;
-        let escaped = false;
-        let end = -1;
-
-        for (let index = start; index < content.length; index += 1) {
-            const char = content[index];
-            if (inString) {
-                if (escaped) {
-                    escaped = false;
-                } else if (char === '\\') {
-                    escaped = true;
-                } else if (char === '"') {
-                    inString = false;
-                }
-                continue;
-            }
-
-            if (char === '"') {
-                inString = true;
-            } else if (char === '{') {
-                depth += 1;
-            } else if (char === '}') {
-                depth -= 1;
-                if (depth === 0) {
-                    end = index;
-                    break;
-                }
-            }
-        }
-
-        if (end === -1) {
-            break;
-        }
-
-        const block = content.slice(start, end + 1);
-        if (block.includes('"name"')) {
-            blocks.push(block);
-        }
-        cursor = end + 1;
+// Say whether a value counts as empty the way Python's truth test does.
+function isEmpty(value: unknown): boolean {
+    if (Array.isArray(value)) {
+        return value.length === 0;
     }
-
-    return blocks;
+    if (typeof value === 'object' && value !== null) {
+        return Object.keys(value).length === 0;
+    }
+    return !value;
 }
 
-export function textToolCalls(content: string, toolDefinitions: ToolDefinition[]): ToolCall[] {
-    if (typeof content !== 'string' || !content.trim()) {
+type Properties = Record<string, { type?: unknown } | undefined>;
+
+// Read the tool calls a reply wrote as text, in Qwen's XML form or as JSON, in the shape of real tool calls.
+export function textToolCalls(content: unknown, toolDefinitions: ToolDefinition[]): ToolCall[] {
+    if (typeof content !== 'string') {
         return [];
     }
-
-    const propertiesByName = Object.fromEntries(
-        (toolDefinitions ?? []).map((definition) => {
-            const name = definition.function?.name ?? '';
-            return [name, definition.function?.parameters?.properties ?? {}];
-        }),
+    const properties = new Map<string, Properties>(
+        toolDefinitions.map((definition) => [definition.function.name, ((definition.function.parameters ?? {}).properties ?? {}) as Properties]),
     );
-
     const calls: ToolCall[] = [];
-    const seen = new Set<string>();
-
-    const blocks: string[] = [];
-    for (const match of content.matchAll(_TEXT_TOOL_CALL)) {
-        blocks.push(match[1] ?? '');
-    }
-    for (const block of jsonToolBlocks(content)) {
-        blocks.push(block);
-    }
-
-    for (const block of blocks) {
-        const functionMatch = /<function=([^>\s]+)>([\s\S]*?)(?:<\/function>|$)/.exec(block);
-        if (functionMatch) {
-            const name = functionMatch[1];
-            const argsSource = functionMatch[2] ?? '';
-            const argumentsObject: Record<string, unknown> = {};
-            for (const paramMatch of argsSource.matchAll(_XML_PARAMETER)) {
-                const key = paramMatch[1];
-                const rawValue = paramMatch[2] ?? '';
-                const type = propertiesByName[name]?.[key]?.type ?? undefined;
-                argumentsObject[key] = parameterValue(rawValue.trim(), type);
+    for (const [, block] of content.matchAll(TEXT_TOOL_CALL)) {
+        let name: string;
+        let argumentsGiven: unknown;
+        const xmlFunction = XML_FUNCTION.exec(block);
+        if (xmlFunction) {
+            name = xmlFunction[1];
+            const parameters: Record<string, unknown> = {};
+            for (const [, key, value] of xmlFunction[2].matchAll(XML_PARAMETER)) {
+                parameters[key] = parameterValue(value, properties.get(name)?.[key]?.type);
             }
-            const payload = JSON.stringify(argumentsObject);
-            const item: ToolCall = {
-                id: `text-call-${calls.length + 1}`,
-                type: 'function',
-                function: { name, arguments: payload },
-            };
-            calls.push(item);
-            seen.add(`${name}:${payload}`);
-            continue;
-        }
-
-        try {
-            const parsed = JSON.parse(block);
-            if (!parsed || typeof parsed !== 'object' || typeof parsed.name !== 'string') {
+            argumentsGiven = parameters;
+        } else {
+            let data: unknown;
+            try {
+                data = JSON.parse(block);
+            } catch {
                 continue;
             }
-            const functionName = parsed.name;
-            const argumentsText = JSON.stringify(parsed.arguments ?? {});
-            const key = `${functionName}:${argumentsText}`;
-            if (seen.has(key)) {
+            if (typeof data !== 'object' || data === null || Array.isArray(data) || typeof (data as { name?: unknown }).name !== 'string') {
                 continue;
             }
-            seen.add(key);
-            calls.push({
-                id: `text-call-${calls.length + 1}`,
-                type: 'function',
-                function: { name: functionName, arguments: argumentsText },
-            });
-        } catch {
-            // Not a JSON call block.
+            const record = data as { name: string; arguments?: unknown };
+            name = record.name;
+            argumentsGiven = isEmpty(record.arguments) ? {} : record.arguments;
         }
+        calls.push({ id: `text-call-${calls.length + 1}`, type: 'function', function: { name, arguments: JSON.stringify(argumentsGiven) } });
     }
-
     return calls;
 }
 
-function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
-    return !!value && typeof (value as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function';
+// ============================================================================
+// The stage
+// ============================================================================
+
+function isPermitted(name: string, allowedTools: Set<string> | null | undefined, blockedTools: Set<string> | null | undefined): boolean {
+    return (allowedTools == null || allowedTools.has(name)) && !(blockedTools?.has(name) ?? false);
 }
 
+// Let the model call tools until it answers or the call limit is reached, and return its answer with the tool results.
 export async function runToolStage(
-    llm: { createChatCompletion: (request: Record<string, unknown>) => any },
+    llm: ChatModel,
     systemPrompt: string,
     userInput: string,
-    toolbox: ToolBoxLike,
+    toolbox: ToolboxLike,
     maxTokens: number,
     temperature: number,
     maxToolCalls: number,
-    onToken?: (token: string) => void,
-    allowedTools?: Set<string> | null,
-    pageSummarizer?: (body: string, focus: string, prompt: string) => string,
-    blockedTools?: Set<string> | null,
-    contextSize?: number,
+    options: ToolStageOptions = {},
 ): Promise<string> {
-    const toolDefinitions = toolbox.toolDefinitions ?? [];
-    const toolHistory: string[] = [];
-    const messages: Array<Record<string, unknown>> = [
+    if (typeof maxToolCalls !== 'number' || !Number.isInteger(maxToolCalls) || maxToolCalls < 1 || maxToolCalls > 10) {
+        throw new Error('max_tool_calls must be between 1 and 10.');
+    }
+    const mcpToolbox = new MCPToolbox(options.mcpServers ?? []);
+    await mcpToolbox.open();
+    try {
+        return await toolLoop(llm, systemPrompt, userInput, toolbox, mcpToolbox, maxTokens, temperature, maxToolCalls, options);
+    } finally {
+        await mcpToolbox.close();
+    }
+}
+
+async function toolLoop(
+    llm: ChatModel,
+    systemPrompt: string,
+    userInput: string,
+    toolbox: ToolboxLike,
+    mcpToolbox: MCPToolbox,
+    maxTokens: number,
+    temperature: number,
+    maxToolCalls: number,
+    options: ToolStageOptions,
+): Promise<string> {
+    const { allowedTools, blockedTools, pageSummarizer, onToken } = options;
+    const toolDefinitions = [...toolbox.toolDefinitions, ...mcpToolbox.toolDefinitions].filter((definition) =>
+        isPermitted(definition.function.name, allowedTools, blockedTools),
+    );
+    const messages: ChatMessage[] = [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userInput },
     ];
-
+    const toolHistory: string[] = [];
     let toolCallCount = 0;
+    let toolOutputChars = 0;
+    const messageCharBudget = options.contextSize != null ? inputCharBudget(options.contextSize, maxTokens, pythonJson(toolDefinitions)) : null;
+
     while (true) {
-        const request: Record<string, unknown> = {
+        const request: ChatCompletionRequest = {
             messages,
             temperature,
             max_tokens: maxTokens,
             tools: toolDefinitions,
             tool_choice: toolCallCount < maxToolCalls ? 'auto' : 'none',
+            signal: options.signal,
         };
         if (onToken) {
-            request.stream = true;
+            request.on_token = onToken;
+        }
+        const completion = await llm.createChatCompletion(request);
+        if (completion.finish_reason === 'length') {
+            throw new Error(
+                'The tool stage reached the token limit; raise max_tokens (background_max_tokens for background research) or context_size, or use Auto size in Options.',
+            );
         }
 
-        let response = llm.createChatCompletion(request);
-        if (onToken && isAsyncIterable(response)) {
-            const contentParts: string[] = [];
-            const toolCallsByIndex: Record<number, ToolCall> = {};
-            let finishReason: string | null = null;
-
-            for await (const chunk of response) {
-                const typedChunk = chunk as Record<string, unknown> | null | undefined;
-                const choices = Array.isArray(typedChunk?.choices) ? (typedChunk.choices as Array<Record<string, unknown>>) : [];
-                if (!choices.length) {
-                    continue;
-                }
-                const choice = (choices[0] ?? {}) as Record<string, unknown>;
-                finishReason = typeof choice.finish_reason === 'string' ? choice.finish_reason : finishReason;
-                const delta = (choice.delta ?? {}) as Record<string, unknown>;
-                const content = typeof delta.content === 'string' ? delta.content : '';
-                if (content) {
-                    contentParts.push(content);
-                    onToken(content);
-                }
-
-                const streamToolCalls = Array.isArray(delta.tool_calls) ? (delta.tool_calls as Array<Record<string, unknown>>) : [];
-                for (const streamedCall of streamToolCalls) {
-                    const callIndex = Number((streamedCall.index ?? 0) as number);
-                    const toolCall = toolCallsByIndex[callIndex] ?? { id: '', type: 'function', function: { name: '', arguments: '' } };
-                    if (typeof streamedCall.id === 'string' && streamedCall.id) {
-                        toolCall.id = streamedCall.id;
-                    }
-                    if (typeof streamedCall.type === 'string' && streamedCall.type) {
-                        toolCall.type = streamedCall.type as 'function';
-                    }
-                    const functionDelta = (streamedCall.function ?? {}) as Record<string, unknown>;
-                    if (typeof functionDelta.name === 'string') {
-                        toolCall.function.name += functionDelta.name;
-                    }
-                    if (typeof functionDelta.arguments === 'string') {
-                        toolCall.function.arguments += functionDelta.arguments;
-                    }
-                    toolCallsByIndex[callIndex] = toolCall;
-                }
-            }
-
-            const assistantMessage: Record<string, unknown> = {
-                role: 'assistant',
-                content: contentParts.join('') || null,
-            };
-            if (Object.keys(toolCallsByIndex).length > 0) {
-                assistantMessage.tool_calls = Object.keys(toolCallsByIndex)
-                    .map((key) => toolCallsByIndex[Number(key)])
-                    .sort((left, right) => left.id.localeCompare(right.id, 'en'));
-            }
-            response = { choices: [{ finish_reason: finishReason, message: assistantMessage }] };
-        }
-
-        const choices = Array.isArray(response?.choices) ? response.choices : [];
-        if (!choices.length) {
-            throw new Error('The model returned no completion choices.');
-        }
-
-        const choice = choices[0];
-        if (choice?.finish_reason === 'length') {
-            throw new Error('The tool stage reached the token limit; raise max_tokens or context_size.');
-        }
-
-        const assistantMessage = choice.message ?? {};
-        let toolCalls = Array.isArray(assistantMessage.tool_calls) ? assistantMessage.tool_calls : [];
-        if (!toolCalls.length) {
-            const parsedToolCalls = textToolCalls(String(assistantMessage.content ?? ''), toolDefinitions);
-            if (parsedToolCalls.length) {
-                toolCalls = parsedToolCalls;
-                assistantMessage.content = assistantMessage.content ? String(assistantMessage.content).split('<tool_call>', 1)[0].trim() : '';
+        let assistantMessage: ChatMessage = { role: 'assistant', content: completion.content || null };
+        let toolCalls = completion.tool_calls ?? [];
+        if (toolCalls.length > 0) {
+            assistantMessage.tool_calls = toolCalls;
+        } else {
+            toolCalls = textToolCalls(completion.content, toolDefinitions);
+            if (toolCalls.length > 0) {
+                // The text before the first call is the reply's own words; the calls go back as real tool calls.
+                const beforeCalls = completion.content.split('<tool_call>', 1)[0].trim();
+                assistantMessage = { role: 'assistant', content: beforeCalls || null, tool_calls: toolCalls };
             }
         }
-
-        if (!toolCalls.length) {
-            const content = typeof assistantMessage.content === 'string' ? assistantMessage.content.trim() : '';
-            if (!content) {
+        if (toolCalls.length === 0) {
+            const content = assistantMessage.content;
+            if (typeof content !== 'string' || !content.trim()) {
                 throw new Error('The model returned an empty tool-stage response.');
             }
-            return toolHistory.length ? `${content}\n\nTool call results:\n${toolHistory.join('\n')}` : content;
+            if (toolHistory.length > 0) {
+                return `${content.trim()}\n\nTool call results:\n${toolHistory.join('\n')}`;
+            }
+            return content.trim();
         }
-
         if (toolCallCount >= maxToolCalls) {
-            const content = typeof assistantMessage.content === 'string' ? assistantMessage.content.trim() : '';
-            const extra = [
-                content,
+            const findings = typeof assistantMessage.content === 'string' ? assistantMessage.content.trim() : '';
+            return [
+                findings,
                 'The tool-call limit was reached; further requested tool calls were not run.',
-                toolHistory.length ? `Tool call results:\n${toolHistory.join('\n')}` : '',
-            ].filter(Boolean).join('\n\n');
-            return extra;
+                toolHistory.length > 0 ? `Tool call results:\n${toolHistory.join('\n')}` : '',
+            ]
+                .filter(Boolean)
+                .join('\n\n');
         }
 
-        messages.push({ role: 'assistant', ...assistantMessage });
-        for (const toolCall of toolCalls as ToolCall[]) {
+        messages.push(assistantMessage);
+        for (const toolCall of toolCalls) {
             const callId = toolCall.id;
-            const functionName = toolCall.function.name;
+            const name = toolCall.function?.name ?? '';
             if (typeof callId !== 'string' || !callId) {
                 throw new Error('The model returned a tool call without an ID.');
             }
-            if (allowedTools && !allowedTools.has(functionName)) {
-                throw new Error(`Tool error: tool '${functionName}' is not allowed in this stage.`);
-            }
-            if (blockedTools && blockedTools.has(functionName)) {
-                throw new Error(`Tool error: tool '${functionName}' is not allowed in this stage.`);
+
+            let result: string;
+            if (toolCallCount >= maxToolCalls) {
+                result = 'Tool error: the configured tool-call limit was reached.';
+            } else if (!isPermitted(name, allowedTools, blockedTools)) {
+                result = `Tool error: tool '${name}' is not allowed in this stage.`;
+            } else {
+                toolCallCount += 1;
+                result = await runOneCall(name, toolCall.function?.arguments ?? '{}', toolbox, mcpToolbox, pageSummarizer, userInput);
             }
 
-            try {
-                const argumentsValue = typeof toolCall.function.arguments === 'string' ? JSON.parse(toolCall.function.arguments) : toolCall.function.arguments;
-                const args = argumentsValue && typeof argumentsValue === 'object' ? argumentsValue as Record<string, unknown> : {};
-                const result = toolbox.call(functionName, args);
-                toolHistory.push(`${functionName}: ${result}`);
-                messages.push({ role: 'tool', tool_call_id: callId, content: result });
-            } catch {
-                const error = `Tool error: invalid JSON arguments for ${functionName}.`;
-                toolHistory.push(`${functionName}: ${error}`);
-                messages.push({ role: 'tool', tool_call_id: callId, content: error });
+            let remainingOutput = MAX_TOOL_HISTORY_CHARS - toolOutputChars;
+            if (messageCharBudget !== null) {
+                const usedChars = messages.reduce((total, message) => total + pythonJsonLength(message), 0);
+                remainingOutput = Math.min(remainingOutput, messageCharBudget - usedChars);
             }
-            toolCallCount += 1;
+            remainingOutput = Math.max(0, remainingOutput);
+            if (result.length > remainingOutput) {
+                result = result.slice(0, remainingOutput);
+            }
+            toolOutputChars += result.length;
+
+            messages.push({ role: 'tool', tool_call_id: callId, content: untrustedBlock(result) });
+            toolHistory.push(`${name}: ${result}`);
         }
     }
+}
+
+// Run one permitted tool call, turning a fetched page into a summary before the model sees it.
+async function runOneCall(
+    name: string,
+    rawArguments: string,
+    toolbox: ToolboxLike,
+    mcpToolbox: MCPToolbox,
+    pageSummarizer: PageSummarizer | null | undefined,
+    userInput: string,
+): Promise<string> {
+    let argumentsGiven: unknown;
+    try {
+        argumentsGiven = JSON.parse(rawArguments);
+    } catch (error) {
+        return `Tool error: invalid JSON arguments: ${(error as Error).message}`;
+    }
+    let result = mcpToolbox.handles(name)
+        ? await mcpToolbox.call(name, argumentsGiven as Record<string, unknown>)
+        : await toolbox.call(name, argumentsGiven);
+    if (name === 'web_fetch' && !result.startsWith('Tool error:')) {
+        if (!pageSummarizer) {
+            result = 'Tool error: webpage summarization is unavailable.';
+        } else {
+            const focus = (argumentsGiven as { focus?: unknown }).focus ?? '';
+            result = await pageSummarizer(result, String(focus), userInput);
+        }
+    }
+    return result;
 }
