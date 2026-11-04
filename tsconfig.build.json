@@ -3,5 +3,5 @@
     "compilerOptions": {
         "types": ["node"]
     },
-    "exclude": ["src/renderer/**", "src/**/*.test.ts"]
+    "exclude": ["src/renderer/**", "src/**/*.test.ts", "src/daemon/daemonHarness.ts"]
 }
