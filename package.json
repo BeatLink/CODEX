@@ -4,13 +4,20 @@
     "version": "0.1.0",
     "type": "module",
     "main": "dist/main/index.js",
+    "bin": {
+        "codex": "dist/cli/index.js",
+        "codex-daemon": "dist/daemon/index.js"
+    },
     "scripts": {
         "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.preload.json && tsc -p tsconfig.renderer.json && cp -f src/renderer/index.html src/renderer/styles.css dist/renderer/",
         "start": "env -u ELECTRON_RUN_AS_NODE ${ELECTRON:-electron} dist/main/index.js",
         "dev": "npm run build && electron dist/main/index.js",
         "daemon": "node dist/daemon/index.js",
+        "eval": "node dist/core/evaluation.js",
+        "recall-benchmark": "node dist/core/recallBenchmark.js",
         "test": "vitest run",
-        "typecheck": "tsc --noEmit -p tsconfig.json"
+        "typecheck": "tsc --noEmit -p tsconfig.json",
+        "cli": "node dist/cli/index.js"
     },
     "devDependencies": {
         "@types/node": "^24.19.2",
