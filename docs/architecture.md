@@ -13,66 +13,76 @@ flow are forced into JSON by a grammar, and facts are taken from evidence the ha
 rather than from the model's memory. A SQLite knowledge store keeps that evidence between requests,
 and a background worker uses idle time to turn it into facts, topic summaries and a topic hierarchy.
 
-## Processes and threads
+## Processes and the event loop
 
 ```
- TUI (Textual)   GTK 4 app   one-shot CLI
-       \             |           /
-        \            |          /          one JSON object per line
-         +--- Unix socket: $XDG_RUNTIME_DIR/codex/daemon.sock ---+
+   Electron window        one-shot CLI
+   (main + renderer)
+          \                   /          one JSON object per line
+           +--- Unix socket: $XDG_RUNTIME_DIR/codex/daemon.sock ---+
                              |
-                     codex-daemon
+                     codex-daemon (one Node process, one event loop)
          +-------------------+---------------------+
-         | socket server     | run thread          | background thread
-         | (one thread per   | (one request at a   | (research and learning
-         |  client)          |  time)              |  while no run is active)
+         | socket server     | run                 | background loop
+         | (one connection   | (one request at a   | (research and learning
+         |  per client)      |  time)              |  while no run is active)
          +-------------------+----------+----------+
                                         |
                              model lock + ModelCache
                                         |
-                          llama-cpp-python, one GGUF model
+                          node-llama-cpp, one GGUF model
                                         |
-                         KnowledgeStore (SQLite, WAL mode)
+                         KnowledgeStore (node:sqlite, WAL mode)
 ```
 
-- **The daemon** ([daemon.py](../codex/daemon.py)) owns the loaded model, the settings, the
+- **The daemon** ([daemon.ts](../src/daemon/daemon.ts)) owns the loaded model, the settings, the
   active run and the background worker. Interfaces hold no state of their own; they render the
-  events the daemon broadcasts, so several can watch the same run.
-- **Interfaces** ([tui.py](../codex/tui.py), [gtk_app.py](../codex/gtk_app.py),
-  [cli.py](../codex/cli.py)) connect through [client.py](../codex/client.py) and start
-  a daemon when none answers. A one-shot CLI run without a daemon runs the request in-process and
-  never starts the background worker.
-- **The protocol** ([protocol.py](../codex/protocol.py)) is newline-delimited JSON: requests
+  events the daemon broadcasts, so several can watch the same run. The daemon is one Node process
+  with one event loop: the socket server, the active run and the background loop are async
+  functions that take turns at each `await`, not threads.
+- **Interfaces** are the window ([src/main](../src/main) and [src/renderer](../src/renderer)) and
+  the one-shot CLI ([cli/index.ts](../src/cli/index.ts)). They connect through
+  [client.ts](../src/daemon/client.ts). The window's main process starts a daemon when none
+  answers and hands the renderer the daemon's events; the renderer draws them. A one-shot CLI run
+  without a daemon runs the request in-process and never starts the background worker.
+- **The protocol** ([protocol.ts](../src/shared/protocol.ts)) is newline-delimited JSON: requests
   `{"id", "method", "params"}`, replies `{"id", "result" | "error"}`, and unsolicited
   `{"event", "data"}` lines such as `run.token` and `run.tree`.
-- **One model, one lock.** A run holds the model lock for its whole duration. The background worker
-  takes the same lock for one model call at a time and checks before every step and every streamed
-  token whether a run has started; if so it raises out, puts its job back in the queue, and releases
-  the lock. A foreground request therefore waits for at most one token.
-- **ModelCache** ([model.py](../codex/model.py)) keeps one `Llama` instance and reloads
+- **One model, one lock.** The model lock is an async mutex. A run holds it for its whole duration.
+  The background worker takes the same lock for one model call at a time and checks before every
+  step and every streamed token whether a run has started; if so it throws `BackgroundPaused` from
+  its token callback, which puts its job back in the queue and releases the lock. A foreground
+  request therefore waits for at most one token.
+- **ModelCache** ([model.ts](../src/core/model.ts)) keeps one loaded model and reloads
   it only when the model path, context size or GPU layers change.
+  The library's own memory estimate is skipped when a model and its context load, because Auto size
+  does the fitting.
 - **A separate background model** (`background_model_path`) has its own `ModelCache` and lock, so
   it never evicts the main model. It still gives way to a run in the same way, and the daemon
   unloads it after five minutes without background work.
-- **The GPU lock** ([gpu_lock.py](../codex/gpu_lock.py)) is shared with other programs: a
+- **The GPU lock** ([gpuLock.ts](../src/core/gpuLock.ts)) is shared with other programs: a
   model with GPU layers takes an exclusive `flock` on `$XDG_RUNTIME_DIR/codex-gpu.lock` when
-  it loads and releases it when the last such model in the process is freed. A process started
+  it loads and releases it when the last such model in the process is freed. A child `flock`
+  process from util-linux holds the lock, so the kernel lets it go even if the daemon dies.
+  `CODEX_GPU_LOCK` names another lock file, or turns the lock off when set empty. A process started
   under `flock` reuses the descriptor it inherited instead of waiting on itself.
 - **Suspending**: the `suspend` and `resume` methods (`codex suspend`, `codex resume`) call
-  `HarnessDaemon.set_suspended`, which cancels the run, unloads both models (freeing the GPU
+  `HarnessDaemon.setSuspended`, which cancels the run, unloads both models (freeing the GPU
   lock), pauses the background worker, and refuses new runs, then broadcasts
   `suspended.changed`. What triggers them is left to the user's launcher.
-- **The tray** ([tray.py](../codex/tray.py)) lives in the GTK interface, not the daemon: a
-  StatusNotifierItem with a dbusmenu, written directly on Gio. Hiding the window to the tray
-  keeps the interface connected, so the daemon's unused-exit timer never starts.
+- **The tray** ([tray.ts](../src/main/tray.ts)) lives in the Electron main process, not the
+  daemon: an Electron `Tray` whose menu is rebuilt from the daemon's status and events. The main
+  process checks over D-Bus (`busctl`) whether a StatusNotifierWatcher is running, and only hides
+  the window to the tray while one is. Hiding the window keeps the window connected, so the
+  daemon's unused-exit timer never starts.
 
 ## How a request runs
 
-Every request is worked as a tree of tasks by [task_tree.py](../codex/task_tree.py): the
+Every request is worked as a tree of tasks by [taskTree.ts](../src/core/taskTree.ts): the
 model decides, task by task, whether to answer, research, read files, act, or split. It builds on
-[model.py](../codex/model.py) for loading the model and making calls,
-[evidence.py](../codex/evidence.py) for searching, recall and page summaries, and
-[checks.py](../codex/checks.py) for the checks that do not rely on the model.
+[model.ts](../src/core/model.ts) for loading the model and making calls,
+[evidence.ts](../src/core/evidence.ts) for searching, recall and page summaries, and
+[checks.ts](../src/core/checks.ts) for the checks that do not rely on the model.
 
 ### Task tree
 
@@ -119,15 +129,16 @@ Rules that keep a small model on track:
 
 ### Model calls
 
-`run_stage` sends one system prompt and one user message, streams tokens to a callback, and passes
-an optional JSON schema as llama.cpp's `response_format`. Replies that drive control flow
+`runStage` sends one system prompt and one user message, streams tokens to a callback, and passes
+an optional JSON schema as `response_format`, which node-llama-cpp turns into a grammar. Qwen's
+thinking is turned off through the chat wrapper. Replies that drive control flow
 (decisions, checks, background extraction) always use a schema; prose replies do
 not. Every parser has a fallback for a malformed reply, so a bad reply degrades the run rather than
 crashing it.
 
 ### Context budget
 
-[context_budget.py](../codex/context_budget.py) counts tokens with the model's own
+[contextBudget.ts](../src/core/contextBudget.ts) counts tokens with the model's own
 tokenizer. Each call's budget is the context size minus its reply budget, the system prompt and a
 template reserve. Short JSON replies get smaller reply budgets (1024 for decisions, 512 for checks)
 so their input has more room. When input overflows, the largest unpinned sections are first
@@ -136,23 +147,23 @@ overflows is trimmed. The original request and the current task are pinned.
 
 ### Tools
 
-[tools.py](../codex/tools.py) holds the built-in tools: `web_search` (DDGS), `web_fetch`
+[tools.ts](../src/core/tools.ts) holds the built-in tools: `web_search` (DuckDuckGo's HTML endpoint, through `fetch`), `web_fetch`
 (public addresses only, rechecked after redirects), `list_directory`, `read_file`, `write_file`
 (only with `allow_file_writes`) and `run_tests` (only with `enable_test_execution`). File paths must
-stay under `filesystem_root`, and sensitive file names are refused. [mcp_tools.py](../codex/mcp_tools.py)
-adds tools from configured MCP servers, limited to each server's `allowed_tools`.
+stay under `filesystem_root`, and sensitive file names are refused. [mcpTools.ts](../src/core/mcpTools.ts)
+adds tools from configured MCP servers, through `@modelcontextprotocol/sdk`, limited to each server's `allowed_tools`.
 
-[tool_stage.py](../codex/tool_stage.py) runs the tool-calling loop for a task's gather step,
+[toolStage.ts](../src/core/toolStage.ts) runs the tool-calling loop for a task's gather step,
 with an allow or block list per approach and at most `max_tool_calls` calls. Fetched pages are
 summarized in chunks for a focus the model supplies, and the chunk summaries are merged.
 
 ### Untrusted text
 
-[context_budget.py](../codex/context_budget.py) renders every section whose heading is in
+[contextBudget.ts](../src/core/contextBudget.ts) renders every section whose heading is in
 `UNTRUSTED_HEADINGS` (search results, stored facts, recalled memory, tool findings, sources and
 subtopic summaries in background calls) between `<untrusted-data>` tags, after removing any such
 tag from the text and replacing each sentence that gives the reader orders with
-`[instruction removed]` (`remove_instructions`); a small model obeys such sentences even inside the
+`[instruction removed]` (`removeInstructions`); a small model obeys such sentences even inside the
 fence. Page material sent to the summarizer and every tool result in the tool loop get
 the same fence. Fencing happens when input is rendered, after trimming and condensing, so a cut
 can never drop the closing tag.
@@ -169,8 +180,8 @@ The model's own verdicts are backed by deterministic checks, applied in the task
 
 ## Knowledge store
 
-[knowledge.py](../codex/knowledge.py) is one SQLite file (`knowledge_db_path`) in WAL mode,
-opened per operation. The schema is versioned with `PRAGMA user_version`; each migration commits
+[knowledge.ts](../src/core/knowledge.ts) is one SQLite file (`knowledge_db_path`) in WAL mode,
+opened per operation through Node's built-in `node:sqlite`, with vectors handled by the `sqlite-vec` package. The schema is versioned with `PRAGMA user_version`; each migration commits
 with its version bump, and a database newer than the code is refused.
 
 | Table | Holds |
@@ -203,7 +214,7 @@ There are two read paths, used at different moments:
    or three of them for a longer prompt (stopwords removed, at most twelve terms), those sharing
    the most terms first. When fewer than five match, recall walks the topic tree: it takes the most
    specific topic whose whole name appears in the query and fills up from facts in that topic and
-   its subtopics. With an embedding model ([embeddings.py](../codex/embeddings.py)), the
+   its subtopics. With an embedding model ([embeddings.ts](../src/core/embeddings.ts)), the
    query is also embedded and compared with every fact's vector through sqlite-vec; facts above a
    similarity floor are merged with the word matches by reciprocal rank fusion, and when no topic
    is named, the topic closest in meaning supplies the branch. Each recalled fact carries its chain of ancestor topics and their
@@ -214,7 +225,7 @@ There are two read paths, used at different moments:
    summaries answer every query of a task, its tool loop is skipped. A fact whose source has
    expired (or, with no source, that is older than the source lifetime) is shown as possibly out
    of date, cannot answer a query on its own, and queues its topic for research.
-2. **Search with memory**, for every search query (`search_with_memory`). It looks the query up in
+2. **Search with memory**, for every search query (`searchWithMemory`). It looks the query up in
    `knowledge_search`, keeping unexpired sources that share half the query's terms. A hit is used
    as "Local knowledge result" and no web search runs; when every query was answered by a stored
    page or topic summary, the task's tool loop is skipped as well. A miss runs `web_search`, and a
@@ -231,7 +242,7 @@ There are two read paths, used at different moments:
 
 ## Background worker
 
-`HarnessDaemon._background_loop` runs on its own thread for the life of the daemon:
+`HarnessDaemon.backgroundLoop` ([daemon.ts](../src/daemon/daemon.ts)) is an async loop that runs for the life of the daemon:
 
 ```
 loop:
@@ -240,14 +251,14 @@ loop:
   otherwise:
     re-queue topics researched longer ago than background_refresh_interval_hours
       (half that for topics recalled five times and used since; most used first)
-    research_one_topic()       — if a job was pending
-    or index_knowledge()       — if facts or topics lack a vector (CPU embedding model)
-    or learn_from_episodes()   — if unprocessed episodes exist
-    or consolidate_knowledge() — if anything is left to tidy
+    researchOneTopic()       — if a job was pending
+    or indexKnowledge()        — if facts or topics lack a vector (CPU embedding model)
+    or learnFromEpisodes()    — if unprocessed episodes exist
+    or consolidateKnowledge() — if anything is left to tidy
     worked → wait 0.2 s, else wait poll interval
 ```
 
-`research_one_topic` ([background.py](../codex/background.py)) claims the highest-priority
+`researchOneTopic` ([background.ts](../src/core/background.ts)) claims the highest-priority
 pending job and:
 
 1. Runs `web_search` on the topic name, then fetches and summarizes the first two different result
@@ -267,14 +278,14 @@ pending job and:
 A paused job goes back to `pending`; any other error marks it `failed` with the message. A job left
 `running` by a stopped daemon goes back to `pending` when the daemon next starts.
 
-`learn_from_episodes` reads up to five unprocessed episodes and asks for durable preferences,
+`learnFromEpisodes` reads up to five unprocessed episodes and asks for durable preferences,
 projects and corrections, with an instruction to leave out secrets and personal identifiers. The
 same reply names up to three general subjects worth researching for the user's ongoing work, and
 each that has no facts yet is queued. The episodes are marked processed even when the call fails, so one bad batch cannot block the worker.
 
 ### Consolidation
 
-`consolidate_knowledge` ([consolidation.py](../codex/consolidation.py)) does one small piece
+`consolidateKnowledge` ([consolidation.ts](../src/core/consolidation.ts)) does one small piece
 of tidying per pass, so it yields to a run as quickly as research does.
 
 1. **Without the model** (`KnowledgeStore.tidy`): break topic parent loops, merge topics whose names
@@ -309,7 +320,7 @@ are no longer recalled.
 prompt ─► recall (user memory, facts + topic path, episodes) ─► "Remembered context"
    │
    ▼
-decide ─► search_with_memory(query)
+decide ─► searchWithMemory(query)
               ├─ stored hit ─► Local knowledge result
               └─ miss ─► web_search ─► sources + topic ─► research_queue
                                                 │
@@ -317,11 +328,11 @@ gather (tool loop) ─► web_fetch ─► page summary ┘ saved on the source
    │
 write ─► check (model verdict + URL and value checks) ─► revise / split
    │
-answer ─► episode ─────────────────────────────────────► learn_from_episodes
+answer ─► episode ─────────────────────────────────────► learnFromEpisodes
                                                           (idle time)
-research_queue ─► research_one_topic (idle time) ─► facts, summaries, graph
+research_queue ─► researchOneTopic (idle time) ─► facts, summaries, graph
                                                           │
-                     consolidate_knowledge (idle time) ◄──┘ merge, re-file, dispute, prune
+                     consolidateKnowledge (idle time) ◄──┘ merge, re-file, dispute, prune
 ```
 
 ## Limits on the development laptop
@@ -334,14 +345,10 @@ DDR4. The limits found there shape the settings and what was left out.
   runs; from 7,168 to 10,240 the model loads but the process aborts with a CUDA error once a long
   prompt arrives, and from 12,288 the context cannot be created. A context that loads is therefore
   no proof that it fits. `settings.json` uses 6,144, and the 560 MiB fixed reserve in
-  [auto_size.py](../codex/auto_size.py) is fitted to these results (measured 2026-10-20).
-- **No draft model or prompt lookup.** In llama-cpp-python 0.3.36 any draft model forces
-  `logits_all`, a context × vocabulary float array: with Qwen3.5's 248,320-token vocabulary that is
-  5.7 GiB of RAM at 6,144 tokens, and the card would compute logits for every prompt token while
-  already at its largest working context.
-- **A CPU model still uses the GPU unless told not to.** With `gpu_layers` 0 alone, the CUDA build
-  put 1,116 MiB of the 4B's context cache and prompt batches on the card, so `create_model` also
-  turns off `offload_kqv` and `op_offload` for such a model, leaving only the 82 MiB CUDA context.
+  [autoSize.ts](../src/core/autoSize.ts) is fitted to these results (measured 2026-10-20).
+- **A CPU model still uses the GPU unless told not to.** A CUDA build puts a model's context cache
+  and prompt batches on the card even with no GPU layers, so a model with `gpu_layers` 0 is loaded
+  on a separate CPU-only backend that never touches the card.
 - **A 9B background model on the CPU is too slow.** `Qwen3.5-9B-Q4_K_M` had not finished
   summarizing its first page after 12 minutes, where the 4B on the card took 28 seconds and
   finished a whole topic in 80 (measured 2026-10-20).

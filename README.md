@@ -11,7 +11,7 @@ that call needs. Alongside the task tree, a local SQLite knowledge store keeps w
 harness has researched, and a background worker uses idle time to research and
 refresh it, so the harness grows more useful the longer it runs.
 
-Models run through `llama-cpp-python` from a local GGUF file. Nothing is sent to
+Models run through `node-llama-cpp` from a local GGUF file. Nothing is sent to
 a hosted model.
 
 ## Daemon and interfaces
@@ -22,7 +22,7 @@ background research. Interfaces connect to it over a Unix socket at
 `$XDG_RUNTIME_DIR/codex/daemon.sock` and only show what it reports, so
 several can be open at once and all see the same run, queue, and settings.
 
-- The terminal and GTK interfaces start the daemon if none is running. A daemon
+- The window starts the daemon if none is running. A daemon
   started this way exits 30 seconds after the last interface disconnects, which
   also frees the model's memory; its output goes to
   `~/.local/state/codex/daemon.log`. Run `codex-daemon` yourself
@@ -36,9 +36,10 @@ several can be open at once and all see the same run, queue, and settings.
 - Loading a model with layers on the GPU takes the lock file
   `$XDG_RUNTIME_DIR/codex-gpu.lock` and holds it until that model is
   unloaded, so two programs never fill the GPU at once (llama.cpp aborts the
-  whole process when the GPU runs out of memory). A load waits up to 30
-  minutes for another holder, and an interface shows "Waiting for the GPU"
-  meanwhile. Other programs can share the GPU the same way with
+  whole process when the GPU runs out of memory). A child `flock` process
+  from util-linux holds the lock, so it is let go even if the daemon dies. A
+  load waits up to 30 minutes for another holder, and an interface shows
+  "Waiting for the GPU" meanwhile. Other programs can share the GPU the same way with
   `flock "$XDG_RUNTIME_DIR/codex-gpu.lock" command`; CODEX
   started under such a command uses the lock it was given. Models with no GPU
   layers, such as the embedding model, never take it.
@@ -156,8 +157,8 @@ crash or a daemon restart can be resumed. Finished tasks keep their results, a
 task that had already split carries on with its unfinished subtasks, and a
 task that was cut off mid-way starts again from its decision. The clarification
 answer and the evidence gathered so far are restored, and the run works under
-the options it started with, not the current settings. The TUI and GTK
-interfaces offer Resume and Discard for the newest unfinished run, and
+the options it started with, not the current settings. The window
+offers Resume and Discard for the newest unfinished run, and
 `codex --resume` resumes it from the command line.
 
 ## Agents
@@ -456,18 +457,28 @@ Research never files a topic itself, so the tree is shaped only here.
 
 ## Installation
 
-With Nix (CUDA build of llama.cpp):
+With Nix, which builds the CUDA version of llama.cpp and supplies the CUDA
+runtime that `node-llama-cpp`'s prebuilt CUDA build needs:
 
 ```bash
-nix run . -- "your prompt"
-nix develop          # shell with the app and its Python environment
+nix build                    # result/bin: codex, codex-daemon, codex-gui
+nix run                      # open the window
+nix run .#cli -- "your prompt"
 ```
 
-With pip, in a Python 3.10+ environment:
+To work on it, enter the dev shell, which provides Node 24 and Electron:
 
 ```bash
-pip install -e .
+nix develop
+npm ci
+npm run build
+npm test
+npm start            # open the window; uses $ELECTRON, or electron from PATH
 ```
+
+The one-shot CLI also runs from the dev shell after a build, with
+`npm run cli -- "your prompt"`. The `flock` command from util-linux must be
+on `PATH`; the Nix package and dev shell provide it.
 
 Then put a GGUF model at `./models/model.gguf`, or point `model_path` at one,
 and optionally an embedding model at `./models/embedding.gguf` (see
@@ -478,13 +489,12 @@ and optionally an embedding model at `./models/embedding.gguf` (see
 ```bash
 codex "Explain how to design a local event logging daemon"
 echo "Summarize this design" | codex
-codex            # opens the TUI when run in a terminal
-codex --tui      # or: codex-tui
-python -m codex  # same as codex
-codex-gtk        # open the GTK interface
+codex            # asks for a prompt when run in a terminal
+codex-gui        # open the window
 codex-daemon     # run the daemon in the foreground
 codex --resume   # carry on the newest unfinished task tree run
 codex eval       # compare the bare model and the task tree
+codex recall-benchmark  # score recall with no chat model
 ```
 
 ### Evaluation
@@ -569,51 +579,42 @@ On 2026-10-21, with Qwen3-Embedding-0.6B on a busy CPU:
 | Mean reciprocal rank | 0.35 | 0.91 |
 | Seconds per recall | 0.00 | 2.29 |
 
-### Terminal interface
+### The window
 
-The TUI has four pages:
+`codex-gui` opens an Electron window with four pages:
 
-- **Workbench**: write a request, pick a mode, and run it with **Ctrl+R** or
-  the Run button, and stop it with the Cancel button. The sidebar shows the
-  live task tree with each task's state (WAIT, NOW, DONE, WARN for unverified,
-  FAIL), the Steps tab streams every step under its own heading, and choosing a
-  task in the tree opens the Task tab with its deliverable, state, note, and
-  result. The Final tab shows the Markdown answer, which can be
-  copied.
-  Clarification questions appear as a dialog. When a task tree run was left
-  unfinished, a bar under the Run button names it and how many of its tasks are
-  done, with Resume and Discard buttons.
+- **Workbench**: write a request, pick a mode, and run it with **Ctrl+Enter**,
+  **Ctrl+R**, or the Run button, and stop it with the Cancel button. The list
+  on the left shows the live task tree with each task's state (WAIT, NOW, DONE,
+  WARN for unverified, FAIL). The Steps page streams every step under its own
+  heading, and choosing a task in the tree shows its deliverable, state, note,
+  and result. The Final answer page shows the Markdown answer, with headings,
+  emphasis, code, and lists styled; web links open in the browser when clicked,
+  and **Copy answer** copies it. Typing `/` suggests the commands. Clarification
+  questions appear as a dialog. When a task tree run was left unfinished, a bar
+  under the Run button names it and how many of its tasks are done, with Resume
+  and Discard buttons.
 - **Background**: queue topics, start research now, pause or resume the worker,
   and watch its output and queue.
-- **Options**: every setting, including model, task tree limits, folder access, tool limits,
-  background research, and the MCP server list, edited as JSON. Changes can be
-  saved back to the settings file. **Auto size** reads the model file and free
-  GPU memory (or RAM without a GPU) and fills in the context size and both token
-  limits; apply or save them.
-- **Knowledge**: browse topics, stored sources and summaries, and graph
-  relationships with their supporting URLs.
+- **Knowledge**: browse topics, stored sources and summaries, facts, and graph
+  relationships with their supporting URLs, or search the stored evidence.
+- **Options**: every setting, including model, task tree limits, folder access,
+  tool limits, background research, and the MCP server list, which is edited as
+  JSON. **Apply** uses the changes now and **Save settings** writes them back to
+  the settings file. **Auto size** reads the model file and free GPU memory (or
+  RAM without a GPU) and fills in the context size and both token limits; apply
+  or save them.
 
-### GTK interface
-
-`codex-gtk` has the same four pages in a GTK 4 window that follows the
-desktop's GTK theme. On the Workbench page the list on the left shows the
-live task tree and a Steps page with every step's output; choosing an entry shows its output, and choosing a task shows
-its deliverable, state, note, and result. The final answer's
-Markdown is shown with headings, emphasis, code, and lists styled, and web
-links open in the browser when clicked. **Ctrl+R**
-or **Ctrl+Enter** runs the request. It needs PyGObject and GTK 4, which the Nix
-package and dev shell provide.
-
-The GTK interface also lives in the system tray (a StatusNotifierItem, so it
-needs a tray host such as KDE Plasma or the AppIndicator extension on GNOME).
-Clicking the icon shows or hides the window, and closing the window hides it
-instead of quitting, which keeps the daemon and its background research
-running. The tray menu shows or hides the window, turns background research
-on or off, turns **Launch at login** on or off, and quits. Launch at login
-writes `~/.config/autostart/org.codex.CODEX.desktop`, which runs
-`codex-gtk --background` to start in the tray without opening the window. If
-no tray appears within 15 seconds the window opens anyway, and without a tray
-closing the window quits as usual.
+The window also lives in the system tray (a StatusNotifierItem, so it needs a
+tray host such as KDE Plasma or the AppIndicator extension on GNOME). Clicking
+the icon shows or hides the window, and closing the window hides it instead of
+quitting, which keeps the daemon and its background research running. The tray
+menu shows or hides the window, turns background research on or off, turns
+**Launch at login** on or off, and quits; Options has the same Launch at login
+switch. Launch at login writes `~/.config/autostart/org.codex.CODEX.desktop`,
+which runs `codex-gui --background` to start in the tray without opening the
+window. If no tray appears within 15 seconds the window opens anyway, and
+without a tray closing the window quits as usual.
 
 ### Suspending
 
@@ -690,7 +691,6 @@ Precedence, lowest first: built-in defaults, the settings file, the
 | `--show-thinking` / `--no-show-thinking` | Stream or hide each step's output |
 | `--mode auto\|answer\|draft\|execute` | Limit what the request may do; only `auto` and `execute` may change files |
 | `--settings PATH` | Use another settings file |
-| `--tui` | Open the terminal interface; the other options are applied to the daemon it connects to |
 
 `max_tokens` is reserved for the reply in most steps, so it must leave room
 for input within `context_size`. **Auto size** in Options picks the largest
@@ -703,7 +703,7 @@ background model, it sizes that model on its own device as well and sets
 
 | Tool | Approach | Notes |
 | --- | --- | --- |
-| `web_search` | research | DuckDuckGo results via DDGS, capped by `max_search_results` |
+| `web_search` | research | DuckDuckGo results from its HTML search page, capped by `max_search_results` |
 | `web_fetch` | research | Public HTTP(S) pages only; private and local addresses are refused, including after redirects. The page is summarized for a focus the model supplies |
 | `list_directory`, `read_file` | research, files, act | Paths must stay under `filesystem_root` |
 | `write_file` | act | Only with `allow_file_writes`; creates or replaces files and cannot delete |
@@ -760,33 +760,38 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 
 | Path | Contents |
 | --- | --- |
-| `codex/task_tree.py` | The task tree: deciding, gathering, writing, checking, and splitting tasks |
-| `codex/model.py` | Loading the model and making one call to it |
-| `codex/evidence.py` | Searching with memory, recall formatting, page summaries, and the research queue |
-| `codex/checks.py` | Checks on a result that do not rely on the model |
-| `codex/tool_stage.py` | The tool-calling loop each task's gather step runs |
-| `codex/tools.py` | Built-in tools and their path and URL checks |
-| `codex/mcp_tools.py` | MCP client for stdio and HTTP servers |
-| `codex/context_budget.py` | Fitting each call's input into the context window |
-| `codex/knowledge.py` | SQLite knowledge store, memory stores, queue, and graph |
-| `codex/environment.py` | Probing the machine for the locations and software memory stores |
-| `codex/recall_benchmark.py` | Scoring recall against questions with known relevant facts |
-| `codex/embeddings.py` | The embedding model used to find facts and topics by meaning |
-| `codex/background.py` | One background research job |
-| `codex/consolidation.py` | One background consolidation step: merging, re-filing, and pruning the store |
-| `codex/settings.py` | Defaults and validation |
-| `codex/daemon.py` | The daemon: model, runs, background worker, and socket server |
-| `codex/client.py`, `codex/protocol.py` | Connecting to the daemon, starting it, and the message format |
-| `codex/cli.py`, `codex/tui.py` | Command line and Textual interface |
-| `codex/gtk_app.py` | GTK 4 interface |
-| `codex/tray.py`, `codex/autostart.py` | The system tray icon and menu, and the login autostart entry |
-| `codex/evaluation.py`, `evals/tasks.json` | The eval harness and its fixed task set |
+| `src/core/taskTree.ts` | The task tree: deciding, gathering, writing, checking, and splitting tasks |
+| `src/core/model.ts` | Loading the model and making one call to it |
+| `src/core/evidence.ts` | Searching with memory, recall formatting, page summaries, and the research queue |
+| `src/core/checks.ts` | Checks on a result that do not rely on the model |
+| `src/core/toolStage.ts` | The tool-calling loop each task's gather step runs |
+| `src/core/tools.ts` | Built-in tools and their path and URL checks |
+| `src/core/mcpTools.ts` | MCP client for stdio and HTTP servers |
+| `src/core/contextBudget.ts` | Fitting each call's input into the context window |
+| `src/core/knowledge.ts` | SQLite knowledge store, memory stores, queue, and graph |
+| `src/core/environment.ts` | Probing the machine for the locations and software memory stores |
+| `src/core/agents.ts` | Reading agent definitions and the MCP servers each one may use |
+| `src/core/recallBenchmark.ts` | Scoring recall against questions with known relevant facts |
+| `src/core/embeddings.ts` | The embedding model used to find facts and topics by meaning |
+| `src/core/background.ts` | One background research job |
+| `src/core/consolidation.ts` | One background consolidation step: merging, re-filing, and pruning the store |
+| `src/core/gpuLock.ts` | The GPU lock file shared with other programs |
+| `src/core/autoSize.ts` | Auto size: fitting context and token limits to the memory available |
+| `src/core/settings.ts` | Defaults and validation |
+| `src/core/evaluation.ts`, `evals/tasks.json` | The eval harness and its fixed task set |
+| `src/core/taskView.ts` | Task tree lines and task details |
+| `src/daemon/daemon.ts` | The daemon: model, runs, background worker, and socket server |
+| `src/daemon/client.ts`, `src/shared/protocol.ts` | Connecting to the daemon and the message format |
+| `src/cli/index.ts` | The one-shot command line, with the `eval` and `recall-benchmark` subcommands |
+| `src/main/tray.ts`, `src/main/autostart.ts` | The system tray icon and menu, and the login autostart entry |
+| `src/main`, `src/renderer` | The Electron window: the main process that starts the daemon and relays its messages, and the page it shows |
 | `evals/seed.json`, `evals/recall_tasks.json` | The seed store's made-up facts and the tasks only recall can answer |
-| `codex/task_view.py` | Task tree lines and task details shared by the interfaces |
+
+Test files named `*.test.ts` sit beside the source files they cover.
 
 See [docs/architecture.md](docs/architecture.md) for how these parts fit together.
 
-Run the tests with `python -m unittest discover -s tests`.
+Run the tests with `npm test`, which uses vitest.
 
 ## Current limits
 
