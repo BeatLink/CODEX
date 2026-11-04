@@ -1,5 +1,5 @@
 {
-  description = "Local LLM CUDA Environment with Llama.cpp";
+  description = "CODEX: a task-tree harness for locally run language models";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -15,52 +15,50 @@
           cudaSupport = true;
         };
       };
-      python = pkgs.python312.override {
-        packageOverrides = pythonFinal: pythonPrev: {
-          anyio = pythonPrev.anyio.overridePythonAttrs (_: {
-            doCheck = false;
-          });
-          # Its tests pull in openai and others, which would all build from source.
-          sqlite-vec = pythonPrev.sqlite-vec.overridePythonAttrs (old: {
-            doCheck = false;
-            nativeCheckInputs = [ ];
-            dependencies = (old.dependencies or [ ]) ++ [ pythonFinal.numpy ];
-          });
-        };
-      };
-      pythonPackages = python.pkgs;
-      project = (builtins.fromTOML (builtins.readFile ./pyproject.toml)).project;
-      app = pythonPackages.buildPythonApplication {
-        pname = project.name;
-        version = project.version;
-        pyproject = true;
+      nodejs = pkgs.nodejs_24;
+      electron = pkgs.electron;
+
+      # node-llama-cpp's prebuilt CUDA build needs the CUDA runtime and the driver's libcuda at run time.
+      runtimeLibraryPath = pkgs.lib.makeLibraryPath [
+        pkgs.cudaPackages.cuda_cudart
+        pkgs.cudaPackages.libcublas
+        pkgs.stdenv.cc.cc.lib
+      ] + ":/run/opengl-driver/lib";
+      runtimePath = pkgs.lib.makeBinPath [ pkgs.util-linux ];
+
+      packageJson = builtins.fromJSON (builtins.readFile ./package.json);
+      app = pkgs.buildNpmPackage {
+        pname = packageJson.name;
+        version = packageJson.version;
         src = self;
-        build-system = [ pythonPackages.setuptools ];
-        nativeBuildInputs = [
-          pkgs.gobject-introspection
-          pkgs.wrapGAppsHook4
-        ];
-        buildInputs = gtkLibraries;
-        dependencies = [
-          pythonPackages."llama-cpp-python"
-          pythonPackages.ddgs
-          pythonPackages.mcp
-          pythonPackages.pygobject3
-          pythonPackages.pyyaml
-          pythonPackages.sqlite-vec
-          pythonPackages.textual
-        ];
+        inherit nodejs;
+        npmDepsHash = "sha256-SEQiNJQOJoHKR9kP44fnxLFIwNgr8E9OXqNHjcB31MY=";
+        npmFlags = [ "--ignore-scripts" ];
+        env = {
+          ELECTRON_SKIP_BINARY_DOWNLOAD = "1";
+          NODE_LLAMA_CPP_SKIP_DOWNLOAD = "true";
+        };
+        nativeBuildInputs = [ pkgs.makeWrapper ];
+        installPhase = ''
+          runHook preInstall
+          npm prune --omit=dev --ignore-scripts
+          mkdir -p $out/lib/codex $out/bin
+          cp -r dist node_modules evals package.json settings.json $out/lib/codex/
+          makeWrapper ${nodejs}/bin/node $out/bin/codex \
+            --add-flags $out/lib/codex/dist/cli/index.js \
+            --prefix LD_LIBRARY_PATH : "${runtimeLibraryPath}" \
+            --prefix PATH : "${runtimePath}"
+          makeWrapper ${nodejs}/bin/node $out/bin/codex-daemon \
+            --add-flags $out/lib/codex/dist/daemon/index.js \
+            --prefix LD_LIBRARY_PATH : "${runtimeLibraryPath}" \
+            --prefix PATH : "${runtimePath}"
+          makeWrapper ${electron}/bin/electron $out/bin/codex-gui \
+            --add-flags $out/lib/codex/dist/main/index.js \
+            --prefix LD_LIBRARY_PATH : "${runtimeLibraryPath}" \
+            --prefix PATH : "${runtimePath}"
+          runHook postInstall
+        '';
       };
-      gtkLibraries = [ pkgs.gtk4 ];
-      pythonEnv = python.withPackages (packages: [
-        packages."llama-cpp-python"
-        packages.ddgs
-        packages.mcp
-        packages.pygobject3
-        packages.pyyaml
-        packages.sqlite-vec
-        packages.textual
-      ]);
     in
     {
       packages.${system} = {
@@ -68,21 +66,26 @@
         codex = app;
       };
 
-      apps.${system}.default = {
-        type = "app";
-        program = "${app}/bin/codex";
+      apps.${system} = {
+        default = {
+          type = "app";
+          program = "${app}/bin/codex-gui";
+        };
+        cli = {
+          type = "app";
+          program = "${app}/bin/codex";
+        };
       };
 
       devShells.${system}.default = pkgs.mkShell {
         packages = [
-          app
-          pythonEnv
-          pkgs.gobject-introspection
-          pkgs.cmake
-          pkgs.ninja
-          pkgs.stdenv.cc
-          pkgs.cudaPackages.cuda_nvcc
-        ] ++ gtkLibraries;
+          nodejs
+          electron
+          pkgs.util-linux
+        ];
+        ELECTRON_OVERRIDE_DIST_PATH = "${electron}/libexec/electron";
+        ELECTRON_SKIP_BINARY_DOWNLOAD = "1";
+        LD_LIBRARY_PATH = runtimeLibraryPath;
       };
     };
 }
