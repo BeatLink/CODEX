@@ -71,10 +71,10 @@ FACT_PAIR_PROMPT = (
 )
 
 MEMORY_PAIR_PROMPT = (
-    "Compare two things remembered about the user, replying with JSON only. Say 'same' when they"
-    " say the same thing in different words, 'contradict' when the second replaces the first or"
-    " both cannot hold at once, such as two different preferred languages for one job, and"
-    " otherwise 'different'."
+    "Compare two things remembered, replying with JSON only. Say 'same' when they say the same"
+    " thing in different words, 'contradict' when the second replaces the first or both cannot"
+    " hold at once, such as two different preferred languages for one job or two different"
+    " places for one folder, and otherwise 'different'."
 )
 
 NAMING_SCHEMA = {
@@ -268,7 +268,7 @@ def _compare_memories(store: KnowledgeStore, model: _BackgroundModel, settings: 
         return False
     # The older memory goes first, so 'the second replaces the first' reads the right way round.
     first, second = sorted(pair, key=lambda memory: (memory["created_at"], memory["id"]))
-    report("Comparing two things remembered about the user")
+    report(f"Comparing two memories in the {first['store']} store")
     verdict = _ask(
         model,
         MEMORY_PAIR_PROMPT,
@@ -280,10 +280,10 @@ def _compare_memories(store: KnowledgeStore, model: _BackgroundModel, settings: 
     )
     store.record_check("memory", first["id"], second["id"], verdict)
     if verdict == "same":
-        store.merge_user_memories(first["id"], second["id"])
-        report("Merged two memories about the user")
+        store.merge_memories(first["id"], second["id"])
+        report("Merged two memories that say the same thing")
     elif verdict == "contradict":
-        store.supersede_user_memory(first["id"], second["id"])
+        store.supersede_memory(first["id"], second["id"])
         report("Set aside an older memory the newer one replaces")
     return True
 

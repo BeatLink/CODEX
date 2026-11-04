@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import sqlite3
 import tempfile
@@ -7,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from codex.context_budget import CONDENSED_MARKER
+from codex.instructions import SKILLS_LABEL
 from codex.knowledge import KnowledgeStore
 from codex.evidence import CONDENSE_PROMPT
 from codex.task_tree import (
@@ -800,12 +802,44 @@ class RecallTests(unittest.TestCase):
         )
 
 
+class SkillTests(unittest.TestCase):
+    def test_a_task_reading_files_gets_the_code_guides_and_lessons_but_not_the_research_ones(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "config" / "codex" / "skills" / "code").mkdir(parents=True)
+            (root / "config" / "codex" / "skills" / "code" / "review.md").write_text("Name the line of each bug.")
+            (root / "project" / ".codex" / "skills" / "research").mkdir(parents=True)
+            (root / "project" / ".codex" / "skills" / "research" / "sources.md").write_text("Prefer release notes.")
+            database_path = str(root / "knowledge.db")
+            store = KnowledgeStore(database_path)
+            store.add_memory("code", "Run the parser tests after editing the parser")
+            store.add_memory("research", "Vendor blogs overstate benchmarks")
+            model = ScriptedModel({("decide", "1"): decision("files"), ("write", "1"): "No bugs on line 3."})
+
+            with (
+                patch.dict(os.environ, {"XDG_CONFIG_HOME": str(root / "config")}),
+                patch("codex.task_tree.run_stage", side_effect=model),
+                patch("codex.task_tree.run_tool_stage", return_value="Read parser.py."),
+            ):
+                execute_task_tree(
+                    "Review the parser", llm=object(), progress_callback=lambda label: None,
+                    max_task_depth=0, knowledge_db_path=database_path, filesystem_root=str(root / "project"),
+                )
+
+        decide_input, write_input = model.call("decide", "1")["input"], model.call("write", "1")["input"]
+        self.assertNotIn("Name the line of each bug.", decide_input)
+        self.assertIn(f"{SKILLS_LABEL}:\nName the line of each bug.", write_input)
+        self.assertIn("Run the parser tests after editing the parser", write_input)
+        self.assertNotIn("Prefer release notes.", write_input)
+        self.assertNotIn("Vendor blogs overstate benchmarks", write_input)
+
+
 class EpisodeTests(unittest.TestCase):
     def test_finished_tree_is_recorded_with_the_episode(self):
         with tempfile.TemporaryDirectory() as directory:
             database_path = str(Path(directory) / "knowledge.db")
             store = KnowledgeStore(database_path)
-            store.add_user_memory("preference", "Prefers short answers")
+            store.add_memory("user", "Prefers short answers")
             result, model, _, _ = run_tree(
                 {("decide", "1"): decision("answer"), ("write", "1"): "Short."},
                 prompt="Say something short",

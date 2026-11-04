@@ -9,7 +9,7 @@ from .checks import unsupported_values
 from .context_budget import fit_sections_to_tokens, input_token_budget, render_sections, token_counter
 from .embeddings import get_embedder
 from .evidence import queue_research_topic, summarize_web_page
-from .knowledge import USER_MEMORY_KINDS, KnowledgeStore, _search_terms, _shares_half_the_terms
+from .knowledge import MEMORY_STORES, KnowledgeStore, _search_terms, _shares_half_the_terms
 from .model import ModelCache, create_model, run_stage
 from .settings import MAX_TOKENS, TEMPERATURE, background_model_key
 from .tools import Toolbox
@@ -74,7 +74,7 @@ SUMMARY_SCHEMA = {
     "required": ["summary"],
 }
 
-USER_MEMORY_SCHEMA = {
+MEMORY_SCHEMA = {
     "type": "object",
     "properties": {
         "memories": {
@@ -82,13 +82,13 @@ USER_MEMORY_SCHEMA = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "kind": {"type": "string", "enum": list(USER_MEMORY_KINDS)},
+                    "store": {"type": "string", "enum": list(MEMORY_STORES)},
                     "statement": {"type": "string"},
                     "reason": {"type": "string", "maxLength": 200},
                 },
-                "required": ["kind", "statement"],
+                "required": ["store", "statement"],
             },
-            "maxItems": 5,
+            "maxItems": 8,
         },
         "research_topics": {"type": "array", "items": {"type": "string", "maxLength": 100}, "maxItems": 3},
     },
@@ -494,8 +494,50 @@ def _refresh_parent_summary(store: KnowledgeStore, model: _BackgroundModel, pare
 
 
 # ==============================================================================
-# Learning about the user
+# Learning from past requests
 # ==============================================================================
+
+LEARNING_PROMPT = (
+    "From these past requests, list durable things worth remembering, replying with JSON only."
+    " Put each in one store: 'user' for how the user likes answers or which tools, languages, and"
+    " styles they use, and anything they corrected about how to work; 'project' for ongoing work"
+    " in this folder and its rules; 'general' for a lasting fact learned that is about neither"
+    " the user nor the machine; 'locations' for where a folder, file, URL, or host is, naming it"
+    " exactly as the paths or actions show it; 'software' for a program, service, or version the"
+    " actions show is installed or running; 'research' for a lesson about researching, such as a"
+    " source that proved wrong or a search that found what others missed; 'code' for a lesson"
+    " about reviewing or editing code, such as a test that must be run or a mistake a check caught."
+    " Give a 'reason' only when the requests say why it holds. Include only what the requests"
+    " clearly show, as one short sentence each; an empty list is the right reply when nothing"
+    " durable appears. Never include secrets, passwords, keys, or personal identifiers such as"
+    " names or email addresses. In 'research_topics', name up to three general subjects, such as"
+    " a library or a technique, that looking up in advance would help with the ongoing work the"
+    " requests show; leave it empty when there is none."
+)
+
+# A path, URL, or host name: what a location memory must name exactly as the requests showed it.
+_LOCATION = re.compile(r"(?:~|\.{0,2})/[^\s,;:'\"()]+|https?://[^\s,;'\"()]+|\b[\w-]+(?:\.[\w-]+)+:\d+\b")
+
+
+# Words any software memory may use without the requests showing them.
+_GENERIC_SOFTWARE_WORDS = frozenset(
+    "installed running runs service services version program programs machine system uses used available".split()
+)
+
+
+def _grounded_memory(store: str, statement: str, seen: str) -> bool:
+    """Say whether a location or software memory names only what the requests really showed.
+
+    The model guesses paths and versions readily, so these are kept only when what they name was seen.
+    """
+    if store == "locations":
+        locations = [location.rstrip(".") for location in _LOCATION.findall(statement)]
+        return bool(locations) and all(location in seen for location in locations)
+    if store == "software":
+        seen_words = set(re.findall(r"\w{2,}", seen.casefold()))
+        named = [word for word in _search_terms(statement) if word not in _GENERIC_SOFTWARE_WORDS]
+        return bool(named) and all(word in seen_words for word in named[:2])
+    return True
 
 
 def learn_from_episodes(
@@ -507,7 +549,7 @@ def learn_from_episodes(
     model_lock: Any = None,
     model_cache: ModelCache | None = None,
 ) -> bool:
-    """Read recent unprocessed requests and remember what they show about the user."""
+    """Read recent unprocessed requests and remember what they show, each lesson in its own store."""
     store = KnowledgeStore(settings["knowledge_db_path"])
     episodes = store.episodes(unprocessed_only=True, limit=EPISODES_PER_PASS)
     if not episodes:
@@ -518,23 +560,9 @@ def learn_from_episodes(
     report = on_progress or (lambda message: None)
     model = _BackgroundModel(settings, on_token, should_pause, llm, model_lock, model_cache)
     report(f"Learning from {len(episodes)} past request(s)")
+    seen = "\n\n".join(f"Request: {episode['prompt']}\n{episode['checklist']}" for episode in episodes)
     try:
-        reply = model.run(
-            "From these past requests, list durable facts about the user worth remembering, replying"
-            " with JSON only: 'preference' for how they like answers or which tools, languages, and"
-            " styles they use; 'project' for ongoing work they mention; 'correction' for something"
-            " they corrected; 'reference' for where something lives, such as a URL, host, or file."
-            " Give a 'reason' only when the requests say why it holds. Include only what the requests clearly show, as one short sentence"
-            " each; an empty list is the right reply when nothing durable appears. Never include"
-            " secrets, passwords, keys, or personal identifiers such as names or email addresses."
-            " In 'research_topics', name up to three general subjects, such as a library or a"
-            " technique, that looking up in advance would help with the ongoing work the requests"
-            " show; leave it empty when there is none.",
-            "\n\n".join(
-                f"Request: {episode['prompt']}\n{episode['checklist']}" for episode in episodes
-            ),
-            json_schema=USER_MEMORY_SCHEMA,
-        )
+        reply = model.run(LEARNING_PROMPT, seen, json_schema=MEMORY_SCHEMA)
     except _BackgroundPaused:
         report("Paused for foreground work")
         return True
@@ -553,13 +581,11 @@ def learn_from_episodes(
         memories, topics = [], []
     learned = 0
     for memory in memories:
-        if isinstance(memory, dict) and memory.get("kind") in USER_MEMORY_KINDS and str(memory.get("statement", "")).strip():
-            store.add_user_memory(
-                memory["kind"],
-                memory["statement"],
-                reason=str(memory.get("reason") or ""),
-                scope=scope if memory["kind"] == "project" else "",
-            )
+        if not isinstance(memory, dict) or memory.get("store") not in MEMORY_STORES:
+            continue
+        statement = str(memory.get("statement", "")).strip()
+        if statement and _grounded_memory(memory["store"], statement, seen):
+            store.add_memory(memory["store"], statement, reason=str(memory.get("reason") or ""), scope=scope)
             learned += 1
     # Researching what the user works on ahead of time lets later requests answer from memory.
     queued = 0
@@ -570,7 +596,7 @@ def learn_from_episodes(
             queued += 1
     for episode in episodes:
         store.mark_episode_processed(episode["id"])
-    report(f"Learned {learned} thing(s) about the user and queued {queued} topic(s) for research")
+    report(f"Learned {learned} thing(s) from past requests and queued {queued} topic(s) for research")
     return True
 
 

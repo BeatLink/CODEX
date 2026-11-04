@@ -94,7 +94,7 @@ def score_recall(seed_path: str | Path, questions: list[Question], embedder: Emb
         score = Score(label)
         for question in questions:
             started = time.perf_counter()
-            recalled = store.recall(question.query, limit=RECALL_LIMIT, include_user=False)["facts"]
+            recalled = store.recall(question.query, limit=RECALL_LIMIT, include_memories=False)["facts"]
             score.answers.append(Answer(question, [fact["statement"] for fact in recalled], time.perf_counter() - started))
     return score
 

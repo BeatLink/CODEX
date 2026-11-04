@@ -9,7 +9,7 @@ from typing import Any
 
 from .checks import CODE_BLOCK
 from .context_budget import UNTRUSTED_NOTE, fit_sections_to_tokens, input_token_budget, render_sections, untrusted_block
-from .knowledge import KnowledgeStore
+from .knowledge import MEMORY_STORE_LABELS, MEMORY_STORES, KnowledgeStore
 from .model import run_stage
 from .tools import Toolbox
 
@@ -74,12 +74,13 @@ def requires_web_research(user_prompt: str) -> bool:
 def format_recall(recalled: dict[str, list[dict[str, Any]]]) -> str:
     """Write recalled memory as short plain lists, or return an empty string when nothing was recalled."""
     parts = []
-    if recalled.get("user"):
-        parts.append("About the user:\n" + "\n".join(
-            f"- ({memory['kind']}) {memory['statement']}"
-            + (f" Why: {memory['reason']}" if memory.get("reason") else "")
-            for memory in recalled["user"]
-        ))
+    for store in MEMORY_STORES:
+        memories = [memory for memory in recalled.get("memories", []) if memory["store"] == store]
+        if memories:
+            parts.append(f"{MEMORY_STORE_LABELS[store]}:\n" + "\n".join(
+                f"- {memory['statement']}" + (f" Why: {memory['reason']}" if memory.get("reason") else "")
+                for memory in memories
+            ))
     if recalled.get("facts"):
         parts.append("Stored facts (from earlier research; cite the URL when using one):\n" + "\n".join(
             f"- {fact['statement']} [{' > '.join([*(step['name'] for step in fact.get('topic_path', [])), fact['topic']])};"

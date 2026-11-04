@@ -130,7 +130,7 @@ def validate_check(task_id: str, check: Any) -> None:
 
 
 def build_seed_store(seed_path: str | Path, database_path: str | Path, embedder: Embedder | None = None) -> None:
-    """Fill a new knowledge store from a seed file of topics, sources, facts, and user memory."""
+    """Fill a new knowledge store from a seed file of topics, sources, facts, and memories."""
     seed = json.loads(Path(seed_path).read_text(encoding="utf-8"))
     if not isinstance(seed, dict) or not seed.get("facts"):
         raise ValueError("The seed file must be a JSON object with a non-empty 'facts' list.")
@@ -141,8 +141,8 @@ def build_seed_store(seed_path: str | Path, database_path: str | Path, embedder:
         store.store_search_results(source["title"], [source], topic=source.get("topic"))
     for fact in seed["facts"]:
         store.add_fact(fact["topic"], fact["statement"], fact.get("source_url"), fact.get("confidence", 0.9))
-    for memory in seed.get("user_memory", []):
-        store.add_user_memory(memory["kind"], memory["statement"])
+    for memory in seed.get("memories", []):
+        store.add_memory(memory["store"], memory["statement"], scope=memory.get("scope", ""))
     # Facts and topics get their vectors now, as the background worker would give them later.
     if store.embedder is not None:
         while items := store.items_to_embed(store.embedder.name, 64):

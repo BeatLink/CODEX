@@ -164,19 +164,38 @@ _MIGRATIONS = (
     ALTER TABLE user_memory ADD COLUMN scope TEXT NOT NULL DEFAULT '';
     ALTER TABLE episodes ADD COLUMN scope TEXT NOT NULL DEFAULT '';
     """,
+    """
+    ALTER TABLE user_memory RENAME TO memories;
+    ALTER TABLE memories RENAME COLUMN kind TO store;
+    UPDATE memories SET store = CASE store WHEN 'project' THEN 'project' WHEN 'reference' THEN 'locations' ELSE 'user' END;
+    """,
 )
 
 MEMORY_KINDS = ("fact", "episode")
 # A task tree run is running until it ends; a run left running by a crash, or stopped, can be resumed.
 TASK_RUN_STATUSES = ("running", "stopped", "finished", "discarded")
 RESUMABLE_TASK_RUN_STATUSES = ("running", "stopped")
-USER_MEMORY_KINDS = ("preference", "project", "correction", "reference")
-# A memory the user stated outright is trusted over one the background worker learned.
-USER_MEMORY_ORIGINS = ("learned", "user")
-# User memories recalled for one request.
-MAX_RECALLED_USER_MEMORIES = 10
+# Each memory belongs to one store, and each store is recalled with its own budget and heading.
+MEMORY_STORES = ("general", "user", "locations", "software", "project", "research", "code")
+MEMORY_STORE_LABELS = {
+    "general": "General knowledge learned from earlier requests",
+    "user": "About the user",
+    "locations": "Folders, files and locations on this machine",
+    "software": "Software on this machine",
+    "project": "About this project",
+    "research": "Lessons for researching and fact finding",
+    "code": "Lessons for code review and editing",
+}
+# Only project memories belong to one folder; every other store holds everywhere.
+SCOPED_MEMORY_STORES = ("project",)
+# Skills are recalled for the tasks that use them, not with the rest of memory for every request.
+SKILL_MEMORY_STORES = ("research", "code")
+# A memory the user stated outright is trusted over one the daemon probed, and both over one the worker learned.
+MEMORY_ORIGINS = ("learned", "probed", "user")
+# Memories recalled for one request from each store.
+MAX_RECALLED_MEMORIES = {"user": 6, "project": 6, "general": 4, "locations": 4, "software": 4, "research": 5, "code": 5}
 
-# What consolidation compares: two topics, two facts under one topic, or two user memories.
+# What consolidation compares: two topics, two facts under one topic, or two memories in one store.
 CONSOLIDATION_KINDS = ("topic", "fact", "memory")
 
 # Two items sharing at least this share of their words are compared by the model.
@@ -556,7 +575,7 @@ class KnowledgeStore:
             )
 
     # ==========================================================================
-    # Facts, user memory, and episodes
+    # Facts, memories, and episodes
     # ==========================================================================
 
     def add_fact(
@@ -649,79 +668,113 @@ class KnowledgeStore:
             ).fetchall()
         return [(row["name"], row["summary"]) for row in rows]
 
-    def add_user_memory(
+    def add_memory(
         self,
-        kind: str,
+        store: str,
         statement: str,
         reason: str = "",
         origin: str = "learned",
         scope: str = "",
     ) -> int:
-        """Remember a durable fact about the user: a preference, a project, a correction, or a reference.
+        """Remember one durable statement in one of the memory stores.
 
-        The reason says why it holds, and a scope of a project folder keeps it to requests worked there.
+        The reason says why it holds, and a project memory's scope keeps it to requests worked in that folder.
         """
-        if kind not in USER_MEMORY_KINDS:
-            raise ValueError(f"kind must be one of: {', '.join(USER_MEMORY_KINDS)}.")
-        if origin not in USER_MEMORY_ORIGINS:
-            raise ValueError(f"origin must be one of: {', '.join(USER_MEMORY_ORIGINS)}.")
+        if store not in MEMORY_STORES:
+            raise ValueError(f"store must be one of: {', '.join(MEMORY_STORES)}.")
+        if origin not in MEMORY_ORIGINS:
+            raise ValueError(f"origin must be one of: {', '.join(MEMORY_ORIGINS)}.")
         statement = " ".join(self._clean_text(statement, "memory", 500).split())
         reason = " ".join(reason.split())[:500]
+        scope = scope if store in SCOPED_MEMORY_STORES else ""
         with self._connect() as connection:
             previous = connection.execute(
-                "SELECT id, status FROM user_memory WHERE statement = ? COLLATE NOCASE", (statement,)
+                "SELECT id, status FROM memories WHERE statement = ? COLLATE NOCASE", (statement,)
             ).fetchone()
             if previous and previous["status"] != "active":
                 self._forget_checks(connection, "memory", previous["id"])
             # Learning a memory again never takes away what the user said about it.
             connection.execute(
-                "INSERT INTO user_memory(kind, statement, reason, origin, scope, created_at) VALUES (?, ?, ?, ?, ?, ?) "
-                "ON CONFLICT(statement) DO UPDATE SET kind = excluded.kind, status = 'active', "
-                "reason = CASE WHEN excluded.reason != '' THEN excluded.reason ELSE user_memory.reason END, "
-                "origin = CASE WHEN user_memory.origin = 'user' THEN 'user' ELSE excluded.origin END, "
-                "scope = CASE WHEN user_memory.origin = 'user' AND excluded.origin != 'user' "
-                "THEN user_memory.scope ELSE excluded.scope END",
-                (kind, statement, reason, origin, scope, time.time()),
+                "INSERT INTO memories(store, statement, reason, origin, scope, created_at) VALUES (?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(statement) DO UPDATE SET status = 'active', "
+                "store = CASE WHEN memories.origin = 'user' AND excluded.origin != 'user' "
+                "THEN memories.store ELSE excluded.store END, "
+                "reason = CASE WHEN excluded.reason != '' THEN excluded.reason ELSE memories.reason END, "
+                "origin = CASE WHEN memories.origin = 'user' THEN 'user' ELSE excluded.origin END, "
+                "scope = CASE WHEN memories.origin = 'user' AND excluded.origin != 'user' "
+                "THEN memories.scope ELSE excluded.scope END",
+                (store, statement, reason, origin, scope, time.time()),
             )
             return int(connection.execute(
-                "SELECT id FROM user_memory WHERE statement = ? COLLATE NOCASE", (statement,)
+                "SELECT id FROM memories WHERE statement = ? COLLATE NOCASE", (statement,)
             ).fetchone()["id"])
 
-    def user_memories(self, limit: int = 50, scope: str | None = None) -> list[dict[str, Any]]:
-        """List active user memories, newest first; with a scope, only global ones and those of that project."""
+    def replace_probed_memories(self, store: str, statements: list[str]) -> None:
+        """Make the probed memories of a store exactly these statements, forgetting what the probe no longer finds."""
+        kept = []
+        for statement in statements:
+            kept.append(self.add_memory(store, statement, origin="probed"))
+        with self._connect() as connection:
+            stale = [
+                row["id"] for row in connection.execute(
+                    "SELECT id FROM memories WHERE store = ? AND origin = 'probed'", (store,)
+                )
+                if row["id"] not in kept
+            ]
+            for memory_id in stale:
+                connection.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+                self._forget_checks(connection, "memory", memory_id)
+
+    def memories(
+        self, limit: int = 50, scope: str | None = None, stores: tuple[str, ...] = MEMORY_STORES
+    ) -> list[dict[str, Any]]:
+        """List active memories in the given stores, newest first; with a scope, only global ones and that project's."""
+        placeholders = ", ".join("?" for _ in stores)
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT id, kind, statement, reason, origin, scope, created_at, use_count FROM user_memory "
-                "WHERE status = 'active' AND (? IS NULL OR scope IN ('', ?)) ORDER BY created_at DESC, id DESC LIMIT ?",
-                (scope, scope, limit),
+                "SELECT id, store, statement, reason, origin, scope, created_at, use_count FROM memories "
+                f"WHERE status = 'active' AND store IN ({placeholders}) AND (? IS NULL OR scope IN ('', ?)) "
+                "ORDER BY created_at DESC, id DESC LIMIT ?",
+                (*stores, scope, scope, limit),
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def relevant_user_memories(
-        self, query: str, scope: str = "", limit: int = MAX_RECALLED_USER_MEMORIES
+    def relevant_memories(
+        self, query: str, scope: str = "", stores: tuple[str, ...] = MEMORY_STORES, count_use: bool = False
     ) -> list[dict[str, Any]]:
-        """Return the user memories that matter most for a request.
+        """Return the memories that matter most for a request, up to each store's own budget.
 
-        Memories sharing the most words with it come first, then those the user stated, then the newest,
-        so a new memory is never crowded out by older ones that were recalled more often.
+        Within a store, memories sharing the most words with it come first, then those the user stated,
+        then the newest, so a new memory is never crowded out by older ones that were recalled more often.
         """
         terms = _search_terms(query)
-        memories = self.user_memories(limit=10_000, scope=scope)
-        ranked = sorted(
-            memories,
-            key=lambda memory: (
-                -_shared_term_count(terms, f"{memory['statement']} {memory['reason']}"),
-                memory["origin"] != "user",
-                -memory["created_at"],
-                -memory["id"],
-            ),
-        )
-        return ranked[:limit]
+        recalled = []
+        for store in stores:
+            ranked = sorted(
+                self.memories(limit=10_000, scope=scope, stores=(store,)),
+                key=lambda memory: (
+                    -_shared_term_count(terms, f"{memory['statement']} {memory['reason']}"),
+                    memory["origin"] != "user",
+                    -memory["created_at"],
+                    -memory["id"],
+                ),
+            )
+            recalled.extend(ranked[:MAX_RECALLED_MEMORIES[store]])
+        if count_use:
+            self._count_memory_use(recalled)
+        return recalled
 
-    def forget_user_memory(self, memory_id: int) -> bool:
-        """Delete one user memory for good; return whether it existed."""
+    def _count_memory_use(self, memories: list[dict[str, Any]]) -> None:
         with self._connect() as connection:
-            deleted = connection.execute("DELETE FROM user_memory WHERE id = ?", (memory_id,)).rowcount
+            connection.executemany(
+                "UPDATE memories SET use_count = use_count + 1, last_used_at = ? WHERE id = ?",
+                [(time.time(), memory["id"]) for memory in memories],
+            )
+
+    def forget_memory(self, memory_id: int) -> bool:
+        """Delete one memory for good; return whether it existed."""
+        with self._connect() as connection:
+            deleted = connection.execute("DELETE FROM memories WHERE id = ?", (memory_id,)).rowcount
             self._forget_checks(connection, "memory", memory_id)
         return bool(deleted)
 
@@ -809,16 +862,17 @@ class KnowledgeStore:
             connection.execute("UPDATE episodes SET processed_at = ? WHERE id = ?", (time.time(), episode_id))
 
     def recall(
-        self, query: str, limit: int = 5, include_user: bool = True, scope: str = ""
+        self, query: str, limit: int = 5, include_memories: bool = True, scope: str = ""
     ) -> dict[str, list[dict[str, Any]]]:
-        """Return what memory holds for a request: user memory, matching facts, and similar past episodes.
+        """Return what memory holds for a request: the memory stores, matching facts, and similar past episodes.
 
         An item matches when it shares half the query's terms, or three of them for a longer query,
-        and the items sharing the most terms come first. User memory is limited to global memories and
-        those of the scope's project.
+        and the items sharing the most terms come first. Project memory is limited to the scope's project,
+        and skills are left for the tasks that use them.
         """
+        stores = tuple(store for store in MEMORY_STORES if store not in SKILL_MEMORY_STORES)
         recalled: dict[str, list[dict[str, Any]]] = {
-            "user": self.relevant_user_memories(query, scope) if include_user else [],
+            "memories": self.relevant_memories(query, scope, stores) if include_memories else [],
             "facts": [],
             "episodes": [],
             "relationships": [],
@@ -877,10 +931,7 @@ class KnowledgeStore:
                 "UPDATE topics SET use_count = use_count + 1, last_used_at = ? WHERE id = ?",
                 [(now, topic_id) for topic_id in {fact["topic_id"] for fact in recalled["facts"]}],
             )
-            connection.executemany(
-                "UPDATE user_memory SET use_count = use_count + 1, last_used_at = ? WHERE id = ?",
-                [(now, memory["id"]) for memory in recalled["user"]],
-            )
+        self._count_memory_use(recalled["memories"])
         return recalled
 
     # ==========================================================================
@@ -1004,8 +1055,9 @@ class KnowledgeStore:
                 text_column = "statement"
             else:
                 rows = connection.execute(
-                    # A project's memories are compared only with that project's, so one project never sets aside another's.
-                    "SELECT id, kind, statement, created_at, scope AS grouping FROM user_memory WHERE status = 'active'"
+                    # Memories are compared within one store, and a project's only with that project's.
+                    "SELECT id, store, statement, origin, created_at, store || ':' || scope AS grouping "
+                    "FROM memories WHERE status = 'active'"
                 ).fetchall()
                 text_column = "statement"
         items = {row["id"]: dict(row) for row in rows}
@@ -1022,6 +1074,9 @@ class KnowledgeStore:
                     if (first_id, second_id) in checked or (first_id, second_id) in candidates:
                         continue
                     first, second = items[first_id], items[second_id]
+                    if kind == "memory" and first["origin"] == second["origin"] == "probed":
+                        # Each probe finding is a separate reading of the machine, so two never repeat or contradict.
+                        continue
                     overlap = _overlap(terms[first_id], terms[second_id])
                     if kind == "topic":
                         if first["id"] == second["parent_id"] or second["id"] == first["parent_id"]:
@@ -1259,11 +1314,11 @@ class KnowledgeStore:
             connection.executemany("UPDATE facts SET status = 'disputed' WHERE id = ?", [(item,) for item in disputed])
             return rows[0]["topic"]
 
-    def merge_user_memories(self, first_id: int, second_id: int) -> None:
+    def merge_memories(self, first_id: int, second_id: int) -> None:
         """Fold two memories that say the same thing into the more used one, or the newer when used equally."""
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT id, use_count, last_used_at FROM user_memory WHERE id IN (?, ?) "
+                "SELECT id, use_count, last_used_at FROM memories WHERE id IN (?, ?) "
                 "ORDER BY use_count DESC, created_at DESC, id DESC",
                 (first_id, second_id),
             ).fetchall()
@@ -1271,25 +1326,25 @@ class KnowledgeStore:
                 return
             keep, drop = rows
             connection.execute(
-                "UPDATE user_memory SET use_count = use_count + ?, last_used_at = MAX(COALESCE(last_used_at, 0), ?) "
+                "UPDATE memories SET use_count = use_count + ?, last_used_at = MAX(COALESCE(last_used_at, 0), ?) "
                 "WHERE id = ?",
                 (drop["use_count"], drop["last_used_at"] or 0, keep["id"]),
             )
-            connection.execute("DELETE FROM user_memory WHERE id = ?", (drop["id"],))
+            connection.execute("DELETE FROM memories WHERE id = ?", (drop["id"],))
             self._forget_checks(connection, "memory", drop["id"])
 
-    def supersede_user_memory(self, first_id: int, second_id: int) -> None:
-        """Set aside the older of two contradicting memories, since the newer one reflects the user now.
+    def supersede_memory(self, first_id: int, second_id: int) -> None:
+        """Set aside the older of two contradicting memories, since the newer one reflects things now.
 
-        A memory the user stated outright is kept over a learned one, whichever is newer.
+        A memory the user stated outright is kept over a probed one, and a probed one over a learned one.
         """
         with self._connect() as connection:
             older = connection.execute(
-                "SELECT id FROM user_memory WHERE id IN (?, ?) ORDER BY origin = 'user', created_at, id LIMIT 1",
+                "SELECT id FROM memories WHERE id IN (?, ?) ORDER BY origin = 'user', origin = 'probed', created_at, id LIMIT 1",
                 (first_id, second_id),
             ).fetchone()
             if older:
-                connection.execute("UPDATE user_memory SET status = 'superseded' WHERE id = ?", (older["id"],))
+                connection.execute("UPDATE memories SET status = 'superseded' WHERE id = ?", (older["id"],))
 
     @staticmethod
     def _forget_checks(connection: sqlite3.Connection, kind: str, item_id: int) -> None:

@@ -14,6 +14,7 @@ from typing import Any, Callable
 from .auto_size import auto_size
 from .background import index_knowledge, learn_from_episodes, research_one_topic
 from .consolidation import consolidate_knowledge
+from .environment import refresh_environment
 from .knowledge import RESUMABLE_TASK_RUN_STATUSES, KnowledgeStore
 from .model import ModelCache
 from .protocol import decode_message, default_socket_path, encode_message
@@ -607,6 +608,8 @@ class HarnessDaemon:
                         "model_lock": model_lock,
                         "model_cache": model_cache,
                     }
+                    # The machine probe needs no model, so it never takes the turn of the model work below.
+                    probed = refresh_environment(settings)
                     # Queued research comes first, then indexing what it found, learning from past requests, and tidying.
                     worked = (
                         research_one_topic(settings, **worker_options)
@@ -615,7 +618,7 @@ class HarnessDaemon:
                         or consolidate_knowledge(settings, **worker_options)
                     )
                     self.broadcast("queue.changed")
-                    if worked:
+                    if worked or probed:
                         self.broadcast("knowledge.changed")
                         wait_seconds = 0.2
                     else:

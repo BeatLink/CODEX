@@ -12,7 +12,7 @@ from typing import Any
 from .context_budget import condense_sections, input_token_budget, render_sections, token_counter
 from .commands import expand_command, is_memory_command, run_memory_command
 from .embeddings import get_embedder
-from .instructions import INSTRUCTIONS_LABEL, load_instructions
+from .instructions import INSTRUCTIONS_LABEL, SKILLS_LABEL, load_instructions, load_skills
 from .knowledge import MAX_RECALLED_RELATIONSHIPS, KnowledgeStore
 from .checks import action_report_problems, calculation_problems, unbacked_claims, uncited_urls, unsupported_values
 from .evidence import (
@@ -81,6 +81,10 @@ TREE_LABEL = "Task tree"
 SNAPSHOT_RESULT_CHARS = 2_000
 # Facts recalled for one task, its own and the request's together.
 MAX_FACTS_PER_TASK = 8
+# The skill store each approach draws on: researching for research, code review and editing for files and acting.
+APPROACH_SKILLS = {"research": "research", "files": "code", "act": "code"}
+# Paths an episode keeps of what its tools opened, so learning sees the machine without the whole log.
+MAX_EPISODE_PATHS = 30
 
 
 def _subtask_schema(min_items: int) -> dict[str, Any]:
@@ -623,8 +627,9 @@ class TaskTreeRun:
         self.summarize = section_summarizer(llm, temperature, context_size, self.count_tokens)
         self.condensed: set[tuple[str, str]] = set()
         self.today = date.today().isoformat()
-        self.recalled: dict[str, list[dict[str, Any]]] = {"user": [], "facts": [], "episodes": [], "relationships": []}
+        self.recalled: dict[str, list[dict[str, Any]]] = {"memories": [], "facts": [], "episodes": [], "relationships": []}
         self.task_memory: dict[str, tuple[str, set[int]]] = {}
+        self.task_skills: dict[tuple[str, str], tuple[str, str]] = {}
         self.recalled_facts = False
         self.local_knowledge_used = False
         self.clarification: tuple[str, str] | None = None
@@ -726,6 +731,9 @@ class TaskTreeRun:
             sections.append(("Correction needed", correction))
         # The call's own material comes next, so a check pins the result it is checking.
         sections.extend(extra)
+        guides, lessons = self.skills_for(node)
+        if guides:
+            sections.append((SKILLS_LABEL, guides))
         if self.clarification is not None:
             sections.append(self.clarification)
         sections.extend(self.dependency_results(node))
@@ -735,6 +743,9 @@ class TaskTreeRun:
         memory = self.memory_for(node)
         if memory:
             sections.append((MEMORY_LABEL, memory))
+        if lessons:
+            # The heading starts like the remembered context's, so learned lessons are fenced as untrusted too.
+            sections.append((f"{MEMORY_LABEL}: lessons", lessons))
         return sections
 
     def pinned_count(self, correction: str) -> int:
@@ -803,7 +814,7 @@ class TaskTreeRun:
             relationships = list(self.recalled["relationships"])
             if node.parent is not None and self.knowledge_store is not None:
                 known = {fact["id"] for fact in facts}
-                own = self.knowledge_store.recall(node.prompt, include_user=False)
+                own = self.knowledge_store.recall(node.prompt, include_memories=False)
                 queue_stale_topics(self.knowledge_store, own["facts"], self.max_pending_research_jobs)
                 # A subtask is narrower than the request, so its own matches come first.
                 facts = [*(fact for fact in own["facts"] if fact["id"] not in known), *facts][:MAX_FACTS_PER_TASK]
@@ -814,6 +825,23 @@ class TaskTreeRun:
                 {fact["id"] for fact in facts},
             )
         return self.task_memory[node.id]
+
+    def skills_for(self, node: TaskNode) -> tuple[str, str]:
+        """Return the user's guides and the learned lessons for the skill the task's approach uses."""
+        store = APPROACH_SKILLS.get(node.approach)
+        if store is None:
+            return "", ""
+        if (node.id, store) not in self.task_skills:
+            lessons = []
+            if self.knowledge_store is not None:
+                lessons = self.knowledge_store.relevant_memories(
+                    node.prompt, str(self.toolbox.root), (store,), count_use=True
+                )
+            self.task_skills[(node.id, store)] = (
+                load_skills(self.toolbox.root, store),
+                format_recall({"memories": lessons}),
+            )
+        return self.task_skills[(node.id, store)]
 
     def dependency_results(self, node: TaskNode) -> list[tuple[str, str]]:
         """Return the results of the earlier tasks this task, or any task above it, builds on."""
@@ -957,7 +985,7 @@ class TaskTreeRun:
             facts = []
             if self.knowledge_store is not None:
                 # A short query matches stored facts that the whole request was too long to match.
-                recalled = self.knowledge_store.recall(query, include_user=False)
+                recalled = self.knowledge_store.recall(query, include_memories=False)
                 facts = [fact for fact in recalled["facts"] if fact["id"] not in shown]
                 queue_stale_topics(self.knowledge_store, facts, self.max_pending_research_jobs)
                 if facts:
@@ -1207,6 +1235,15 @@ class TaskTreeRun:
         checklist = self.tree.outline()
         if self.clarification is not None:
             checklist += f"\n\n{self.clarification[0]}: {self.clarification[1]}"
+        if self.toolbox.paths_seen:
+            checklist += "\n\nPaths the tools opened:\n" + "\n".join(
+                f"- {path}" for path in self.toolbox.paths_seen[:MAX_EPISODE_PATHS]
+            )
+        if self.toolbox.action_log:
+            checklist += "\n\nActions taken:\n" + "\n".join(
+                f"- {name} {json.dumps(arguments, ensure_ascii=False)}: {' '.join(result.split())[:200]}"
+                for name, arguments, result in self.toolbox.action_log[:MAX_EPISODE_PATHS]
+            )
         try:
             self.knowledge_store.record_episode(
                 self.user_prompt,

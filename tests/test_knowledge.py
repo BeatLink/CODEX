@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from codex.knowledge import _MIGRATIONS, KnowledgeStore
+from codex.knowledge import _MIGRATIONS, MAX_RECALLED_MEMORIES, KnowledgeStore
 
 
 class KnowledgeStoreTests(unittest.TestCase):
@@ -142,31 +142,31 @@ class KnowledgeStoreTests(unittest.TestCase):
         self.assertEqual(facts[0]["source_url"], "https://example.test/fts")
 
     def test_recall_returns_user_memory_facts_and_episodes_and_counts_use(self):
-        self.store.add_user_memory("preference", "Prefers Python examples")
+        self.store.add_memory("user", "Prefers Python examples")
         self.store.add_fact("SQLite", "SQLite FTS5 supports bm25 ranking.", confidence=0.8)
         self.store.add_fact("Rust", "Cargo builds crates.", confidence=0.8)
         self.store.record_episode("Explain SQLite FTS5 ranking", "reasoning", "1. Explain ranking", "Answer", "answered")
 
         recalled = self.store.recall("How does SQLite FTS5 ranking work?")
 
-        self.assertEqual([memory["statement"] for memory in recalled["user"]], ["Prefers Python examples"])
+        self.assertEqual([memory["statement"] for memory in recalled["memories"]], ["Prefers Python examples"])
         self.assertEqual([fact["statement"] for fact in recalled["facts"]], ["SQLite FTS5 supports bm25 ranking."])
         self.assertEqual(recalled["episodes"][0]["prompt"], "Explain SQLite FTS5 ranking")
         use_counts = {fact["topic"]: fact["use_count"] for fact in self.store.facts()}
         self.assertEqual(use_counts, {"SQLite": 1, "Rust": 0})
 
     def test_a_long_request_recalls_a_fact_sharing_three_of_its_terms(self):
-        self.store.add_user_memory("preference", "Prefers Python examples")
+        self.store.add_memory("user", "Prefers Python examples")
         self.store.add_fact("FastAPI", "FastAPI runs async def endpoints on the event loop.")
         self.store.add_fact("FastAPI", "FastAPI is a Python web framework.")
 
         recalled = self.store.recall(
             "I am building a web service with FastAPI and Postgres; how should I structure"
             " async endpoints and database sessions so they do not block?",
-            include_user=False,
+            include_memories=False,
         )
 
-        self.assertEqual(recalled["user"], [])
+        self.assertEqual(recalled["memories"], [])
         # The other fact comes from the named topic's branch, after the one matching the request itself.
         self.assertEqual(
             [fact["statement"] for fact in recalled["facts"]],
@@ -232,52 +232,81 @@ class KnowledgeStoreTests(unittest.TestCase):
 
     def test_a_new_user_memory_is_recalled_beside_often_used_ones(self):
         for number in range(12):
-            self.store.add_user_memory("preference", f"Likes style number {number}")
+            self.store.add_memory("user", f"Likes style number {number}")
         for _ in range(3):
             self.store.recall("anything at all")
-        self.store.add_user_memory("preference", "Wants answers in British English")
+        self.store.add_memory("user", "Wants answers in British English")
 
-        recalled = [memory["statement"] for memory in self.store.recall("anything at all")["user"]]
+        recalled = [memory["statement"] for memory in self.store.recall("anything at all")["memories"]]
 
-        self.assertEqual(len(recalled), 10)
+        self.assertEqual(len(recalled), MAX_RECALLED_MEMORIES["user"])
         self.assertEqual(recalled[0], "Wants answers in British English")
 
     def test_user_memories_sharing_the_request_s_words_come_first(self):
-        self.store.add_user_memory("preference", "Uses Rust for command line tools")
-        self.store.add_user_memory("preference", "Prefers short answers")
+        self.store.add_memory("user", "Uses Rust for command line tools")
+        self.store.add_memory("user", "Prefers short answers")
 
-        recalled = self.store.recall("Write a Rust command line parser")["user"]
+        recalled = self.store.recall("Write a Rust command line parser")["memories"]
 
         self.assertEqual(recalled[0]["statement"], "Uses Rust for command line tools")
 
     def test_a_project_memory_is_recalled_only_in_its_project(self):
-        self.store.add_user_memory("project", "Is porting the parser to Zig", scope="/work/parser")
-        self.store.add_user_memory("preference", "Prefers short answers")
+        self.store.add_memory("project", "Is porting the parser to Zig", scope="/work/parser")
+        self.store.add_memory("user", "Prefers short answers")
 
-        here = [memory["statement"] for memory in self.store.recall("next step", scope="/work/parser")["user"]]
-        elsewhere = [memory["statement"] for memory in self.store.recall("next step", scope="/work/other")["user"]]
+        here = [memory["statement"] for memory in self.store.recall("next step", scope="/work/parser")["memories"]]
+        elsewhere = [memory["statement"] for memory in self.store.recall("next step", scope="/work/other")["memories"]]
 
         self.assertCountEqual(here, ["Is porting the parser to Zig", "Prefers short answers"])
         self.assertEqual(elsewhere, ["Prefers short answers"])
 
     def test_learning_a_stated_memory_again_keeps_it_stated_with_its_reason(self):
-        self.store.add_user_memory("reference", "Docs live at https://example.test/docs", reason="Moved there", origin="user")
-        self.store.add_user_memory("reference", "Docs live at https://example.test/docs")
+        self.store.add_memory("locations", "Docs live at https://example.test/docs", reason="Moved there", origin="user")
+        self.store.add_memory("locations", "Docs live at https://example.test/docs")
 
-        [memory] = self.store.user_memories()
+        [memory] = self.store.memories()
 
         self.assertEqual((memory["origin"], memory["reason"]), ("user", "Moved there"))
 
     def test_a_forgotten_user_memory_is_gone(self):
-        memory_id = self.store.add_user_memory("preference", "Prefers tabs")
+        memory_id = self.store.add_memory("user", "Prefers tabs")
 
-        self.assertTrue(self.store.forget_user_memory(memory_id))
-        self.assertFalse(self.store.forget_user_memory(memory_id))
-        self.assertEqual(self.store.user_memories(), [])
+        self.assertTrue(self.store.forget_memory(memory_id))
+        self.assertFalse(self.store.forget_memory(memory_id))
+        self.assertEqual(self.store.memories(), [])
 
-    def test_user_memory_rejects_unknown_kinds(self):
-        with self.assertRaisesRegex(ValueError, "kind must be one of"):
-            self.store.add_user_memory("secret", "anything")
+    def test_memory_rejects_unknown_stores(self):
+        with self.assertRaisesRegex(ValueError, "store must be one of"):
+            self.store.add_memory("secret", "anything")
+
+    def test_each_store_is_recalled_with_its_own_budget_and_skills_are_left_out(self):
+        for number in range(8):
+            self.store.add_memory("user", f"Likes style number {number}")
+        self.store.add_memory("locations", "Backups live in /Storage/Backups")
+        self.store.add_memory("research", "Check release notes before blog posts")
+
+        recalled = self.store.recall("anything at all")["memories"]
+
+        stores = [memory["store"] for memory in recalled]
+        self.assertEqual(stores.count("user"), MAX_RECALLED_MEMORIES["user"])
+        self.assertIn("locations", stores)
+        self.assertNotIn("research", stores)
+
+    def test_probed_memories_are_replaced_by_the_next_probe(self):
+        self.store.add_memory("software", "Uses Fedora at work", origin="user")
+        self.store.replace_probed_memories("software", ["git is installed", "docker is installed"])
+
+        self.store.replace_probed_memories("software", ["git is installed", "Uses Fedora at work"])
+
+        memories = {memory["statement"]: memory["origin"] for memory in self.store.memories()}
+        self.assertEqual(memories, {"git is installed": "probed", "Uses Fedora at work": "user"})
+
+    def test_a_user_memory_keeps_its_store_when_learned_again_elsewhere(self):
+        self.store.add_memory("project", "Tests run with unittest", origin="user", scope="/work/parser")
+        self.store.add_memory("code", "Tests run with unittest")
+
+        [memory] = self.store.memories()
+        self.assertEqual((memory["store"], memory["scope"], memory["origin"]), ("project", "/work/parser", "user"))
 
     def test_episodes_can_be_marked_processed(self):
         episode_id = self.store.record_episode("Prompt", "direct", "", "Answer", "answered")
@@ -319,7 +348,7 @@ class StoreSizeCapTests(unittest.TestCase):
 
     def test_processed_episodes_go_before_any_fact_or_user_memory(self):
         self.store.add_fact("Kestrel", "Kestrel ingest listens on port 7413.")
-        self.store.add_user_memory("preference", "Prefers ISO dates.")
+        self.store.add_memory("user", "Prefers ISO dates.")
         for number in range(60):
             episode_id = self.store.record_episode(f"Request {number}", "answer", "", "Done.", "answered", task_tree="x" * 40_000)
             self.store.mark_episode_processed(episode_id)
@@ -331,7 +360,7 @@ class StoreSizeCapTests(unittest.TestCase):
         self.assertGreater(changes["items evicted to fit the size cap"], 0)
         self.assertLess(len(self.store.episodes(limit=100)), 60)
         self.assertEqual([fact["statement"] for fact in self.store.facts()], ["Kestrel ingest listens on port 7413."])
-        self.assertEqual([memory["statement"] for memory in self.store.user_memories()], ["Prefers ISO dates."])
+        self.assertEqual([memory["statement"] for memory in self.store.memories()], ["Prefers ISO dates."])
 
     def test_the_least_used_facts_go_first_and_their_search_entries_with_them(self):
         # The used fact is the oldest, so only its use can keep it.
@@ -425,6 +454,8 @@ class KnowledgeMigrationTests(unittest.TestCase):
 
     def test_every_earlier_version_migrates_without_losing_rows(self):
         tables = ("topics", "sources", "research_queue", "graph_nodes", "graph_edges", "facts", "user_memory", "episodes")
+        # The user memory table became the memory stores, keeping every row.
+        renamed = {"user_memory": "memories"}
         for start_version in range(1, len(_MIGRATIONS)):
             with self.subTest(start_version=start_version), tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / "knowledge.db"
@@ -438,13 +469,16 @@ class KnowledgeMigrationTests(unittest.TestCase):
 
                 with sqlite3.connect(path) as connection:
                     self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], len(_MIGRATIONS))
-                    self.assertEqual({table: count_rows(connection, table) for table in before}, before)
+                    self.assertEqual({table: count_rows(connection, renamed.get(table, table)) for table in before}, before)
                 connection.close()
                 self.assertEqual(store.search("Kestrel ingest")[0]["url"], "https://wiki.example/ingest")
                 if start_version >= 2:
                     statements = [fact["statement"] for fact in store.recall("Kestrel ingest port")["facts"]]
                     self.assertIn("Kestrel ingest listens on port 7413.", statements)
-                    self.assertEqual([memory["statement"] for memory in store.user_memories()], ["Prefers ISO dates."])
+                    self.assertEqual(
+                        [(memory["store"], memory["statement"]) for memory in store.memories()],
+                        [("user", "Prefers ISO dates.")],
+                    )
                     self.assertEqual(len(store.episodes()), 1)
                 store.add_fact("Kestrel", "Kestrel ingest is written in Rust.")
                 self.assertEqual(len(store.facts()), 2 if start_version >= 2 else 1)

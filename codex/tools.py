@@ -214,6 +214,8 @@ class Toolbox:
         self.search_callback = search_callback
         self.used_tools: set[str] = set()
         self.action_log: list[tuple[str, dict[str, Any], str]] = []
+        # Every path a file tool really opened, so what a run saw of the machine can be learned from it.
+        self.paths_seen: list[str] = []
         self.tool_definitions = [
             definition
             for definition in TOOL_DEFINITIONS
@@ -259,6 +261,10 @@ class Toolbox:
             result = json.dumps(result, ensure_ascii=False)
         if not result.startswith("Tool error:"):
             self.used_tools.add(name)
+            if name in ("list_directory", "read_file", "write_file"):
+                path = str(self._resolve_path(arguments.get("path", ".")))
+                if path not in self.paths_seen:
+                    self.paths_seen.append(path)
         # Page JSON is already bounded by the fetch limits and must stay whole for the summarizer to parse it.
         if name == "web_fetch":
             return result

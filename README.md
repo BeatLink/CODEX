@@ -175,6 +175,20 @@ Together they are cut at 4000 characters, since a small model's window has
 little room to spare. Keep each rule short and plain; a small model follows a
 written rule far more reliably than one it has to work out.
 
+### Skills and guides
+
+Guides for one kind of work go only to the tasks doing it, so they cost the
+rest nothing. Each skill has a folder of Markdown files, read in name order:
+
+| Skill | Folders | Tasks that get it |
+| --- | --- | --- |
+| Researching and fact finding | `~/.config/codex/skills/research/`, then the folder's `.codex/skills/research/` | Tasks that chose `research` |
+| Code review and editing | `~/.config/codex/skills/code/`, then the folder's `.codex/skills/code/` | Tasks that chose `files` or `act` |
+
+A skill's guides are cut at 3000 characters. They reach every step of the task
+after its decision (gathering, writing, checking, and revising) beside the
+lessons of the same skill that memory holds (see below).
+
 ## Commands
 
 A prompt may start with a command. Besides the mode prefixes (`/ask`, `/plan`,
@@ -182,8 +196,8 @@ A prompt may start with a command. Besides the mode prefixes (`/ask`, `/plan`,
 
 | Command | What it does |
 | --- | --- |
-| `/remember [kind] statement [Why: reason]` | Stores a memory you state yourself, without the model. The kind is `preference` (the default), `project`, `correction`, or `reference`. A `project` memory belongs to the current folder; the others hold everywhere. A stated memory outlasts a learned one it contradicts |
-| `/memories` | Lists the memories for the current folder, with their numbers |
+| `/remember [store] statement [Why: reason]` | Stores a memory you state yourself, without the model, in one of the memory stores below: `user` (the default), `general`, `locations`, `software`, `project`, `research`, or `code`. `preference` and `correction` also mean `user`, and `reference` means `locations`. A `project` memory belongs to the current folder; the others hold everywhere. A stated memory outlasts a probed or learned one it contradicts |
+| `/memories [store]` | Lists the memories for the current folder under each store's heading, with their numbers, or only those of one store |
 | `/forget number` or `/forget words` | Deletes one memory, by its number or by words from it; when several match, they are listed instead |
 | `/init` | Reads the folder and writes its `CODEX.md`, or improves the one there. With file writes off, it replies with the text instead |
 
@@ -219,11 +233,20 @@ Knowledge lives in a SQLite database at `knowledge_db_path`
   retrieved, and when it expires (one week by default).
 - **Facts**: single statements under a topic, each with its source and a
   confidence from 0 to 1. A repeated fact keeps its highest confidence.
-- **User memory**: preferences, projects, corrections, and references (where
-  something lives, such as a URL or host) about the user, each with an
-  optional reason it holds. A memory is either learned from past requests or
-  stated by the user, and a project memory belongs to the folder
+- **Memory stores**: short statements, each in one store and with an optional
+  reason it holds. A memory is learned from past requests, probed from the
+  machine, or stated by the user, and a project memory belongs to the folder
   (`filesystem_root`) its requests were worked in.
+
+  | Store | Holds | Recalled |
+  | --- | --- | --- |
+  | `general` | Lasting facts learned from requests that are about neither the user nor the machine | Up to 4 per request |
+  | `user` | How the user likes answers, the tools, languages, and styles they use, and what they corrected | Up to 6 per request |
+  | `locations` | Folders, files, URLs, and hosts on this machine | Up to 4 per request |
+  | `software` | Programs, services, and versions installed or running on this machine | Up to 4 per request |
+  | `project` | Ongoing work and rules of one folder | Up to 6 per request, from that folder only |
+  | `research` | Lessons for researching and fact finding | Up to 5 per task that researches |
+  | `code` | Lessons for code review and editing | Up to 5 per task that reads files or acts |
 - **Episodes**: each finished request with its mode, its task tree, any
   clarification, the answer, and how it ended (how many tasks met their
   deliverable, and how many were unverified or failed).
@@ -234,10 +257,12 @@ Knowledge lives in a SQLite database at `knowledge_db_path`
   carry the source that supports them.
 - **A research queue** of pending, running, done, and failed jobs.
 
-Before the first model call, the request recalls what memory holds for it: up
-to ten user memories, global ones and those of the current folder, sharing the
+Before the first model call, the request recalls what memory holds for it: from
+each store but the two skill stores, up to that store's limit, those sharing the
 most words with the request first, then those the user stated, then the
-newest, so a new memory is never crowded out by older ones; plus facts and past episodes that share at least half of the
+newest, so a new memory is never crowded out by older ones. Each store is shown
+under its own heading. The skill stores are recalled the same way once a task
+has decided how to work, for that task's own prompt. Recall also brings facts and past episodes that share at least half of the
 prompt's search terms, or three of them for a longer prompt, ignoring common
 words; those sharing the most terms come first. When fewer than five match and
 the request names a stored topic (every word of the topic's name appears in
@@ -306,11 +331,22 @@ their summaries, so the model gets the broader picture in a few lines, and with
 up to five stored relationships of the named things it mentions.
 
 With no research queued, the worker reads recent requests that have not been
-processed yet and remembers what they show about the user: preferences,
-projects, corrections, and references, with a reason when the requests give
-one. Each pass reads requests from one folder, and the project memories it
-learns stay with that folder. It is told to leave out secrets and personal
-identifiers. The same call names up to three general subjects that would help
+processed yet and remembers what they show, putting each statement in one
+memory store, with a reason when the requests give one. Each recorded request
+lists the paths its file tools opened and the writes and test runs it made, and
+a `locations` memory is kept only when every path, URL, or host and port it
+names appears there or in the request, and a `software` memory only when the
+first two words naming the program do. Each pass reads requests from one folder,
+and the project memories it learns stay with that folder. It is told to leave
+out secrets and personal identifiers.
+
+The daemon also probes the machine when it starts and again every
+`background_refresh_interval_hours`, without the model: the home folder, the
+working folder, the desktop's named folders, mounted filesystems, the operating
+system, kernel, shell, desktop, which common commands are and are not
+installed, and the running system and user services. These are the `locations`
+and `software` memories marked probed; each probe replaces the last one's, so
+what is no longer there is forgotten. The same call names up to three general subjects that would help
 with the ongoing work the requests show, and each one with no facts yet is
 queued for research. It also re-queues topics whose research is older than
 `background_refresh_interval_hours`, or half that for a topic recalled at least
@@ -364,8 +400,8 @@ Changes that need no model come first:
 - When the store's data passes `background_max_store_megabytes` (1024 by
   default), the least valuable rows are deleted until it is back under 90% of
   that size: pruned facts first, then finished task runs, processed episodes,
-  expired sources no fact cites, and last the least used facts. User memories
-  and topics are never evicted. Freed space is reused by SQLite rather than
+  expired sources no fact cites, and last the least used facts. Memories and
+  topics are never evicted. Freed space is reused by SQLite rather than
   returned to the disk.
 
 Then the model checks the name of each researched topic once, and of any other
@@ -393,7 +429,7 @@ verdict:
 | --- | --- | --- |
 | Two topics | same subject, first is broader, second is broader, different | Same subjects are merged into the one with more facts and sources, carrying over its facts, sources, subtopics, queued research, and graph edges. A broader topic adopts the narrower one when that narrows where it sits now |
 | Two facts under one topic | same, contradict, different | Same facts are merged into the more trusted one. Of two contradicting facts the less trusted is marked disputed, or both when neither is more trusted, and the topic is queued for fresh research |
-| Two user memories | same, contradict, different | Same memories are merged. Of two contradicting memories the older is set aside, except that one the user stated outlasts a learned one. Project memories are compared only with global ones and those of their own folder |
+| Two memories in one store | same, contradict, different | Same memories are merged. Of two contradicting memories the older is set aside, except that one the user stated outlasts the rest and a probed one outlasts a learned one. Two probed memories are never compared. Project memories are compared only with those of their own folder |
 
 Disputed and pruned facts and set-aside memories are no longer recalled. Each
 pair is compared once; its verdict is stored, and a fact or memory learned
@@ -706,7 +742,8 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 | `codex/tools.py` | Built-in tools and their path and URL checks |
 | `codex/mcp_tools.py` | MCP client for stdio and HTTP servers |
 | `codex/context_budget.py` | Fitting each call's input into the context window |
-| `codex/knowledge.py` | SQLite knowledge store, queue, and graph |
+| `codex/knowledge.py` | SQLite knowledge store, memory stores, queue, and graph |
+| `codex/environment.py` | Probing the machine for the locations and software memory stores |
 | `codex/recall_benchmark.py` | Scoring recall against questions with known relevant facts |
 | `codex/embeddings.py` | The embedding model used to find facts and topics by meaning |
 | `codex/background.py` | One background research job |

@@ -36,18 +36,40 @@ class MemoryCommandTests(CommandTestCase):
     def test_remember_stores_a_stated_preference_with_its_reason(self):
         reply = self.remember("Answer in British English. Why: I work in the UK.")
 
-        [memory] = self.store.user_memories()
+        [memory] = self.store.memories()
         self.assertIn("Remembered", reply)
         self.assertEqual(
-            (memory["kind"], memory["statement"], memory["reason"], memory["origin"], memory["scope"]),
-            ("preference", "Answer in British English.", "I work in the UK.", "user", ""),
+            (memory["store"], memory["statement"], memory["reason"], memory["origin"], memory["scope"]),
+            ("user", "Answer in British English.", "I work in the UK.", "user", ""),
         )
 
     def test_a_remembered_project_belongs_to_this_folder(self):
         self.remember("project: Porting the parser to Zig")
 
-        [memory] = self.store.user_memories()
-        self.assertEqual((memory["kind"], memory["scope"]), ("project", str(self.root)))
+        [memory] = self.store.memories()
+        self.assertEqual((memory["store"], memory["scope"]), ("project", str(self.root)))
+
+    def test_remember_files_a_memory_in_the_store_it_names_and_keeps_old_kind_words(self):
+        self.remember("code Run the linter before committing")
+        self.remember("reference Docs live at https://example.test/docs")
+
+        stores = {memory["statement"]: (memory["store"], memory["scope"]) for memory in self.store.memories()}
+        self.assertEqual(stores, {
+            "Run the linter before committing": ("code", ""),
+            "Docs live at https://example.test/docs": ("locations", ""),
+        })
+
+    def test_memories_lists_each_store_under_its_heading_and_can_show_one_store(self):
+        self.remember("software Uses Podman, not Docker")
+        self.remember("Prefers short answers")
+
+        everything = run_memory_command("/memories", self.store, str(self.root))
+        only_software = run_memory_command("/memories software", self.store, str(self.root))
+
+        self.assertIn("About the user (user)", everything)
+        self.assertIn("Software on this machine (software)", everything)
+        self.assertNotIn("short answers", only_software)
+        self.assertIn("no memory store called 'nowhere'", run_memory_command("/memories nowhere", self.store, str(self.root)))
 
     def test_forget_by_words_asks_for_a_number_when_several_match(self):
         self.remember("Use tabs in Go")
@@ -55,16 +77,16 @@ class MemoryCommandTests(CommandTestCase):
 
         reply = run_memory_command("/forget use tabs", self.store, str(self.root))
         self.assertIn("Several memories match", reply)
-        self.assertEqual(len(self.store.user_memories()), 2)
+        self.assertEqual(len(self.store.memories()), 2)
 
         run_memory_command("/forget tabs make", self.store, str(self.root))
-        self.assertEqual([memory["statement"] for memory in self.store.user_memories()], ["Use tabs in Go"])
+        self.assertEqual([memory["statement"] for memory in self.store.memories()], ["Use tabs in Go"])
 
     def test_memories_lists_them_and_forget_takes_a_number(self):
         self.remember("reference Docs live at https://example.test/docs")
-        memory_id = self.store.user_memories()[0]["id"]
+        memory_id = self.store.memories()[0]["id"]
 
-        self.assertIn(f"{memory_id}. (reference) Docs live", run_memory_command("/memories", self.store, str(self.root)))
+        self.assertIn(f"{memory_id}. Docs live", run_memory_command("/memories", self.store, str(self.root)))
         run_memory_command(f"/forget {memory_id}", self.store, str(self.root))
         self.assertIn("No memories yet", run_memory_command("/memories", self.store, str(self.root)))
 
@@ -73,7 +95,7 @@ class MemoryCommandTests(CommandTestCase):
             reply = execute_task_tree("/remember Prefers short answers", knowledge_db_path=str(self.database),
                                       filesystem_root=str(self.root))
         self.assertIn("Prefers short answers", reply)
-        self.assertEqual(len(self.store.user_memories()), 1)
+        self.assertEqual(len(self.store.memories()), 1)
 
 
 class UserCommandTests(CommandTestCase):

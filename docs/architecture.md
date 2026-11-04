@@ -171,7 +171,7 @@ with its version bump, and a database newer than the code is refused.
 | `topics` | Name (unique, case-insensitive), `parent_id`, priority, summary, use count, last researched, last placed |
 | `sources` | URL (unique), title, snippet, fetched-page summary, query, topic, retrieved and expiry times |
 | `facts` | One statement under a topic, its source, a confidence from 0 to 1, a status (`active`, `disputed`, `pruned`), use count |
-| `user_memory` | Preferences, projects and corrections about the user, `active` or `superseded` |
+| `memories` | Statements in the memory stores (general, user, locations, software, project, research, code), learned, probed or stated by the user, `active` or `superseded` |
 | `episodes` | Each finished request: prompt, mode, checklist or tree outline, answer, outcome, tree snapshot |
 | `knowledge_search` | FTS5 index over sources (title, snippet plus summary, URL) |
 | `embeddings` | One vector per fact and topic, with the model and text it was made from |
@@ -191,8 +191,8 @@ The knowledge is organised in three layers that mirror each other:
 
 There are two read paths, used at different moments:
 
-1. **Recall** (`KnowledgeStore.recall`), before the first model call. It returns the ten most-used
-   user memories, plus facts and past episodes whose text shares half the prompt's search terms,
+1. **Recall** (`KnowledgeStore.recall`), before the first model call. It returns memories from each
+   store but the skill stores, up to each store's limit in `MAX_RECALLED_MEMORIES`, plus facts and past episodes whose text shares half the prompt's search terms,
    or three of them for a longer prompt (stopwords removed, at most twelve terms), those sharing
    the most terms first. When fewer than five match, recall walks the topic tree: it takes the most
    specific topic whose whole name appears in the query and fills up from facts in that topic and
@@ -286,14 +286,14 @@ of tidying per pass, so it yields to a run as quickly as research does.
    narrowest of up to 20 related topics, the top level, or, for a researched topic, a new broader
    subject made where it sat (a move under an existing topic needs a second, pair-comparison call
    to agree that topic is broader), compare two facts under one topic (same, contradict, different), and
-   compare two user memories. Candidate pairs must share at least half their words, or, for topics
+   compare two memories in one store. Candidate pairs must share at least half their words, or, for topics
    and facts under one topic, have embeddings with a cosine similarity of at least 0.75. Every reply is a short reason
    and a verdict from a schema enum, and each verdict is stored in `consolidation_checks` so a pair
    is asked about only once.
 
 Merges keep the more trusted item and carry over its facts, sources, subtopics, queued research and
 graph edges. Contradicting facts are marked `disputed` and their topic is queued for fresh research;
-a contradicted user memory has its older side `superseded`. Disputed, pruned and superseded items
+a contradicted memory has its older side `superseded`. Disputed, pruned and superseded items
 are no longer recalled.
 
 ## Request data flow
@@ -355,7 +355,10 @@ These are properties of the code as it stands, recorded so changes can be measur
   and its topic is re-researched, but it stays `active` until a newer fact contradicts it.
 - **Fact grounding is lexical.** A fact is checked against its source by shared words, versions
   and dates, so a paraphrase that changes a claim's meaning but keeps its words still passes.
-- **User memories must share words to be compared.** Topics and facts are also paired by meaning,
-  but user memories have no embeddings, so differently worded duplicates of them stay apart.
+- **Memories must share words to be compared.** Topics and facts are also paired by meaning,
+  but memories have no embeddings, so differently worded duplicates of them stay apart.
+- **Skills are matched by approach, not by subject.** A task that researches gets the research
+  guides and lessons whatever it researches, and one that reads files gets the code ones even
+  when the files are not code.
 - **Use counts only grow.** A topic recalled often long ago still counts as often used, so its
   refreshes stay frequent as long as it is used at all.

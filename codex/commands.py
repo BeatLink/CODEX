@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .instructions import INSTRUCTIONS_FILE_NAMES, config_directory, project_instructions_path
-from .knowledge import USER_MEMORY_KINDS, KnowledgeStore
+from .knowledge import MEMORY_STORE_LABELS, MEMORY_STORES, SCOPED_MEMORY_STORES, KnowledgeStore
 
 
 # ==============================================================================
@@ -16,6 +16,18 @@ MEMORY_COMMANDS = ("/remember", "/forget", "/memories")
 
 # "Why:" starts the reason a remembered statement holds.
 _REASON = re.compile(r"\s*\bwhy:\s*", re.IGNORECASE)
+
+# Other words /remember takes for a store, including the kinds memories had before there were stores.
+STORE_ALIASES = {
+    "preference": "user",
+    "correction": "user",
+    "reference": "locations",
+    "location": "locations",
+    "files": "locations",
+    "folders": "locations",
+    "environment": "locations",
+    "skill": "code",
+}
 
 
 def _command_word(user_prompt: str) -> tuple[str, str]:
@@ -39,33 +51,36 @@ def run_memory_command(user_prompt: str, knowledge_store: KnowledgeStore | None,
         return _remember(knowledge_store, text, scope)
     if command == "/forget":
         return _forget(knowledge_store, text, scope)
-    return _list_memories(knowledge_store, scope)
+    return _list_memories(knowledge_store, text, scope)
+
+
+def _store_word(word: str) -> str | None:
+    word = word.casefold().rstrip(":")
+    return word if word in MEMORY_STORES else STORE_ALIASES.get(word)
 
 
 def _remember(knowledge_store: KnowledgeStore, text: str, scope: str) -> str:
-    kinds = ", ".join(USER_MEMORY_KINDS)
+    stores = ", ".join(MEMORY_STORES)
     first_word, _, rest = text.partition(" ")
-    kind = first_word.casefold().rstrip(":")
-    if kind in USER_MEMORY_KINDS:
+    store = _store_word(first_word)
+    if store is not None:
         text = rest.strip()
     else:
-        kind = "preference"
+        store = "user"
     reason_start = _REASON.search(text)
     statement, reason = (text[:reason_start.start()], text[reason_start.end():]) if reason_start else (text, "")
     statement = statement.strip()
     if not statement:
-        return f"Say what to remember, for example: /remember preference Answer in British English. Why: I work in the UK. Kinds: {kinds}."
-    # A project memory belongs to the folder it was stated in; everything else holds everywhere.
-    memory_scope = scope if kind == "project" else ""
-    memory_id = knowledge_store.add_user_memory(kind, statement, reason=reason.strip(), origin="user", scope=memory_scope)
-    where = " for this folder" if memory_scope else ""
-    return f"Remembered{where} as memory {memory_id} ({kind}): {statement}"
+        return f"Say what to remember, for example: /remember user Answer in British English. Why: I work in the UK. Stores: {stores}."
+    memory_id = knowledge_store.add_memory(store, statement, reason=reason.strip(), origin="user", scope=scope)
+    where = " for this folder" if store in SCOPED_MEMORY_STORES else ""
+    return f"Remembered{where} as memory {memory_id} ({store}): {statement}"
 
 
 def _forget(knowledge_store: KnowledgeStore, text: str, scope: str) -> str:
     if not text:
         return "Say which memory to forget: its number from /memories, or words from it."
-    memories = knowledge_store.user_memories(limit=10_000, scope=scope)
+    memories = knowledge_store.memories(limit=10_000, scope=scope)
     if text.isdigit():
         matches = [memory for memory in memories if memory["id"] == int(text)]
     else:
@@ -75,24 +90,33 @@ def _forget(knowledge_store: KnowledgeStore, text: str, scope: str) -> str:
         return f"No memory matches '{text}'. List them with /memories."
     if len(matches) > 1:
         # Deleting cannot be undone, so several matches are listed instead of all being forgotten.
-        return "Several memories match; forget one by its number:\n" + _memory_lines(matches)
-    knowledge_store.forget_user_memory(matches[0]["id"])
+        return "Several memories match; forget one by its number:\n" + _memory_lines(matches, show_store=True)
+    knowledge_store.forget_memory(matches[0]["id"])
     return f"Forgot memory {matches[0]['id']}: {matches[0]['statement']}"
 
 
-def _list_memories(knowledge_store: KnowledgeStore, scope: str) -> str:
-    memories = knowledge_store.user_memories(limit=10_000, scope=scope)
+def _list_memories(knowledge_store: KnowledgeStore, text: str, scope: str) -> str:
+    """List the memories for this folder under each store's heading, or only one store's when one is named."""
+    store = _store_word(text) if text else None
+    if text and store is None:
+        return f"There is no memory store called '{text}'. Stores: {', '.join(MEMORY_STORES)}."
+    memories = knowledge_store.memories(limit=10_000, scope=scope, stores=(store,) if store else MEMORY_STORES)
     if not memories:
         return "No memories yet. Add one with /remember."
-    return "Memories for this folder, newest first:\n" + _memory_lines(memories)
+    groups = []
+    for name in MEMORY_STORES:
+        in_store = [memory for memory in memories if memory["store"] == name]
+        if in_store:
+            groups.append(f"{MEMORY_STORE_LABELS[name]} ({name}), newest first:\n" + _memory_lines(in_store))
+    return "\n\n".join(groups)
 
 
-def _memory_lines(memories: list[dict]) -> str:
+def _memory_lines(memories: list[dict], show_store: bool = False) -> str:
     return "\n".join(
-        f"{memory['id']}. ({memory['kind']}"
-        + (", this folder" if memory["scope"] else "")
-        + (", learned" if memory["origin"] == "learned" else "")
-        + f") {memory['statement']}"
+        f"{memory['id']}. "
+        + (f"[{memory['store']}] " if show_store else "")
+        + (f"({memory['origin']}) " if memory["origin"] != "user" else "")
+        + memory["statement"]
         + (f" Why: {memory['reason']}" if memory["reason"] else "")
         for memory in memories
     )

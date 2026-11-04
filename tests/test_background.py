@@ -273,7 +273,7 @@ class ExtractionTests(unittest.TestCase):
         self.store.record_episode("Write my Rust CLI in clap", "action", "1. Use clap", "Done", "answered")
         self.store.add_fact("Rust", "Rust is a systems language.")
         reply = json.dumps({
-            "memories": [{"kind": "project", "statement": "Is building a Rust CLI with clap."}],
+            "memories": [{"store": "project", "statement": "Is building a Rust CLI with clap."}],
             "research_topics": ["clap argument parsing", "Rust"],
         })
 
@@ -282,7 +282,7 @@ class ExtractionTests(unittest.TestCase):
 
         self.assertIn("Write my Rust CLI in clap", run_stage.call_args.args[2])
         self.assertEqual(
-            [(memory["kind"], memory["statement"]) for memory in self.store.user_memories()],
+            [(memory["store"], memory["statement"]) for memory in self.store.memories()],
             [("project", "Is building a Rust CLI with clap.")],
         )
         self.assertEqual([job["topic"] for job in self.store.queue_status()], ["clap argument parsing"])
@@ -294,8 +294,8 @@ class ExtractionTests(unittest.TestCase):
         self.store.record_episode("Port the parser to Zig", "action", "", "Done", "answered", scope="/work/parser")
         reply = json.dumps({
             "memories": [
-                {"kind": "project", "statement": "Is porting a parser to Zig."},
-                {"kind": "preference", "statement": "Likes Zig.", "reason": "Asked for Zig"},
+                {"store": "project", "statement": "Is porting a parser to Zig."},
+                {"store": "user", "statement": "Likes Zig.", "reason": "Asked for Zig"},
             ],
             "research_topics": [],
         })
@@ -305,10 +305,36 @@ class ExtractionTests(unittest.TestCase):
 
         self.assertEqual(run_stage.call_count, 1)
         self.assertEqual(
-            {memory["statement"]: (memory["scope"], memory["reason"]) for memory in self.store.user_memories()},
+            {memory["statement"]: (memory["scope"], memory["reason"]) for memory in self.store.memories()},
             {"Is porting a parser to Zig.": ("/work/parser", ""), "Likes Zig.": ("", "Asked for Zig")},
         )
         self.assertEqual(len(self.store.episodes(unprocessed_only=True)), 1)
+
+    def test_learning_keeps_only_locations_and_software_the_requests_showed(self):
+        checklist = "Paths the tools opened:\n- /Storage/Backups/nightly\n\nActions taken:\n- run_tests {}: pytest 8.3 passed"
+        self.store.record_episode("Check my backups", "files", checklist, "Done", "answered")
+        reply = json.dumps({
+            "memories": [
+                {"store": "locations", "statement": "Nightly backups are in /Storage/Backups/nightly."},
+                {"store": "locations", "statement": "Backups are mirrored to /mnt/offsite."},
+                {"store": "software", "statement": "pytest is installed."},
+                {"store": "software", "statement": "Borg is installed."},
+                {"store": "research", "statement": "Check the backup log before the docs."},
+            ],
+            "research_topics": [],
+        })
+
+        with patch("codex.background.run_stage", return_value=reply):
+            learn_from_episodes(self.settings, llm=object())
+
+        self.assertEqual(
+            sorted((memory["store"], memory["statement"]) for memory in self.store.memories()),
+            [
+                ("locations", "Nightly backups are in /Storage/Backups/nightly."),
+                ("research", "Check the backup log before the docs."),
+                ("software", "pytest is installed."),
+            ],
+        )
 
 
 if __name__ == "__main__":

@@ -97,7 +97,7 @@ class SeedStoreTests(unittest.TestCase):
             topics = {topic["name"]: topic for topic in store.topics()}
 
         self.assertTrue(any("7413" in fact["statement"] for fact in recalled["facts"]))
-        self.assertTrue(any("ISO 8601" in memory["statement"] for memory in recalled["user"]))
+        self.assertTrue(any("ISO 8601" in memory["statement"] for memory in recalled["memories"]))
         self.assertTrue(any("7413" in source["snippet"] for source in sources))
         self.assertEqual(topics["Kestrel ingest"]["parent_id"], topics["Halvorsen Lab"]["id"])
 

@@ -1,4 +1,4 @@
-"""Read the standing instructions the user writes for every request, and the commands they define."""
+"""Read the standing instructions the user writes for every request, and the skill guides for the tasks that use them."""
 
 import os
 from pathlib import Path
@@ -54,3 +54,39 @@ def load_instructions(filesystem_root: str | Path) -> str:
     if len(instructions) > MAX_INSTRUCTIONS_CHARS:
         instructions = instructions[:MAX_INSTRUCTIONS_CHARS] + "\n[Cut: the instructions are longer than the limit.]"
     return instructions
+
+
+# ==============================================================================
+# Skills and guides
+# ==============================================================================
+
+# Each skill store has a folder of Markdown guides, global and per folder.
+SKILL_FOLDERS = {"research": "research", "code": "code"}
+
+# Guides go into every call of a task that uses them, so they are kept as short as instructions.
+MAX_SKILLS_CHARS = 3000
+
+SKILLS_LABEL = "Skills and guides from the user"
+
+
+def skill_directories(filesystem_root: str | Path, store: str) -> list[Path]:
+    """Return where a skill store's guides live, the global folder first and the folder's own last."""
+    root = Path(filesystem_root).expanduser().resolve()
+    return [config_directory() / "skills" / SKILL_FOLDERS[store], root / ".codex" / "skills" / SKILL_FOLDERS[store]]
+
+
+def load_skills(filesystem_root: str | Path, store: str) -> str:
+    """Return the user's guides for one skill store, or an empty string when there are none."""
+    parts = []
+    for directory in dict.fromkeys(skill_directories(filesystem_root, store)):
+        for path in sorted(directory.glob("*.md")) if directory.is_dir() else []:
+            try:
+                text = path.read_text(encoding="utf-8").strip()
+            except (OSError, UnicodeDecodeError):
+                continue
+            if text:
+                parts.append(text)
+    skills = "\n\n".join(parts)
+    if len(skills) > MAX_SKILLS_CHARS:
+        skills = skills[:MAX_SKILLS_CHARS] + "\n[Cut: the guides are longer than the limit.]"
+    return skills

@@ -38,8 +38,8 @@
     {"topic": "Skerry backup server", "statement": "Skerry, the lab's backup server, keeps nightly snapshots for 45 days.", "source_url": "https://wiki.halvorsen-lab.test/infra/skerry"},
     {"topic": "Halvorsen Lab", "statement": "The Halvorsen Lab on-call rota changes over every Tuesday at 09:00.", "source_url": "https://wiki.halvorsen-lab.test/on-call"}
   ],
-  "user_memory": [
-    {"kind": "preference", "statement": "The user wants dates written in ISO 8601 form, YYYY-MM-DD."},
-    {"kind": "project", "statement": "The user works at Halvorsen Lab on the Kestrel ingest service."}
+  "memories": [
+    {"store": "user", "statement": "The user wants dates written in ISO 8601 form, YYYY-MM-DD."},
+    {"store": "user", "statement": "The user works at Halvorsen Lab on the Kestrel ingest service."}
   ]
 }
