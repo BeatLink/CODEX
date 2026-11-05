@@ -43,7 +43,7 @@
           runHook preInstall
           npm prune --omit=dev --ignore-scripts
           mkdir -p $out/lib/codex $out/bin
-          cp -r dist node_modules evals package.json settings.json $out/lib/codex/
+          cp -r dist node_modules evals package.json $out/lib/codex/
           makeWrapper ${nodejs}/bin/node $out/bin/codex \
             --add-flags $out/lib/codex/dist/cli/index.js \
             --prefix LD_LIBRARY_PATH : "${runtimeLibraryPath}" \
