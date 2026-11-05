@@ -20,12 +20,21 @@ def server(name):
 
 class ParseAgentTests(unittest.TestCase):
     def test_front_matter_gives_the_fields_and_the_body_gives_the_instructions(self):
-        agent = parse_agent("mail", "---\ndescription: Sends email.\nmcp_servers: mail, smtp\nagents: contacts\n---\nBe brief.\n")
+        agent = parse_agent("mail", "---\ndescription: Sends email.\nmcp_servers: [mail, smtp]\nagents:\n  - contacts\n---\nBe brief.\n")
         self.assertEqual(agent.name, "mail")
         self.assertEqual(agent.description, "Sends email.")
         self.assertEqual(agent.mcp_servers, ["mail", "smtp"])
         self.assertEqual(agent.agents, ["contacts"])
         self.assertEqual(agent.instructions, "Be brief.")
+
+    def test_a_single_name_or_comma_separated_string_is_a_list_of_names(self):
+        agent = parse_agent("mail", "---\ndescription: Sends email.\nmcp_servers: mail\nagents: contacts, notes\n---\n")
+        self.assertEqual(agent.mcp_servers, ["mail"])
+        self.assertEqual(agent.agents, ["contacts", "notes"])
+
+    def test_front_matter_that_is_not_valid_yaml_is_not_an_agent(self):
+        self.assertIsNone(parse_agent("mail", "---\ndescription: [unclosed\n---\nBe brief."))
+        self.assertIsNone(parse_agent("mail", "---\n- just\n- a list\n---\nBe brief."))
 
     def test_a_file_without_a_description_is_not_an_agent(self):
         self.assertIsNone(parse_agent("mail", "Be brief."))

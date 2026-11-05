@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from .instructions import config_directory
 
 
@@ -40,31 +42,37 @@ def agent_directories(filesystem_root: str | Path) -> list[Path]:
     return [config_directory() / "agents", root / ".codex" / "agents"]
 
 
-def _names(value: str) -> list[str]:
-    return [name.strip() for name in value.split(",") if name.strip()]
+def _names(value: Any) -> list[str]:
+    """Read a YAML list of names, or a single name or comma-separated string."""
+    items = value if isinstance(value, list) else str(value or "").split(",")
+    return [str(item).strip() for item in items if str(item).strip()]
 
 
 def parse_agent(name: str, text: str) -> AgentDefinition | None:
     """Read one agent file, or return None when it has no description to choose it by."""
-    fields: dict[str, str] = {}
+    fields: Any = {}
     body = text.strip()
     lines = body.splitlines()
     if lines and lines[0].strip() == "---":
         for index, line in enumerate(lines[1:], start=1):
             if line.strip() == "---":
+                try:
+                    fields = yaml.safe_load("\n".join(lines[1:index]))
+                except yaml.YAMLError:
+                    return None
                 body = "\n".join(lines[index + 1:]).strip()
                 break
-            key, _, value = line.partition(":")
-            fields[key.strip().casefold()] = value.strip()
-    description = fields.get("description", "")
+    if not isinstance(fields, dict):
+        return None
+    description = str(fields.get("description") or "").strip()
     if not description:
         return None
     return AgentDefinition(
         name=name,
         description=description,
         instructions=body[:MAX_AGENT_INSTRUCTIONS_CHARS],
-        mcp_servers=_names(fields.get("mcp_servers", "")),
-        agents=_names(fields.get("agents", "")),
+        mcp_servers=_names(fields.get("mcp_servers")),
+        agents=_names(fields.get("agents")),
     )
 
 

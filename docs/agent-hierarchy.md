@@ -24,13 +24,13 @@ An agent is a persistent configuration, not a running process. There is one mode
 | `mcp_servers` | Names of the MCP servers only this agent can use |
 | `agents` | Names of the agents this one can delegate to |
 
-Agents are Markdown files in `~/.config/codex/agents/` and the working folder's `.codex/agents/`, like skills and user commands. A folder's file replaces a global one of the same name.
+Agents are Markdown files with YAML front matter in `~/.config/codex/agents/` and the working folder's `.codex/agents/`, like skills and user commands. The front matter is read with PyYAML; `mcp_servers` and `agents` are YAML lists. A folder's file replaces a global one of the same name.
 
 ```markdown
 ---
 description: Reads, drafts and sends the user's email.
-mcp_servers: mail
-agents: contacts
+mcp_servers: [mail]
+agents: [contacts]
 ---
 Keep replies short. Never send a message without showing the draft first.
 ```

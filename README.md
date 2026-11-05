@@ -162,7 +162,7 @@ interfaces offer Resume and Discard for the newest unfinished run, and
 
 ## Agents
 
-A task can hand its work to a named specialist agent, which works it as its own task tree with its own instructions and tools. Agents are Markdown files in `~/.config/codex/agents/` and the folder's `.codex/agents/`: the file name is the agent's name, and the front matter gives a `description` (what the parent reads to choose it), `mcp_servers` (servers only this agent may use), and `agents` (the agents it can hand work to). The body is added to the standing instructions for the agent's calls. Agents nest three deep at most. See [docs/agent-hierarchy.md](docs/agent-hierarchy.md).
+A task can hand its work to a named specialist agent, which works it as its own task tree with its own instructions and tools. Agents are Markdown files in `~/.config/codex/agents/` and the folder's `.codex/agents/`: the file name is the agent's name, and the YAML front matter gives a `description` (what the parent reads to choose it), `mcp_servers` (servers only this agent may use), and `agents` (the agents it can hand work to). The body is added to the standing instructions for the agent's calls. Agents nest three deep at most. See [docs/agent-hierarchy.md](docs/agent-hierarchy.md).
 
 ## Standing instructions
 

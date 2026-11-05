@@ -46,6 +46,7 @@
           pythonPackages.ddgs
           pythonPackages.mcp
           pythonPackages.pygobject3
+          pythonPackages.pyyaml
           pythonPackages.sqlite-vec
           pythonPackages.textual
         ];
@@ -56,6 +57,7 @@
         packages.ddgs
         packages.mcp
         packages.pygobject3
+        packages.pyyaml
         packages.sqlite-vec
         packages.textual
       ]);
