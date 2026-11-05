@@ -276,7 +276,7 @@ type Seed = {
     topics?: Array<{ name: string; parent?: string | null }>;
     sources?: Array<SearchResult & { title: string; topic?: string | null }>;
     facts: Array<{ topic: string; statement: string; source_url?: string | null; confidence?: number }>;
-    user_memory?: Array<{ kind: string; statement: string }>;
+    memories?: Array<{ store: string; statement: string; scope?: string }>;
 };
 
 function required<T>(value: T | undefined, name: string): T {
@@ -286,7 +286,7 @@ function required<T>(value: T | undefined, name: string): T {
     return value;
 }
 
-// Fill a new knowledge store from a seed file of topics, sources, facts, and user memory.
+// Fill a new knowledge store from a seed file of topics, sources, facts, and memories.
 export async function buildSeedStore(seedPath: string, databasePath: string, embedder: TextEmbedder | null = null): Promise<void> {
     const seed = JSON.parse(readFileSync(seedPath, 'utf-8')) as Seed;
     if (!isObject(seed) || !Array.isArray(seed.facts) || seed.facts.length === 0) {
@@ -302,8 +302,8 @@ export async function buildSeedStore(seedPath: string, databasePath: string, emb
     for (const fact of seed.facts) {
         store.addFact(required(fact.topic, 'topic'), required(fact.statement, 'statement'), fact.source_url ?? null, fact.confidence ?? 0.9);
     }
-    for (const memory of seed.user_memory ?? []) {
-        store.addUserMemory(required(memory.kind, 'kind'), required(memory.statement, 'statement'));
+    for (const memory of seed.memories ?? []) {
+        store.addMemory(required(memory.store, 'store'), required(memory.statement, 'statement'), { scope: memory.scope ?? '' });
     }
     // Facts and topics get their vectors now, as the background worker would give them later.
     if (store.embedder !== null) {

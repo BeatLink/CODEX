@@ -26,9 +26,11 @@ export function defaultLogPath(environment: NodeJS.ProcessEnv = process.env): st
 export type LaunchOptions = {
     socketPath: string;
     settingsPath: string | null;
+    // Starts in the system tray without opening the window, as the login autostart entry does.
+    startInTray: boolean;
 };
 
-// Reads --socket and --settings from the app's arguments, falling back to CODEX_SOCKET_PATH and the default socket.
+// Reads --socket, --settings and --background from the app's arguments, falling back to CODEX_SOCKET_PATH and the default socket.
 export function launchOptions(argv: string[], environment: NodeJS.ProcessEnv = process.env): LaunchOptions {
     const valueOf = (flag: string): string | null => {
         for (let index = 0; index < argv.length; index += 1) {
@@ -44,5 +46,6 @@ export function launchOptions(argv: string[], environment: NodeJS.ProcessEnv = p
     return {
         socketPath: valueOf('--socket') ?? environment.CODEX_SOCKET_PATH ?? defaultSocketPath(environment),
         settingsPath: valueOf('--settings'),
+        startInTray: argv.includes('--background'),
     };
 }

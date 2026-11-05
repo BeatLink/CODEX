@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { KnowledgeStore, MIGRATIONS } from './knowledge.js';
+import { KnowledgeStore, MAX_RECALLED_MEMORIES, MIGRATIONS } from './knowledge.js';
 
 
 // ============================================================================
@@ -198,14 +198,14 @@ describe('KnowledgeStore', () => {
     });
 
     it('recalls user memory, facts and episodes and counts their use', async () => {
-        store.addUserMemory('preference', 'Prefers Python examples');
+        store.addMemory('user', 'Prefers Python examples');
         store.addFact('SQLite', 'SQLite FTS5 supports bm25 ranking.', null, 0.8);
         store.addFact('Rust', 'Cargo builds crates.', null, 0.8);
         store.recordEpisode('Explain SQLite FTS5 ranking', 'reasoning', '1. Explain ranking', 'Answer', 'answered');
 
         const recalled = await store.recall('How does SQLite FTS5 ranking work?');
 
-        expect(recalled.user.map((memory) => memory.statement)).toEqual(['Prefers Python examples']);
+        expect(recalled.memories.map((memory) => memory.statement)).toEqual(['Prefers Python examples']);
         expect(recalled.facts.map((fact) => fact.statement)).toEqual(['SQLite FTS5 supports bm25 ranking.']);
         expect(recalled.episodes[0].prompt).toBe('Explain SQLite FTS5 ranking');
         const useCounts = Object.fromEntries(store.facts().map((fact) => [fact.topic, fact.use_count]));
@@ -213,17 +213,17 @@ describe('KnowledgeStore', () => {
     });
 
     it('recalls for a long request a fact sharing three of its terms', async () => {
-        store.addUserMemory('preference', 'Prefers Python examples');
+        store.addMemory('user', 'Prefers Python examples');
         store.addFact('FastAPI', 'FastAPI runs async def endpoints on the event loop.');
         store.addFact('FastAPI', 'FastAPI is a Python web framework.');
 
         const recalled = await store.recall(
             'I am building a web service with FastAPI and Postgres; how should I structure' +
                 ' async endpoints and database sessions so they do not block?',
-            { includeUser: false },
+            { includeMemories: false },
         );
 
-        expect(recalled.user).toEqual([]);
+        expect(recalled.memories).toEqual([]);
         // The other fact comes from the named topic's branch, after the one matching the request itself.
         expect(recalled.facts.map((fact) => fact.statement)).toEqual([
             'FastAPI runs async def endpoints on the event loop.',
@@ -294,58 +294,91 @@ describe('KnowledgeStore', () => {
 
     it('recalls a new user memory beside often used ones', async () => {
         for (let number = 0; number < 12; number += 1) {
-            store.addUserMemory('preference', `Likes style number ${number}`);
+            store.addMemory('user', `Likes style number ${number}`);
         }
         for (let count = 0; count < 3; count += 1) {
             await store.recall('anything at all');
         }
-        store.addUserMemory('preference', 'Wants answers in British English');
+        store.addMemory('user', 'Wants answers in British English');
 
-        const recalled = (await store.recall('anything at all')).user.map((memory) => memory.statement);
+        const recalled = (await store.recall('anything at all')).memories.map((memory) => memory.statement);
 
-        expect(recalled).toHaveLength(10);
+        expect(recalled).toHaveLength(MAX_RECALLED_MEMORIES.user);
         expect(recalled[0]).toBe('Wants answers in British English');
     });
 
     it('puts user memories sharing the request words first', async () => {
-        store.addUserMemory('preference', 'Uses Rust for command line tools');
-        store.addUserMemory('preference', 'Prefers short answers');
+        store.addMemory('user', 'Uses Rust for command line tools');
+        store.addMemory('user', 'Prefers short answers');
 
-        const recalled = (await store.recall('Write a Rust command line parser')).user;
+        const recalled = (await store.recall('Write a Rust command line parser')).memories;
 
         expect(recalled[0].statement).toBe('Uses Rust for command line tools');
     });
 
     it('recalls a project memory only in its project', async () => {
-        store.addUserMemory('project', 'Is porting the parser to Zig', { scope: '/work/parser' });
-        store.addUserMemory('preference', 'Prefers short answers');
+        store.addMemory('project', 'Is porting the parser to Zig', { scope: '/work/parser' });
+        store.addMemory('user', 'Prefers short answers');
 
-        const here = (await store.recall('next step', { scope: '/work/parser' })).user.map((memory) => memory.statement);
-        const elsewhere = (await store.recall('next step', { scope: '/work/other' })).user.map((memory) => memory.statement);
+        const here = (await store.recall('next step', { scope: '/work/parser' })).memories.map((memory) => memory.statement);
+        const elsewhere = (await store.recall('next step', { scope: '/work/other' })).memories.map((memory) => memory.statement);
 
         expect([...here].sort()).toEqual(['Is porting the parser to Zig', 'Prefers short answers']);
         expect(elsewhere).toEqual(['Prefers short answers']);
     });
 
     it('keeps a stated memory stated, with its reason, when it is learned again', () => {
-        store.addUserMemory('reference', 'Docs live at https://example.test/docs', { reason: 'Moved there', origin: 'user' });
-        store.addUserMemory('reference', 'Docs live at https://example.test/docs');
+        store.addMemory('locations', 'Docs live at https://example.test/docs', { reason: 'Moved there', origin: 'user' });
+        store.addMemory('locations', 'Docs live at https://example.test/docs');
 
-        const [memory] = store.userMemories();
+        const [memory] = store.memories();
 
         expect([memory.origin, memory.reason]).toEqual(['user', 'Moved there']);
     });
 
     it('forgets a user memory for good', () => {
-        const memoryId = store.addUserMemory('preference', 'Prefers tabs');
+        const memoryId = store.addMemory('user', 'Prefers tabs');
 
-        expect(store.forgetUserMemory(memoryId)).toBe(true);
-        expect(store.forgetUserMemory(memoryId)).toBe(false);
-        expect(store.userMemories()).toEqual([]);
+        expect(store.forgetMemory(memoryId)).toBe(true);
+        expect(store.forgetMemory(memoryId)).toBe(false);
+        expect(store.memories()).toEqual([]);
     });
 
-    it('rejects unknown user memory kinds', () => {
-        expect(() => store.addUserMemory('secret', 'anything')).toThrow(/kind must be one of/);
+    it('rejects unknown memory stores', () => {
+        expect(() => store.addMemory('secret', 'anything')).toThrow(/store must be one of/);
+    });
+
+    it('recalls each store with its own budget and leaves skills out', async () => {
+        for (let number = 0; number < 8; number += 1) {
+            store.addMemory('user', `Likes style number ${number}`);
+        }
+        store.addMemory('locations', 'Backups live in /Storage/Backups');
+        store.addMemory('research', 'Check release notes before blog posts');
+
+        const recalled = (await store.recall('anything at all')).memories;
+
+        const stores = recalled.map((memory) => memory.store);
+        expect(stores.filter((name) => name === 'user')).toHaveLength(MAX_RECALLED_MEMORIES.user);
+        expect(stores).toContain('locations');
+        expect(stores).not.toContain('research');
+    });
+
+    it('replaces probed memories with the next probe', () => {
+        store.addMemory('software', 'Uses Fedora at work', { origin: 'user' });
+        store.replaceProbedMemories('software', ['git is installed', 'docker is installed']);
+
+        store.replaceProbedMemories('software', ['git is installed', 'Uses Fedora at work']);
+
+        const memories = Object.fromEntries(store.memories().map((memory) => [memory.statement, memory.origin]));
+        expect(memories).toEqual({ 'git is installed': 'probed', 'Uses Fedora at work': 'user' });
+    });
+
+    it('keeps a user memory in its store when it is learned again elsewhere', () => {
+        store.addMemory('project', 'Tests run with unittest', { origin: 'user', scope: '/work/parser' });
+        store.addMemory('code', 'Tests run with unittest');
+
+        const [memory] = store.memories();
+        expect([memory.store, memory.scope, memory.origin]).toEqual(['project', '/work/parser', 'user']);
     });
 
     it('marks episodes processed', () => {
@@ -417,7 +450,7 @@ describe('KnowledgeStore size cap', () => {
 
     it('evicts processed episodes before any fact or user memory', () => {
         store.addFact('Kestrel', 'Kestrel ingest listens on port 7413.');
-        store.addUserMemory('preference', 'Prefers ISO dates.');
+        store.addMemory('user', 'Prefers ISO dates.');
         for (let number = 0; number < 60; number += 1) {
             const episodeId = store.recordEpisode(`Request ${number}`, 'answer', '', 'Done.', 'answered', { taskTree: 'x'.repeat(40_000) });
             store.markEpisodeProcessed(episodeId);
@@ -430,7 +463,7 @@ describe('KnowledgeStore size cap', () => {
         expect(changes['items evicted to fit the size cap']).toBeGreaterThan(0);
         expect(store.episodes({ limit: 100 }).length).toBeLessThan(60);
         expect(store.facts().map((fact) => fact.statement)).toEqual(['Kestrel ingest listens on port 7413.']);
-        expect(store.userMemories().map((memory) => memory.statement)).toEqual(['Prefers ISO dates.']);
+        expect(store.memories().map((memory) => memory.statement)).toEqual(['Prefers ISO dates.']);
     });
 
     it('evicts the least used facts first, with their search entries', async () => {
@@ -502,6 +535,43 @@ function buildOldStore(path: string, version: number): void {
     });
 }
 
+// What the Python store's sqlite_master holds after migrating a version 7 database.
+const PYTHON_SCHEMA_OBJECTS = [
+    ['index', 'one_pending_job_per_topic'],
+    ['index', 'sqlite_autoindex_consolidation_checks_1'],
+    ['index', 'sqlite_autoindex_embeddings_1'],
+    ['index', 'sqlite_autoindex_facts_1'],
+    ['index', 'sqlite_autoindex_graph_edges_1'],
+    ['index', 'sqlite_autoindex_graph_nodes_1'],
+    ['index', 'sqlite_autoindex_memories_1'],
+    ['index', 'sqlite_autoindex_sources_1'],
+    ['index', 'sqlite_autoindex_topics_1'],
+    ['table', 'consolidation_checks'],
+    ['table', 'embeddings'],
+    ['table', 'episodes'],
+    ['table', 'facts'],
+    ['table', 'graph_edges'],
+    ['table', 'graph_nodes'],
+    ['table', 'knowledge_search'],
+    ['table', 'knowledge_search_config'],
+    ['table', 'knowledge_search_content'],
+    ['table', 'knowledge_search_data'],
+    ['table', 'knowledge_search_docsize'],
+    ['table', 'knowledge_search_idx'],
+    ['table', 'memories'],
+    ['table', 'memory_search'],
+    ['table', 'memory_search_config'],
+    ['table', 'memory_search_content'],
+    ['table', 'memory_search_data'],
+    ['table', 'memory_search_docsize'],
+    ['table', 'memory_search_idx'],
+    ['table', 'research_queue'],
+    ['table', 'sources'],
+    ['table', 'task_runs'],
+    ['table', 'topics'],
+];
+const PYTHON_MEMORIES_TABLE = "CREATE TABLE \"memories\" (\n        id INTEGER PRIMARY KEY,\n        store TEXT NOT NULL,\n        statement TEXT NOT NULL UNIQUE COLLATE NOCASE,\n        created_at REAL NOT NULL,\n        last_used_at REAL,\n        use_count INTEGER NOT NULL DEFAULT 0\n    , status TEXT NOT NULL DEFAULT 'active', reason TEXT NOT NULL DEFAULT '', origin TEXT NOT NULL DEFAULT 'learned', scope TEXT NOT NULL DEFAULT '')";
+
 function countRows(database: DatabaseSync, table: string): number {
     return Number(scalar(database, `SELECT COUNT(*) FROM ${table}`));
 }
@@ -534,6 +604,8 @@ describe('KnowledgeStore migrations', () => {
     for (let startVersion = 1; startVersion < MIGRATIONS.length; startVersion += 1) {
         it(`migrates a version ${startVersion} database without losing rows`, async () => {
             const tables = ['topics', 'sources', 'research_queue', 'graph_nodes', 'graph_edges', 'facts', 'user_memory', 'episodes'];
+            // The user memory table became the memory stores, keeping every row.
+            const renamed: Record<string, string> = { user_memory: 'memories' };
             const path = join(directory, 'knowledge.db');
             buildOldStore(path, startVersion);
             const before = withDatabase(path, (database) => {
@@ -547,19 +619,50 @@ describe('KnowledgeStore migrations', () => {
 
             withDatabase(path, (database) => {
                 expect(scalar(database, 'PRAGMA user_version')).toBe(MIGRATIONS.length);
-                expect(Object.fromEntries(Object.keys(before).map((table) => [table, countRows(database, table)]))).toEqual(before);
+                expect(Object.fromEntries(Object.keys(before).map((table) => [table, countRows(database, renamed[table] ?? table)]))).toEqual(before);
             });
             expect(store.search('Kestrel ingest')[0].url).toBe('https://wiki.example/ingest');
             if (startVersion >= 2) {
                 const statements = (await store.recall('Kestrel ingest port')).facts.map((fact) => fact.statement);
                 expect(statements).toContain('Kestrel ingest listens on port 7413.');
-                expect(store.userMemories().map((memory) => memory.statement)).toEqual(['Prefers ISO dates.']);
+                expect(store.memories().map((memory) => [memory.store, memory.statement])).toEqual([['user', 'Prefers ISO dates.']]);
                 expect(store.episodes()).toHaveLength(1);
             }
             store.addFact('Kestrel', 'Kestrel ingest is written in Rust.');
             expect(store.facts()).toHaveLength(startVersion >= 2 ? 2 : 1);
         });
     }
+
+    it('migrates a version 7 database to the schema the Python store makes, keeping each kind in its store', () => {
+        const path = join(directory, 'knowledge.db');
+        withDatabase(path, (database) => {
+            for (const migration of MIGRATIONS.slice(0, 7)) {
+                database.exec(migration);
+            }
+            database.exec(
+                "INSERT INTO user_memory(kind, statement, created_at, scope) VALUES ('preference', 'Prefers ISO dates.', 1, ''), " +
+                    "('correction', 'Never use tabs.', 2, ''), ('reference', 'Docs live at /srv/docs.', 3, ''), " +
+                    "('project', 'Ports the parser to Zig.', 4, '/work/parser')",
+            );
+            database.exec('PRAGMA user_version = 7');
+        });
+
+        const store = new KnowledgeStore(path);
+
+        // The schema objects and the memories table's text are what the Python store writes for the same database.
+        withDatabase(path, (database) => {
+            const objects = database.prepare('SELECT type, name, sql FROM sqlite_master ORDER BY type, name').all();
+            expect(scalar(database, 'PRAGMA user_version')).toBe(8);
+            expect(objects.map((row) => [row.type, row.name])).toEqual(PYTHON_SCHEMA_OBJECTS);
+            expect(objects.find((row) => row.name === 'memories')!.sql).toBe(PYTHON_MEMORIES_TABLE);
+        });
+        expect(store.memories().map((memory) => [memory.store, memory.statement, memory.scope])).toEqual([
+            ['project', 'Ports the parser to Zig.', '/work/parser'],
+            ['locations', 'Docs live at /srv/docs.', ''],
+            ['user', 'Never use tabs.', ''],
+            ['user', 'Prefers ISO dates.', ''],
+        ]);
+    });
 
     it('refuses a newer schema', () => {
         const path = join(directory, 'knowledge.db');

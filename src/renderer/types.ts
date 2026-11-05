@@ -44,6 +44,7 @@ export type Status = {
     settings_path: string;
     run: RunSnapshot | null;
     background: { status: string; output: string };
+    suspended?: boolean;
     unfinished_runs: UnfinishedRun[];
 };
 
@@ -119,4 +120,6 @@ export type CodexApi = {
     saveDialog(options?: { title?: string; defaultPath?: string; filters?: Array<{ name: string; extensions: string[] }> }): Promise<string | null>;
     copyText(text: string): Promise<boolean>;
     listCommands(filesystemRoot: string): Promise<UserCommand[]>;
+    getAutostart(): Promise<boolean>;
+    setAutostart(enabled: boolean): Promise<boolean>;
 };

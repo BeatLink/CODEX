@@ -14,6 +14,8 @@ import {
     FINAL_WAITING_TEXT,
     initialState,
     reduceEvent,
+    RESUMED_TEXT,
+    SUSPENDED_TEXT,
     unfinishedRunText,
     type WorkbenchState,
 } from './runState.js';
@@ -188,6 +190,40 @@ describe('daemon status and other events', () => {
         const changed = events(initialState(), ['settings.changed', { settings: { ...settings, background_research_enabled: false } }]);
 
         expect(changed.settings?.background_research_enabled).toBe(false);
+    });
+
+    it('shows a suspension and tells the user when it starts and ends', () => {
+        const ready = { ...initialState(), status: 'Ready' };
+
+        const suspended = reduceEvent(ready, 'suspended.changed', { suspended: true });
+        const again = reduceEvent(suspended.state, 'suspended.changed', { suspended: true });
+        const resumed = reduceEvent(suspended.state, 'suspended.changed', { suspended: false });
+        const running = reduceEvent({ ...beginRun(ready, 1), status: 'Task 1 · draft' }, 'suspended.changed', { suspended: true });
+
+        expect(suspended.state.suspended).toBe(true);
+        expect(suspended.state.status).toBe(SUSPENDED_TEXT);
+        expect(suspended.effects).toEqual([{ kind: 'notify', message: SUSPENDED_TEXT }]);
+        expect(again.effects).toEqual([]);
+        expect(resumed.state.status).toBe('Ready');
+        expect(resumed.effects).toEqual([{ kind: 'notify', message: RESUMED_TEXT }]);
+        expect(running.state.status).toBe('Task 1 · draft');
+    });
+
+    it("picks up a suspension from the daemon's status", () => {
+        const status: Status = {
+            settings,
+            settings_path: '',
+            run: null,
+            background: { status: SUSPENDED_TEXT, output: '' },
+            suspended: true,
+            unfinished_runs: [],
+        };
+
+        const { state, effects } = applyStatus(initialState(), status);
+
+        expect(state.suspended).toBe(true);
+        expect(state.status).toBe(SUSPENDED_TEXT);
+        expect(effects).toContainEqual({ kind: 'notify', message: SUSPENDED_TEXT });
     });
 
     it('offers the newest unfinished run with a shortened prompt', () => {

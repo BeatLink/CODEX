@@ -435,6 +435,8 @@ export class Toolbox {
     readonly searchCallback: ((query: string, results: SearchResult[]) => void) | null;
     readonly usedTools = new Set<string>();
     readonly actionLog: ActionRecord[] = [];
+    // Every path a file tool really opened, so what a run saw of the machine can be learned from it.
+    readonly pathsSeen: string[] = [];
     readonly toolDefinitions: ToolDefinition[];
     private readonly fetchPage: typeof fetch;
     private readonly resolveHost: HostResolver;
@@ -510,6 +512,12 @@ export class Toolbox {
         const text = typeof result === 'string' ? result : JSON.stringify(result);
         if (!text.startsWith('Tool error:')) {
             this.usedTools.add(name);
+            if (name === 'list_directory' || name === 'read_file' || name === 'write_file') {
+                const path = this.resolveInsideRoot(argumentsGiven.path ?? '.');
+                if (!this.pathsSeen.includes(path)) {
+                    this.pathsSeen.push(path);
+                }
+            }
         }
         // Page JSON is already bounded by the fetch limits and must stay whole for the summarizer to parse it.
         if (name === 'web_fetch') {

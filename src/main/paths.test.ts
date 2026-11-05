@@ -14,15 +14,15 @@ describe('daemon paths', () => {
         expect(defaultLogPath({ XDG_STATE_HOME: '/state' })).toBe('/state/codex/daemon.log');
     });
 
-    it('reads the socket and settings from the command line first', () => {
+    it('reads the socket, settings and tray start from the command line first', () => {
         const environment = { XDG_RUNTIME_DIR: '/run/user/1000', CODEX_SOCKET_PATH: '/from/env.sock' };
 
-        const fromArguments = launchOptions(['electron', 'main.js', '--socket', '/tmp/a.sock', '--settings=s.json'], environment);
+        const fromArguments = launchOptions(['electron', 'main.js', '--socket', '/tmp/a.sock', '--settings=s.json', '--background'], environment);
         const fromEnvironment = launchOptions(['electron', 'main.js'], environment);
         const fallback = launchOptions(['electron', 'main.js'], { XDG_RUNTIME_DIR: '/run/user/1000' });
 
-        expect(fromArguments).toEqual({ socketPath: '/tmp/a.sock', settingsPath: 's.json' });
-        expect(fromEnvironment).toEqual({ socketPath: '/from/env.sock', settingsPath: null });
+        expect(fromArguments).toEqual({ socketPath: '/tmp/a.sock', settingsPath: 's.json', startInTray: true });
+        expect(fromEnvironment).toEqual({ socketPath: '/from/env.sock', settingsPath: null, startInTray: false });
         expect(fallback.socketPath).toBe('/run/user/1000/codex/daemon.sock');
     });
 });

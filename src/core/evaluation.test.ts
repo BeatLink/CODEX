@@ -150,7 +150,7 @@ describe('buildSeedStore', () => {
         const topics = Object.fromEntries(store.topics().map((topic) => [topic.name, topic]));
 
         expect(recalled.facts.some((fact) => fact.statement.includes('7413'))).toBe(true);
-        expect(recalled.user.some((memory) => String(memory.statement).includes('ISO 8601'))).toBe(true);
+        expect(recalled.memories.some((memory) => String(memory.statement).includes('ISO 8601'))).toBe(true);
         expect(sources.some((source) => String(source.snippet).includes('7413'))).toBe(true);
         expect(topics['Kestrel ingest'].parent_id).toBe(topics['Halvorsen Lab'].id);
     });

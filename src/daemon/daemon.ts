@@ -6,6 +6,7 @@ import { dirname, resolve } from 'node:path';
 import { autoSize } from '../core/autoSize.js';
 import { indexKnowledge, learnFromEpisodes, researchOneTopic, type BackgroundOptions, type ModelLock } from '../core/background.js';
 import { consolidateKnowledge } from '../core/consolidation.js';
+import { refreshEnvironment } from '../core/environment.js';
 import { KnowledgeStore, RESUMABLE_TASK_RUN_STATUSES, type TaskRun } from '../core/knowledge.js';
 import { ModelCache } from '../core/model.js';
 import { backgroundModelKey, defaultSettingsPath, expandUser, saveSettings, validateSettings, type Settings } from '../core/settings.js';
@@ -198,6 +199,7 @@ export type DaemonDependencies = {
     indexKnowledge: BackgroundStep;
     learnFromEpisodes: BackgroundStep;
     consolidateKnowledge: BackgroundStep;
+    refreshEnvironment: (settings: Settings) => Promise<boolean>;
     // Seconds on a clock that only moves forward.
     monotonic: () => number;
 };
@@ -209,6 +211,7 @@ const DEFAULT_DEPENDENCIES: DaemonDependencies = {
     indexKnowledge,
     learnFromEpisodes,
     consolidateKnowledge,
+    refreshEnvironment: (settings) => refreshEnvironment(settings),
     monotonic: () => performance.now() / 1000,
 };
 
@@ -282,6 +285,8 @@ export class HarnessDaemon {
     private readonly workerWakeup = new Wakeup();
     private backgroundRunRequested = false;
     private worker: Promise<void> | null = null;
+    // True while suspended: the models are unloaded and no work starts.
+    suspended = false;
     private server: Server | null = null;
     private socketPath: string | null = null;
     private unusedTimer: ReturnType<typeof setTimeout> | null = null;
@@ -353,6 +358,8 @@ export class HarnessDaemon {
                 ),
             ],
             ['discard_run', method(['run_id'], (_, params) => this.discardRun(integer(params.run_id, 'run_id', 0)))],
+            ['suspend', method([], () => this.suspend())],
+            ['resume', method([], () => this.resume())],
             ['shutdown', method([], () => this.shutdown())],
         ]);
     }
@@ -526,6 +533,7 @@ export class HarnessDaemon {
             settings_path: this.settingsPath,
             run: this.run !== null ? this.run.snapshot() : null,
             background: { status: this.backgroundStatus, output: this.backgroundOutput },
+            suspended: this.suspended,
             unfinished_runs: this.unfinishedRuns(),
         };
     }
@@ -584,6 +592,7 @@ export class HarnessDaemon {
         if (!trimmed) {
             throw new Error('The prompt cannot be empty.');
         }
+        this.refuseWhileSuspended();
         const runSettings = validateSettings({ ...this.getSettings(), ...settings });
         return this.launchRun(connection, trimmed, runSettings, interactive, null);
     }
@@ -614,6 +623,7 @@ export class HarnessDaemon {
         interactive: boolean,
         saved: TaskRun | null,
     ): Json {
+        this.refuseWhileSuspended();
         if (this.run !== null) {
             throw new Error('Another request is already running.');
         }
@@ -845,7 +855,10 @@ export class HarnessDaemon {
             let worked = false;
             let waitSeconds: number;
             const manualRunRequested = this.backgroundRunRequested;
-            if (!settings.background_research_enabled && !manualRunRequested) {
+            if (this.suspended) {
+                this.setBackgroundStatus('Suspended');
+                waitSeconds = 1;
+            } else if (!settings.background_research_enabled && !manualRunRequested) {
                 this.setBackgroundStatus('Paused');
                 waitSeconds = settings.background_poll_interval_seconds;
             } else if (this.runIsActive()) {
@@ -864,10 +877,12 @@ export class HarnessDaemon {
                     const workerOptions: BackgroundOptions = {
                         onProgress: (message) => this.setBackgroundStatus(message),
                         onToken: (token) => this.appendBackgroundToken(token),
-                        shouldPause: () => this.runIsActive() || this.stopping,
+                        shouldPause: () => this.runIsActive() || this.suspended || this.stopping,
                         modelLock,
                         modelCache,
                     };
+                    // The machine probe needs no model, so it never takes the turn of the model work below.
+                    const probed = await this.dependencies.refreshEnvironment(settings);
                     // Queued research comes first, then indexing what it found, learning from past requests, and tidying.
                     worked =
                         (await this.dependencies.researchOneTopic(settings, workerOptions)) ||
@@ -875,7 +890,7 @@ export class HarnessDaemon {
                         (await this.dependencies.learnFromEpisodes(settings, workerOptions)) ||
                         (await this.dependencies.consolidateKnowledge(settings, workerOptions));
                     this.broadcast('queue.changed');
-                    if (worked) {
+                    if (worked || probed) {
                         this.broadcast('knowledge.changed');
                         waitSeconds = 0.2;
                     } else {
@@ -895,6 +910,39 @@ export class HarnessDaemon {
             await this.workerWakeup.wait(waitSeconds);
             this.workerWakeup.clear();
         }
+    }
+
+    // ========================================================================
+    // Suspending
+    // ========================================================================
+
+    private refuseWhileSuspended(): void {
+        if (this.suspended) {
+            throw new Error('CODEX is suspended; resume it first.');
+        }
+    }
+
+    async suspend(): Promise<Json> {
+        await this.setSuspended(true);
+        return { suspended: true };
+    }
+
+    async resume(): Promise<Json> {
+        await this.setSuspended(false);
+        return { suspended: false };
+    }
+
+    // Frees the GPU for another program, or takes work up again; a suspension stops the run and unloads every model.
+    async setSuspended(suspended: boolean): Promise<void> {
+        this.suspended = suspended;
+        if (suspended) {
+            this.run?.cancel();
+            // Both locks come free once the stopped run and the paused background work let go of the model.
+            await this.modelLock.withLock(() => this.modelCache.unload());
+            await this.backgroundModelLock.withLock(() => this.backgroundModelCache.unload());
+        }
+        this.workerWakeup.set();
+        this.broadcast('suspended.changed', { suspended });
     }
 
     // ========================================================================

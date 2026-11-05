@@ -1,4 +1,4 @@
-// The SQLite knowledge store: topics, sources, facts, user memory, episodes, task runs, the research queue and the graph.
+// The SQLite knowledge store: topics, sources, facts, memories, episodes, task runs, the research queue and the graph.
 // Its file is shared with earlier versions, so the schema, migrations and stored values stay exactly as they were.
 
 import { mkdirSync } from 'node:fs';
@@ -153,6 +153,11 @@ export const MIGRATIONS: readonly string[] = [
     ALTER TABLE user_memory ADD COLUMN scope TEXT NOT NULL DEFAULT '';
     ALTER TABLE episodes ADD COLUMN scope TEXT NOT NULL DEFAULT '';
     `,
+    `
+    ALTER TABLE user_memory RENAME TO memories;
+    ALTER TABLE memories RENAME COLUMN kind TO store;
+    UPDATE memories SET store = CASE store WHEN 'project' THEN 'project' WHEN 'reference' THEN 'locations' ELSE 'user' END;
+    `,
 ];
 
 // ============================================================================
@@ -174,13 +179,29 @@ export const MEMORY_KINDS = ['fact', 'episode'] as const;
 // A task tree run is running until it ends; a run left running by a crash, or stopped, can be resumed.
 export const TASK_RUN_STATUSES = ['running', 'stopped', 'finished', 'discarded'] as const;
 export const RESUMABLE_TASK_RUN_STATUSES = ['running', 'stopped'] as const;
-export const USER_MEMORY_KINDS = ['preference', 'project', 'correction', 'reference'] as const;
-// A memory the user stated outright is trusted over one the background worker learned.
-export const USER_MEMORY_ORIGINS = ['learned', 'user'] as const;
-// User memories recalled for one request.
-export const MAX_RECALLED_USER_MEMORIES = 10;
+// Each memory belongs to one store, and each store is recalled with its own budget and heading.
+export const MEMORY_STORES = ['general', 'user', 'locations', 'software', 'project', 'research', 'code'] as const;
+export const MEMORY_STORE_LABELS: Record<MemoryStore, string> = {
+    general: 'General knowledge learned from earlier requests',
+    user: 'About the user',
+    locations: 'Folders, files and locations on this machine',
+    software: 'Software on this machine',
+    project: 'About this project',
+    research: 'Lessons for researching and fact finding',
+    code: 'Lessons for code review and editing',
+};
+// Only project memories belong to one folder; every other store holds everywhere.
+export const SCOPED_MEMORY_STORES: readonly MemoryStore[] = ['project'];
+// Skills are recalled for the tasks that use them, not with the rest of memory for every request.
+export const SKILL_MEMORY_STORES: readonly MemoryStore[] = ['research', 'code'];
+// A memory the user stated outright is trusted over one the daemon probed, and both over one the worker learned.
+export const MEMORY_ORIGINS = ['learned', 'probed', 'user'] as const;
+// Memories recalled for one request from each store.
+export const MAX_RECALLED_MEMORIES: Record<MemoryStore, number> = {
+    user: 6, project: 6, general: 4, locations: 4, software: 4, research: 5, code: 5,
+};
 
-// What consolidation compares: two topics, two facts under one topic, or two user memories.
+// What consolidation compares: two topics, two facts under one topic, or two memories in one store.
 export const CONSOLIDATION_KINDS = ['topic', 'fact', 'memory'] as const;
 
 // Two items sharing at least this share of their words are compared by the model.
@@ -222,8 +243,8 @@ export const RECALL_MIN_SHARED_TERMS = 3;
 // Types
 // ============================================================================
 
-export type UserMemoryKind = (typeof USER_MEMORY_KINDS)[number];
-export type UserMemoryOrigin = (typeof USER_MEMORY_ORIGINS)[number];
+export type MemoryStore = (typeof MEMORY_STORES)[number];
+export type MemoryOrigin = (typeof MEMORY_ORIGINS)[number];
 export type TaskRunStatus = (typeof TASK_RUN_STATUSES)[number];
 export type ConsolidationKind = (typeof CONSOLIDATION_KINDS)[number];
 
@@ -248,7 +269,7 @@ export type RecalledFact = {
 export type RecalledRelationship = { subject: string; relation: string; object: string; source_url: string | null };
 
 export type Recalled = {
-    user: Row[];
+    memories: Row[];
     facts: RecalledFact[];
     episodes: Row[];
     relationships: RecalledRelationship[];
@@ -260,14 +281,14 @@ export type TaskRun = Row & { options: Record<string, unknown>; state: Record<st
 // Text matching
 // ============================================================================
 
-const WORD = '[\\p{L}\\p{N}_]';
+export const WORD = '[\\p{L}\\p{N}_]';
 
 // Folds case the way Python's casefold does for nearly every text, such as German sharp s to ss.
 export function casefold(text: string): string {
     return text.toUpperCase().toLowerCase();
 }
 
-function words(text: string, minimumLength: number): string[] {
+export function words(text: string, minimumLength: number): string[] {
     return text.match(new RegExp(`${WORD}{${minimumLength},}`, 'gu')) ?? [];
 }
 
@@ -741,7 +762,7 @@ export class KnowledgeStore {
     }
 
     // ==========================================================================
-    // Facts, user memory, and episodes
+    // Facts, memories, and episodes
     // ==========================================================================
 
     // Stores one atomic fact under a topic; a repeated fact keeps its highest confidence.
@@ -844,76 +865,116 @@ export class KnowledgeStore {
         return rows.map((row) => [row.name, row.summary]);
     }
 
-    // Remembers a durable fact about the user; the reason says why it holds, and a project folder scope keeps it there.
-    addUserMemory(
-        kind: string,
+    // Remembers one durable statement in a memory store; a project memory's scope keeps it to that folder.
+    addMemory(
+        store: string,
         statement: string,
         options: { reason?: string; origin?: string; scope?: string } = {},
     ): number {
         const reason = options.reason ?? '';
         const origin = options.origin ?? 'learned';
-        const scope = options.scope ?? '';
-        if (!(USER_MEMORY_KINDS as readonly string[]).includes(kind)) {
-            throw new Error(`kind must be one of: ${USER_MEMORY_KINDS.join(', ')}.`);
+        if (!(MEMORY_STORES as readonly string[]).includes(store)) {
+            throw new Error(`store must be one of: ${MEMORY_STORES.join(', ')}.`);
         }
-        if (!(USER_MEMORY_ORIGINS as readonly string[]).includes(origin)) {
-            throw new Error(`origin must be one of: ${USER_MEMORY_ORIGINS.join(', ')}.`);
+        if (!(MEMORY_ORIGINS as readonly string[]).includes(origin)) {
+            throw new Error(`origin must be one of: ${MEMORY_ORIGINS.join(', ')}.`);
         }
         const memory = collapseSpaces(cleanText(statement, 'memory', 500));
         const memoryReason = firstChars(collapseSpaces(reason), 500);
+        const scope = (SCOPED_MEMORY_STORES as readonly string[]).includes(store) ? (options.scope ?? '') : '';
         return this.withConnection((connection) => {
-            const previous = connection.get('SELECT id, status FROM user_memory WHERE statement = ? COLLATE NOCASE', memory);
+            const previous = connection.get('SELECT id, status FROM memories WHERE statement = ? COLLATE NOCASE', memory);
             if (previous && previous.status !== 'active') {
                 forgetChecks(connection, 'memory', previous.id);
             }
             // Learning a memory again never takes away what the user said about it.
             connection.run(
-                'INSERT INTO user_memory(kind, statement, reason, origin, scope, created_at) VALUES (?, ?, ?, ?, ?, ?) ' +
-                    "ON CONFLICT(statement) DO UPDATE SET kind = excluded.kind, status = 'active', " +
-                    "reason = CASE WHEN excluded.reason != '' THEN excluded.reason ELSE user_memory.reason END, " +
-                    "origin = CASE WHEN user_memory.origin = 'user' THEN 'user' ELSE excluded.origin END, " +
-                    "scope = CASE WHEN user_memory.origin = 'user' AND excluded.origin != 'user' " +
-                    'THEN user_memory.scope ELSE excluded.scope END',
-                kind, memory, memoryReason, origin, scope, now(),
+                'INSERT INTO memories(store, statement, reason, origin, scope, created_at) VALUES (?, ?, ?, ?, ?, ?) ' +
+                    "ON CONFLICT(statement) DO UPDATE SET status = 'active', " +
+                    "store = CASE WHEN memories.origin = 'user' AND excluded.origin != 'user' " +
+                    'THEN memories.store ELSE excluded.store END, ' +
+                    "reason = CASE WHEN excluded.reason != '' THEN excluded.reason ELSE memories.reason END, " +
+                    "origin = CASE WHEN memories.origin = 'user' THEN 'user' ELSE excluded.origin END, " +
+                    "scope = CASE WHEN memories.origin = 'user' AND excluded.origin != 'user' " +
+                    'THEN memories.scope ELSE excluded.scope END',
+                store, memory, memoryReason, origin, scope, now(),
             );
-            return Number(connection.get('SELECT id FROM user_memory WHERE statement = ? COLLATE NOCASE', memory)!.id);
+            return Number(connection.get('SELECT id FROM memories WHERE statement = ? COLLATE NOCASE', memory)!.id);
         });
     }
 
-    // Lists active user memories, newest first; with a scope, only global ones and those of that project.
-    userMemories(options: { limit?: number; scope?: string | null } = {}): Row[] {
+    // Makes a store's probed memories exactly these statements, forgetting what the probe no longer finds.
+    replaceProbedMemories(store: string, statements: string[]): void {
+        const kept = statements.map((statement) => this.addMemory(store, statement, { origin: 'probed' }));
+        this.withConnection((connection) => {
+            const stale = connection
+                .all("SELECT id FROM memories WHERE store = ? AND origin = 'probed'", store)
+                .map((row) => Number(row.id))
+                .filter((memoryId) => !kept.includes(memoryId));
+            for (const memoryId of stale) {
+                connection.run('DELETE FROM memories WHERE id = ?', memoryId);
+                forgetChecks(connection, 'memory', memoryId);
+            }
+        });
+    }
+
+    // Lists active memories in the given stores, newest first; with a scope, only global ones and that project's.
+    memories(options: { limit?: number; scope?: string | null; stores?: readonly string[] } = {}): Row[] {
         const limit = options.limit ?? 50;
         const scope = options.scope ?? null;
+        const stores = options.stores ?? MEMORY_STORES;
+        const placeholders = stores.map(() => '?').join(', ');
         return this.withConnection((connection) =>
             connection.all(
-                'SELECT id, kind, statement, reason, origin, scope, created_at, use_count FROM user_memory ' +
-                    "WHERE status = 'active' AND (? IS NULL OR scope IN ('', ?)) ORDER BY created_at DESC, id DESC LIMIT ?",
-                scope, scope, limit,
+                'SELECT id, store, statement, reason, origin, scope, created_at, use_count FROM memories ' +
+                    `WHERE status = 'active' AND store IN (${placeholders}) AND (? IS NULL OR scope IN ('', ?)) ` +
+                    'ORDER BY created_at DESC, id DESC LIMIT ?',
+                ...stores, scope, scope, limit,
             ),
         );
     }
 
-    // Returns the memories sharing the most words with a request first, then those the user stated, then the newest.
-    relevantUserMemories(query: string, options: { scope?: string; limit?: number } = {}): Row[] {
+    // Returns each store's memories sharing the most words with a request first, then the user's, then the newest.
+    relevantMemories(
+        query: string,
+        options: { scope?: string; stores?: readonly string[]; countUse?: boolean } = {},
+    ): Row[] {
         const scope = options.scope ?? '';
-        const limit = options.limit ?? MAX_RECALLED_USER_MEMORIES;
+        const stores = options.stores ?? MEMORY_STORES;
         const terms = searchTerms(query);
-        const memories = this.userMemories({ limit: 10_000, scope });
-        const shared = new Map(memories.map((memory) => [memory.id, sharedTermCount(terms, `${memory.statement} ${memory.reason}`)]));
-        const ranked = [...memories].sort(
-            (first, second) =>
-                shared.get(second.id)! - shared.get(first.id)! ||
-                Number(first.origin !== 'user') - Number(second.origin !== 'user') ||
-                second.created_at - first.created_at ||
-                second.id - first.id,
-        );
-        return ranked.slice(0, limit);
+        const recalled: Row[] = [];
+        for (const store of stores) {
+            const memories = this.memories({ limit: 10_000, scope, stores: [store] });
+            const shared = new Map(memories.map((memory) => [memory.id, sharedTermCount(terms, `${memory.statement} ${memory.reason}`)]));
+            const ranked = [...memories].sort(
+                (first, second) =>
+                    shared.get(second.id)! - shared.get(first.id)! ||
+                    Number(first.origin !== 'user') - Number(second.origin !== 'user') ||
+                    second.created_at - first.created_at ||
+                    second.id - first.id,
+            );
+            recalled.push(...ranked.slice(0, MAX_RECALLED_MEMORIES[store as MemoryStore]));
+        }
+        if (options.countUse) {
+            this.countMemoryUse(recalled);
+        }
+        return recalled;
     }
 
-    // Deletes one user memory for good and returns whether it existed.
-    forgetUserMemory(memoryId: number): boolean {
+    // Counts one more use of each recalled memory.
+    private countMemoryUse(memories: Row[]): void {
+        this.withConnection((connection) => {
+            connection.runMany(
+                'UPDATE memories SET use_count = use_count + 1, last_used_at = ? WHERE id = ?',
+                memories.map((memory) => [now(), memory.id]),
+            );
+        });
+    }
+
+    // Deletes one memory for good and returns whether it existed.
+    forgetMemory(memoryId: number): boolean {
         return this.withConnection((connection) => {
-            const deleted = connection.run('DELETE FROM user_memory WHERE id = ?', memoryId).changes;
+            const deleted = connection.run('DELETE FROM memories WHERE id = ?', memoryId).changes;
             forgetChecks(connection, 'memory', memoryId);
             return deleted > 0;
         });
@@ -1011,13 +1072,14 @@ export class KnowledgeStore {
         });
     }
 
-    // Returns what memory holds for a request: user memory, matching facts, similar past episodes and relationships.
-    async recall(query: string, options: { limit?: number; includeUser?: boolean; scope?: string } = {}): Promise<Recalled> {
+    // Returns what memory holds for a request: the non-skill memory stores, matching facts, past episodes and relationships.
+    async recall(query: string, options: { limit?: number; includeMemories?: boolean; scope?: string } = {}): Promise<Recalled> {
         const limit = options.limit ?? 5;
-        const includeUser = options.includeUser ?? true;
+        const includeMemories = options.includeMemories ?? true;
         const scope = options.scope ?? '';
+        const stores = MEMORY_STORES.filter((store) => !SKILL_MEMORY_STORES.includes(store));
         const recalled: Recalled = {
-            user: includeUser ? this.relevantUserMemories(query, { scope }) : [],
+            memories: includeMemories ? this.relevantMemories(query, { scope, stores }) : [],
             facts: [],
             episodes: [],
             relationships: [],
@@ -1025,7 +1087,7 @@ export class KnowledgeStore {
         const terms = searchTerms(query);
         const queryVector = await this.queryVector(query);
         const recalledAt = now();
-        return this.withConnection((connection) => {
+        const result = this.withConnection((connection) => {
             const lexicalFactIds: number[] = [];
             if (terms.length > 0) {
                 const rows = connection.all(
@@ -1083,12 +1145,10 @@ export class KnowledgeStore {
                 'UPDATE topics SET use_count = use_count + 1, last_used_at = ? WHERE id = ?',
                 [...new Set(recalled.facts.map((fact) => fact.topic_id))].map((topicId) => [recalledAt, topicId]),
             );
-            connection.runMany(
-                'UPDATE user_memory SET use_count = use_count + 1, last_used_at = ? WHERE id = ?',
-                recalled.user.map((memory) => [recalledAt, memory.id]),
-            );
             return recalled;
         });
+        this.countMemoryUse(result.memories);
+        return result;
     }
 
     // ==========================================================================
@@ -1146,8 +1206,11 @@ export class KnowledgeStore {
             }
             return {
                 checked: checkedPairs,
-                // A project's memories are compared only with that project's, so one project never sets aside another's.
-                rows: connection.all("SELECT id, kind, statement, created_at, scope AS grouping FROM user_memory WHERE status = 'active'"),
+                // Memories are compared within one store, and a project's only with that project's.
+                rows: connection.all(
+                    "SELECT id, store, statement, origin, created_at, store || ':' || scope AS grouping " +
+                        "FROM memories WHERE status = 'active'",
+                ),
                 textColumn: 'statement',
             };
         });
@@ -1173,6 +1236,10 @@ export class KnowledgeStore {
                     }
                     const first = items.get(firstId)!;
                     const second = items.get(secondId)!;
+                    if (kind === 'memory' && first.origin === 'probed' && second.origin === 'probed') {
+                        // Each probe finding is a separate reading of the machine, so two never repeat or contradict.
+                        continue;
+                    }
                     const firstTerms = terms.get(firstId)!;
                     const secondTerms = terms.get(secondId)!;
                     let score = overlap(firstTerms, secondTerms);
@@ -1468,10 +1535,10 @@ export class KnowledgeStore {
     }
 
     // Folds two memories that say the same thing into the more used one, or the newer when used equally.
-    mergeUserMemories(firstId: number, secondId: number): void {
+    mergeMemories(firstId: number, secondId: number): void {
         this.withConnection((connection) => {
             const rows = connection.all(
-                'SELECT id, use_count, last_used_at FROM user_memory WHERE id IN (?, ?) ' +
+                'SELECT id, use_count, last_used_at FROM memories WHERE id IN (?, ?) ' +
                     'ORDER BY use_count DESC, created_at DESC, id DESC',
                 firstId, secondId,
             );
@@ -1480,24 +1547,24 @@ export class KnowledgeStore {
             }
             const [keep, drop] = rows;
             connection.run(
-                'UPDATE user_memory SET use_count = use_count + ?, last_used_at = MAX(COALESCE(last_used_at, 0), ?) ' +
+                'UPDATE memories SET use_count = use_count + ?, last_used_at = MAX(COALESCE(last_used_at, 0), ?) ' +
                     'WHERE id = ?',
                 drop.use_count, drop.last_used_at || 0, keep.id,
             );
-            connection.run('DELETE FROM user_memory WHERE id = ?', drop.id);
+            connection.run('DELETE FROM memories WHERE id = ?', drop.id);
             forgetChecks(connection, 'memory', drop.id);
         });
     }
 
-    // Sets aside the older of two contradicting memories, keeping one the user stated over a learned one.
-    supersedeUserMemory(firstId: number, secondId: number): void {
+    // Sets aside the older of two contradicting memories, keeping the user's over a probed one and a probed over a learned one.
+    supersedeMemory(firstId: number, secondId: number): void {
         this.withConnection((connection) => {
             const older = connection.get(
-                "SELECT id FROM user_memory WHERE id IN (?, ?) ORDER BY origin = 'user', created_at, id LIMIT 1",
+                "SELECT id FROM memories WHERE id IN (?, ?) ORDER BY origin = 'user', origin = 'probed', created_at, id LIMIT 1",
                 firstId, secondId,
             );
             if (older) {
-                connection.run("UPDATE user_memory SET status = 'superseded' WHERE id = ?", older.id);
+                connection.run("UPDATE memories SET status = 'superseded' WHERE id = ?", older.id);
             }
         });
     }

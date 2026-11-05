@@ -51,10 +51,10 @@ describe('memory commands', () => {
     it('stores a stated preference with its reason', () => {
         const reply = remember('Answer in British English. Why: I work in the UK.');
 
-        const [memory] = store.userMemories();
+        const [memory] = store.memories();
         expect(reply).toContain('Remembered');
-        expect([memory.kind, memory.statement, memory.reason, memory.origin, memory.scope]).toEqual([
-            'preference',
+        expect([memory.store, memory.statement, memory.reason, memory.origin, memory.scope]).toEqual([
+            'user',
             'Answer in British English.',
             'I work in the UK.',
             'user',
@@ -65,8 +65,32 @@ describe('memory commands', () => {
     it('keeps a remembered project for this folder', () => {
         remember('project: Porting the parser to Zig');
 
-        const [memory] = store.userMemories();
-        expect([memory.kind, memory.scope]).toEqual(['project', root]);
+        const [memory] = store.memories();
+        expect([memory.store, memory.scope]).toEqual(['project', root]);
+    });
+
+    it('files a memory in the store it names and keeps the old kind words', () => {
+        remember('code Run the linter before committing');
+        remember('reference Docs live at https://example.test/docs');
+
+        const stores = Object.fromEntries(store.memories().map((memory) => [memory.statement, [memory.store, memory.scope]]));
+        expect(stores).toEqual({
+            'Run the linter before committing': ['code', ''],
+            'Docs live at https://example.test/docs': ['locations', ''],
+        });
+    });
+
+    it('lists each store under its heading and can show one store', () => {
+        remember('software Uses Podman, not Docker');
+        remember('Prefers short answers');
+
+        const everything = runMemoryCommand('/memories', store, root);
+        const onlySoftware = runMemoryCommand('/memories software', store, root);
+
+        expect(everything).toContain('About the user (user)');
+        expect(everything).toContain('Software on this machine (software)');
+        expect(onlySoftware).not.toContain('short answers');
+        expect(runMemoryCommand('/memories nowhere', store, root)).toContain("no memory store called 'nowhere'");
     });
 
     it('asks for a number when several memories match the words to forget', () => {
@@ -75,17 +99,17 @@ describe('memory commands', () => {
 
         const reply = runMemoryCommand('/forget use tabs', store, root);
         expect(reply).toContain('Several memories match');
-        expect(store.userMemories()).toHaveLength(2);
+        expect(store.memories()).toHaveLength(2);
 
         runMemoryCommand('/forget tabs make', store, root);
-        expect(store.userMemories().map((memory) => memory.statement)).toEqual(['Use tabs in Go']);
+        expect(store.memories().map((memory) => memory.statement)).toEqual(['Use tabs in Go']);
     });
 
     it('lists memories and forgets one by its number', () => {
         remember('reference Docs live at https://example.test/docs');
-        const memoryId = store.userMemories()[0].id;
+        const memoryId = store.memories()[0].id;
 
-        expect(runMemoryCommand('/memories', store, root)).toContain(`${memoryId}. (reference) Docs live`);
+        expect(runMemoryCommand('/memories', store, root)).toContain(`${memoryId}. Docs live`);
         runMemoryCommand(`/forget ${memoryId}`, store, root);
         expect(runMemoryCommand('/memories', store, root)).toContain('No memories yet');
     });

@@ -18,6 +18,7 @@ import {
     showUnfinishedRuns,
     stopRun,
     STEPS_WAITING_TEXT,
+    SUSPENDED_TEXT,
     TASK_DETAIL_WAITING_TEXT,
     unfinishedRunText,
     type Clarification,
@@ -50,6 +51,8 @@ const codex = (window as unknown as { codex: CodexApi }).codex;
 const RENDER_INTERVAL_MILLISECONDS = 150;
 const NOTICE_SECONDS = 8;
 const COMMAND_CACHE_MILLISECONDS = 5000;
+// The main process sends this alongside the daemon's events when launch at login changes from the tray.
+const AUTOSTART_CHANGED_EVENT = 'autostart.changed';
 
 let state: WorkbenchState = initialState();
 let knowledge: Knowledge = { topics: [], sources: [], graph: [] };
@@ -310,7 +313,7 @@ function renderWorkbench(): void {
 }
 
 function backgroundState(message: string): string {
-    if (message === 'Paused') return 'paused';
+    if (message === 'Paused' || message === SUSPENDED_TEXT) return 'paused';
     if (message.startsWith('Worker error')) return 'error';
     if (message.startsWith('Idle') || message === 'Foreground prompt active') return 'idle';
     return 'working';
@@ -511,6 +514,31 @@ function buildOptionsForm(): void {
     mcp.innerHTML = `<h2 class="eyebrow">MCP servers</h2><span class="field-label"></span><textarea id="mcp-servers" spellcheck="false"></textarea>`;
     (mcp.querySelector('.field-label') as HTMLElement).textContent = MCP_SERVERS_HINT;
     view.optionsForm.append(mcp);
+    // Launch at login belongs to this computer rather than the daemon, so it takes effect at once instead of on Apply.
+    const desktop = document.createElement('fieldset');
+    desktop.className = 'options-group';
+    desktop.innerHTML =
+        '<h2 class="eyebrow">Desktop</h2><label class="switch-row"><input type="checkbox" id="launch-at-login"><span>Launch at login, in the system tray</span></label>';
+    view.optionsForm.append(desktop);
+}
+
+async function setLaunchAtLogin(enabled: boolean): Promise<void> {
+    const input = element<HTMLInputElement>('launch-at-login');
+    try {
+        input.checked = await codex.setAutostart(enabled);
+        notifyUser(input.checked ? 'CODEX will start in the tray when you log in.' : 'CODEX will no longer start when you log in.');
+    } catch (error) {
+        input.checked = !enabled;
+        notifyUser((error as Error).message, true);
+    }
+}
+
+async function showLaunchAtLogin(): Promise<void> {
+    try {
+        element<HTMLInputElement>('launch-at-login').checked = await codex.getAutostart();
+    } catch {
+        // The switch stays as it is when the main process cannot read the entry.
+    }
 }
 
 function readForm(): FormValues {
@@ -917,6 +945,8 @@ function bindControls(): void {
     element('search-knowledge').addEventListener('click', searchKnowledge);
     element('refresh-knowledge').addEventListener('click', () => void refreshKnowledge());
 
+    const launchAtLogin = element<HTMLInputElement>('launch-at-login');
+    launchAtLogin.addEventListener('change', () => void setLaunchAtLogin(launchAtLogin.checked));
     element('apply-options').addEventListener('click', () => void applySettings());
     element('save-options').addEventListener('click', () => void saveSettings());
     element('auto-size').addEventListener('click', () => void autoSize());
@@ -940,7 +970,14 @@ function bindControls(): void {
 async function start(): Promise<void> {
     buildOptionsForm();
     bindControls();
-    codex.onEvent((event, data) => dispatch(reduceEvent(state, event, data)));
+    codex.onEvent((event, data) => {
+        if (event === AUTOSTART_CHANGED_EVENT) {
+            element<HTMLInputElement>('launch-at-login').checked = Boolean(data.enabled);
+            return;
+        }
+        dispatch(reduceEvent(state, event, data));
+    });
+    void showLaunchAtLogin();
     render();
     view.prompt.focus();
     try {

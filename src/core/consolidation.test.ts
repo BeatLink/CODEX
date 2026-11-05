@@ -450,23 +450,23 @@ describe('comparing pairs', () => {
     });
 
     it('lets a newer user memory supersede a contradicting older one', async () => {
-        store.addUserMemory('preference', 'Prefers Python for scripting tasks.');
-        store.addUserMemory('preference', 'Prefers Rust for scripting tasks.');
+        store.addMemory('user', 'Prefers Python for scripting tasks.');
+        store.addMemory('user', 'Prefers Rust for scripting tasks.');
 
         const [worked, calls] = await consolidate([verdict('contradict')]);
 
         expect(worked).toBe(true);
         expect(calls[0][2].indexOf('Python')).toBeLessThan(calls[0][2].indexOf('Rust'));
-        expect(store.userMemories().map((memory) => memory.statement)).toEqual(['Prefers Rust for scripting tasks.']);
+        expect(store.memories().map((memory) => memory.statement)).toEqual(['Prefers Rust for scripting tasks.']);
     });
 
     it('keeps a stated user memory over a newer learned one it contradicts', async () => {
-        store.addUserMemory('preference', 'Prefers Python for scripting tasks.', { origin: 'user' });
-        store.addUserMemory('preference', 'Prefers Rust for scripting tasks.');
+        store.addMemory('user', 'Prefers Python for scripting tasks.', { origin: 'user' });
+        store.addMemory('user', 'Prefers Rust for scripting tasks.');
 
         await consolidate([verdict('contradict')]);
 
-        expect(store.userMemories().map((memory) => memory.statement)).toEqual(['Prefers Python for scripting tasks.']);
+        expect(store.memories().map((memory) => memory.statement)).toEqual(['Prefers Python for scripting tasks.']);
     });
 
     it('leaves the pair to compare later when foreground work arrives', async () => {

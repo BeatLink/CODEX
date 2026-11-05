@@ -1,5 +1,5 @@
-// Read the standing instructions the user writes for every request.
-import { readFileSync, statSync } from 'node:fs';
+// Read the standing instructions the user writes for every request, and the skill guides for the tasks that use them.
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -65,4 +65,59 @@ export function loadInstructions(filesystemRoot: string): string {
         instructions = instructions.slice(0, MAX_INSTRUCTIONS_CHARS) + '\n[Cut: the instructions are longer than the limit.]';
     }
     return instructions;
+}
+
+// ============================================================================
+// Skills and guides
+// ============================================================================
+
+// Each skill store has a folder of Markdown guides, global and per folder.
+export const SKILL_FOLDERS: Record<string, string> = { research: 'research', code: 'code' };
+
+// Guides go into every call of a task that uses them, so they are kept as short as instructions.
+export const MAX_SKILLS_CHARS = 3000;
+
+export const SKILLS_LABEL = 'Skills and guides from the user';
+
+// Return where a skill store's guides live, the global folder first and the folder's own last.
+export function skillDirectories(filesystemRoot: string, store: string): string[] {
+    const root = resolve(expandUser(filesystemRoot));
+    return [join(configDirectory(), 'skills', SKILL_FOLDERS[store]), join(root, '.codex', 'skills', SKILL_FOLDERS[store])];
+}
+
+function guideFiles(directory: string): string[] {
+    try {
+        if (!statSync(directory).isDirectory()) {
+            return [];
+        }
+        return readdirSync(directory)
+            .filter((name) => name.endsWith('.md'))
+            .map((name) => join(directory, name))
+            .sort();
+    } catch {
+        return [];
+    }
+}
+
+// Return the user's guides for one skill store, or an empty string when there are none.
+export function loadSkills(filesystemRoot: string, store: string): string {
+    const parts: string[] = [];
+    for (const directory of new Set(skillDirectories(filesystemRoot, store))) {
+        for (const path of guideFiles(directory)) {
+            let text: string;
+            try {
+                text = new TextDecoder('utf-8', { fatal: true }).decode(readFileSync(path)).trim();
+            } catch {
+                continue;
+            }
+            if (text) {
+                parts.push(text);
+            }
+        }
+    }
+    let skills = parts.join('\n\n');
+    if (skills.length > MAX_SKILLS_CHARS) {
+        skills = skills.slice(0, MAX_SKILLS_CHARS) + '\n[Cut: the guides are longer than the limit.]';
+    }
+    return skills;
 }

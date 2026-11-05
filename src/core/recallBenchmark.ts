@@ -97,7 +97,7 @@ export async function scoreRecall(seedPath: string, questions: Question[], embed
         const score = new Score(label);
         for (const question of questions) {
             const started = performance.now();
-            const recalled = (await store.recall(question.query, { limit: RECALL_LIMIT, includeUser: false })).facts;
+            const recalled = (await store.recall(question.query, { limit: RECALL_LIMIT, includeMemories: false })).facts;
             score.answers.push(new Answer(question, recalled.map((fact) => fact.statement), (performance.now() - started) / 1000));
         }
         return score;

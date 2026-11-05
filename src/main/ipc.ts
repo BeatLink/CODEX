@@ -1,4 +1,4 @@
-// The IPC the window may use: daemon requests from a fixed list, daemon events, native dialogs, the clipboard, and user commands.
+// The IPC the window may use: daemon requests from a fixed list, daemon events, native dialogs, the clipboard, user commands, and launch at login.
 import type { BrowserWindow, IpcMain, IpcMainInvokeEvent, OpenDialogOptions, SaveDialogOptions } from 'electron';
 
 import { loadCommands } from '../core/commands.js';
@@ -11,7 +11,12 @@ export const CHANNELS = {
     saveDialog: 'codex:save-dialog',
     copyText: 'codex:copy-text',
     listCommands: 'codex:list-commands',
+    getAutostart: 'codex:get-autostart',
+    setAutostart: 'codex:set-autostart',
 } as const;
+
+// The window hears this alongside the daemon's events when launch at login changes from the tray.
+export const AUTOSTART_CHANGED_EVENT = 'autostart.changed';
 
 // Shutdown is left out, since closing a window must never stop a daemon other interfaces share.
 export const ALLOWED_METHODS = new Set([
@@ -125,6 +130,7 @@ export type IpcDependencies = {
     showOpenDialog: (window: BrowserWindow, options: OpenDialogOptions) => Promise<{ canceled: boolean; filePaths: string[] }>;
     showSaveDialog: (window: BrowserWindow, options: SaveDialogOptions) => Promise<{ canceled: boolean; filePath?: string }>;
     writeClipboard: (text: string) => void;
+    autostart: { isEnabled: () => boolean; setEnabled: (enabled: boolean) => void };
     isTrustedSender: (event: IpcMainInvokeEvent) => boolean;
 };
 
@@ -153,6 +159,11 @@ export function registerIpc(dependencies: IpcDependencies): void {
         return true;
     })));
     ipcMain.handle(CHANNELS.listCommands, guarded((_event, filesystemRoot) => wrap(() => listUserCommands(filesystemRoot))));
+    ipcMain.handle(CHANNELS.getAutostart, guarded(() => wrap(() => dependencies.autostart.isEnabled())));
+    ipcMain.handle(CHANNELS.setAutostart, guarded((_event, enabled) => wrap(() => {
+        dependencies.autostart.setEnabled(Boolean(enabled));
+        return dependencies.autostart.isEnabled();
+    })));
 }
 
 // Passes one daemon event on to the window, if it is still open.

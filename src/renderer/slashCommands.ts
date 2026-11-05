@@ -10,10 +10,10 @@ export type CommandSuggestion = { name: string; usage: string; description: stri
 export const BUILTIN_COMMANDS: CommandSuggestion[] = [
     {
         name: 'remember',
-        usage: '/remember [kind] statement. Why: reason',
-        description: 'Keep a memory without loading the model; kinds: preference, project, correction, reference',
+        usage: '/remember [store] statement. Why: reason',
+        description: 'Keep a memory without loading the model; stores: general, user, locations, software, project, research, code',
     },
-    { name: 'memories', usage: '/memories', description: 'List memories for this folder, newest first' },
+    { name: 'memories', usage: '/memories [store]', description: "List this folder's memories under each store, newest first" },
     { name: 'forget', usage: '/forget number or words', description: 'Forget one memory by its number or words from it' },
     { name: 'init', usage: '/init [notes]', description: "Write this folder's CODEX.md from its files" },
     { name: 'answer', usage: '/answer request', description: 'Run this request in answer mode' },

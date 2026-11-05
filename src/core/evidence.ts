@@ -8,7 +8,7 @@ import {
     untrustedBlock,
     type TokenCounter,
 } from './contextBudget.js';
-import type { KnowledgeStore, Row } from './knowledge.js';
+import { MEMORY_STORES, MEMORY_STORE_LABELS, type KnowledgeStore, type Row } from './knowledge.js';
 import { runStage, type ChatModel } from './model.js';
 import { Toolbox, type SearchResult } from './tools.js';
 
@@ -100,7 +100,7 @@ export function searchFoundNothing(searchResult: string): boolean {
 // ============================================================================
 
 export type RecallParts = {
-    user?: Row[];
+    memories?: Row[];
     facts?: Row[];
     episodes?: Row[];
     relationships?: Row[];
@@ -115,13 +115,14 @@ function localDate(seconds: number): string {
 // Write recalled memory as short plain lists, or return an empty string when nothing was recalled.
 export function formatRecall(recalled: RecallParts): string {
     const parts: string[] = [];
-    if (recalled.user?.length) {
-        parts.push(
-            'About the user:\n' +
-                recalled.user
-                    .map((memory) => `- (${memory.kind}) ${memory.statement}` + (memory.reason ? ` Why: ${memory.reason}` : ''))
-                    .join('\n'),
-        );
+    for (const store of MEMORY_STORES) {
+        const memories = (recalled.memories ?? []).filter((memory) => memory.store === store);
+        if (memories.length > 0) {
+            parts.push(
+                `${MEMORY_STORE_LABELS[store]}:\n` +
+                    memories.map((memory) => `- ${memory.statement}` + (memory.reason ? ` Why: ${memory.reason}` : '')).join('\n'),
+            );
+        }
     }
     if (recalled.facts?.length) {
         parts.push(

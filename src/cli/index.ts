@@ -114,7 +114,29 @@ const SUBCOMMANDS: Record<string, () => Promise<{ main: (argv: string[]) => Prom
     'recall-benchmark': () => import('../core/recallBenchmark.js'),
 };
 
+// Suspend or resume the running daemon; with none running there is nothing to do, which is not a failure.
+export async function setSuspended(suspended: boolean, io: CliEnvironment): Promise<number> {
+    let client: DaemonClient;
+    try {
+        client = await io.connectToDaemon({ onEvent: () => undefined, start: false });
+    } catch {
+        return 0;
+    }
+    try {
+        await client.call(suspended ? 'suspend' : 'resume');
+    } catch (error) {
+        io.printError(`Error: ${error instanceof Error ? error.message : String(error)}`);
+        return 1;
+    } finally {
+        client.close();
+    }
+    return 0;
+}
+
 export async function main(argv: string[] = process.argv.slice(2), io: CliEnvironment = processEnvironment()): Promise<number> {
+    if (argv[0] === 'suspend' || argv[0] === 'resume') {
+        return setSuspended(argv[0] === 'suspend', io);
+    }
     if (argv.length > 0 && Object.hasOwn(SUBCOMMANDS, argv[0])) {
         return (await SUBCOMMANDS[argv[0]]()).main(argv.slice(1));
     }

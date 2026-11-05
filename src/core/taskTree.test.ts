@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -8,8 +8,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import type { ActionRecord } from './checks.js';
 import { CONDENSED_MARKER } from './contextBudget.js';
 import { CONDENSE_PROMPT } from './evidence.js';
+import { SKILLS_LABEL } from './instructions.js';
 import { KnowledgeStore } from './knowledge.js';
 import type { ChatCompletion, ChatCompletionRequest, ChatModel } from './model.js';
+import type { McpServerSettings } from './settings.js';
 import {
     CHECK_PROMPT,
     COMBINE_PROMPT,
@@ -57,7 +59,7 @@ class Interrupted extends Error {}
 
 function decision(
     approach: string,
-    options: { facts?: string[]; queries?: string[]; subtasks?: Array<[string, number[]]>; clarification?: string } = {},
+    options: { facts?: string[]; queries?: string[]; subtasks?: Array<[string, number[]]>; clarification?: string; agent?: string } = {},
 ): string {
     const reply: Record<string, unknown> = {
         reason: 'Because.',
@@ -68,6 +70,9 @@ function decision(
     };
     if (options.clarification !== undefined) {
         reply.clarification = options.clarification;
+    }
+    if (options.agent !== undefined) {
+        reply.agent = options.agent;
     }
     return JSON.stringify(reply);
 }
@@ -870,6 +875,44 @@ describe('recall', () => {
 });
 
 // ============================================================================
+// Skills
+// ============================================================================
+
+describe('skills', () => {
+    it('gives a task reading files the code guides and lessons but not the research ones', async () => {
+        const root = mkdtempSync(join(workDirectory, 'skills-'));
+        mkdirSync(join(root, 'config', 'codex', 'skills', 'code'), { recursive: true });
+        writeFileSync(join(root, 'config', 'codex', 'skills', 'code', 'review.md'), 'Name the line of each bug.');
+        mkdirSync(join(root, 'project', '.codex', 'skills', 'research'), { recursive: true });
+        writeFileSync(join(root, 'project', '.codex', 'skills', 'research', 'sources.md'), 'Prefer release notes.');
+        const databasePath = join(root, 'knowledge.db');
+        const store = new KnowledgeStore(databasePath);
+        store.addMemory('code', 'Run the parser tests after editing the parser');
+        store.addMemory('research', 'Vendor blogs overstate benchmarks');
+        const model = new ScriptedModel({ 'decide 1': decision('files'), 'write 1': 'No bugs on line 3.' });
+        mocks.runToolStage.mockResolvedValue('Read parser.py.');
+        vi.stubEnv('XDG_CONFIG_HOME', join(root, 'config'));
+
+        try {
+            await executeTaskTree(
+                'Review the parser',
+                runOptions(model, { maxTaskDepth: 0, knowledgeDbPath: databasePath, filesystemRoot: join(root, 'project') }),
+            );
+        } finally {
+            vi.stubEnv('XDG_CONFIG_HOME', join(workDirectory, 'config'));
+        }
+
+        const decideInput = model.call('decide', '1').input;
+        const writeInput = model.call('write', '1').input;
+        expect(decideInput).not.toContain('Name the line of each bug.');
+        expect(writeInput).toContain(`${SKILLS_LABEL}:\nName the line of each bug.`);
+        expect(writeInput).toContain('Run the parser tests after editing the parser');
+        expect(writeInput).not.toContain('Prefer release notes.');
+        expect(writeInput).not.toContain('Vendor blogs overstate benchmarks');
+    });
+});
+
+// ============================================================================
 // Episodes and resuming
 // ============================================================================
 
@@ -877,7 +920,7 @@ describe('episodes', () => {
     it('records a finished tree with the episode', async () => {
         const databasePath = join(mkdtempSync(join(workDirectory, 'episode-')), 'knowledge.db');
         const store = new KnowledgeStore(databasePath);
-        store.addUserMemory('preference', 'Prefers short answers');
+        store.addMemory('user', 'Prefers short answers');
 
         const { model } = await runTree(
             { 'decide 1': decision('answer'), 'write 1': 'Short.' },
@@ -943,5 +986,99 @@ describe('resuming', () => {
 
     it('refuses to resume an unknown run', async () => {
         await expect(runTree({}, { knowledgeDbPath: databasePath, resumeRunId: 7 })).rejects.toThrow(/no saved task tree run 7/);
+    });
+});
+
+// ============================================================================
+// Agents
+// ============================================================================
+
+function writeAgents(root: string, files: Record<string, string>): void {
+    const directory = join(root, '.codex', 'agents');
+    mkdirSync(directory, { recursive: true });
+    for (const [name, text] of Object.entries(files)) {
+        writeFileSync(join(directory, `${name}.md`), text);
+    }
+}
+
+function mcpServer(name: string): McpServerSettings {
+    return { name, enabled: true, transport: 'stdio', command: 'true', args: [], env: {}, allowed_tools: [] };
+}
+
+describe('agents', () => {
+    it('hands a task to an agent that works it as its own tree', async () => {
+        const root = mkdtempSync(join(workDirectory, 'agents-'));
+        writeAgents(root, { mail: '---\ndescription: Reads and sends email.\nmcp_servers: mail\n---\nShow every draft first.' });
+
+        const { result, model, trees } = await runTree(
+            { 'decide 1': [decision('delegate', { agent: 'mail' }), decision('answer')], 'write 1': 'Sent the note.' },
+            { prompt: 'Email Sam that I am late', filesystemRoot: root, allowFileWrites: false, mcpServers: [mcpServer('mail')] },
+        );
+
+        expect(result).toBe('Sent the note.');
+        expect(model.steps()).toEqual(['decide 1', 'decide 1', 'write 1', 'check 1']);
+        const [top, nested] = model.calls.filter((call) => call.step === 'decide');
+        expect(top.system).toContain('mail: Reads and sends email.');
+        expect(top.json_schema!.properties.agent.enum).toEqual(['mail', '']);
+        expect(top.json_schema!.properties.approach.enum).toContain('delegate');
+        expect(top.json_schema!.properties.approach.enum).not.toContain('act');
+        expect(nested.json_schema!.properties).not.toHaveProperty('agent');
+        expect(nested.json_schema!.properties.approach.enum).toContain('act');
+        expect(nested.json_schema!.properties).not.toHaveProperty('clarification');
+        expect(nested.input).toContain('Show every draft first.');
+        expect(nested.input).toContain('Email Sam that I am late');
+        expect(trees.at(-1)![0].approach).toBe('delegate');
+        expect(trees.at(-1)![0].status).toBe('done');
+        expect(trees.at(-1)![0].note).toBe('Delegated to the mail agent');
+    });
+
+    it('offers no delegate choice when there are no agents', async () => {
+        const root = mkdtempSync(join(workDirectory, 'agents-'));
+
+        const { model } = await runTree({ 'decide 1': decision('answer'), 'write 1': 'Done.' }, { filesystemRoot: root });
+
+        const schema = model.call('decide', '1').json_schema!;
+        expect(schema.properties).not.toHaveProperty('agent');
+        expect(schema.properties.approach.enum).not.toContain('delegate');
+    });
+
+    it('answers directly when the model names an agent that is not offered', async () => {
+        const root = mkdtempSync(join(workDirectory, 'agents-'));
+        writeAgents(root, { mail: '---\ndescription: Email.\n---\n' });
+
+        const { result, model } = await runTree(
+            { 'decide 1': decision('delegate', { agent: 'calendar' }), 'write 1': 'Direct answer.' },
+            { filesystemRoot: root },
+        );
+
+        expect(result).toBe('Direct answer.');
+        expect(model.steps()).toEqual(['decide 1', 'write 1', 'check 1']);
+    });
+
+    it('nests agents only as deep as the limit', async () => {
+        const root = mkdtempSync(join(workDirectory, 'agents-'));
+        writeAgents(root, {
+            one: '---\ndescription: First.\nagents: two\n---\n',
+            two: '---\ndescription: Second.\nagents: three\n---\n',
+            three: '---\ndescription: Third.\nagents: four\n---\n',
+            four: '---\ndescription: Fourth.\n---\n',
+        });
+
+        const { result, model } = await runTree(
+            {
+                'decide 1': [
+                    decision('delegate', { agent: 'one' }),
+                    decision('delegate', { agent: 'two' }),
+                    decision('delegate', { agent: 'three' }),
+                    decision('answer'),
+                ],
+                'write 1': 'Deep answer.',
+            },
+            { filesystemRoot: root },
+        );
+
+        const offers = model.calls.filter((call) => call.step === 'decide').map((call) => call.json_schema!.properties.agent?.enum ?? null);
+        expect(offers).toEqual([['one', ''], ['two', ''], ['three', ''], null]);
+        expect(result).toBe('Deep answer.');
     });
 });

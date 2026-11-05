@@ -1,21 +1,33 @@
-// The Electron main process: opens the window, connects it to the daemon, and passes requests and events between them.
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, screen, shell, type IpcMainInvokeEvent } from 'electron';
+// The Electron main process: opens the window and the tray icon, connects them to the daemon, and passes requests and events on.
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, screen, shell, Tray, type IpcMainInvokeEvent } from 'electron';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import * as autostart from './autostart.js';
 import { DISCONNECTED_EVENT, type DaemonClient } from './daemonBridge.js';
 import { connectToDaemon } from './daemonLifecycle.js';
-import { forwardEvent, registerIpc } from './ipc.js';
+import { AUTOSTART_CHANGED_EVENT, forwardEvent, registerIpc } from './ipc.js';
 import { launchOptions } from './paths.js';
+import { menuTemplate, TRAY_HOST_POLL_SECONDS, TRAY_WAIT_SECONDS, trayHostRunning, trayItems, trayTooltip } from './tray.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const rendererPage = path.join(here, '../renderer/index.html');
 const preloadScript = path.join(here, 'preload.cjs');
+const trayIconPath = path.join(here, '../renderer/tray-icon.png');
 const options = launchOptions(process.argv);
+// Without codex-gui on the PATH, launch at login runs this same Electron on this same script.
+const autostartOptions = { fallback: [process.execPath, fileURLToPath(import.meta.url)] };
 
 let mainWindow: BrowserWindow | null = null;
 let client: DaemonClient | null = null;
 let connection: Promise<{ socket_path: string; started: boolean }> | null = null;
+let tray: Tray | null = null;
+// True while a tray host shows the icon, so closing the window can hide it there instead of quitting.
+let trayRegistered = false;
+let quitting = false;
+// What the tray menu shows of the daemon, kept up to date from its status and events.
+let suspended = false;
+let researching = false;
 
 // ============================================================================
 // Daemon connection
@@ -30,10 +42,17 @@ function connectOnce(): Promise<{ socket_path: string; started: boolean }> {
                 forwardEvent(mainWindow, event, data);
                 if (event === DISCONNECTED_EVENT) {
                     client = null;
+                } else if (event === 'settings.changed') {
+                    researching = Boolean((data.settings as Record<string, unknown> | undefined)?.background_research_enabled);
+                    refreshTray();
+                } else if (event === 'suspended.changed') {
+                    suspended = Boolean(data.suspended);
+                    refreshTray();
                 }
             },
         }).then((result) => {
             client = result.client;
+            void readDaemonState(result.client);
             return { socket_path: options.socketPath, started: result.started };
         });
         connection.catch(() => {
@@ -41,6 +60,17 @@ function connectOnce(): Promise<{ socket_path: string; started: boolean }> {
         });
     }
     return connection;
+}
+
+async function readDaemonState(connected: DaemonClient): Promise<void> {
+    try {
+        const status = await connected.call<{ settings: Record<string, unknown>; suspended?: boolean }>('status');
+        researching = Boolean(status.settings.background_research_enabled);
+        suspended = Boolean(status.suspended);
+        refreshTray();
+    } catch {
+        // The tray keeps its last state until the next event.
+    }
 }
 
 // ============================================================================
@@ -52,7 +82,7 @@ function isTrustedSender(event: IpcMainInvokeEvent): boolean {
     return url.split('#')[0] === pathToFileURL(rendererPage).href;
 }
 
-function createWindow(): BrowserWindow {
+function createWindow(showWhenReady = true): BrowserWindow {
     const area = screen.getPrimaryDisplay().workAreaSize;
     const window = new BrowserWindow({
         title: 'CODEX',
@@ -70,7 +100,18 @@ function createWindow(): BrowserWindow {
             spellcheck: true,
         },
     });
-    window.once('ready-to-show', () => window.show());
+    if (showWhenReady) {
+        window.once('ready-to-show', () => window.show());
+    }
+    // While the tray holds the icon, closing hides the window there and keeps its link to the daemon alive.
+    window.on('close', (event) => {
+        if (!quitting && trayRegistered) {
+            event.preventDefault();
+            window.hide();
+        }
+    });
+    window.on('show', refreshTray);
+    window.on('hide', refreshTray);
     // Links open in the system browser, and the window never leaves its own page.
     window.webContents.setWindowOpenHandler(({ url }) => {
         if (/^https?:\/\//.test(url)) {
@@ -90,6 +131,7 @@ function createWindow(): BrowserWindow {
         if (mainWindow === window) {
             mainWindow = null;
         }
+        refreshTray();
     });
     void window.loadFile(rendererPage);
     return window;
@@ -115,6 +157,97 @@ function applicationMenu(): Menu {
     ]);
 }
 
+function showWindow(): void {
+    if (mainWindow === null) {
+        mainWindow = createWindow();
+        return;
+    }
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+}
+
+// ============================================================================
+// Tray
+// ============================================================================
+
+function toggleWindow(): void {
+    if (mainWindow !== null && mainWindow.isVisible() && mainWindow.isFocused()) {
+        mainWindow.hide();
+    } else {
+        showWindow();
+    }
+    refreshTray();
+}
+
+function toggleResearch(): void {
+    void client?.call('set_background_enabled', { enabled: !researching }).catch(() => undefined);
+}
+
+function setLaunchAtLogin(enabled: boolean): void {
+    if (enabled) {
+        autostart.enable(autostartOptions);
+    } else {
+        autostart.disable(autostartOptions);
+    }
+    forwardEvent(mainWindow, AUTOSTART_CHANGED_EVENT, { enabled: autostart.isEnabled(autostartOptions) });
+    refreshTray();
+}
+
+function quitFromTray(): void {
+    quitting = true;
+    app.quit();
+}
+
+function refreshTray(): void {
+    if (tray === null || tray.isDestroyed()) {
+        return;
+    }
+    const items = trayItems(
+        {
+            showing: mainWindow !== null && mainWindow.isVisible(),
+            suspended,
+            researching,
+            launchAtLogin: autostart.isEnabled(autostartOptions),
+        },
+        {
+            toggleWindow,
+            toggleResearch,
+            toggleAutostart: () => setLaunchAtLogin(!autostart.isEnabled(autostartOptions)),
+            quit: quitFromTray,
+        },
+    );
+    tray.setContextMenu(Menu.buildFromTemplate(menuTemplate(items)));
+    tray.setToolTip(trayTooltip(suspended));
+}
+
+// Notes whether a tray host holds the icon; losing it brings a hidden window back, so the app is never unreachable.
+function setTrayRegistered(registered: boolean): void {
+    trayRegistered = registered;
+    if (!registered && mainWindow !== null && !mainWindow.isVisible()) {
+        showWindow();
+    }
+}
+
+function startTray(): void {
+    try {
+        tray = new Tray(nativeImage.createFromPath(trayIconPath));
+    } catch {
+        // Without a tray the window closes the app as usual.
+        tray = null;
+        return;
+    }
+    tray.on('click', toggleWindow);
+    refreshTray();
+    const checkHost = (): void => {
+        void trayHostRunning().then((running) => {
+            if (running !== trayRegistered) setTrayRegistered(running);
+        });
+    };
+    checkHost();
+    setInterval(checkHost, TRAY_HOST_POLL_SECONDS * 1000).unref();
+}
+
 // ============================================================================
 // App lifecycle
 // ============================================================================
@@ -129,22 +262,28 @@ registerIpc({
     showOpenDialog: (window, dialogOptions) => dialog.showOpenDialog(window, dialogOptions),
     showSaveDialog: (window, dialogOptions) => dialog.showSaveDialog(window, dialogOptions),
     writeClipboard: (text) => clipboard.writeText(text),
+    autostart: {
+        isEnabled: () => autostart.isEnabled(autostartOptions),
+        setEnabled: setLaunchAtLogin,
+    },
     isTrustedSender,
 });
 
 if (!app.requestSingleInstanceLock()) {
     app.quit();
 } else {
-    app.on('second-instance', () => {
-        if (mainWindow !== null) {
-            if (mainWindow.isMinimized()) mainWindow.restore();
-            mainWindow.focus();
-        }
-    });
+    app.on('second-instance', showWindow);
 
     void app.whenReady().then(() => {
         Menu.setApplicationMenu(applicationMenu());
-        mainWindow = createWindow();
+        mainWindow = createWindow(!options.startInTray);
+        startTray();
+        if (options.startInTray) {
+            // A start in the tray shows the window after all when no tray host turns up to hold the icon.
+            setTimeout(() => {
+                if (!trayRegistered && mainWindow !== null && !mainWindow.isVisible()) showWindow();
+            }, TRAY_WAIT_SECONDS * 1000);
+        }
         void connectOnce().catch(() => undefined);
         app.on('activate', () => {
             if (BrowserWindow.getAllWindows().length === 0) {
@@ -160,6 +299,9 @@ app.on('window-all-closed', () => {
 
 // Only the connection closes; the daemon keeps serving other interfaces, and one this window started exits when unused.
 app.on('before-quit', () => {
+    quitting = true;
+    tray?.destroy();
+    tray = null;
     if (client !== null) {
         client.onEvent = null;
         client.close();

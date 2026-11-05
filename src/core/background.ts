@@ -1,9 +1,9 @@
-// Background work between requests: research queued topics, learn about the user from past requests, and index knowledge for search by meaning.
+// Background work between requests: research queued topics, learn from past requests, and index knowledge for search by meaning.
 import { unsupportedValues } from './checks.js';
 import { fitSectionsToTokens, inputTokenBudget, renderSections, tokenCounter, type Section } from './contextBudget.js';
 import { getEmbedder } from './embeddings.js';
 import { queueResearchTopic, summarizeWebPage } from './evidence.js';
-import { KnowledgeStore, USER_MEMORY_KINDS, casefold, searchTerms, sharesHalfTheTerms, type SearchResult } from './knowledge.js';
+import { KnowledgeStore, MEMORY_STORES, WORD, casefold, searchTerms, sharesHalfTheTerms, words, type SearchResult } from './knowledge.js';
 import { LocalModel, runStage, type ChatModel, type ModelCache } from './model.js';
 import { MAX_TOKENS, TEMPERATURE, backgroundModelKey, type Settings } from './settings.js';
 import { Toolbox } from './tools.js';
@@ -72,7 +72,7 @@ export const SUMMARY_SCHEMA = {
     required: ['summary'],
 };
 
-export const USER_MEMORY_SCHEMA = {
+export const MEMORY_SCHEMA = {
     type: 'object',
     properties: {
         memories: {
@@ -80,13 +80,13 @@ export const USER_MEMORY_SCHEMA = {
             items: {
                 type: 'object',
                 properties: {
-                    kind: { type: 'string', enum: [...USER_MEMORY_KINDS] },
+                    store: { type: 'string', enum: [...MEMORY_STORES] },
                     statement: { type: 'string' },
                     reason: { type: 'string', maxLength: 200 },
                 },
-                required: ['kind', 'statement'],
+                required: ['store', 'statement'],
             },
-            maxItems: 5,
+            maxItems: 8,
         },
         research_topics: { type: 'array', items: { type: 'string', maxLength: 100 }, maxItems: 3 },
     },
@@ -578,22 +578,54 @@ export async function refreshParentSummary(store: KnowledgeStore, model: Backgro
 }
 
 // ============================================================================
-// Learning about the user
+// Learning from past requests
 // ============================================================================
 
 export const LEARNING_PROMPT =
-    'From these past requests, list durable facts about the user worth remembering, replying' +
-    " with JSON only: 'preference' for how they like answers or which tools, languages, and" +
-    " styles they use; 'project' for ongoing work they mention; 'correction' for something" +
-    " they corrected; 'reference' for where something lives, such as a URL, host, or file." +
-    " Give a 'reason' only when the requests say why it holds. Include only what the requests clearly show, as one short sentence" +
-    ' each; an empty list is the right reply when nothing durable appears. Never include' +
-    ' secrets, passwords, keys, or personal identifiers such as names or email addresses.' +
-    " In 'research_topics', name up to three general subjects, such as a library or a" +
-    ' technique, that looking up in advance would help with the ongoing work the requests' +
-    ' show; leave it empty when there is none.';
+    'From these past requests, list durable things worth remembering, replying with JSON only.' +
+    " Put each in one store: 'user' for how the user likes answers or which tools, languages, and" +
+    " styles they use, and anything they corrected about how to work; 'project' for ongoing work" +
+    " in this folder and its rules; 'general' for a lasting fact learned that is about neither" +
+    " the user nor the machine; 'locations' for where a folder, file, URL, or host is, naming it" +
+    " exactly as the paths or actions show it; 'software' for a program, service, or version the" +
+    " actions show is installed or running; 'research' for a lesson about researching, such as a" +
+    " source that proved wrong or a search that found what others missed; 'code' for a lesson" +
+    ' about reviewing or editing code, such as a test that must be run or a mistake a check caught.' +
+    " Give a 'reason' only when the requests say why it holds. Include only what the requests" +
+    ' clearly show, as one short sentence each; an empty list is the right reply when nothing' +
+    ' durable appears. Never include secrets, passwords, keys, or personal identifiers such as' +
+    " names or email addresses. In 'research_topics', name up to three general subjects, such as" +
+    ' a library or a technique, that looking up in advance would help with the ongoing work the' +
+    " requests show; leave it empty when there is none.";
 
-// Read recent unprocessed requests and remember what they show about the user.
+// A word boundary that counts every letter and digit as a word character, as Python's does.
+const WORD_BOUNDARY = `(?:(?<=${WORD})(?!${WORD})|(?<!${WORD})(?=${WORD}))`;
+// A path, URL, or host name: what a location memory must name exactly as the requests showed it.
+const LOCATION = new RegExp(
+    `(?:~|\\.{0,2})/[^\\s,;:'"()]+|https?://[^\\s,;'"()]+|${WORD_BOUNDARY}(?:${WORD}|-)+(?:\\.(?:${WORD}|-)+)+:\\p{Nd}+${WORD_BOUNDARY}`,
+    'gu',
+);
+
+// Words any software memory may use without the requests showing them.
+const GENERIC_SOFTWARE_WORDS = new Set(
+    'installed running runs service services version program programs machine system uses used available'.split(' '),
+);
+
+// Says whether a location or software memory names only what the requests showed, since the model guesses paths and versions.
+export function groundedMemory(store: string, statement: string, seen: string): boolean {
+    if (store === 'locations') {
+        const locations = (statement.match(LOCATION) ?? []).map((location) => location.replace(/\.+$/, ''));
+        return locations.length > 0 && locations.every((location) => seen.includes(location));
+    }
+    if (store === 'software') {
+        const seenWords = new Set(words(casefold(seen), 2));
+        const named = searchTerms(statement).filter((word) => !GENERIC_SOFTWARE_WORDS.has(word));
+        return named.length > 0 && named.slice(0, 2).every((word) => seenWords.has(word));
+    }
+    return true;
+}
+
+// Reads recent unprocessed requests and remembers what they show, each lesson in its own store.
 export async function learnFromEpisodes(settings: Settings, options: BackgroundOptions = {}): Promise<boolean> {
     const store = new KnowledgeStore(settings.knowledge_db_path);
     const unprocessed = store.episodes({ unprocessedOnly: true, limit: EPISODES_PER_PASS });
@@ -606,13 +638,10 @@ export async function learnFromEpisodes(settings: Settings, options: BackgroundO
     const report = options.onProgress ?? (() => {});
     const model = BackgroundModel.fromOptions(settings, options);
     report(`Learning from ${episodes.length} past request(s)`);
+    const seen = episodes.map((episode) => `Request: ${episode.prompt}\n${episode.checklist}`).join('\n\n');
     let reply: string;
     try {
-        reply = await model.run(
-            LEARNING_PROMPT,
-            episodes.map((episode) => `Request: ${episode.prompt}\n${episode.checklist}`).join('\n\n'),
-            USER_MEMORY_SCHEMA,
-        );
+        reply = await model.run(LEARNING_PROMPT, seen, MEMORY_SCHEMA);
     } catch (error) {
         if (error instanceof BackgroundPaused) {
             report('Paused for foreground work');
@@ -631,16 +660,12 @@ export async function learnFromEpisodes(settings: Settings, options: BackgroundO
     const topics = isObject(data) && Array.isArray(data.research_topics) ? data.research_topics : [];
     let learned = 0;
     for (const memory of memories) {
-        if (
-            isObject(memory)
-            && typeof memory.kind === 'string'
-            && (USER_MEMORY_KINDS as readonly string[]).includes(memory.kind)
-            && String(memory.statement ?? '').trim()
-        ) {
-            store.addUserMemory(memory.kind, String(memory.statement), {
-                reason: String(memory.reason || ''),
-                scope: memory.kind === 'project' ? scope : '',
-            });
+        if (!isObject(memory) || typeof memory.store !== 'string' || !(MEMORY_STORES as readonly string[]).includes(memory.store)) {
+            continue;
+        }
+        const statement = String(memory.statement ?? '').trim();
+        if (statement && groundedMemory(memory.store, statement, seen)) {
+            store.addMemory(memory.store, statement, { reason: String(memory.reason || ''), scope });
             learned += 1;
         }
     }
@@ -656,7 +681,7 @@ export async function learnFromEpisodes(settings: Settings, options: BackgroundO
     for (const episode of episodes) {
         store.markEpisodeProcessed(episode.id);
     }
-    report(`Learned ${learned} thing(s) about the user and queued ${queued} topic(s) for research`);
+    report(`Learned ${learned} thing(s) from past requests and queued ${queued} topic(s) for research`);
     return true;
 }
 

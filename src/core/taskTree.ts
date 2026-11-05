@@ -1,6 +1,7 @@
 // Run a request as a tree of tasks, where each task is answered, worked with tools, or split into subtasks.
 import { resolve } from 'node:path';
 
+import { MAX_AGENT_DEPTH, loadAgents, serversFor, topLevelAgents, type AgentDefinition } from './agents.js';
 import { actionReportProblems, calculationProblems, unbackedClaims, uncitedUrls, unsupportedValues, type ActionRecord } from './checks.js';
 import { expandCommand, isMemoryCommand, runMemoryCommand } from './commands.js';
 import { condenseSections, inputTokenBudget, isCallFailure, renderSections, tokenCounter, type Section, type TokenCounter } from './contextBudget.js';
@@ -27,8 +28,8 @@ import {
     sectionSummarizer,
     type SectionSummarizer,
 } from './evidence.js';
-import { INSTRUCTIONS_LABEL, loadInstructions } from './instructions.js';
-import { KnowledgeStore, MAX_RECALLED_RELATIONSHIPS, casefold, type Recalled, type RecalledFact, type RecalledRelationship } from './knowledge.js';
+import { INSTRUCTIONS_LABEL, SKILLS_LABEL, loadInstructions, loadSkills } from './instructions.js';
+import { KnowledgeStore, MAX_RECALLED_RELATIONSHIPS, casefold, type Recalled, type Row, type RecalledFact, type RecalledRelationship } from './knowledge.js';
 import { loadModel, runStage, type ChatModel, type ModelCache } from './model.js';
 import {
     CONTEXT_SIZE,
@@ -59,8 +60,8 @@ export const MIN_ACT_TOOL_CALLS = 8;
 export const DECISION_MAX_TOKENS = 1024;
 export const CHECK_MAX_TOKENS = 512;
 
-// Each way a task can be done; "decompose" splits it into subtasks instead of doing it.
-export const APPROACHES = ['answer', 'research', 'files', 'act', 'decompose'] as const;
+// Each way a task can be done; "decompose" splits it into subtasks and "delegate" hands it to an agent.
+export const APPROACHES = ['answer', 'research', 'files', 'act', 'decompose', 'delegate'] as const;
 export type Approach = (typeof APPROACHES)[number];
 export const APPROACH_STEPS: Record<string, string> = { research: 'Researching', files: 'Reading files', act: 'Acting' };
 export const CHECK_VERDICTS = ['met', 'partly met', 'missing'] as const;
@@ -76,8 +77,14 @@ export const CLARIFICATION_LABEL = 'User clarification';
 export const SEARCH_LABELS = ['Local knowledge result', 'Automatic web search result'] as const;
 export const TREE_LABEL = 'Task tree';
 export const SNAPSHOT_RESULT_CHARS = 2_000;
+// Each earlier result handed to an agent is cut to this, since the agent's window is as small as the parent's.
+export const MAX_HANDED_RESULT_CHARS = 1_500;
 // Facts recalled for one task, its own and the request's together.
 export const MAX_FACTS_PER_TASK = 8;
+// The skill store each approach draws on: researching for research, code review and editing for files and acting.
+export const APPROACH_SKILLS: Record<string, string> = { research: 'research', files: 'code', act: 'code' };
+// Paths an episode keeps of what its tools opened, so learning sees the machine without the whole log.
+export const MAX_EPISODE_PATHS = 30;
 
 export type SubtaskSpec = { prompt: string; deliverable: string; depends_on: number[] };
 type JsonSchema = Record<string, unknown>;
@@ -100,7 +107,7 @@ function subtaskSchema(minItems: number): JsonSchema {
 }
 
 // Build the decision's JSON schema, offering only the approaches this task may take.
-export function decisionSchema(approaches: string[], askClarification: boolean): JsonSchema {
+export function decisionSchema(approaches: string[], askClarification: boolean, agentNames: string[] = []): JsonSchema {
     // Fields come in this order so the model reasons and lists facts before it picks an approach.
     const properties: Record<string, unknown> = {
         reason: { type: 'string' },
@@ -109,6 +116,9 @@ export function decisionSchema(approaches: string[], askClarification: boolean):
         search_queries: { type: 'array', items: { type: 'string' }, maxItems: MAX_SEARCH_QUERIES },
         subtasks: subtaskSchema(0),
     };
+    if (agentNames.length > 0) {
+        properties.agent = { type: 'string', enum: [...agentNames, ''] };
+    }
     if (askClarification) {
         properties.clarification = { type: 'string' };
     }
@@ -161,6 +171,10 @@ export const DECISION_PROMPT =
     ' other tasks in the tree cover the rest of it, so never repeat them.' +
     " Leave 'search_queries' and" +
     " 'subtasks' empty when they do not apply.";
+export const DELEGATE_NOTE =
+    " 'delegate' hands the task to one specialist agent named in 'agent'," +
+    " and must be chosen when an agent's description covers the task;" +
+    " otherwise leave 'agent' empty. Agents:";
 export const CLARIFICATION_NOTE =
     ' If a material ambiguity in the request must be resolved to answer' +
     " correctly, put one concise question in 'clarification'; otherwise set" +
@@ -542,24 +556,36 @@ export class Decision {
     searchQueries: string[];
     subtasks: SubtaskSpec[];
     clarification: string | null;
+    agent: string;
 
     constructor(
         public approach: string,
-        options: { searchQueries?: string[]; subtasks?: SubtaskSpec[]; clarification?: string | null } = {},
+        options: { searchQueries?: string[]; subtasks?: SubtaskSpec[]; clarification?: string | null; agent?: string } = {},
     ) {
         this.searchQueries = options.searchQueries ?? [];
         this.subtasks = options.subtasks ?? [];
         this.clarification = options.clarification ?? null;
+        this.agent = options.agent ?? '';
     }
 }
 
 // Read a decision reply, or return null when it is not the expected shape.
-export function parseDecision(reply: string, node: TaskNode, approaches: string[], existingPrompts: string[] | null = null): Decision | null {
+export function parseDecision(
+    reply: string,
+    node: TaskNode,
+    approaches: string[],
+    existingPrompts: string[] | null = null,
+    agentNames: string[] = [],
+): Decision | null {
     const data = parseJson(reply);
     if (!isRecord(data) || typeof data.approach !== 'string' || !approaches.includes(data.approach)) {
         return null;
     }
     let approach = data.approach;
+    const agent = clean(data.agent);
+    if (approach === 'delegate' && !agentNames.includes(agent)) {
+        return null;
+    }
     const facts = data.facts_to_check;
     // A small model cannot tell when it does not know something, so any listed fact means research.
     if (approach === 'answer' && approaches.includes('research') && Array.isArray(facts) && facts.some((fact) => clean(fact))) {
@@ -583,6 +609,7 @@ export function parseDecision(reply: string, node: TaskNode, approaches: string[
         searchQueries: approach === 'research' ? searchQueries : [],
         subtasks: approach === 'decompose' ? subtasks : [],
         clarification: clarification || null,
+        agent: approach === 'delegate' ? agent : '',
     });
 }
 
@@ -644,6 +671,12 @@ export type TaskTreeRunOptions = TaskTreeCallbacks & {
     checkpointId?: number | null;
     instructions?: string;
     confirmActions?: boolean;
+    // A delegated run answers a task for its parent, not a user, so it never asks the user a question.
+    delegated?: boolean;
+    // Every agent by name, the agent this run works as (none at the top), and how many hand-overs deep it is.
+    agents?: Map<string, AgentDefinition> | null;
+    agent?: AgentDefinition | null;
+    agentDepth?: number;
 };
 
 export type TaskRunState = {
@@ -689,6 +722,11 @@ export class TaskTreeRun {
     readonly allowFileWrites: boolean;
     readonly enableTestExecution: boolean;
     readonly mcpServers: McpServerSettings[];
+    readonly allMcpServers: McpServerSettings[];
+    readonly agents: Map<string, AgentDefinition>;
+    readonly delegated: boolean;
+    readonly agent: AgentDefinition | null;
+    readonly agentDepth: number;
     readonly maxPendingResearchJobs: number;
     readonly showThinking: boolean;
     readonly clarificationCallback: ClarificationCallback | null;
@@ -703,8 +741,9 @@ export class TaskTreeRun {
     readonly summarize: SectionSummarizer;
     readonly condensed = new Set<string>();
     readonly today = todayIso();
-    recalled: Recalled = { user: [], facts: [], episodes: [], relationships: [] };
+    recalled: Recalled = { memories: [], facts: [], episodes: [], relationships: [] };
     readonly taskMemory = new Map<string, [string, Set<number>]>();
+    readonly taskSkills = new Map<string, [guides: string, lessons: string]>();
     recalledFacts = false;
     localKnowledgeUsed = false;
     clarification: [string, string] | null = null;
@@ -723,6 +762,11 @@ export class TaskTreeRun {
         readonly foundUrls: Set<string>,
         options: TaskTreeRunOptions = {},
     ) {
+        this.agents = options.agents ?? new Map();
+        this.delegated = options.delegated ?? false;
+        this.agent = options.agent ?? null;
+        this.agentDepth = options.agentDepth ?? 0;
+        this.allMcpServers = options.mcpServers ?? [];
         this.instructions = options.instructions ?? '';
         this.confirmActions = options.confirmActions ?? true;
         this.contextSize = options.contextSize ?? CONTEXT_SIZE;
@@ -731,7 +775,7 @@ export class TaskTreeRun {
         this.maxToolCalls = options.maxToolCalls ?? 5;
         this.allowFileWrites = options.allowFileWrites ?? false;
         this.enableTestExecution = options.enableTestExecution ?? false;
-        this.mcpServers = options.mcpServers ?? [];
+        this.mcpServers = serversFor(this.agent, this.agents, this.allMcpServers);
         this.maxPendingResearchJobs = options.maxPendingResearchJobs ?? 100;
         this.showThinking = options.showThinking ?? false;
         this.clarificationCallback = options.clarificationCallback ?? null;
@@ -867,6 +911,10 @@ export class TaskTreeRun {
         }
         // The call's own material comes next, so a check pins the result it is checking.
         sections.push(...extra);
+        const [guides, lessons] = this.skillsFor(node);
+        if (guides) {
+            sections.push([SKILLS_LABEL, guides]);
+        }
         if (this.clarification !== null) {
             sections.push(this.clarification);
         }
@@ -878,6 +926,10 @@ export class TaskTreeRun {
         const memory = await this.memoryFor(node);
         if (memory) {
             sections.push([MEMORY_LABEL, memory]);
+        }
+        if (lessons) {
+            // The heading starts like the remembered context's, so learned lessons are fenced as untrusted too.
+            sections.push([`${MEMORY_LABEL}: lessons`, lessons]);
         }
         return sections;
     }
@@ -953,7 +1005,7 @@ export class TaskTreeRun {
         let relationships: RecalledRelationship[] = [...this.recalled.relationships];
         if (node.parent !== null && this.knowledgeStore !== null) {
             const known = new Set(facts.map((fact) => fact.id));
-            const own = await this.knowledgeStore.recall(node.prompt, { includeUser: false });
+            const own = await this.knowledgeStore.recall(node.prompt, { includeMemories: false });
             queueStaleTopics(this.knowledgeStore, own.facts, this.maxPendingResearchJobs);
             // A subtask is narrower than the request, so its own matches come first.
             facts = [...own.facts.filter((fact) => !known.has(fact.id)), ...facts].slice(0, MAX_FACTS_PER_TASK);
@@ -969,6 +1021,23 @@ export class TaskTreeRun {
             this.taskMemory.set(node.id, recall);
         }
         return this.taskMemory.get(node.id)!;
+    }
+
+    // Return the user's guides and the learned lessons for the skill the task's approach uses.
+    skillsFor(node: TaskNode): [guides: string, lessons: string] {
+        const store = Object.hasOwn(APPROACH_SKILLS, node.approach) ? APPROACH_SKILLS[node.approach] : undefined;
+        if (store === undefined) {
+            return ['', ''];
+        }
+        const key = JSON.stringify([node.id, store]);
+        if (!this.taskSkills.has(key)) {
+            let lessons: Row[] = [];
+            if (this.knowledgeStore !== null) {
+                lessons = this.knowledgeStore.relevantMemories(node.prompt, { scope: String(this.toolbox.root), stores: [store], countUse: true });
+            }
+            this.taskSkills.set(key, [loadSkills(this.toolbox.root, store), formatRecall({ memories: lessons })]);
+        }
+        return this.taskSkills.get(key)!;
     }
 
     // Return the results of the earlier tasks this task, or any task above it, builds on.
@@ -1027,6 +1096,8 @@ export class TaskTreeRun {
             this.publish();
             if (decision.approach === 'decompose') {
                 await this.workSubtasks(node, decision.subtasks);
+            } else if (decision.approach === 'delegate') {
+                await this.delegate(node, decision.agent);
             } else {
                 await this.workDirectly(node, decision);
             }
@@ -1052,22 +1123,38 @@ export class TaskTreeRun {
         if (this.tree.roomFor(node) >= MIN_SUBTASKS) {
             approaches.push('decompose');
         }
+        if (this.agentChoices().length > 0) {
+            approaches.push('delegate');
+        }
         return approaches;
+    }
+
+    // Return the agents this run may hand a task to: the top level's own, or the agent's sub-agents.
+    agentChoices(): string[] {
+        if (this.agentDepth >= MAX_AGENT_DEPTH) {
+            return [];
+        }
+        return this.agent === null ? topLevelAgents(this.agents) : [...this.agent.agents];
     }
 
     async decide(node: TaskNode): Promise<Decision> {
         const approaches = this.approachesFor(node);
-        const ask = node.parent === null && this.clarification === null;
-        const systemPrompt = DECISION_PROMPT + (ask ? CLARIFICATION_NOTE : '');
+        const ask = node.parent === null && this.clarification === null && !this.delegated;
+        const agentNames = this.agentChoices();
+        let systemPrompt = DECISION_PROMPT + (ask ? CLARIFICATION_NOTE : '');
+        if (agentNames.length > 0) {
+            systemPrompt += DELEGATE_NOTE + agentNames.map((name) => ` ${name}: ${this.agents.get(name)!.description}`).join('');
+        }
         const reply = await this.call(node, 'Deciding', systemPrompt, await this.sections(node), {
             replyTokens: DECISION_MAX_TOKENS,
-            jsonSchema: decisionSchema(approaches, ask),
+            jsonSchema: decisionSchema(approaches, ask, agentNames),
         });
         const decision = parseDecision(
             reply,
             node,
             approaches,
             this.tree.nodes().map((task) => task.prompt),
+            agentNames,
         );
         if (decision === null) {
             return new Decision(requiresWebResearch(node.prompt) ? 'research' : 'answer');
@@ -1082,6 +1169,57 @@ export class TaskTreeRun {
             decision.approach = 'act';
         }
         return decision;
+    }
+
+    // Hand a task to an agent, which works it as its own task tree and returns the result.
+    async delegate(node: TaskNode, agentName: string): Promise<void> {
+        const agent = this.agents.get(agentName)!;
+        node.note = `Delegated to the ${agentName} agent`;
+        this.publish();
+        const handed = [`${node.prompt}\nDeliverable: ${node.deliverable}`];
+        handed.push(
+            ...this.dependencyResults(node).map(([label, text]) => `Earlier result, ${label}:\n${text.slice(0, MAX_HANDED_RESULT_CHARS)}`),
+        );
+        const run = new TaskTreeRun(handed.join('\n\n'), this.llm, this.toolbox, this.knowledgeStore, this.foundUrls, {
+            contextSize: this.contextSize,
+            maxTokens: this.maxTokens,
+            temperature: this.temperature,
+            maxToolCalls: this.maxToolCalls,
+            maxTaskDepth: this.tree.maxDepth,
+            maxTaskNodes: this.tree.maxNodes,
+            allowFileWrites: this.allowFileWrites,
+            enableTestExecution: this.enableTestExecution,
+            mcpServers: this.allMcpServers,
+            maxPendingResearchJobs: this.maxPendingResearchJobs,
+            showThinking: this.showThinking,
+            clarificationCallback: null,
+            progressCallback: this.progressCallback,
+            stageOutputCallback: this.stageOutputCallback,
+            treeCallback: null,
+            // Stopping the parent stops the agent's run too.
+            signal: this.signal,
+            shouldStop: this.shouldStop,
+            mode: this.mode,
+            instructions: [this.instructions, agent.instructions].filter(Boolean).join('\n\n'),
+            confirmActions: this.confirmActions,
+            delegated: true,
+            agents: this.agents,
+            agent,
+            agentDepth: this.agentDepth + 1,
+        });
+        run.actionsDecision = this.actionsDecision;
+        let result: string;
+        try {
+            result = await run.run();
+        } finally {
+            // What the agent found and whether the user approved its actions count for the whole run.
+            this.evidence.push(...run.evidence);
+            this.actionsDecision = run.actionsDecision;
+        }
+        const problem = run.tree.root.note;
+        node.result = result;
+        node.status = run.tree.root.status;
+        node.note = `Delegated to the ${agentName} agent` + (problem ? `: ${problem}` : '');
     }
 
     async askClarification(question: string): Promise<void> {
@@ -1149,7 +1287,7 @@ export class TaskTreeRun {
             let facts: RecalledFact[] = [];
             if (this.knowledgeStore !== null) {
                 // A short query matches stored facts that the whole request was too long to match.
-                const recalled = await this.knowledgeStore.recall(query, { includeUser: false });
+                const recalled = await this.knowledgeStore.recall(query, { includeMemories: false });
                 facts = recalled.facts.filter((fact) => !shown.has(fact.id));
                 queueStaleTopics(this.knowledgeStore, facts, this.maxPendingResearchJobs);
                 if (facts.length > 0) {
@@ -1430,6 +1568,17 @@ export class TaskTreeRun {
         if (this.clarification !== null) {
             checklist += `\n\n${this.clarification[0]}: ${this.clarification[1]}`;
         }
+        if (this.toolbox.pathsSeen.length > 0) {
+            checklist += '\n\nPaths the tools opened:\n' + this.toolbox.pathsSeen.slice(0, MAX_EPISODE_PATHS).map((path) => `- ${path}`).join('\n');
+        }
+        if (this.toolbox.actionLog.length > 0) {
+            checklist +=
+                '\n\nActions taken:\n' +
+                this.toolbox.actionLog
+                    .slice(0, MAX_EPISODE_PATHS)
+                    .map(([name, argumentsGiven, result]) => `- ${name} ${pythonJson(argumentsGiven)}: ${result.split(/\s+/).filter(Boolean).join(' ').slice(0, 200)}`)
+                    .join('\n');
+        }
         try {
             this.knowledgeStore.recordEpisode(this.userPrompt, this.tree.root.approach || 'answer', checklist, this.tree.root.result, this.outcome(), {
                 taskTree: pythonJson(this.tree.snapshot()),
@@ -1639,6 +1788,7 @@ export async function executeTaskTree(userPrompt: string, options: ExecuteTaskTr
         checkpointId: resumeRunId,
         instructions: loadInstructions(toolbox.root),
         confirmActions: options.confirmActions ?? true,
+        agents: loadAgents(toolbox.root),
     });
     if (savedRun !== null) {
         run.restore(savedRun.state!);

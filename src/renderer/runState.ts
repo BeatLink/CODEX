@@ -11,6 +11,8 @@ export const DISCONNECTED_EVENT = 'daemon.disconnected';
 export const APPROVAL_QUESTION =
     'Approve these actions before anything is changed? Reply yes to go ahead; any other reply stops them.';
 export const UNFINISHED_PROMPT_CHARS = 80;
+export const SUSPENDED_TEXT = 'Suspended';
+export const RESUMED_TEXT = 'CODEX is working again.';
 
 export type Phase = 'steps' | 'task' | 'final';
 export type StepSection = { label: string; text: string };
@@ -37,6 +39,8 @@ export type WorkbenchState = {
     backgroundStatus: string;
     backgroundOutput: string;
     clarifications: Clarification[];
+    // True while the daemon is suspended and has freed the GPU.
+    suspended: boolean;
 };
 
 export type Effect =
@@ -73,6 +77,7 @@ export function initialState(): WorkbenchState {
         backgroundStatus: 'Idle',
         backgroundOutput: '',
         clarifications: [],
+        suspended: false,
     };
 }
 
@@ -224,6 +229,19 @@ export function clarificationAnswered(state: WorkbenchState, clarificationId: nu
 }
 
 // ============================================================================
+// Suspending
+// ============================================================================
+
+// Tells the user when the daemon is suspended or resumed, and shows it as the status while no run is going.
+export function setSuspended(state: WorkbenchState, suspended: boolean): Reduction {
+    if (suspended === state.suspended) {
+        return { state, effects: [] };
+    }
+    const next = { ...state, suspended, status: state.running ? state.status : suspended ? SUSPENDED_TEXT : 'Ready' };
+    return { state: next, effects: [{ kind: 'notify', message: suspended ? SUSPENDED_TEXT : RESUMED_TEXT }] };
+}
+
+// ============================================================================
 // Daemon status and events
 // ============================================================================
 
@@ -239,7 +257,7 @@ export function applyStatus(state: WorkbenchState, status: Status): Reduction {
     next = setBackgroundStatus(next, status.background.status);
     const run: RunSnapshot | null = status.run;
     if (run === null) {
-        next = { ...next, status: 'Ready' };
+        next = { ...next, status: next.suspended ? SUSPENDED_TEXT : 'Ready' };
     } else {
         next = showTaskTree(beginRun(next, run.run_id), run.tree);
         for (const [label, text] of Object.entries(run.outputs)) {
@@ -250,9 +268,15 @@ export function applyStatus(state: WorkbenchState, status: Status): Reduction {
         }
     }
     next = showUnfinishedRuns(next, status.unfinished_runs);
+    const suspension = setSuspended(next, Boolean(status.suspended));
     return {
-        state: next,
-        effects: [{ kind: 'show_settings', settings: status.settings }, { kind: 'refresh_knowledge' }, { kind: 'refresh_queue' }],
+        state: suspension.state,
+        effects: [
+            { kind: 'show_settings', settings: status.settings },
+            { kind: 'refresh_knowledge' },
+            { kind: 'refresh_queue' },
+            ...suspension.effects,
+        ],
     };
 }
 
@@ -300,6 +324,8 @@ export function reduceEvent(state: WorkbenchState, event: string, data: Record<s
             return { state, effects: [{ kind: 'refresh_knowledge' }] };
         case 'settings.changed':
             return { state: { ...state, settings: data.settings as Settings }, effects: [] };
+        case 'suspended.changed':
+            return setSuspended(state, Boolean(data.suspended));
         case DISCONNECTED_EVENT: {
             let next = state;
             const effects: Effect[] = [];

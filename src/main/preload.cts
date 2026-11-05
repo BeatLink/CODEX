@@ -1,4 +1,4 @@
-// Gives the window a small API for the daemon, its events, native dialogs, the clipboard and user commands.
+// Gives the window a small API for the daemon, its events, native dialogs, the clipboard, user commands and launch at login.
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 
 // These names match CHANNELS in ipc.ts; a sandboxed preload cannot load other files.
@@ -9,6 +9,8 @@ const OPEN_DIALOG = 'codex:open-dialog';
 const SAVE_DIALOG = 'codex:save-dialog';
 const COPY_TEXT = 'codex:copy-text';
 const LIST_COMMANDS = 'codex:list-commands';
+const GET_AUTOSTART = 'codex:get-autostart';
+const SET_AUTOSTART = 'codex:set-autostart';
 
 type Envelope = { ok: true; result: unknown } | { ok: false; error: string };
 type DaemonEvent = { event: string; data: Record<string, unknown> };
@@ -39,4 +41,6 @@ contextBridge.exposeInMainWorld('codex', {
     saveDialog: (options: Record<string, unknown> = {}) => invoke(SAVE_DIALOG, options),
     copyText: (text: string) => invoke(COPY_TEXT, text),
     listCommands: (filesystemRoot: string) => invoke(LIST_COMMANDS, filesystemRoot),
+    getAutostart: () => invoke(GET_AUTOSTART),
+    setAutostart: (enabled: boolean) => invoke(SET_AUTOSTART, enabled),
 });

@@ -24,7 +24,7 @@ An agent is a persistent configuration, not a running process. There is one mode
 | `mcp_servers` | Names of the MCP servers only this agent can use |
 | `agents` | Names of the agents this one can delegate to |
 
-Agents are Markdown files with YAML front matter in `~/.config/codex/agents/` and the working folder's `.codex/agents/`, like skills and user commands. The front matter is read with PyYAML; `mcp_servers` and `agents` are YAML lists. A folder's file replaces a global one of the same name.
+Agents are Markdown files with YAML front matter in `~/.config/codex/agents/` and the working folder's `.codex/agents/`, like skills and user commands. The front matter is read with the `yaml` package, following PyYAML's safe_load; `mcp_servers` and `agents` are YAML lists. A folder's file replaces a global one of the same name.
 
 ```markdown
 ---
@@ -57,7 +57,7 @@ Tool exposure is the point of the design. A server named in any agent's `mcp_ser
 
 Built in the first version:
 
-- `codex/agents.py` loads agent files and works out which agents a run can delegate to.
+- `src/core/agents.ts` loads agent files and works out which agents a run can delegate to.
 - `delegate` in the task tree, with the nested run, per-agent MCP servers and per-agent instructions.
 - The nested tree is not shown in the interfaces; the delegating task shows `delegate` and the agent's name.
 

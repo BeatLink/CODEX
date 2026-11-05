@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ALLOWED_METHODS, handleRequest, listUserCommands, openDialogOptions, saveDialogOptions } from './ipc.js';
+import { ALLOWED_METHODS, CHANNELS, handleRequest, listUserCommands, openDialogOptions, registerIpc, saveDialogOptions, type IpcDependencies } from './ipc.js';
 
 const directories: string[] = [];
 
@@ -89,5 +89,28 @@ describe('user commands', () => {
 
         expect(commands).toContainEqual({ name: 'review', description: 'Review a file', mode: 'answer' });
         expect(listUserCommands('')).toEqual([]);
+    });
+});
+
+describe('launch at login', () => {
+    it('reads and sets the autostart entry for a trusted window only', async () => {
+        const handlers = new Map<string, (...args: unknown[]) => unknown>();
+        let enabled = false;
+        let trusted = true;
+        registerIpc({
+            ipcMain: { handle: (channel: string, handler: (...args: unknown[]) => unknown) => handlers.set(channel, handler) },
+            autostart: { isEnabled: () => enabled, setEnabled: (value: boolean) => (enabled = value) },
+            isTrustedSender: () => trusted,
+        } as unknown as IpcDependencies);
+
+        const turnedOn = await handlers.get(CHANNELS.setAutostart)!({}, true);
+        const read = await handlers.get(CHANNELS.getAutostart)!({});
+        trusted = false;
+        const refused = await handlers.get(CHANNELS.setAutostart)!({}, false);
+
+        expect(turnedOn).toEqual({ ok: true, result: true });
+        expect(read).toEqual({ ok: true, result: true });
+        expect(refused).toEqual({ ok: false, error: 'Untrusted sender.' });
+        expect(enabled).toBe(true);
     });
 });

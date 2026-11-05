@@ -57,6 +57,22 @@ describe('codex command', () => {
         rmSync(directory, { recursive: true, force: true });
     });
 
+    it('suspends and resumes a running daemon, and does nothing without one', async () => {
+        const calls: string[] = [];
+        const client = { call: async (method: string) => calls.push(method), close: () => undefined } as unknown as DaemonClient;
+        const withDaemon = fakeEnvironment({ connectToDaemon: async () => client });
+        const failing = { call: async () => Promise.reject(new Error('busy')), close: () => undefined } as unknown as DaemonClient;
+        const withFailure = fakeEnvironment({ connectToDaemon: async () => failing });
+
+        expect(await main(['suspend'], fakeEnvironment())).toBe(0);
+        expect(await main(['suspend'], withDaemon)).toBe(0);
+        expect(await main(['resume'], withDaemon)).toBe(0);
+        expect(await main(['resume'], withFailure)).toBe(1);
+
+        expect(calls).toEqual(['suspend', 'resume']);
+        expect(withFailure.errors).toEqual(['Error: busy']);
+    });
+
     it('takes show_thinking from the settings unless the command line overrides it', async () => {
         for (const [argumentsGiven, expected] of [
             [['prompt'], true],

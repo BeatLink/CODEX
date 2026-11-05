@@ -9,7 +9,7 @@
         "codex-daemon": "dist/daemon/index.js"
     },
     "scripts": {
-        "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.preload.json && tsc -p tsconfig.renderer.json && cp -f src/renderer/index.html src/renderer/styles.css dist/renderer/",
+        "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.preload.json && tsc -p tsconfig.renderer.json && cp -f src/renderer/index.html src/renderer/styles.css src/renderer/tray-icon.png dist/renderer/",
         "start": "env -u ELECTRON_RUN_AS_NODE ${ELECTRON:-electron} dist/main/index.js",
         "dev": "npm run build && electron dist/main/index.js",
         "daemon": "node dist/daemon/index.js",
@@ -29,7 +29,8 @@
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.32.2",
         "node-llama-cpp": "^3.22.2",
-        "sqlite-vec": "^0.1.9"
+        "sqlite-vec": "^0.1.9",
+        "yaml": "^2.9.1"
     },
     "description": "A task-tree harness for locally run language models",
     "license": "GPL-3.0-or-later"

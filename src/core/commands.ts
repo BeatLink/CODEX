@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 
 import { INSTRUCTIONS_FILE_NAMES, configDirectory, projectInstructionsPath } from './instructions.js';
-import { USER_MEMORY_KINDS } from './knowledge.js';
+import { MEMORY_STORES, MEMORY_STORE_LABELS, SCOPED_MEMORY_STORES, casefold, type MemoryStore as StoreName } from './knowledge.js';
 import { expandUser } from './settings.js';
 
 // ============================================================================
@@ -15,9 +15,21 @@ export const MEMORY_COMMANDS = ['/remember', '/forget', '/memories'] as const;
 // "Why:" starts the reason a remembered statement holds.
 const REASON = /\s*\bwhy:\s*/i;
 
-export type UserMemory = {
+// Other words /remember takes for a store, including the kinds memories had before there were stores.
+export const STORE_ALIASES: Record<string, StoreName> = {
+    preference: 'user',
+    correction: 'user',
+    reference: 'locations',
+    location: 'locations',
+    files: 'locations',
+    folders: 'locations',
+    environment: 'locations',
+    skill: 'code',
+};
+
+export type Memory = {
     id: number;
-    kind: string;
+    store: string;
     statement: string;
     reason: string;
     origin: string;
@@ -26,9 +38,9 @@ export type UserMemory = {
 
 // The part of the knowledge store the memory commands use.
 export type MemoryStore = {
-    addUserMemory(kind: string, statement: string, options?: { reason?: string; origin?: string; scope?: string }): number;
-    userMemories(options?: { limit?: number; scope?: string | null }): Array<Record<string, unknown>>;
-    forgetUserMemory(memoryId: number): boolean;
+    addMemory(store: string, statement: string, options?: { reason?: string; origin?: string; scope?: string }): number;
+    memories(options?: { limit?: number; scope?: string | null; stores?: readonly string[] }): Array<Record<string, unknown>>;
+    forgetMemory(memoryId: number): boolean;
 };
 
 // Return the prompt's leading word in lower case and the text after it.
@@ -57,39 +69,43 @@ export function runMemoryCommand(userPrompt: string, knowledgeStore: MemoryStore
     if (command === '/forget') {
         return forget(knowledgeStore, text, scope);
     }
-    return listMemories(knowledgeStore, scope);
+    return listMemories(knowledgeStore, text, scope);
+}
+
+// Returns the store a word names, directly or by an alias, or null.
+function storeWord(word: string): StoreName | null {
+    const name = casefold(word).replace(/:+$/, '');
+    return (MEMORY_STORES as readonly string[]).includes(name) ? (name as StoreName) : (STORE_ALIASES[name] ?? null);
 }
 
 function remember(knowledgeStore: MemoryStore, text: string, scope: string): string {
-    const kinds = USER_MEMORY_KINDS.join(', ');
+    const stores = MEMORY_STORES.join(', ');
     const space = text.indexOf(' ');
     const firstWord = space === -1 ? text : text.slice(0, space);
-    let kind = firstWord.toLowerCase().replace(/:+$/, '');
-    if ((USER_MEMORY_KINDS as readonly string[]).includes(kind)) {
+    let store = storeWord(firstWord);
+    if (store !== null) {
         text = space === -1 ? '' : text.slice(space + 1).trim();
     } else {
-        kind = 'preference';
+        store = 'user';
     }
     const reasonStart = REASON.exec(text);
     let statement = reasonStart ? text.slice(0, reasonStart.index) : text;
     const reason = reasonStart ? text.slice(reasonStart.index + reasonStart[0].length) : '';
     statement = statement.trim();
     if (!statement) {
-        return `Say what to remember, for example: /remember preference Answer in British English. Why: I work in the UK. Kinds: ${kinds}.`;
+        return `Say what to remember, for example: /remember user Answer in British English. Why: I work in the UK. Stores: ${stores}.`;
     }
-    // A project memory belongs to the folder it was stated in; everything else holds everywhere.
-    const memoryScope = kind === 'project' ? scope : '';
-    const memoryId = knowledgeStore.addUserMemory(kind, statement, { reason: reason.trim(), origin: 'user', scope: memoryScope });
-    const where = memoryScope ? ' for this folder' : '';
-    return `Remembered${where} as memory ${memoryId} (${kind}): ${statement}`;
+    const memoryId = knowledgeStore.addMemory(store, statement, { reason: reason.trim(), origin: 'user', scope });
+    const where = SCOPED_MEMORY_STORES.includes(store) ? ' for this folder' : '';
+    return `Remembered${where} as memory ${memoryId} (${store}): ${statement}`;
 }
 
 function forget(knowledgeStore: MemoryStore, text: string, scope: string): string {
     if (!text) {
         return 'Say which memory to forget: its number from /memories, or words from it.';
     }
-    const memories = knowledgeStore.userMemories({ limit: 10_000, scope }) as UserMemory[];
-    let matches: UserMemory[];
+    const memories = knowledgeStore.memories({ limit: 10_000, scope }) as Memory[];
+    let matches: Memory[];
     if (/^\d+$/.test(text)) {
         matches = memories.filter((memory) => memory.id === Number(text));
     } else {
@@ -101,28 +117,40 @@ function forget(knowledgeStore: MemoryStore, text: string, scope: string): strin
     }
     if (matches.length > 1) {
         // Deleting cannot be undone, so several matches are listed instead of all being forgotten.
-        return 'Several memories match; forget one by its number:\n' + memoryLines(matches);
+        return 'Several memories match; forget one by its number:\n' + memoryLines(matches, true);
     }
-    knowledgeStore.forgetUserMemory(matches[0].id);
+    knowledgeStore.forgetMemory(matches[0].id);
     return `Forgot memory ${matches[0].id}: ${matches[0].statement}`;
 }
 
-function listMemories(knowledgeStore: MemoryStore, scope: string): string {
-    const memories = knowledgeStore.userMemories({ limit: 10_000, scope }) as UserMemory[];
+// Lists the memories for this folder under each store's heading, or only one store's when one is named.
+function listMemories(knowledgeStore: MemoryStore, text: string, scope: string): string {
+    const store = text ? storeWord(text) : null;
+    if (text && store === null) {
+        return `There is no memory store called '${text}'. Stores: ${MEMORY_STORES.join(', ')}.`;
+    }
+    const memories = knowledgeStore.memories({ limit: 10_000, scope, stores: store ? [store] : MEMORY_STORES }) as Memory[];
     if (memories.length === 0) {
         return 'No memories yet. Add one with /remember.';
     }
-    return 'Memories for this folder, newest first:\n' + memoryLines(memories);
+    const groups: string[] = [];
+    for (const name of MEMORY_STORES) {
+        const inStore = memories.filter((memory) => memory.store === name);
+        if (inStore.length > 0) {
+            groups.push(`${MEMORY_STORE_LABELS[name]} (${name}), newest first:\n` + memoryLines(inStore));
+        }
+    }
+    return groups.join('\n\n');
 }
 
-function memoryLines(memories: UserMemory[]): string {
+function memoryLines(memories: Memory[], showStore = false): string {
     return memories
         .map(
             (memory) =>
-                `${memory.id}. (${memory.kind}` +
-                (memory.scope ? ', this folder' : '') +
-                (memory.origin === 'learned' ? ', learned' : '') +
-                `) ${memory.statement}` +
+                `${memory.id}. ` +
+                (showStore ? `[${memory.store}] ` : '') +
+                (memory.origin !== 'user' ? `(${memory.origin}) ` : '') +
+                memory.statement +
                 (memory.reason ? ` Why: ${memory.reason}` : ''),
         )
         .join('\n');

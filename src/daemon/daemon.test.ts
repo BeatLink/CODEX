@@ -156,6 +156,42 @@ describe('HarnessDaemon', () => {
         expect(watcherEvents.names()).not.toContain('run.clarification');
     });
 
+    it('suspending stops the run, unloads the models and refuses new runs', async () => {
+        let started = false;
+        const executeTaskTree = vi.fn(async (_prompt: string, options: ExecuteTaskTreeOptions): Promise<string> => {
+            for (;;) {
+                started = true;
+                options.stageOutputCallback!('Task 1 · Researching', 'x');
+                await sleep(10);
+            }
+        });
+        const daemon = await start({ executeTaskTree });
+        const events = new EventLog();
+        const client = await daemon.client(events.handler);
+        await client.call('run', { prompt: 'first' });
+        for (let attempt = 0; attempt < 500 && !started; attempt += 1) {
+            await sleep(10);
+        }
+        expect(started).toBe(true);
+        const unloaded: string[] = [];
+        vi.spyOn(daemon.harness.modelCache, 'unload').mockImplementation(async () => (unloaded.push('main'), true));
+        vi.spyOn(daemon.harness.backgroundModelCache, 'unload').mockImplementation(async () => (unloaded.push('background'), true));
+
+        expect(await client.call('suspend')).toEqual({ suspended: true });
+
+        expect(await events.waitFor('suspended.changed')).toEqual({ suspended: true });
+        await events.waitFor('run.cancelled');
+        expect(unloaded).toEqual(['main', 'background']);
+        expect((await client.call<Record<string, unknown>>('status')).suspended).toBe(true);
+        await expect(client.call('run', { prompt: 'second' })).rejects.toThrow(/suspended/);
+
+        expect(await client.call('resume')).toEqual({ suspended: false });
+
+        expect((await client.call<Record<string, unknown>>('status')).suspended).toBe(false);
+        expect(await client.call('run', { prompt: 'third' })).toHaveProperty('run_id');
+        await client.call('cancel');
+    });
+
     it('stops a run on cancel and when its owner leaves', async () => {
         let started = false;
         const executeTaskTree = vi.fn(async (_prompt: string, options: ExecuteTaskTreeOptions): Promise<string> => {

@@ -316,22 +316,22 @@ describe('extraction', () => {
 });
 
 // ============================================================================
-// Learning about the user
+// Learning from past requests
 // ============================================================================
 
 describe('learning from past requests', () => {
-    it('turns past requests into user memory', async () => {
+    it('turns past requests into memories', async () => {
         store.recordEpisode('Write my Rust CLI in clap', 'action', '1. Use clap', 'Done', 'answered');
         store.addFact('Rust', 'Rust is a systems language.');
         fakes.runStage.mockResolvedValue(JSON.stringify({
-            memories: [{ kind: 'project', statement: 'Is building a Rust CLI with clap.' }],
+            memories: [{ store: 'project', statement: 'Is building a Rust CLI with clap.' }],
             research_topics: ['clap argument parsing', 'Rust'],
         }));
 
         expect(await learnFromEpisodes(settings, { llm })).toBe(true);
 
         expect(fakes.runStage.mock.lastCall![2]).toContain('Write my Rust CLI in clap');
-        expect(store.userMemories().map((memory) => [memory.kind, memory.statement])).toEqual([['project', 'Is building a Rust CLI with clap.']]);
+        expect(store.memories().map((memory) => [memory.store, memory.statement])).toEqual([['project', 'Is building a Rust CLI with clap.']]);
         expect(store.queueStatus().map((job) => job.topic)).toEqual(['clap argument parsing']);
         expect(store.episodes({ unprocessedOnly: true })).toEqual([]);
         expect(await learnFromEpisodes(settings, { llm })).toBe(false);
@@ -342,8 +342,8 @@ describe('learning from past requests', () => {
         store.recordEpisode('Port the parser to Zig', 'action', '', 'Done', 'answered', { scope: '/work/parser' });
         fakes.runStage.mockResolvedValue(JSON.stringify({
             memories: [
-                { kind: 'project', statement: 'Is porting a parser to Zig.' },
-                { kind: 'preference', statement: 'Likes Zig.', reason: 'Asked for Zig' },
+                { store: 'project', statement: 'Is porting a parser to Zig.' },
+                { store: 'user', statement: 'Likes Zig.', reason: 'Asked for Zig' },
             ],
             research_topics: [],
         }));
@@ -351,11 +351,34 @@ describe('learning from past requests', () => {
         await learnFromEpisodes(settings, { llm });
 
         expect(fakes.runStage).toHaveBeenCalledTimes(1);
-        expect(Object.fromEntries(store.userMemories().map((memory) => [memory.statement, [memory.scope, memory.reason]]))).toEqual({
+        expect(Object.fromEntries(store.memories().map((memory) => [memory.statement, [memory.scope, memory.reason]]))).toEqual({
             'Is porting a parser to Zig.': ['/work/parser', ''],
             'Likes Zig.': ['', 'Asked for Zig'],
         });
         expect(store.episodes({ unprocessedOnly: true })).toHaveLength(1);
+    });
+
+    it('keeps only the locations and software the requests showed', async () => {
+        const checklist = 'Paths the tools opened:\n- /Storage/Backups/nightly\n\nActions taken:\n- run_tests {}: pytest 8.3 passed';
+        store.recordEpisode('Check my backups', 'files', checklist, 'Done', 'answered');
+        fakes.runStage.mockResolvedValue(JSON.stringify({
+            memories: [
+                { store: 'locations', statement: 'Nightly backups are in /Storage/Backups/nightly.' },
+                { store: 'locations', statement: 'Backups are mirrored to /mnt/offsite.' },
+                { store: 'software', statement: 'pytest is installed.' },
+                { store: 'software', statement: 'Borg is installed.' },
+                { store: 'research', statement: 'Check the backup log before the docs.' },
+            ],
+            research_topics: [],
+        }));
+
+        await learnFromEpisodes(settings, { llm });
+
+        expect(store.memories().map((memory) => [memory.store, memory.statement]).sort()).toEqual([
+            ['locations', 'Nightly backups are in /Storage/Backups/nightly.'],
+            ['research', 'Check the backup log before the docs.'],
+            ['software', 'pytest is installed.'],
+        ]);
     });
 });
 
