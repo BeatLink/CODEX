@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- A robot head cut out of the X-Tech hexagon, at the same margin as the X-Tech icon. -->
+  <title>CODEX</title>
+  <mask id="cut">
+    <rect width="64" height="64" fill="#fff"/>
+    <g fill="#000" transform="translate(0 2)">
+      <rect x="18" y="25" width="28" height="20" rx="6"/>
+      <rect x="13.5" y="31" width="5" height="8" rx="2"/>
+      <rect x="45.5" y="31" width="5" height="8" rx="2"/>
+      <rect x="30.5" y="19" width="3" height="7"/>
+      <circle cx="32" cy="17.5" r="3"/>
+    </g>
+    <g fill="#fff" transform="translate(0 2)">
+      <circle cx="26" cy="34" r="3.2"/>
+      <circle cx="38" cy="34" r="3.2"/>
+    </g>
+  </mask>
+  <path fill="#0088ff" mask="url(#cut)" d="M63 32 47.5 58.847 16.5 58.847 1 32 16.5 5.153 47.5 5.153Z"/>
+</svg>
