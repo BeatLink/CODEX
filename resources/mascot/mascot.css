@@ -11,25 +11,20 @@
 
 .mascot .head,
 .mascot .eye-look,
-.mascot .eye-blink,
 .mascot .eye-shape,
-.mascot .mouth-open,
-.mascot .tear,
 .mascot .zzz,
-.mascot .antenna-ball,
-.mascot .ear {
+.mascot .antenna-ball {
     transform-box: view-box;
 }
 
-/* The head is drawn twice, as the cut-out in the mask and as the face over it, so both copies move together. */
+/* The head is drawn twice, as the cut-out in the mask and as the face over it, so both copies bob together. */
 .mascot .head {
     transform-origin: 32px 47px;
+    animation: bob 3.8s ease-in-out infinite;
 }
 
 .mascot .eye-look,
-.mascot .eye-blink,
 .mascot .eye-shape,
-.mascot .tear,
 .mascot .zzz {
     transform-origin: 0 0;
 }
@@ -38,179 +33,125 @@
     transform-origin: 32px 19.5px;
 }
 
-.mascot .mouth-open {
-    transform-origin: 32px 42px;
-}
-
 .mascot .eye-shape {
-    d: path("M-2.8 0C-2.8 -3.73 2.8 -3.73 2.8 0C2.8 3.73 -2.8 3.73 -2.8 0Z");
+    d: path("M-2.25 0C-2.25 -3 2.25 -3 2.25 0C2.25 3 -2.25 3 -2.25 0Z");
     transition: d 0.35s ease, transform 0.35s ease;
 }
 
 .mascot .mouth {
     d: path("M26.5 40.8C27.17 41.73 28.33 42.2 30 42.2C32.5 42.2 35 42.2 37.5 42.2");
-    transition: d 0.35s ease, opacity 0.25s ease;
+    transition: d 0.35s ease;
 }
 
-.mascot .mouth-open {
-    d: path("M31.6 41.8C31.6 41.8 32.4 41.8 32.4 41.8C32.4 42.02 32.22 42.2 32 42.2C31.78 42.2 31.6 42.02 31.6 41.8Z");
-    opacity: 0;
-    transition: d 0.35s ease, opacity 0.25s ease;
-}
-
-.mascot .tear,
 .mascot .zzz {
     opacity: 0;
 }
 
-/* ============================================================================ */
-/* Shared motion */
-/* ============================================================================ */
-
-@keyframes blink {
-    0%, 92%, 100% { transform: scaleY(1); }
-    95% { transform: scaleY(0.1); }
+@keyframes bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-0.5px); }
 }
 
-@keyframes ball-hop {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-1.2px); }
+/* ============================================================================ */
+/* Blinks, each collapsing its own eye shape into a line */
+/* ============================================================================ */
+
+@keyframes blink-round {
+    0%, 92%, 100% { d: path("M-2.25 0C-2.25 -3 2.25 -3 2.25 0C2.25 3 -2.25 3 -2.25 0Z"); }
+    95% { d: path("M-2.25 0C-2.25 0 2.25 0 2.25 0C2.25 0 -2.25 0 -2.25 0Z"); }
+}
+
+@keyframes blink-slit {
+    0%, 92%, 100% { d: path("M-2.5 0C-2.5 -0.93 2.5 -0.93 2.5 0C2.5 0.93 -2.5 0.93 -2.5 0Z"); }
+    95% { d: path("M-2.5 0C-2.5 0 2.5 0 2.5 0C2.5 0 -2.5 0 -2.5 0Z"); }
+}
+
+@keyframes blink-droop {
+    0%, 92%, 100% { d: path("M-2.25 0C-2.25 -1.33 2.25 -1.33 2.25 0C2.25 3.2 -2.25 3.2 -2.25 0Z"); }
+    95% { d: path("M-2.25 0C-2.25 0 2.25 0 2.25 0C2.25 0 -2.25 0 -2.25 0Z"); }
+}
+
+@keyframes blink-worry {
+    0%, 92%, 100% { d: path("M-2.25 0C-2.25 -2.53 2.25 -2.53 2.25 0C2.25 3 -2.25 3 -2.25 0Z"); }
+    95% { d: path("M-2.25 0C-2.25 0 2.25 0 2.25 0C2.25 0 -2.25 0 -2.25 0Z"); }
 }
 
 /* ============================================================================ */
 /* Calm: connected and nothing to do */
 /* ============================================================================ */
 
-.mascot[data-state="calm"] .head { animation: calm-breathe 3.8s ease-in-out infinite; }
-.mascot[data-state="calm"] .eye-blink { animation: blink 4.6s infinite; }
-
-@keyframes calm-breathe {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-0.5px); }
-}
+.mascot[data-state="calm"] .eye-shape { animation: blink-round 4.6s infinite; }
 
 /* ============================================================================ */
-/* Thinking: glancing around with a wavering mouth */
+/* Thinking: glancing around with a flat mouth */
 /* ============================================================================ */
 
-.mascot[data-state="thinking"] .head { animation: thinking-ponder 3.2s ease-in-out infinite; }
+.mascot[data-state="thinking"] .eye-shape { animation: blink-round 4.6s infinite; }
 .mascot[data-state="thinking"] .eye-look { animation: thinking-glance 5s ease-in-out infinite; }
-.mascot[data-state="thinking"] .eye-blink { animation: blink 4.6s infinite; }
-.mascot[data-state="thinking"] .mouth { animation: thinking-wobble 1.3s ease-in-out infinite alternate; }
-.mascot[data-state="thinking"] .antenna-ball { animation: thinking-pulse 1s ease-in-out infinite alternate; }
-
-@keyframes thinking-ponder {
-    0%, 100% { transform: rotate(-2deg); }
-    50% { transform: rotate(2deg); }
-}
+.mascot[data-state="thinking"] .mouth { d: path("M27 41.8C28.7 41.8 30.3 41.8 32 41.8C33.7 41.8 35.3 41.8 37 41.8"); }
+.mascot[data-state="thinking"] .antenna-ball { animation: thinking-pulse 1.2s ease-in-out infinite alternate; }
 
 @keyframes thinking-glance {
-    0%, 30% { transform: translate(-1.4px, -1.2px); }
-    40%, 70% { transform: translate(1.4px, -1.4px); }
-    80% { transform: translate(0, -1.6px); }
-    100% { transform: translate(-1.4px, -1.2px); }
-}
-
-@keyframes thinking-wobble {
-    from { d: path("M27.5 41.8C29 40.6 30.5 40.6 32 41.8C33.5 43 35 43 36.5 41.8"); }
-    to { d: path("M27.5 41.8C29 43 30.5 43 32 41.8C33.5 40.6 35 40.6 36.5 41.8"); }
+    0%, 30% { transform: translate(-1px, -0.8px); }
+    40%, 70% { transform: translate(1px, -0.9px); }
+    80% { transform: translate(0, -1.1px); }
+    100% { transform: translate(-1px, -0.8px); }
 }
 
 @keyframes thinking-pulse {
-    from { transform: scale(0.6); }
-    to { transform: scale(1.1); }
+    from { transform: scale(0.85); }
+    to { transform: scale(1); }
 }
 
 /* ============================================================================ */
-/* Curious: wide eyes and a small round mouth, head tilted */
+/* Curious: slightly wide eyes glancing up */
 /* ============================================================================ */
 
-.mascot[data-state="curious"] .eye-shape { transform: scale(1.2); }
-.mascot[data-state="curious"] .mouth { opacity: 0; }
-.mascot[data-state="curious"] .mouth-open { d: path("M30 41.6C30 38.67 34 38.67 34 41.6C34 42.93 33.1 44 32 44C30.9 44 30 42.93 30 41.6Z"); opacity: 1; animation: curious-pulse 1.2s ease-in-out infinite alternate; }
-.mascot[data-state="curious"] .head { animation: curious-tilt 2.4s ease-in-out infinite alternate; }
-.mascot[data-state="curious"] .eye-blink { animation: blink 6s infinite; }
-.mascot[data-state="curious"] .antenna-ball { animation: ball-hop 1s ease-in-out infinite; }
+.mascot[data-state="curious"] .eye-shape { transform: scale(1.08); animation: blink-round 6s infinite; }
+.mascot[data-state="curious"] .eye-look { animation: curious-look 3s ease-in-out infinite alternate; }
+.mascot[data-state="curious"] .mouth { d: path("M27 41.8C28.7 41.8 30.3 41.8 32 41.8C33.7 41.8 35.3 41.8 37 41.8"); }
 
-@keyframes curious-tilt {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(6deg); }
-}
-
-@keyframes curious-pulse {
-    from { transform: scale(1); }
-    to { transform: scale(1.15); }
+@keyframes curious-look {
+    from { transform: translateY(0); }
+    to { transform: translateY(-0.6px); }
 }
 
 /* ============================================================================ */
-/* Happy: arched eyes and a widening smile */
+/* Happy: arched eyes and a faint smile */
 /* ============================================================================ */
 
-.mascot[data-state="happy"] .eye-shape { d: path("M-3.2 0C-3.2 -4 3.2 -4 3.2 0C3.2 -1.73 -3.2 -1.73 -3.2 0Z"); transform: translateY(0.9px); }
-.mascot[data-state="happy"] .mouth { d: path("M26 39.8C27 42.2 29.5 43.4 32 43.4C34.5 43.4 37 42.2 38 39.8"); animation: happy-smile 1.8s ease-in-out infinite alternate; }
-.mascot[data-state="happy"] .head { animation: happy-sway 1.8s ease-in-out infinite alternate; }
-.mascot[data-state="happy"] .antenna-ball { animation: ball-hop 1.2s ease-in-out infinite; }
+.mascot[data-state="happy"] .eye-shape { d: path("M-2.6 0C-2.6 -2 2.6 -2 2.6 0C2.6 -2 -2.6 -2 -2.6 0Z"); transform: translateY(0.8px); animation: happy-eyes 2s ease-in-out infinite alternate; }
+.mascot[data-state="happy"] .mouth { d: path("M26.5 41.1C28.2 41.9 29.8 42.3 32 42.3C34.2 42.3 35.8 41.9 37.5 41.1"); }
 
-@keyframes happy-sway {
-    from { transform: translateY(0) rotate(-3deg); }
-    to { transform: translateY(-0.8px) rotate(3deg); }
-}
-
-@keyframes happy-smile {
-    from { d: path("M26 39.8C27 42.2 29.5 43.4 32 43.4C34.5 43.4 37 42.2 38 39.8"); }
-    to { d: path("M25.2 39.4C26.4 42.6 29.2 44.2 32 44.2C34.8 44.2 37.6 42.6 38.8 39.4"); }
+@keyframes happy-eyes {
+    from { d: path("M-2.6 0C-2.6 -2 2.6 -2 2.6 0C2.6 -2 -2.6 -2 -2.6 0Z"); }
+    to { d: path("M-2.6 0C-2.6 -2.4 2.6 -2.4 2.6 0C2.6 -2.4 -2.6 -2.4 -2.6 0Z"); }
 }
 
 /* ============================================================================ */
-/* Sad: drooping eyes, a trembling frown and a falling tear */
+/* Sad: drooping eyes and a faint frown */
 /* ============================================================================ */
 
-.mascot[data-state="sad"] .eye-shape { d: path("M-2.8 0C-2.8 -2 2.8 -2 2.8 0C2.8 3.87 -2.8 3.87 -2.8 0Z"); }
-.mascot[data-state="sad"] .eye-left .eye-shape { transform: translateY(0.8px) rotate(-14deg); }
-.mascot[data-state="sad"] .eye-right .eye-shape { transform: translateY(0.8px) rotate(14deg); }
-.mascot[data-state="sad"] .mouth { d: path("M26.5 43C27.5 40.6 29.5 39.6 32 39.6C34.5 39.6 36.5 40.6 37.5 43"); animation: sad-quiver 1.1s ease-in-out infinite alternate; }
-.mascot[data-state="sad"] .head { animation: sad-sink 4.5s ease-in-out infinite; }
-.mascot[data-state="sad"] .eye-blink { animation: blink 7s infinite; }
-.mascot[data-state="sad"] .antenna-ball { transform: translateY(1.5px) scale(0.8); }
-.mascot[data-state="sad"] .tear { animation: sad-tear 3s ease-in infinite; }
+.mascot[data-state="sad"] .eye-shape { d: path("M-2.25 0C-2.25 -1.33 2.25 -1.33 2.25 0C2.25 3.2 -2.25 3.2 -2.25 0Z"); animation: blink-droop 7s infinite; }
+.mascot[data-state="sad"] .eye-left .eye-shape { transform: translateY(0.6px) rotate(-8deg); }
+.mascot[data-state="sad"] .eye-right .eye-shape { transform: translateY(0.6px) rotate(8deg); }
+.mascot[data-state="sad"] .eye-look { animation: sad-look 5s ease-in-out infinite alternate; }
+.mascot[data-state="sad"] .mouth { d: path("M26.5 42.5C28.2 41.7 29.8 41.3 32 41.3C34.2 41.3 35.8 41.7 37.5 42.5"); }
 
-@keyframes sad-sink {
-    0%, 100% { transform: translateY(1.2px); }
-    50% { transform: translateY(1.8px); }
-}
-
-@keyframes sad-quiver {
-    from { d: path("M26.5 43C27.5 40.6 29.5 39.6 32 39.6C34.5 39.6 36.5 40.6 37.5 43"); }
-    to { d: path("M26.7 43.4C27.7 41 29.6 40 32 40C34.4 40 36.3 41 37.3 43.4"); }
-}
-
-@keyframes sad-tear {
-    0% { opacity: 0; transform: translateY(0) scale(0.6); }
-    15% { opacity: 1; transform: translateY(0.4px) scale(1); }
-    70% { opacity: 1; transform: translateY(5px) scale(1); }
-    100% { opacity: 0; transform: translateY(6.5px) scale(1); }
+@keyframes sad-look {
+    from { transform: translateY(0.2px); }
+    to { transform: translateY(0.7px); }
 }
 
 /* ============================================================================ */
-/* Asleep: closed eyes, slow breathing and floating z's */
+/* Asleep: closed eyes and floating z's */
 /* ============================================================================ */
 
-.mascot[data-state="asleep"] .eye-shape { d: path("M-3 0C-3 1.2 3 1.2 3 0C3 2 -3 2 -3 0Z"); transform: translateY(0.3px); }
-.mascot[data-state="asleep"] .mouth { d: path("M28.5 41.6C29.5 42.2 30.5 42.4 32 42.4C33.5 42.4 34.5 42.2 35.5 41.6"); animation: asleep-breathe 4.2s ease-in-out infinite; }
-.mascot[data-state="asleep"] .head { animation: asleep-snooze 4.2s ease-in-out infinite; }
-.mascot[data-state="asleep"] .antenna-ball { transform: scale(0.7); }
+.mascot[data-state="asleep"] .eye-shape { d: path("M-2.6 0C-2.6 1.07 2.6 1.07 2.6 0C2.6 1.07 -2.6 1.07 -2.6 0Z"); transform: translateY(0.3px); }
+.mascot[data-state="asleep"] .mouth { d: path("M28.5 41.8C29.7 41.8 30.8 41.8 32 41.8C33.2 41.8 34.3 41.8 35.5 41.8"); }
+.mascot[data-state="asleep"] .antenna-ball { transform: scale(0.8); }
 .mascot[data-state="asleep"] .zzz { animation: asleep-float 2.8s ease-out infinite; }
 .mascot[data-state="asleep"] .zzz-small .zzz { animation-delay: -1.4s; }
-
-@keyframes asleep-snooze {
-    0%, 100% { transform: translateY(1.4px) rotate(3deg); }
-    50% { transform: translateY(2px) rotate(3deg); }
-}
-
-@keyframes asleep-breathe {
-    0%, 100% { d: path("M28.5 41.6C29.5 42.2 30.5 42.4 32 42.4C33.5 42.4 34.5 42.2 35.5 41.6"); }
-    50% { d: path("M28.5 41.9C29.5 42.6 30.5 42.8 32 42.8C33.5 42.8 34.5 42.6 35.5 41.9"); }
-}
 
 @keyframes asleep-float {
     0% { opacity: 0; transform: translate(0, 0) scale(0.6); }
@@ -220,161 +161,76 @@
 }
 
 /* ============================================================================ */
-/* Worried: darting eyes, a shiver and a fidgeting mouth */
+/* Worried: tilted, darting eyes and a wiggly mouth */
 /* ============================================================================ */
 
-.mascot[data-state="worried"] .eye-shape { d: path("M-2.8 0C-2.8 -3.2 2.8 -3.2 2.8 0C2.8 3.73 -2.8 3.73 -2.8 0Z"); }
-.mascot[data-state="worried"] .eye-left .eye-shape { transform: scale(1.1) rotate(-13deg); }
-.mascot[data-state="worried"] .eye-right .eye-shape { transform: scale(1.1) rotate(13deg); }
-.mascot[data-state="worried"] .mouth { d: path("M28 42.4C29 41.8 30.5 41.8 32 42.4C33.5 43 35 43 36 42.4"); animation: worried-fidget 0.35s ease-in-out infinite alternate; }
-.mascot[data-state="worried"] .head { animation: worried-shiver 0.3s ease-in-out infinite alternate; }
-.mascot[data-state="worried"] .eye-look { animation: worried-dart 2.2s ease-in-out infinite; }
-.mascot[data-state="worried"] .eye-blink { animation: blink 3s infinite; }
-.mascot[data-state="worried"] .antenna-ball { animation: worried-flutter 0.5s ease-in-out infinite alternate; }
-
-@keyframes worried-shiver {
-    from { transform: translateX(-0.25px); }
-    to { transform: translateX(0.25px); }
-}
+.mascot[data-state="worried"] .eye-shape { d: path("M-2.25 0C-2.25 -2.53 2.25 -2.53 2.25 0C2.25 3 -2.25 3 -2.25 0Z"); animation: blink-worry 3s infinite; }
+.mascot[data-state="worried"] .eye-left .eye-shape { transform: scale(1.05) rotate(-9deg); }
+.mascot[data-state="worried"] .eye-right .eye-shape { transform: scale(1.05) rotate(9deg); }
+.mascot[data-state="worried"] .eye-look { animation: worried-dart 2.6s ease-in-out infinite; }
+.mascot[data-state="worried"] .mouth { d: path("M28 42.4C29 41.8 30.5 41.8 32 42.4C33.5 43 35 43 36 42.4"); animation: worried-wiggle 0.35s ease-in-out infinite alternate; }
 
 @keyframes worried-dart {
-    0%, 15% { transform: translate(-1.3px, 0); }
-    25%, 45% { transform: translate(1.3px, 0.2px); }
-    55%, 70% { transform: translate(0, -1px); }
-    80%, 100% { transform: translate(-1.3px, 0); }
+    0%, 15% { transform: translate(-0.9px, 0); }
+    25%, 45% { transform: translate(0.9px, 0.2px); }
+    55%, 70% { transform: translate(0, -0.7px); }
+    80%, 100% { transform: translate(-0.9px, 0); }
 }
 
-@keyframes worried-fidget {
+@keyframes worried-wiggle {
     from { d: path("M28 42.4C29 41.8 30.5 41.8 32 42.4C33.5 43 35 43 36 42.4"); }
     to { d: path("M28 42.4C29 43 30.5 43 32 42.4C33.5 41.8 35 41.8 36 42.4"); }
 }
 
-@keyframes worried-flutter {
-    from { transform: scale(0.7); }
-    to { transform: scale(1.05); }
+/* ============================================================================ */
+/* Excited: slightly big eyes bouncing quickly */
+/* ============================================================================ */
+
+.mascot[data-state="excited"] .eye-shape { transform: scale(1.12); animation: blink-round 5s infinite; }
+.mascot[data-state="excited"] .eye-look { animation: excited-bounce 0.6s ease-in-out infinite alternate; }
+.mascot[data-state="excited"] .mouth { d: path("M27 41.8C28.7 41.8 30.3 41.8 32 41.8C33.7 41.8 35.3 41.8 37 41.8"); }
+
+@keyframes excited-bounce {
+    from { transform: translateY(0); }
+    to { transform: translateY(-0.6px); }
 }
 
 /* ============================================================================ */
-/* Excited: big eyes, an open grin and a hop */
+/* Focused: narrowed eyes scanning */
 /* ============================================================================ */
 
-.mascot[data-state="excited"] .eye-shape { transform: scale(1.3); }
-.mascot[data-state="excited"] .mouth { opacity: 0; }
-.mascot[data-state="excited"] .mouth-open { d: path("M27 39.5C27 39.5 37 39.5 37 39.5C37 42.65 34.76 45.2 32 45.2C29.24 45.2 27 42.65 27 39.5Z"); opacity: 1; animation: excited-talk 0.3s ease-in-out infinite alternate; }
-.mascot[data-state="excited"] .head { animation: excited-hop 0.6s ease-out infinite; }
-.mascot[data-state="excited"] .eye-look { animation: excited-bulge 0.3s ease-in-out infinite alternate; }
-.mascot[data-state="excited"] .antenna-ball { animation: excited-flash 0.3s ease-in-out infinite alternate; }
-.mascot[data-state="excited"] .ear-left { animation: excited-ear-left 0.3s ease-in-out infinite alternate; }
-.mascot[data-state="excited"] .ear-right { animation: excited-ear-right 0.3s ease-in-out infinite alternate; }
+.mascot[data-state="focused"] .eye-shape { d: path("M-2.5 0C-2.5 -0.93 2.5 -0.93 2.5 0C2.5 0.93 -2.5 0.93 -2.5 0Z"); animation: blink-slit 8s infinite; }
+.mascot[data-state="focused"] .eye-look { animation: focused-scan 3.5s ease-in-out infinite alternate; }
+.mascot[data-state="focused"] .mouth { d: path("M27 41.8C28.7 41.8 30.3 41.8 32 41.8C33.7 41.8 35.3 41.8 37 41.8"); }
 
-@keyframes excited-hop {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    35% { transform: translateY(-2.2px) rotate(-2deg); }
-    70% { transform: translateY(0) rotate(2deg); }
+@keyframes focused-scan {
+    from { transform: translateX(-0.6px); }
+    to { transform: translateX(0.6px); }
 }
 
-@keyframes excited-bulge {
-    from { transform: scale(1); }
+/* ============================================================================ */
+/* Startled: eyes pop a little wider and hold */
+/* ============================================================================ */
+
+.mascot[data-state="startled"] .eye-shape { transform: scale(1.12); animation: startled-pop 0.35s ease-out both; }
+.mascot[data-state="startled"] .mouth { d: path("M27 41.8C28.7 41.8 30.3 41.8 32 41.8C33.7 41.8 35.3 41.8 37 41.8"); }
+
+@keyframes startled-pop {
+    from { transform: scale(1.25); }
     to { transform: scale(1.12); }
 }
 
-@keyframes excited-talk {
-    from { d: path("M27 39.5C27 39.5 37 39.5 37 39.5C37 42.65 34.76 45.2 32 45.2C29.24 45.2 27 42.65 27 39.5Z"); }
-    to { d: path("M27.4 39.5C27.4 39.5 36.6 39.5 36.6 39.5C36.6 41.87 34.54 43.8 32 43.8C29.46 43.8 27.4 41.87 27.4 39.5Z"); }
-}
-
-@keyframes excited-flash {
-    from { transform: scale(0.7); }
-    to { transform: scale(1.4); }
-}
-
-@keyframes excited-ear-left {
-    from { transform: translateX(0); }
-    to { transform: translateX(-0.7px); }
-}
-
-@keyframes excited-ear-right {
-    from { transform: translateX(0); }
-    to { transform: translateX(0.7px); }
-}
-
 /* ============================================================================ */
-/* Focused: narrowed eyes scanning, a flat mouth */
+/* Waking: eyes open slowly from lines, then calm */
 /* ============================================================================ */
 
-.mascot[data-state="focused"] .eye-shape { d: path("M-3 0C-3 -1.47 3 -1.47 3 0C3 1.47 -3 1.47 -3 0Z"); }
-.mascot[data-state="focused"] .mouth { d: path("M27 41.8C28.7 41.8 30.3 41.8 32 41.8C33.7 41.8 35.3 41.8 37 41.8"); }
-.mascot[data-state="focused"] .head { transform: translateY(0.5px); }
-.mascot[data-state="focused"] .eye-look { animation: focused-scan 3.5s ease-in-out infinite alternate; }
-.mascot[data-state="focused"] .eye-blink { animation: blink 8s infinite; }
-.mascot[data-state="focused"] .antenna-ball { animation: focused-pulse 2s ease-in-out infinite alternate; }
-
-@keyframes focused-scan {
-    from { transform: translateX(-0.9px); }
-    to { transform: translateX(0.9px); }
-}
-
-@keyframes focused-pulse {
-    from { transform: scale(0.85); }
-    to { transform: scale(1); }
-}
-
-/* ============================================================================ */
-/* Startled: a jolt, wide trembling eyes and a small open mouth */
-/* ============================================================================ */
-
-.mascot[data-state="startled"] .eye-shape { transform: scale(1.35); }
-.mascot[data-state="startled"] .mouth { opacity: 0; }
-.mascot[data-state="startled"] .mouth-open { d: path("M30.4 41.4C30.4 39.27 33.6 39.27 33.6 41.4C33.6 42.62 32.88 43.6 32 43.6C31.12 43.6 30.4 42.62 30.4 41.4Z"); opacity: 1; }
-.mascot[data-state="startled"] .head { animation: startled-jolt 0.35s ease-out both; }
-.mascot[data-state="startled"] .eye-look { animation: startled-tremble 0.12s linear infinite alternate; }
-.mascot[data-state="startled"] .antenna-ball { transform: scale(1.3); }
-
-@keyframes startled-jolt {
-    0% { transform: translateY(-3px); }
-    40% { transform: translateY(0.5px); }
-    100% { transform: translateY(0); }
-}
-
-@keyframes startled-tremble {
-    from { transform: translateX(-0.25px); }
-    to { transform: translateX(0.25px); }
-}
-
-/* ============================================================================ */
-/* Waking: eyes open slowly, a yawn and a stretch, then calm */
-/* ============================================================================ */
-
-.mascot[data-state="waking"] .head { animation: waking-stretch 1.8s ease-in-out; }
-.mascot[data-state="waking"] .eye-blink { animation: waking-open 1.4s ease-out, blink 4.6s 1.4s infinite; }
-.mascot[data-state="waking"] .mouth { animation: waking-mouth 1.8s ease-in-out; }
-.mascot[data-state="waking"] .mouth-open { animation: waking-yawn 1.8s ease-in-out; }
-
-@keyframes waking-stretch {
-    0% { transform: translateY(1.4px) rotate(3deg); }
-    45% { transform: translateY(-1.2px) rotate(0deg) scaleY(1.04); }
-    100% { transform: translateY(0) rotate(0deg) scaleY(1); }
-}
+.mascot[data-state="waking"] .eye-shape { animation: waking-open 1.6s ease-out, blink-round 4.6s 1.6s infinite; }
 
 @keyframes waking-open {
-    0% { transform: scaleY(0.08); }
-    25% { transform: scaleY(0.5); }
-    40% { transform: scaleY(0.12); }
-    100% { transform: scaleY(1); }
-}
-
-@keyframes waking-mouth {
-    0%, 30% { opacity: 1; }
-    35%, 75% { opacity: 0; }
-    85%, 100% { opacity: 1; }
-}
-
-@keyframes waking-yawn {
-    0%, 30% { d: path("M30.8 41.4C30.8 40.73 33.2 40.73 33.2 41.4C33.2 41.95 32.66 42.4 32 42.4C31.34 42.4 30.8 41.95 30.8 41.4Z"); opacity: 0; }
-    40% { d: path("M30.8 41.4C30.8 40.73 33.2 40.73 33.2 41.4C33.2 41.95 32.66 42.4 32 42.4C31.34 42.4 30.8 41.95 30.8 41.4Z"); opacity: 1; }
-    55% { d: path("M29.8 41.8C29.8 38.6 34.2 38.6 34.2 41.8C34.2 43.68 33.22 45.2 32 45.2C30.78 45.2 29.8 43.68 29.8 41.8Z"); opacity: 1; }
-    70% { d: path("M29.8 41.8C29.8 38.6 34.2 38.6 34.2 41.8C34.2 43.68 33.22 45.2 32 45.2C30.78 45.2 29.8 43.68 29.8 41.8Z"); opacity: 1; }
-    80%, 100% { d: path("M30.8 41.4C30.8 40.73 33.2 40.73 33.2 41.4C33.2 41.95 32.66 42.4 32 42.4C31.34 42.4 30.8 41.95 30.8 41.4Z"); opacity: 0; }
+    0% { d: path("M-2.25 0C-2.25 0 2.25 0 2.25 0C2.25 0 -2.25 0 -2.25 0Z"); }
+    25% { d: path("M-2.25 0C-2.25 -1.6 2.25 -1.6 2.25 0C2.25 1.6 -2.25 1.6 -2.25 0Z"); }
+    40% { d: path("M-2.25 0C-2.25 0 2.25 0 2.25 0C2.25 0 -2.25 0 -2.25 0Z"); }
+    100% { d: path("M-2.25 0C-2.25 -3 2.25 -3 2.25 0C2.25 3 -2.25 3 -2.25 0Z"); }
 }
 
 /* ============================================================================ */

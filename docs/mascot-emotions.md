@@ -10,17 +10,19 @@ The renderer's content security policy allows only stylesheets from the app itse
 
 | Emotion | Eyes | Mouth | Extra |
 | --- | --- | --- | --- |
-| `calm` | Plain, slow blink | Smirk | Gentle breathing |
-| `thinking` | Glancing up and from side to side | Wavering line | Antenna pulses |
-| `curious` | Wide | Small round "o" | Head tilts |
-| `happy` | Arched `^ ^` | Widening smile | Sways, antenna hops |
-| `sad` | Drooping and tilted | Trembling frown | A tear falls, head sinks |
-| `asleep` | Closed | Slow breathing line | Floating z's, head nods |
-| `worried` | Tilted, darting | Fidgeting line | Head shivers |
-| `excited` | Big, bulging | Open grin that talks | Hops, ears jiggle, antenna flashes |
-| `focused` | Narrowed, scanning | Flat | Leans in |
-| `startled` | Wide, trembling | Small round "o" | A jolt on entry |
-| `waking` | Open slowly | Yawn, then smirk | Stretch; ends as `calm` |
+| `calm` | Plain, slow blink | Smirk, as in the icon | |
+| `thinking` | Glancing up and from side to side | Flat | Antenna pulses gently |
+| `curious` | Slightly wide, glancing up | Flat | |
+| `happy` | Thin arches `^ ^` | Faint smile | |
+| `sad` | Drooping and slightly tilted | Faint frown | |
+| `asleep` | Closed lines | Short flat | Floating z's |
+| `worried` | Slightly tilted, darting | Wiggly line | |
+| `excited` | Slightly big, bouncing quickly | Flat | |
+| `focused` | Narrowed, scanning | Flat | |
+| `startled` | Slightly wide | Flat | Eyes pop wider once on entry |
+| `waking` | Open slowly from lines | Smirk | Ends as `calm` |
+
+Only one head movement exists, a slow vertical bob, and it is the same in every emotion. Eyes are drawn with a rounded outline, so any eye that blinks or is nearly closed becomes a line.
 
 `startled` and `waking` play their opening once and then hold, so they suit a short moment before moving on to another emotion.
 
