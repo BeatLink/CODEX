@@ -58,6 +58,13 @@ and a background worker uses idle time to turn it into facts, topic summaries an
   model with GPU layers takes an exclusive `flock` on `$XDG_RUNTIME_DIR/codex-gpu.lock` when
   it loads and releases it when the last such model in the process is freed. A process started
   under `flock` reuses the descriptor it inherited instead of waiting on itself.
+- **Suspending for games** ([gamemode.py](../codex/gamemode.py)): a daemon thread polls
+  `gamemoded -s`; while a game is registered, `HarnessDaemon.set_suspended` cancels the run,
+  unloads both models (freeing the GPU lock), pauses the background worker, and refuses new
+  runs, then broadcasts `suspended.changed`.
+- **The tray** ([tray.py](../codex/tray.py)) lives in the GTK interface, not the daemon: a
+  StatusNotifierItem with a dbusmenu, written directly on Gio. Hiding the window to the tray
+  keeps the interface connected, so the daemon's unused-exit timer never starts.
 
 ## How a request runs
 

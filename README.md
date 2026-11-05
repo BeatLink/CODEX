@@ -604,6 +604,29 @@ links open in the browser when clicked. **Ctrl+R**
 or **Ctrl+Enter** runs the request. It needs PyGObject and GTK 4, which the Nix
 package and dev shell provide.
 
+The GTK interface also lives in the system tray (a StatusNotifierItem, so it
+needs a tray host such as KDE Plasma or the AppIndicator extension on GNOME).
+Clicking the icon shows or hides the window, and closing the window hides it
+instead of quitting, which keeps the daemon and its background research
+running. The tray menu shows or hides the window, turns background research
+on or off, turns **Launch at login** on or off, and quits. Launch at login
+writes `~/.config/autostart/org.codex.CODEX.desktop`, which runs
+`codex-gtk --background` to start in the tray without opening the window. If
+no tray appears within 15 seconds the window opens anyway, and without a tray
+closing the window quits as usual.
+
+### Suspending for games
+
+The daemon asks `gamemoded -s` every 3 seconds whether a game started with
+`gamemoderun` is running. While one is, the daemon is suspended: it cancels the
+running request (an unfinished task tree can be resumed afterwards), unloads
+the main and background models so the GPU and its lock are free, pauses
+background research, and refuses new requests. The interfaces show "Suspended
+while a game runs". When the game closes, work picks up again and models load
+on the next request. A machine without GameMode is never suspended. The
+daemon status carries `suspended`, and the `suspended.changed` event reports
+each change.
+
 ## Configuration
 
 Settings are read from `settings.json` in the current directory, then from the
@@ -757,6 +780,8 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 | `codex/client.py`, `codex/protocol.py` | Connecting to the daemon, starting it, and the message format |
 | `codex/cli.py`, `codex/tui.py` | Command line and Textual interface |
 | `codex/gtk_app.py` | GTK 4 interface |
+| `codex/tray.py`, `codex/autostart.py` | The system tray icon and menu, and the login autostart entry |
+| `codex/gamemode.py` | Detecting a game running under GameMode, which suspends the daemon |
 | `codex/evaluation.py`, `evals/tasks.json` | The eval harness and its fixed task set |
 | `evals/seed.json`, `evals/recall_tasks.json` | The seed store's made-up facts and the tasks only recall can answer |
 | `codex/task_view.py` | Task tree lines and task details shared by the interfaces |

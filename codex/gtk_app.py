@@ -11,6 +11,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gio, GLib, Gtk, Pango  # noqa: E402
 
+from . import autostart  # noqa: E402
 from .client import DISCONNECTED_EVENT, DaemonClient, DaemonError, connect_to_daemon  # noqa: E402
 from .settings import (  # noqa: E402
     MODE_CHOICES,
@@ -21,6 +22,7 @@ from .settings import (  # noqa: E402
     validate_settings,
 )
 from .task_view import TASK_STEP_PREFIX, task_detail_markdown, task_tree_lines  # noqa: E402
+from .tray import MenuItem, Tray  # noqa: E402
 
 
 APPLICATION_ID = "org.codex.CODEX"
@@ -31,6 +33,10 @@ TASK_DETAIL_WAITING_TEXT = "Choose a task in the tree to see what it asks for an
 BACKGROUND_WAITING_TEXT = "Waiting for background work..."
 OUTPUT_FLUSH_MILLISECONDS = 150
 NOTICE_SECONDS = 8
+# A start in the tray waits this long for a tray to appear before it shows the window instead, so it is never unreachable.
+TRAY_WAIT_SECONDS = 15
+TRAY_ICON_NAME = "applications-science"
+SUSPENDED_TEXT = "Suspended while a game runs"
 
 # Each number field: (label, setting, lowest, highest, step, decimal places).
 MODEL_NUMBER_FIELDS = (
@@ -368,6 +374,7 @@ class CodexWindow(Gtk.ApplicationWindow):
         self._knowledge_sources: list[dict[str, Any]] = []
         self._knowledge_graph: list[dict[str, Any]] = []
         self._notice_timeout: int | None = None
+        self.suspended = False
 
         self.pages = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE, vexpand=True)
         self.pages.add_titled(self._build_workbench_page(), "workbench", "Workbench")
@@ -629,6 +636,10 @@ class CodexWindow(Gtk.ApplicationWindow):
     # ==========================================================================
 
     def _on_close_request(self, _window: Gtk.Window) -> bool:
+        if getattr(self.get_application(), "tray_registered", False):
+            # The tray keeps the interface, and its link to the daemon, alive.
+            self.set_visible(False)
+            return True
         if self.client is not None:
             self.client.on_event = None
             self.client.close()
@@ -690,6 +701,7 @@ class CodexWindow(Gtk.ApplicationWindow):
 
     def _show_daemon_status(self, status: dict[str, Any]) -> None:
         self._show_settings(status["settings"])
+        self._set_suspended(status.get("suspended", False))
         background = status["background"]
         self.background_output.set_text(background["output"] or BACKGROUND_WAITING_TEXT)
         self._set_background_status(background["status"])
@@ -742,10 +754,27 @@ class CodexWindow(Gtk.ApplicationWindow):
         elif event == "settings.changed":
             self.settings = data["settings"]
             self._set_background_switch(self.settings["background_research_enabled"])
+            self._refresh_tray()
+        elif event == "suspended.changed":
+            self._set_suspended(data["suspended"])
         elif event == DISCONNECTED_EVENT:
             if self._request_running:
                 self._fail_run("The daemon closed the connection.")
             self._show_daemon_error("Lost the connection to the CODEX daemon.")
+
+    def _set_suspended(self, suspended: bool) -> None:
+        if suspended == self.suspended:
+            return
+        self.suspended = suspended
+        self.notify_user(SUSPENDED_TEXT if suspended else "The game closed; CODEX is working again.")
+        if not self._request_running:
+            self.status.set_label(SUSPENDED_TEXT if suspended else "Ready")
+        self._refresh_tray()
+
+    def _refresh_tray(self) -> None:
+        refresh = getattr(self.get_application(), "refresh_tray", None)
+        if refresh is not None:
+            refresh()
 
     def _call_daemon(
         self,
@@ -1234,16 +1263,107 @@ class CodexWindow(Gtk.ApplicationWindow):
 
 
 class CodexApplication(Gtk.Application):
-    def __init__(self, settings: dict[str, Any], settings_path: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        settings: dict[str, Any],
+        settings_path: str | Path | None = None,
+        start_in_tray: bool = False,
+    ) -> None:
         super().__init__(application_id=APPLICATION_ID, flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
         self.settings = settings
         self.settings_path = settings_path
         self.window: CodexWindow | None = None
+        self.tray: Tray | None = None
+        self.tray_registered = False
+        self._start_in_tray = start_in_tray
 
     def do_activate(self) -> None:
-        if self.window is None:
+        first = self.window is None
+        if first:
             self.window = CodexWindow(self, self.settings, self.settings_path)
-        self.window.present()
+            # Closing the window hides it, so the application must not exit with no window showing.
+            self.hold()
+            self._start_tray()
+        if first and self._start_in_tray:
+            GLib.timeout_add_seconds(TRAY_WAIT_SECONDS, self._show_if_no_tray)
+        else:
+            self.window.present()
+
+    def _start_tray(self) -> None:
+        try:
+            self.tray = Tray(
+                "CODEX",
+                TRAY_ICON_NAME,
+                self._tray_items,
+                self._toggle_window,
+                lambda registered: GLib.idle_add(self._tray_registered_changed, registered),
+            )
+            self.tray.start()
+        except GLib.Error:
+            # Without a session bus there is no tray, and the window closes the application as usual.
+            self.tray = None
+
+    def _tray_registered_changed(self, registered: bool) -> bool:
+        self.tray_registered = registered
+        if not registered and self.window is not None and not self.window.get_visible():
+            self.window.present()
+        return False
+
+    def _show_if_no_tray(self) -> bool:
+        if not self.tray_registered and self.window is not None and not self.window.get_visible():
+            self.window.present()
+        return False
+
+    def _toggle_window(self) -> None:
+        if self.window is None:
+            return
+        if self.window.get_visible() and self.window.is_active():
+            self.window.set_visible(False)
+        else:
+            self.window.present()
+        self.refresh_tray()
+
+    def _tray_items(self) -> list[MenuItem]:
+        window = self.window
+        showing = window is not None and window.get_visible()
+        suspended = window is not None and window.suspended
+        researching = window is not None and bool(window.settings.get("background_research_enabled"))
+        items = [MenuItem("Hide CODEX" if showing else "Show CODEX", self._toggle_window)]
+        if suspended:
+            items.append(MenuItem(SUSPENDED_TEXT, None))
+        items += [
+            MenuItem(None),
+            MenuItem("Background research", self._toggle_research, checked=researching),
+            MenuItem("Launch at login", self._toggle_autostart, checked=autostart.is_enabled()),
+            MenuItem(None),
+            MenuItem("Quit", self._quit),
+        ]
+        return items
+
+    def refresh_tray(self) -> None:
+        if self.tray is not None:
+            self.tray.refresh(SUSPENDED_TEXT if self.window is not None and self.window.suspended else "CODEX")
+
+    def _toggle_research(self) -> None:
+        if self.window is not None:
+            enabled = not self.window.settings.get("background_research_enabled")
+            self.window._call_daemon("set_background_enabled", enabled=enabled)
+
+    def _toggle_autostart(self) -> None:
+        if autostart.is_enabled():
+            autostart.disable()
+        else:
+            autostart.enable()
+        self.refresh_tray()
+
+    def _quit(self) -> None:
+        self.tray_registered = False
+        if self.tray is not None:
+            self.tray.stop()
+        if self.window is not None:
+            self.window.close()
+        self.release()
+        self.quit()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1253,12 +1373,17 @@ def main(argv: list[str] | None = None) -> int:
         default=str(default_settings_path()),
         help="Path to the JSON settings file used when this starts the daemon.",
     )
+    parser.add_argument(
+        "--background",
+        action="store_true",
+        help="Start in the system tray without opening the window, as the login autostart entry does.",
+    )
     args = parser.parse_args(argv)
     try:
         settings = load_settings(args.settings)
     except (OSError, ValueError) as error:
         parser.error(str(error))
-    return CodexApplication(settings, args.settings).run([sys.argv[0]])
+    return CodexApplication(settings, args.settings, args.background).run([sys.argv[0]])
 
 
 if __name__ == "__main__":

@@ -27,6 +27,7 @@
 - [x] Let the user define slash commands as Markdown files, and add /init to write a folder's CODEX.md
 - [x] Recall user memories by relevance and recency, keep project memories to their folder, and record why each holds
 - [x] Split memory into stores (general, user, locations, software, project, research skills, code skills), probe the machine for the environment stores, and give each task the skills its approach uses
+- [x] Add a system tray, launch at login, and suspend while a game runs under gamemoderun
 - [ ] Benchmark on real maintenance tasks
 - [x] Keep the loaded model between requests and share it with the background worker
 - [x] Return structured JSON from stages using llama.cpp schema-constrained output

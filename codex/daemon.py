@@ -15,6 +15,7 @@ from .auto_size import auto_size
 from .background import index_knowledge, learn_from_episodes, research_one_topic
 from .consolidation import consolidate_knowledge
 from .environment import refresh_environment
+from .gamemode import game_mode_active
 from .knowledge import RESUMABLE_TASK_RUN_STATUSES, KnowledgeStore
 from .model import ModelCache
 from .protocol import decode_message, default_socket_path, encode_message
@@ -23,6 +24,9 @@ from .task_tree import execute_task_tree
 
 # A separate background model is unloaded after this long without background work, to give its memory back.
 BACKGROUND_MODEL_IDLE_SECONDS = 300
+
+# How often the daemon asks GameMode whether a game started with gamemoderun is running.
+GAME_MODE_POLL_SECONDS = 3
 
 
 class RunCancelled(Exception):
@@ -118,6 +122,9 @@ class HarnessDaemon:
         self._background_status = "Idle"
         self._background_output = ""
         self._worker: threading.Thread | None = None
+        self._game_watcher: threading.Thread | None = None
+        # Set while a game runs under GameMode: the models are unloaded and no work starts.
+        self._suspended = threading.Event()
         self._server: socketserver.ThreadingUnixStreamServer | None = None
         self._methods: dict[str, Callable[..., Any]] = {
             "status": self.status,
@@ -148,6 +155,8 @@ class HarnessDaemon:
         self._knowledge_store(self.get_settings()["knowledge_db_path"]).requeue_interrupted_jobs()
         self._worker = threading.Thread(target=self._background_loop, name="background-research", daemon=True)
         self._worker.start()
+        self._game_watcher = threading.Thread(target=self._game_mode_loop, name="game-mode", daemon=True)
+        self._game_watcher.start()
 
     def bind(self, socket_path: str | Path) -> socketserver.ThreadingUnixStreamServer:
         path = Path(socket_path)
@@ -270,6 +279,7 @@ class HarnessDaemon:
                 "settings_path": str(self.settings_path),
                 "run": self._run.snapshot() if self._run is not None else None,
                 "background": {"status": self._background_status, "output": self._background_output},
+                "suspended": self._suspended.is_set(),
                 "unfinished_runs": self.unfinished_runs(),
             }
 
@@ -334,6 +344,7 @@ class HarnessDaemon:
         prompt = prompt.strip()
         if not prompt:
             raise ValueError("The prompt cannot be empty.")
+        self._refuse_while_suspended()
         run_settings = validate_settings({**self.get_settings(), **(settings or {})})
         return self._launch_run(connection, prompt, run_settings, interactive, None)
 
@@ -365,6 +376,7 @@ class HarnessDaemon:
         interactive: bool,
         saved: dict[str, Any] | None,
     ) -> dict[str, Any]:
+        self._refuse_while_suspended()
         with self._lock:
             if self._run is not None:
                 raise RuntimeError("Another request is already running.")
@@ -586,7 +598,10 @@ class HarnessDaemon:
             settings = self.get_settings()
             worked = False
             manual_run_requested = self._background_run_requested.is_set()
-            if not settings["background_research_enabled"] and not manual_run_requested:
+            if self._suspended.is_set():
+                self._set_background_status("Suspended while a game runs")
+                wait_seconds = 1
+            elif not settings["background_research_enabled"] and not manual_run_requested:
                 self._set_background_status("Paused")
                 wait_seconds = settings["background_poll_interval_seconds"]
             elif self._run_is_active():
@@ -604,7 +619,7 @@ class HarnessDaemon:
                     worker_options = {
                         "on_progress": self._set_background_status,
                         "on_token": self._append_background_token,
-                        "should_pause": lambda: self._run_is_active() or self._stop.is_set(),
+                        "should_pause": lambda: self._run_is_active() or self._suspended.is_set() or self._stop.is_set(),
                         "model_lock": model_lock,
                         "model_cache": model_cache,
                     }
@@ -630,6 +645,38 @@ class HarnessDaemon:
             self._unload_idle_background_model(worked)
             self._worker_wakeup.wait(wait_seconds)
             self._worker_wakeup.clear()
+
+    # ==========================================================================
+    # Suspending for games
+    # ==========================================================================
+
+    def _refuse_while_suspended(self) -> None:
+        if self._suspended.is_set():
+            raise RuntimeError("CODEX is suspended while a game runs under GameMode; try again when it closes.")
+
+    def _game_mode_loop(self) -> None:
+        while not self._stop.is_set():
+            active = game_mode_active()
+            if active != self._suspended.is_set():
+                self.set_suspended(active)
+            self._stop.wait(GAME_MODE_POLL_SECONDS)
+
+    def set_suspended(self, suspended: bool) -> None:
+        """Give the GPU to a game, or take work up again: a suspension stops the run and unloads every model."""
+        if suspended:
+            self._suspended.set()
+            with self._lock:
+                if self._run is not None:
+                    self._run.cancel_requested.set()
+            # Both locks are free once the stopped run and the paused background work let go of the model.
+            with self._model_lock:
+                self._model_cache.unload()
+            with self._background_model_lock:
+                self._background_model_cache.unload()
+        else:
+            self._suspended.clear()
+        self._worker_wakeup.set()
+        self.broadcast("suspended.changed", suspended=suspended)
 
     # ==========================================================================
     # Knowledge
