@@ -76,12 +76,14 @@ let cpuBackend: Promise<Llama> | null = null;
 
 // A CPU-only model gets its own backend, so its context cache and prompt batches stay off the GPU.
 export async function llamaBackend(onCpuOnly: boolean): Promise<Llama> {
-    const { getLlama } = await import('node-llama-cpp');
+    const { getLlama, LlamaLogLevel } = await import('node-llama-cpp');
+    // Only llama.cpp's errors reach the terminal, so its load messages never mix into a reply.
+    const logLevel = LlamaLogLevel.error;
     if (onCpuOnly) {
-        cpuBackend ??= getLlama({ gpu: false });
+        cpuBackend ??= getLlama({ gpu: false, logLevel });
         return cpuBackend;
     }
-    gpuBackend ??= getLlama();
+    gpuBackend ??= getLlama({ logLevel });
     return gpuBackend;
 }
 
