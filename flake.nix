@@ -32,7 +32,7 @@
         version = packageJson.version;
         src = self;
         inherit nodejs;
-        npmDepsHash = "sha256-SEQiNJQOJoHKR9kP44fnxLFIwNgr8E9OXqNHjcB31MY=";
+        npmDepsHash = "sha256-n1IHenHErqroT1tuqzkioSymigrMLpxgC98hSeOVQv8=";
         npmFlags = [ "--ignore-scripts" ];
         env = {
           ELECTRON_SKIP_BINARY_DOWNLOAD = "1";
