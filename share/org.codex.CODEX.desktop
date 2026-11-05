@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=CODEX
+GenericName=Local LLM harness
+Comment=Work requests as task trees with a locally run language model
+Exec=codex-gui
+Icon=org.codex.CODEX
+Terminal=false
+Categories=Utility;
+Keywords=llm;research;knowledge;
+StartupWMClass=codex

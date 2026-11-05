@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { desktopEntryText, disable, enable, entryPath, findOnPath, isEnabled, launchCommand } from './autostart.js';
+import { desktopEntryText, disable, enable, entryPath, findLauncher, findOnPath, isEnabled, launchCommand, refresh } from './autostart.js';
 
 describe('autostart', () => {
     let directory: string;
@@ -37,6 +37,30 @@ describe('autostart', () => {
         expect(isEnabled({ environment })).toBe(false);
     });
 
+    it('runs the launcher the package names when codex-gui is not on the PATH', () => {
+        const launcher = join(directory, 'codex-gui');
+        writeFileSync(launcher, '#!/bin/sh\n');
+        chmodSync(launcher, 0o755);
+        const environment = { XDG_CONFIG_HOME: directory, PATH: '', CODEX_GUI_COMMAND: launcher };
+
+        enable({ environment, fallback: ['/opt/electron', '/app/main.js'] });
+
+        const entry = readFileSync(entryPath(environment), 'utf8');
+        expect(entry).toContain(`Exec=${launcher} --background\n`);
+        expect(findLauncher({ PATH: '', CODEX_GUI_COMMAND: join(directory, 'missing') })).toBeNull();
+    });
+
+    it('rewrites an existing entry for this install and leaves a missing one alone', () => {
+        const environment = { XDG_CONFIG_HOME: directory, PATH: '' };
+        refresh({ environment, fallback: ['/new/electron'] });
+        expect(isEnabled({ environment })).toBe(false);
+        enable({ environment, fallback: ['/old/electron'] });
+
+        refresh({ environment, fallback: ['/new/electron'] });
+
+        expect(readFileSync(entryPath(environment), 'utf8')).toContain('Exec=/new/electron --background\n');
+    });
+
     it('keeps the entry under the config folder, defaulting to ~/.config', () => {
         expect(entryPath({ XDG_CONFIG_HOME: '/config' })).toBe('/config/autostart/org.codex.CODEX.desktop');
         expect(entryPath({})).toMatch(/\/\.config\/autostart\/org\.codex\.CODEX\.desktop$/);
@@ -57,7 +81,7 @@ describe('autostart', () => {
                 'Name=CODEX\n' +
                 'Comment=Local LLM harness, started in the system tray\n' +
                 'Exec=codex-gui --background\n' +
-                'Icon=applications-science\n' +
+                'Icon=org.codex.CODEX\n' +
                 'Terminal=false\n' +
                 'X-GNOME-Autostart-enabled=true\n',
         );

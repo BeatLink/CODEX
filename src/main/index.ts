@@ -15,7 +15,7 @@ const rendererPage = path.join(here, '../renderer/index.html');
 const preloadScript = path.join(here, 'preload.cjs');
 const trayIconPath = path.join(here, '../renderer/tray-icon.png');
 const options = launchOptions(process.argv);
-// Without codex-gui on the PATH, launch at login runs this same Electron on this same script.
+// Without codex-gui on the PATH or named by the package, launch at login runs this same Electron on this same script.
 const autostartOptions = { fallback: [process.execPath, fileURLToPath(import.meta.url)] };
 
 let mainWindow: BrowserWindow | null = null;
@@ -276,6 +276,7 @@ if (!app.requestSingleInstanceLock()) {
 
     void app.whenReady().then(() => {
         Menu.setApplicationMenu(applicationMenu());
+        autostart.refresh(autostartOptions);
         mainWindow = createWindow(!options.startInTray);
         startTray();
         if (options.startInTray) {

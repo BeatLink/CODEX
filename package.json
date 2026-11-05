@@ -1,5 +1,6 @@
 {
     "name": "codex",
+    "desktopName": "org.codex.CODEX.desktop",
     "private": true,
     "version": "0.1.0",
     "type": "module",

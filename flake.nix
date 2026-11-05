@@ -55,7 +55,10 @@
           makeWrapper ${electron}/bin/electron $out/bin/codex-gui \
             --add-flags $out/lib/codex/dist/main/index.js \
             --prefix LD_LIBRARY_PATH : "${runtimeLibraryPath}" \
-            --prefix PATH : "${runtimePath}"
+            --prefix PATH : "${runtimePath}" \
+            --set CODEX_GUI_COMMAND $out/bin/codex-gui
+          install -Dm644 share/org.codex.CODEX.desktop $out/share/applications/org.codex.CODEX.desktop
+          install -Dm644 share/org.codex.CODEX.svg $out/share/icons/hicolor/scalable/apps/org.codex.CODEX.svg
           runHook postInstall
         '';
       };

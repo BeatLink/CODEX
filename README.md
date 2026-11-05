@@ -466,6 +466,11 @@ nix run                      # open the window
 nix run .#cli -- "your prompt"
 ```
 
+The package also installs an application launcher
+(`share/applications/org.codex.CODEX.desktop`) and its icon, so installing it
+into a profile, for example with `nix profile install`, adds CODEX to the
+desktop's application menu.
+
 To work on it, enter the dev shell, which provides Node 24 and Electron:
 
 ```bash
@@ -613,7 +618,9 @@ menu shows or hides the window, turns background research on or off, turns
 **Launch at login** on or off, and quits; Options has the same Launch at login
 switch. Launch at login writes `~/.config/autostart/org.codex.CODEX.desktop`,
 which runs `codex-gui --background` to start in the tray without opening the
-window. If no tray appears within 15 seconds the window opens anyway, and
+window. It uses `codex-gui` from the PATH, or else the packaged launcher the
+window was started from, and the window rewrites the entry each time it starts
+so an update never leaves it pointing at a removed path. If no tray appears within 15 seconds the window opens anyway, and
 without a tray closing the window quits as usual.
 
 ### Suspending

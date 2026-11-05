@@ -6,6 +6,9 @@ import { delimiter, dirname, join } from 'node:path';
 export const ENTRY_NAME = 'org.codex.CODEX.desktop';
 export const BACKGROUND_FLAG = '--background';
 export const LAUNCH_PROGRAM = 'codex-gui';
+// The packaged codex-gui sets this to its own path, so the entry runs the wrapper even when it is not on the PATH.
+export const LAUNCHER_VARIABLE = 'CODEX_GUI_COMMAND';
+export const ICON_NAME = 'org.codex.CODEX';
 
 // ============================================================================
 // Paths
@@ -33,6 +36,20 @@ export function findOnPath(program: string, environment: NodeJS.ProcessEnv = pro
     return null;
 }
 
+// Picks codex-gui from the PATH first, then the launcher the package names, so the entry gets the wrapper's environment.
+export function findLauncher(environment: NodeJS.ProcessEnv = process.env): string | null {
+    const onPath = findOnPath(LAUNCH_PROGRAM, environment);
+    if (onPath !== null) return onPath;
+    const named = environment[LAUNCHER_VARIABLE];
+    if (!named) return null;
+    try {
+        accessSync(named, constants.X_OK);
+        return named;
+    } catch {
+        return null;
+    }
+}
+
 // ============================================================================
 // Entry text
 // ============================================================================
@@ -58,7 +75,7 @@ export function desktopEntryText(command: string): string {
         'Name=CODEX\n' +
         'Comment=Local LLM harness, started in the system tray\n' +
         `Exec=${command}\n` +
-        'Icon=applications-science\n' +
+        `Icon=${ICON_NAME}\n` +
         'Terminal=false\n' +
         'X-GNOME-Autostart-enabled=true\n'
     );
@@ -82,8 +99,13 @@ export function enable(options: AutostartOptions = {}): void {
     const environment = options.environment ?? process.env;
     const path = entryPath(environment);
     mkdirSync(dirname(path), { recursive: true });
-    const command = launchCommand(findOnPath(LAUNCH_PROGRAM, environment), options.fallback ?? [process.execPath]);
+    const command = launchCommand(findLauncher(environment), options.fallback ?? [process.execPath]);
     writeFileSync(path, desktopEntryText(command));
+}
+
+// Rewrites an existing entry for this install, so an update never leaves it pointing at a removed path.
+export function refresh(options: AutostartOptions = {}): void {
+    if (isEnabled(options)) enable(options);
 }
 
 export function disable(options: AutostartOptions = {}): void {
