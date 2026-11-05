@@ -30,7 +30,7 @@ from codex.task_tree import (
 from user_config import setUpModule, tearDownModule  # The user's own config files never reach these tests.
 
 
-def decision(approach, facts=(), queries=(), subtasks=(), clarification=None):
+def decision(approach, facts=(), queries=(), subtasks=(), clarification=None, agent=None):
     reply = {
         "reason": "Because.",
         "facts_to_check": list(facts),
@@ -43,6 +43,8 @@ def decision(approach, facts=(), queries=(), subtasks=(), clarification=None):
     }
     if clarification is not None:
         reply["clarification"] = clarification
+    if agent is not None:
+        reply["agent"] = agent
     return json.dumps(reply)
 
 
@@ -921,3 +923,86 @@ class ResumeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def write_agents(root, **files):
+    directory = Path(root) / ".codex" / "agents"
+    directory.mkdir(parents=True)
+    for name, text in files.items():
+        (directory / f"{name}.md").write_text(text)
+
+
+def mcp_server(name):
+    return {"name": name, "enabled": True, "transport": "stdio", "command": "true", "args": [], "env": {}}
+
+
+class AgentTests(unittest.TestCase):
+    def test_a_task_hands_its_work_to_an_agent_that_works_it_as_its_own_tree(self):
+        with tempfile.TemporaryDirectory() as directory:
+            write_agents(
+                directory,
+                mail="---\ndescription: Reads and sends email.\nmcp_servers: mail\n---\nShow every draft first.",
+            )
+            result, model, progress, trees = run_tree({
+                ("decide", "1"): [decision("delegate", agent="mail"), decision("answer")],
+                ("write", "1"): "Sent the note.",
+            }, prompt="Email Sam that I am late", filesystem_root=directory, allow_file_writes=False,
+                mcp_servers=[mcp_server("mail")])
+
+        self.assertEqual(result, "Sent the note.")
+        self.assertEqual(model.steps(), [("decide", "1"), ("decide", "1"), ("write", "1"), ("check", "1")])
+        top, nested = [call for call in model.calls if call["step"] == "decide"]
+        self.assertIn("mail: Reads and sends email.", top["system"])
+        self.assertEqual(top["json_schema"]["properties"]["agent"]["enum"], ["mail", ""])
+        self.assertIn("delegate", top["json_schema"]["properties"]["approach"]["enum"])
+        self.assertNotIn("act", top["json_schema"]["properties"]["approach"]["enum"])
+        self.assertNotIn("agent", nested["json_schema"]["properties"])
+        self.assertIn("act", nested["json_schema"]["properties"]["approach"]["enum"])
+        self.assertNotIn("clarification", nested["json_schema"]["properties"])
+        self.assertIn("Show every draft first.", nested["input"])
+        self.assertIn("Email Sam that I am late", nested["input"])
+        self.assertEqual(trees[-1][0]["approach"], "delegate")
+        self.assertEqual(trees[-1][0]["status"], "done")
+        self.assertEqual(trees[-1][0]["note"], "Delegated to the mail agent")
+
+    def test_no_agents_means_no_delegate_choice(self):
+        with tempfile.TemporaryDirectory() as directory:
+            _, model, _, _ = run_tree(
+                {("decide", "1"): decision("answer"), ("write", "1"): "Done."}, filesystem_root=directory
+            )
+        schema = model.call("decide", "1")["json_schema"]
+        self.assertNotIn("agent", schema["properties"])
+        self.assertNotIn("delegate", schema["properties"]["approach"]["enum"])
+
+    def test_naming_an_agent_that_is_not_offered_falls_back_to_a_direct_answer(self):
+        with tempfile.TemporaryDirectory() as directory:
+            write_agents(directory, mail="---\ndescription: Email.\n---\n")
+            result, model, _, _ = run_tree({
+                ("decide", "1"): decision("delegate", agent="calendar"),
+                ("write", "1"): "Direct answer.",
+            }, filesystem_root=directory)
+        self.assertEqual(result, "Direct answer.")
+        self.assertEqual(model.steps(), [("decide", "1"), ("write", "1"), ("check", "1")])
+
+    def test_agents_nest_only_as_deep_as_the_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            write_agents(
+                directory,
+                one="---\ndescription: First.\nagents: two\n---\n",
+                two="---\ndescription: Second.\nagents: three\n---\n",
+                three="---\ndescription: Third.\nagents: four\n---\n",
+                four="---\ndescription: Fourth.\n---\n",
+            )
+            result, model, _, _ = run_tree({
+                ("decide", "1"): [
+                    decision("delegate", agent="one"),
+                    decision("delegate", agent="two"),
+                    decision("delegate", agent="three"),
+                    decision("answer"),
+                ],
+                ("write", "1"): "Deep answer.",
+            }, filesystem_root=directory)
+
+        offers = [call["json_schema"]["properties"].get("agent", {}).get("enum") for call in model.calls if call["step"] == "decide"]
+        self.assertEqual(offers, [["one", ""], ["two", ""], ["three", ""], None])
+        self.assertEqual(result, "Deep answer.")

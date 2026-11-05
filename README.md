@@ -160,6 +160,10 @@ the options it started with, not the current settings. The TUI and GTK
 interfaces offer Resume and Discard for the newest unfinished run, and
 `codex --resume` resumes it from the command line.
 
+## Agents
+
+A task can hand its work to a named specialist agent, which works it as its own task tree with its own instructions and tools. Agents are Markdown files in `~/.config/codex/agents/` and the folder's `.codex/agents/`: the file name is the agent's name, and the front matter gives a `description` (what the parent reads to choose it), `mcp_servers` (servers only this agent may use), and `agents` (the agents it can hand work to). The body is added to the standing instructions for the agent's calls. Agents nest three deep at most. See [docs/agent-hierarchy.md](docs/agent-hierarchy.md).
+
 ## Standing instructions
 
 Rules you write yourself go into every model call, after the request, and are

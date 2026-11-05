@@ -9,6 +9,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from .agents import MAX_AGENT_DEPTH, AgentDefinition, load_agents, servers_for, top_level_agents
 from .context_budget import condense_sections, input_token_budget, render_sections, token_counter
 from .commands import expand_command, is_memory_command, run_memory_command
 from .embeddings import get_embedder
@@ -62,8 +63,8 @@ MIN_ACT_TOOL_CALLS = 8
 DECISION_MAX_TOKENS = 1024
 CHECK_MAX_TOKENS = 512
 
-# Each way a task can be done; "decompose" splits it into subtasks instead of doing it.
-APPROACHES = ("answer", "research", "files", "act", "decompose")
+# Each way a task can be done; "decompose" splits it into subtasks and "delegate" hands it to an agent.
+APPROACHES = ("answer", "research", "files", "act", "decompose", "delegate")
 APPROACH_STEPS = {"research": "Researching", "files": "Reading files", "act": "Acting"}
 CHECK_VERDICTS = ("met", "partly met", "missing")
 
@@ -79,6 +80,8 @@ CLARIFICATION_LABEL = "User clarification"
 SEARCH_LABELS = ("Local knowledge result", "Automatic web search result")
 TREE_LABEL = "Task tree"
 SNAPSHOT_RESULT_CHARS = 2_000
+# Each earlier result handed to an agent is cut to this, since the agent's window is as small as the parent's.
+MAX_HANDED_RESULT_CHARS = 1_500
 # Facts recalled for one task, its own and the request's together.
 MAX_FACTS_PER_TASK = 8
 # The skill store each approach draws on: researching for research, code review and editing for files and acting.
@@ -104,7 +107,7 @@ def _subtask_schema(min_items: int) -> dict[str, Any]:
     }
 
 
-def decision_schema(approaches: list[str], ask_clarification: bool) -> dict[str, Any]:
+def decision_schema(approaches: list[str], ask_clarification: bool, agent_names: list[str] = ()) -> dict[str, Any]:
     """Build the decision's JSON schema, offering only the approaches this task may take."""
     # Fields come in this order so the model reasons and lists facts before it picks an approach.
     properties: dict[str, Any] = {
@@ -114,6 +117,8 @@ def decision_schema(approaches: list[str], ask_clarification: bool) -> dict[str,
         "search_queries": {"type": "array", "items": {"type": "string"}, "maxItems": MAX_SEARCH_QUERIES},
         "subtasks": _subtask_schema(0),
     }
+    if agent_names:
+        properties["agent"] = {"type": "string", "enum": [*agent_names, ""]}
     if ask_clarification:
         properties["clarification"] = {"type": "string"}
     return {"type": "object", "properties": properties, "required": list(properties)}
@@ -166,6 +171,11 @@ DECISION_PROMPT = (
     " other tasks in the tree cover the rest of it, so never repeat them."
     " Leave 'search_queries' and"
     " 'subtasks' empty when they do not apply."
+)
+DELEGATE_NOTE = (
+    " 'delegate' hands the task to one specialist agent named in 'agent',"
+    " and must be chosen when an agent's description covers the task;"
+    " otherwise leave 'agent' empty. Agents:"
 )
 CLARIFICATION_NOTE = (
     " If a material ambiguity in the request must be resolved to answer"
@@ -510,6 +520,7 @@ class Decision:
     search_queries: list[str] = field(default_factory=list)
     subtasks: list[dict[str, Any]] = field(default_factory=list)
     clarification: str | None = None
+    agent: str = ""
 
 
 def parse_decision(
@@ -517,6 +528,7 @@ def parse_decision(
     node: TaskNode,
     approaches: list[str],
     existing_prompts: list[str] | None = None,
+    agent_names: list[str] = (),
 ) -> Decision | None:
     """Read a decision reply, or return None when it is not the expected shape."""
     try:
@@ -526,6 +538,9 @@ def parse_decision(
     if not isinstance(data, dict) or data.get("approach") not in approaches:
         return None
     approach = data["approach"]
+    agent = _clean(data.get("agent"))
+    if approach == "delegate" and agent not in agent_names:
+        return None
     facts = data.get("facts_to_check")
     # A small model cannot tell when it does not know something, so any listed fact means research.
     if approach == "answer" and "research" in approaches and isinstance(facts, list) and any(_clean(fact) for fact in facts):
@@ -548,6 +563,7 @@ def parse_decision(
         search_queries=search_queries if approach == "research" else [],
         subtasks=subtasks if approach == "decompose" else [],
         clarification=clarification or None,
+        agent=agent if approach == "delegate" else "",
     )
 
 
@@ -598,8 +614,19 @@ class TaskTreeRun:
         checkpoint_id: int | None = None,
         instructions: str = "",
         confirm_actions: bool = True,
+        delegated: bool = False,
+        agents: dict[str, AgentDefinition] | None = None,
+        agent: AgentDefinition | None = None,
+        agent_depth: int = 0,
     ) -> None:
         self.user_prompt = user_prompt
+        # Every agent by name, the agent this run works as (none at the top), and how many hand-overs deep it is.
+        self.agents = agents or {}
+        # A delegated run answers a task for its parent, not a user, so it never asks the user a question.
+        self.delegated = delegated
+        self.agent = agent
+        self.agent_depth = agent_depth
+        self.all_mcp_servers = mcp_servers
         self.instructions = instructions
         self.confirm_actions = confirm_actions
         # The user approves or declines a run's actions once, the first time a task would act.
@@ -614,7 +641,7 @@ class TaskTreeRun:
         self.max_tool_calls = max_tool_calls
         self.allow_file_writes = allow_file_writes
         self.enable_test_execution = enable_test_execution
-        self.mcp_servers = mcp_servers
+        self.mcp_servers = servers_for(agent, self.agents, mcp_servers)
         self.max_pending_research_jobs = max_pending_research_jobs
         self.show_thinking = show_thinking
         self.clarification_callback = clarification_callback
@@ -640,7 +667,7 @@ class TaskTreeRun:
         self.mode = mode
         # Answer and draft modes never change anything, so only auto and execute may act.
         self.can_act = mode in ("auto", "execute") and (
-            allow_file_writes or enable_test_execution or any(server.get("enabled", True) for server in mcp_servers)
+            allow_file_writes or enable_test_execution or any(server.get("enabled", True) for server in self.mcp_servers)
         )
 
     # ==========================================================================
@@ -888,6 +915,8 @@ class TaskTreeRun:
             self.publish()
             if decision.approach == "decompose":
                 self.work_subtasks(node, decision.subtasks)
+            elif decision.approach == "delegate":
+                self.delegate(node, decision.agent)
             else:
                 self.work_directly(node, decision)
         except (RuntimeError, ValueError) as error:
@@ -905,21 +934,34 @@ class TaskTreeRun:
             approaches = ["answer", "research", "files"] + (["act"] if self.can_act else [])
         if self.tree.room_for(node) >= MIN_SUBTASKS:
             approaches.append("decompose")
+        if self.agent_choices():
+            approaches.append("delegate")
         return approaches
+
+    def agent_choices(self) -> list[str]:
+        """Return the agents this run may hand a task to: the top level's own, or the agent's sub-agents."""
+        if self.agent_depth >= MAX_AGENT_DEPTH:
+            return []
+        return top_level_agents(self.agents) if self.agent is None else list(self.agent.agents)
 
     def decide(self, node: TaskNode) -> Decision:
         approaches = self.approaches_for(node)
-        ask = node.parent is None and self.clarification is None
+        ask = node.parent is None and self.clarification is None and not self.delegated
+        agent_names = self.agent_choices()
         system_prompt = DECISION_PROMPT + (CLARIFICATION_NOTE if ask else "")
+        if agent_names:
+            system_prompt += DELEGATE_NOTE + "".join(f" {name}: {self.agents[name].description}" for name in agent_names)
         reply = self.call(
             node,
             "Deciding",
             system_prompt,
             self.sections(node),
             reply_tokens=DECISION_MAX_TOKENS,
-            json_schema=decision_schema(approaches, ask),
+            json_schema=decision_schema(approaches, ask, agent_names),
         )
-        decision = parse_decision(reply, node, approaches, [task.prompt for task in self.tree.nodes()])
+        decision = parse_decision(
+            reply, node, approaches, [task.prompt for task in self.tree.nodes()], agent_names
+        )
         if decision is None:
             fallback = "research" if requires_web_research(node.prompt) else "answer"
             return Decision(approach=fallback)
@@ -931,6 +973,55 @@ class TaskTreeRun:
             # An execute request is there to change things, and acting can read files as well.
             decision.approach = "act"
         return decision
+
+    def delegate(self, node: TaskNode, agent_name: str) -> None:
+        """Hand a task to an agent, which works it as its own task tree and returns the result."""
+        agent = self.agents[agent_name]
+        node.note = f"Delegated to the {agent_name} agent"
+        self.publish()
+        handed = [f"{node.prompt}\nDeliverable: {node.deliverable}"]
+        handed.extend(
+            f"Earlier result, {label}:\n{text[:MAX_HANDED_RESULT_CHARS]}" for label, text in self.dependency_results(node)
+        )
+        run = TaskTreeRun(
+            "\n\n".join(handed),
+            self.llm,
+            self.toolbox,
+            self.knowledge_store,
+            self.found_urls,
+            context_size=self.context_size,
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+            max_tool_calls=self.max_tool_calls,
+            max_task_depth=self.tree.max_depth,
+            max_task_nodes=self.tree.max_nodes,
+            allow_file_writes=self.allow_file_writes,
+            enable_test_execution=self.enable_test_execution,
+            mcp_servers=self.all_mcp_servers,
+            max_pending_research_jobs=self.max_pending_research_jobs,
+            show_thinking=self.show_thinking,
+            clarification_callback=None,
+            progress_callback=self.progress_callback,
+            stage_output_callback=self.stage_output_callback,
+            tree_callback=None,
+            mode=self.mode,
+            instructions="\n\n".join(part for part in (self.instructions, agent.instructions) if part),
+            confirm_actions=self.confirm_actions,
+            delegated=True,
+            agents=self.agents,
+            agent=agent,
+            agent_depth=self.agent_depth + 1,
+        )
+        run.actions_decision = self.actions_decision
+        try:
+            result = run.run()
+        finally:
+            # What the agent found and whether the user approved its actions count for the whole run.
+            self.evidence.extend(run.evidence)
+            self.actions_decision = run.actions_decision
+        problem = run.tree.root.note
+        node.result, node.status = result, run.tree.root.status
+        node.note = f"Delegated to the {agent_name} agent" + (f": {problem}" if problem else "")
 
     def ask_clarification(self, question: str) -> None:
         if self.clarification_callback is None:
@@ -1387,6 +1478,7 @@ def execute_task_tree(
         checkpoint_id=resume_run_id,
         instructions=load_instructions(toolbox.root),
         confirm_actions=confirm_actions,
+        agents=load_agents(toolbox.root),
     )
     if saved_run is not None:
         run.restore(saved_run["state"])

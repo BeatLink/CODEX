@@ -10,7 +10,9 @@
 - [x] Remove the eight-stage pipeline and work every request as a task tree
 - [x] Resume an unfinished task tree after the daemon restarts
 - [x] Show each task's result when its row is chosen in the interfaces
-- [ ] Subagents / refinement loops
+- [x] Let a task delegate to a named agent with its own instructions and MCP servers (prototype)
+- [ ] Give agents their own memory and scratchpad, resume inside an agent, and show the nested tree
+- [ ] Refinement loops
 - [x] Tool calling
 - [x] Web search
 - [x] Local filesystem access
