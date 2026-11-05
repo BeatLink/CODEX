@@ -8,7 +8,7 @@ from typing import Any
 from rich.console import Console
 from rich.markdown import Markdown
 
-from .client import DISCONNECTED_EVENT, connect_to_daemon
+from .client import DISCONNECTED_EVENT, DaemonError, connect_to_daemon
 from .settings import MODE_CHOICES, default_settings_path, load_settings, validate_settings
 from .knowledge import KnowledgeStore
 from .task_tree import execute_task_tree
@@ -22,6 +22,8 @@ def main(argv: list[str] | None = None) -> int:
         argv = sys.argv[1:]
     if argv and argv[0] == "tui":
         argv = ["--tui", *argv[1:]]
+    if argv and argv[0] in ("suspend", "resume"):
+        return _set_suspended(argv[0] == "suspend")
     if argv and argv[0] == "eval":
         from .evaluation import main as eval_main
 
@@ -200,6 +202,22 @@ def _resume(settings: dict[str, Any]) -> int:
         print(f"Error: {error}", file=sys.stderr)
         return 1
     _print_result(result)
+    return 0
+
+
+def _set_suspended(suspended: bool) -> int:
+    """Suspend or resume the running daemon; with none running there is nothing to do, which is not a failure."""
+    try:
+        client = connect_to_daemon(start=False)
+    except OSError:
+        return 0
+    try:
+        client.call("suspend" if suspended else "resume")
+    except DaemonError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
+    finally:
+        client.close()
     return 0
 
 

@@ -19,6 +19,15 @@ class CliTests(unittest.TestCase):
         no_daemon.start()
         self.addCleanup(no_daemon.stop)
 
+    def test_suspend_and_resume_reach_a_running_daemon_and_do_nothing_without_one(self):
+        self.assertEqual(main(["suspend"]), 0)
+        calls = []
+        client = type("Client", (), {"call": lambda self, method: calls.append(method), "close": lambda self: None})()
+        with patch("codex.cli.connect_to_daemon", return_value=client):
+            self.assertEqual(main(["suspend"]), 0)
+            self.assertEqual(main(["resume"]), 0)
+        self.assertEqual(calls, ["suspend", "resume"])
+
     def test_final_result_uses_markdown_renderer_in_terminal(self):
         result = "```python\nprint('hello')\n```"
         with (

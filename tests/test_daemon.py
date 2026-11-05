@@ -133,7 +133,7 @@ class DaemonTests(unittest.TestCase):
         self.assertEqual(answers, ["Markdown"])
         self.assertNotIn("run.clarification", watcher_events.names())
 
-    def test_a_game_under_gamemode_stops_the_run_unloads_the_models_and_refuses_new_runs(self):
+    def test_suspending_stops_the_run_unloads_the_models_and_refuses_new_runs(self):
         started = threading.Event()
 
         def endless_task_tree(prompt, **kwargs):
@@ -152,7 +152,7 @@ class DaemonTests(unittest.TestCase):
             daemon.harness._model_cache.unload = lambda: unloaded.append("main") or True
             daemon.harness._background_model_cache.unload = lambda: unloaded.append("background") or True
 
-            daemon.harness.set_suspended(True)
+            self.assertEqual(client.call("suspend"), {"suspended": True})
 
             self.assertEqual(events.wait_for("suspended.changed"), {"suspended": True})
             events.wait_for("run.cancelled")
@@ -161,29 +161,11 @@ class DaemonTests(unittest.TestCase):
             with self.assertRaisesRegex(DaemonError, "suspended"):
                 client.call("run", prompt="second")
 
-            daemon.harness.set_suspended(False)
+            self.assertEqual(client.call("resume"), {"suspended": False})
 
             self.assertFalse(client.call("status")["suspended"])
             self.assertIn("run_id", client.call("run", prompt="third"))
             client.call("cancel")
-
-    def test_the_game_watcher_suspends_while_gamemode_is_active_and_resumes_after(self):
-        states = iter([False, True, True, False])
-        daemon = self.start()
-        with patch("codex.daemon.game_mode_active", side_effect=lambda: next(states, False)), patch(
-            "codex.daemon.GAME_MODE_POLL_SECONDS", 0.01
-        ):
-            events = EventLog()
-            daemon.client(events)
-            daemon.harness.start_background_worker()
-            events.wait_for("suspended.changed")
-            self.assertEqual(
-                [data["suspended"] for name, data in events.events if name == "suspended.changed"][:1], [True]
-            )
-            deadline = time.monotonic() + 5
-            while time.monotonic() < deadline and daemon.harness._suspended.is_set():
-                time.sleep(0.01)
-        self.assertFalse(daemon.harness._suspended.is_set())
 
     def test_cancel_and_a_lost_owner_both_stop_the_run(self):
         started = threading.Event()

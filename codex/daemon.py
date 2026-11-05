@@ -15,7 +15,6 @@ from .auto_size import auto_size
 from .background import index_knowledge, learn_from_episodes, research_one_topic
 from .consolidation import consolidate_knowledge
 from .environment import refresh_environment
-from .gamemode import game_mode_active
 from .knowledge import RESUMABLE_TASK_RUN_STATUSES, KnowledgeStore
 from .model import ModelCache
 from .protocol import decode_message, default_socket_path, encode_message
@@ -24,9 +23,6 @@ from .task_tree import execute_task_tree
 
 # A separate background model is unloaded after this long without background work, to give its memory back.
 BACKGROUND_MODEL_IDLE_SECONDS = 300
-
-# How often the daemon asks GameMode whether a game started with gamemoderun is running.
-GAME_MODE_POLL_SECONDS = 3
 
 
 class RunCancelled(Exception):
@@ -122,8 +118,7 @@ class HarnessDaemon:
         self._background_status = "Idle"
         self._background_output = ""
         self._worker: threading.Thread | None = None
-        self._game_watcher: threading.Thread | None = None
-        # Set while a game runs under GameMode: the models are unloaded and no work starts.
+        # Set while suspended: the models are unloaded and no work starts.
         self._suspended = threading.Event()
         self._server: socketserver.ThreadingUnixStreamServer | None = None
         self._methods: dict[str, Callable[..., Any]] = {
@@ -143,6 +138,8 @@ class HarnessDaemon:
             "unfinished_runs": self.unfinished_runs,
             "resume_run": self.resume_run,
             "discard_run": self.discard_run,
+            "suspend": self.suspend,
+            "resume": self.resume,
             "shutdown": self.shutdown,
         }
 
@@ -155,8 +152,6 @@ class HarnessDaemon:
         self._knowledge_store(self.get_settings()["knowledge_db_path"]).requeue_interrupted_jobs()
         self._worker = threading.Thread(target=self._background_loop, name="background-research", daemon=True)
         self._worker.start()
-        self._game_watcher = threading.Thread(target=self._game_mode_loop, name="game-mode", daemon=True)
-        self._game_watcher.start()
 
     def bind(self, socket_path: str | Path) -> socketserver.ThreadingUnixStreamServer:
         path = Path(socket_path)
@@ -599,7 +594,7 @@ class HarnessDaemon:
             worked = False
             manual_run_requested = self._background_run_requested.is_set()
             if self._suspended.is_set():
-                self._set_background_status("Suspended while a game runs")
+                self._set_background_status("Suspended")
                 wait_seconds = 1
             elif not settings["background_research_enabled"] and not manual_run_requested:
                 self._set_background_status("Paused")
@@ -647,22 +642,23 @@ class HarnessDaemon:
             self._worker_wakeup.clear()
 
     # ==========================================================================
-    # Suspending for games
+    # Suspending
     # ==========================================================================
 
     def _refuse_while_suspended(self) -> None:
         if self._suspended.is_set():
-            raise RuntimeError("CODEX is suspended while a game runs under GameMode; try again when it closes.")
+            raise RuntimeError("CODEX is suspended; resume it first.")
 
-    def _game_mode_loop(self) -> None:
-        while not self._stop.is_set():
-            active = game_mode_active()
-            if active != self._suspended.is_set():
-                self.set_suspended(active)
-            self._stop.wait(GAME_MODE_POLL_SECONDS)
+    def suspend(self, connection: ClientConnection | None = None) -> dict[str, Any]:
+        self.set_suspended(True)
+        return {"suspended": True}
+
+    def resume(self, connection: ClientConnection | None = None) -> dict[str, Any]:
+        self.set_suspended(False)
+        return {"suspended": False}
 
     def set_suspended(self, suspended: bool) -> None:
-        """Give the GPU to a game, or take work up again: a suspension stops the run and unloads every model."""
+        """Free the GPU for another program, or take work up again: a suspension stops the run and unloads every model."""
         if suspended:
             self._suspended.set()
             with self._lock:

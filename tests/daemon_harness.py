@@ -2,7 +2,6 @@ import tempfile
 import threading
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
 
 from codex.client import DaemonClient
 from codex.daemon import HarnessDaemon
@@ -29,9 +28,6 @@ class RunningDaemon:
             settings_path or Path(self.directory.name) / "settings.json",
             exit_when_unused_seconds,
         )
-        # A game running on the machine running the tests must not suspend the test daemon.
-        self._no_game = patch("codex.daemon.game_mode_active", return_value=False)
-        self._no_game.start()
         server = self.harness.bind(self.socket_path)
         self.thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
         self.thread.start()
@@ -55,7 +51,6 @@ class RunningDaemon:
         self.harness.shutdown()
         self.thread.join(timeout=5)
         self.harness.close()
-        self._no_game.stop()
         self.directory.cleanup()
 
 

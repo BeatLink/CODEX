@@ -36,7 +36,7 @@ NOTICE_SECONDS = 8
 # A start in the tray waits this long for a tray to appear before it shows the window instead, so it is never unreachable.
 TRAY_WAIT_SECONDS = 15
 TRAY_ICON_NAME = "applications-science"
-SUSPENDED_TEXT = "Suspended while a game runs"
+SUSPENDED_TEXT = "Suspended"
 
 # Each number field: (label, setting, lowest, highest, step, decimal places).
 MODEL_NUMBER_FIELDS = (
@@ -766,7 +766,7 @@ class CodexWindow(Gtk.ApplicationWindow):
         if suspended == self.suspended:
             return
         self.suspended = suspended
-        self.notify_user(SUSPENDED_TEXT if suspended else "The game closed; CODEX is working again.")
+        self.notify_user(SUSPENDED_TEXT if suspended else "CODEX is working again.")
         if not self._request_running:
             self.status.set_label(SUSPENDED_TEXT if suspended else "Ready")
         self._refresh_tray()
