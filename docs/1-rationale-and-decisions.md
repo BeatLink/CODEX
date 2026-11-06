@@ -144,7 +144,7 @@ Source: `research/done-research-task-decomposition-harnesses.md` (gathered 2026-
 
 Source: `research/done-mascot-emotions.md`.
 
-- **CODEX draws only the hexagon with the transparent robot head; RoboEyes draws the eyes and mouth unchanged** (its own moods, colours and settings). The CSS-only mascot this replaces is gone.
+- **CODEX draws only the hexagon with a black robot head; RoboEyes draws the eyes and mouth unchanged** (its own moods, colours and settings). The head is black, not see-through, because a transparent head showed the light theme's pale background and hid the white face; white on black was chosen over a blue face after comparing both. The CSS-only mascot this replaces is gone.
 - **RoboEyes as an npm git dependency pinned to a commit,** loaded through an import map whose hash the content security policy allows. It isn't on npm; Nix builds it with `makeCacheWritable`.
 - **RoboEyes' built-in moods follow the run state** (`worried`, `asleep`, `thinking`, else `default`), with `happy` or `sad` for a few seconds when a run ends. Placement: the foot of the workbench sidebar, beside the run status.
 

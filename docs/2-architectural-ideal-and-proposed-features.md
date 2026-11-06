@@ -238,7 +238,7 @@ Sample a step several times and decide by first-to-ahead-by-K voting; discard co
 
 Source: `research/done-mascot-emotions.md`. The robot from the CODEX icon sits at the foot of the workbench sidebar, beside the run status.
 
-- **CODEX** draws only the icon's hexagon with the robot head cut out, transparent, and lays a canvas over the head (`src/renderer/index.html`).
+- **CODEX** draws only the icon's hexagon with the robot head filled black, and lays a canvas over the head (`src/renderer/index.html`). The black head keeps RoboEyes' white face visible on both themes.
 - **RoboEyes** (github.com/x-tech-laboratories/RoboEyes, an npm git dependency pinned to a commit) draws the eyes and mouth on that canvas exactly as it ships: its own moods, colours and settings. The canvas is RoboEyes' 112 by 80 screen shrunk into the head's 28 by 20 units, so it stays sharp.
 
 **Moods** are RoboEyes' own, chosen by state, most urgent first (`src/renderer/mascot.ts`): `worried` (daemon unavailable), `asleep` (suspended), `thinking` (run in progress), `default` otherwise. When a run ends, `happy` (completed) or `sad` (failed) shows for 3 seconds through RoboEyes' `setMood(mood, { for })`, unless the daemon is unavailable.

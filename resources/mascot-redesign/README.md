@@ -1,7 +1,7 @@
 # Mascot redesign (for review)
 
 A redesign of the CODEX mascot: a dark "visor" screen with lit eyes and mouth, so the face no longer depends on the
-page behind it. The app does not use it: it draws the icon's hexagon with a transparent head, and RoboEyes draws the eyes
+page behind it. The app does not use it: it draws the icon's hexagon with a black head, and RoboEyes draws the eyes
 and mouth.
 
 - `mascot.css`: the animated mascot, its rules and its states (asleep, curious, excited, focused, happy, sad, startled,

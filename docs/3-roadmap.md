@@ -116,7 +116,6 @@ Source: `research/done-mascot-emotions.md`.
 Built: see doc 2, "Mascot emotions". Still open:
 
 1. Try other placements (top bar, an empty workbench, the answer area) once the sidebar one has been lived with.
-2. RoboEyes' white face is hard to see on the light theme's sidebar; decide whether that needs anything.
 
 ## Speech output
 
