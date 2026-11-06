@@ -639,6 +639,18 @@ main {
     padding: 0;
     overflow: hidden;
     resize: vertical;
+    position: relative;
+}
+
+.task-graph[data-empty='true']::before {
+    content: attr(data-empty-text);
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    font-style: italic;
+    pointer-events: none;
 }
 
 .output {

@@ -367,10 +367,14 @@ const taskGraph = new TaskGraph(view.taskGraph, { onChoose: (taskId) => dispatch
 let graphedNodes: unknown = null;
 let graphedChoice: string | null = null;
 
-// Shows the graph once there are tasks, and redraws it only when the tasks or the chosen task change.
+const NO_TASKS_TEXT = 'Tasks appear here once a request is planned.';
+
+// Shows the graph while it is turned on, and redraws it only when the tasks or the chosen task change.
 function renderTaskGraph(): void {
     view.graphToggle.setAttribute('aria-pressed', String(state.graphShown));
-    view.taskGraph.hidden = !state.graphShown || state.nodes.length === 0;
+    view.taskGraph.hidden = !state.graphShown;
+    view.taskGraph.dataset.empty = String(state.nodes.length === 0);
+    view.taskGraph.dataset.emptyText = NO_TASKS_TEXT;
     const choice = state.phase === 'task' ? state.chosenTaskId : null;
     if (view.taskGraph.hidden || (graphedNodes === state.nodes && graphedChoice === choice)) {
         return;
