@@ -1,12 +1,13 @@
 // The Electron main process: opens the window and the tray icon, connects them to the daemon, and passes requests and events on.
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, screen, shell, Tray, type IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, Notification, nativeTheme, screen, shell, Tray, type IpcMainInvokeEvent } from 'electron';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import * as autostart from './autostart.js';
 import { DISCONNECTED_EVENT, type DaemonClient } from './daemonBridge.js';
 import { connectToDaemon } from './daemonLifecycle.js';
-import { AUTOSTART_CHANGED_EVENT, forwardEvent, registerIpc } from './ipc.js';
+import { freshActions, notificationBody, summarizeActions } from './inbox.js';
+import { AUTOSTART_CHANGED_EVENT, forwardEvent, registerIpc, SHOW_INBOX_EVENT } from './ipc.js';
 import { launchOptions } from './paths.js';
 import { menuTemplate, TRAY_HOST_POLL_SECONDS, TRAY_WAIT_SECONDS, trayHostRunning, trayItems, trayTooltip } from './tray.js';
 
@@ -28,6 +29,10 @@ let quitting = false;
 // What the tray menu shows of the daemon, kept up to date from its status and events.
 let suspended = false;
 let researching = false;
+// Proposed actions waiting, and the newest one already announced, so only later ones raise a notification.
+let inboxCount = 0;
+let announcedUpTo = 0;
+let inboxRead = false;
 
 // ============================================================================
 // Daemon connection
@@ -48,11 +53,14 @@ function connectOnce(): Promise<{ socket_path: string; started: boolean }> {
                 } else if (event === 'suspended.changed') {
                     suspended = Boolean(data.suspended);
                     refreshTray();
+                } else if (event === 'actions.changed' && client !== null) {
+                    void readInbox(client);
                 }
             },
         }).then((result) => {
             client = result.client;
             void readDaemonState(result.client);
+            void readInbox(result.client);
             return { socket_path: options.socketPath, started: result.started };
         });
         connection.catch(() => {
@@ -70,6 +78,27 @@ async function readDaemonState(connected: DaemonClient): Promise<void> {
         refreshTray();
     } catch {
         // The tray keeps its last state until the next event.
+    }
+}
+
+// Counts the proposed actions for the tray and announces the ones that arrived since the last look.
+async function readInbox(connected: DaemonClient): Promise<void> {
+    try {
+        const actions = summarizeActions(await connected.call('actions', { status: 'proposed', limit: 100 }));
+        inboxCount = actions.length;
+        // The first look only sets the mark, so actions already waiting at startup are not announced.
+        const { fresh, seenUpTo } = freshActions(inboxRead ? announcedUpTo : Math.max(0, ...actions.map((action) => action.id)), actions);
+        announcedUpTo = seenUpTo;
+        inboxRead = true;
+        const body = notificationBody(fresh);
+        if (body !== null && Notification.isSupported() && !(mainWindow?.isVisible() && mainWindow.isFocused())) {
+            const notification = new Notification({ title: 'CODEX', body });
+            notification.on('click', showInbox);
+            notification.show();
+        }
+        refreshTray();
+    } catch {
+        // The tray keeps its last count until the next event.
     }
 }
 
@@ -167,6 +196,17 @@ function showWindow(): void {
     mainWindow.focus();
 }
 
+// Shows the window on its Inbox page, waiting for a new window to load before it is told.
+function showInbox(): void {
+    const created = mainWindow === null;
+    showWindow();
+    if (created) {
+        mainWindow?.webContents.once('did-finish-load', () => forwardEvent(mainWindow, SHOW_INBOX_EVENT, {}));
+    } else {
+        forwardEvent(mainWindow, SHOW_INBOX_EVENT, {});
+    }
+}
+
 // ============================================================================
 // Tray
 // ============================================================================
@@ -209,16 +249,18 @@ function refreshTray(): void {
             suspended,
             researching,
             launchAtLogin: autostart.isEnabled(autostartOptions),
+            inbox: inboxCount,
         },
         {
             toggleWindow,
+            showInbox,
             toggleResearch,
             toggleAutostart: () => setLaunchAtLogin(!autostart.isEnabled(autostartOptions)),
             quit: quitFromTray,
         },
     );
     tray.setContextMenu(Menu.buildFromTemplate(menuTemplate(items)));
-    tray.setToolTip(trayTooltip(suspended));
+    tray.setToolTip(trayTooltip(suspended, inboxCount));
 }
 
 // Notes whether a tray host holds the icon; losing it brings a hidden window back, so the app is never unreachable.

@@ -18,6 +18,9 @@ export const CHANNELS = {
 // The window hears this alongside the daemon's events when launch at login changes from the tray.
 export const AUTOSTART_CHANGED_EVENT = 'autostart.changed';
 
+// The window hears this when the tray asks for the Inbox page.
+export const SHOW_INBOX_EVENT = 'inbox.show';
+
 // Shutdown is left out, since closing a window must never stop a daemon other interfaces share.
 export const ALLOWED_METHODS = new Set([
     'status',
@@ -32,6 +35,8 @@ export const ALLOWED_METHODS = new Set([
     'queue_topic',
     'research_now',
     'queue_status',
+    'actions',
+    'resolve_action',
     'knowledge',
     'unfinished_runs',
     'resume_run',

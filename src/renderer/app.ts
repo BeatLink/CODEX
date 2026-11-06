@@ -1,4 +1,5 @@
 // The CODEX window: wires the pages to the daemon through the preload API and draws the workbench state.
+import { actionCards, inboxTabText, NO_ACTIONS_TEXT } from './inboxView.js';
 import { factsMarkdown, graphMarkdown, NO_FACTS_TEXT, queueLines, sourcesMarkdown, topicRows } from './knowledgeView.js';
 import { markdownToHtml } from './markdown.js';
 import {
@@ -45,7 +46,7 @@ import {
 } from './settingsForm.js';
 import { commandSuggestions, completeCommand, type CommandSuggestion } from './slashCommands.js';
 import { taskDetailMarkdown, taskTreeRows } from './taskView.js';
-import type { CodexApi, Knowledge, ResearchJob, Settings, SizeChoice, Status, UnfinishedRun, UserCommand } from './types.js';
+import type { CodexApi, Knowledge, ProposedAction, ResearchJob, Settings, SizeChoice, Status, UnfinishedRun, UserCommand } from './types.js';
 
 const codex = (window as unknown as { codex: CodexApi }).codex;
 const RENDER_INTERVAL_MILLISECONDS = 150;
@@ -53,11 +54,14 @@ const NOTICE_SECONDS = 8;
 const COMMAND_CACHE_MILLISECONDS = 5000;
 // The main process sends this alongside the daemon's events when launch at login changes from the tray.
 const AUTOSTART_CHANGED_EVENT = 'autostart.changed';
+// The main process sends this when the tray or a notification asks for the Inbox page.
+const SHOW_INBOX_EVENT = 'inbox.show';
 
 let state: WorkbenchState = initialState();
 let knowledge: Knowledge = { topics: [], sources: [], graph: [] };
 let knowledgeQuery = '';
 let knowledgeTopicId: number | null = null;
+let inbox: ProposedAction[] = [];
 
 // ============================================================================
 // Elements
@@ -106,6 +110,9 @@ const view = {
     knowledgeDetail: element('knowledge-detail'),
     knowledgeFacts: element('knowledge-facts'),
     knowledgeGraph: element('knowledge-graph'),
+    inboxTab: element('inbox-tab'),
+    inboxList: element('inbox-list'),
+    inboxEmpty: element('inbox-empty'),
     optionsForm: element<HTMLFormElement>('options-form'),
     settingsPath: element('settings-path'),
     dialog: element<HTMLDialogElement>('clarification-dialog'),
@@ -818,6 +825,54 @@ async function researchNow(): Promise<void> {
 }
 
 // ============================================================================
+// Inbox
+// ============================================================================
+
+async function refreshInbox(): Promise<void> {
+    try {
+        inbox = await codex.request<ProposedAction[]>('actions', { status: 'proposed', limit: 100 });
+    } catch {
+        return;
+    }
+    renderInbox();
+}
+
+function renderInbox(): void {
+    view.inboxTab.textContent = inboxTabText(inbox.length);
+    view.inboxEmpty.textContent = NO_ACTIONS_TEXT;
+    view.inboxEmpty.hidden = inbox.length > 0;
+    view.inboxList.textContent = '';
+    for (const card of actionCards(inbox)) {
+        const item = document.createElement('li');
+        item.className = 'inbox-card panel';
+        const title = document.createElement('div');
+        title.className = 'inbox-title';
+        title.textContent = card.title;
+        const meta = document.createElement('div');
+        meta.className = 'muted small-text';
+        meta.textContent = card.meta;
+        const body = document.createElement('p');
+        body.className = 'inbox-body';
+        body.textContent = card.body;
+        const buttons = document.createElement('div');
+        buttons.className = 'actions';
+        for (const choice of card.buttons) {
+            const button = document.createElement('button');
+            button.textContent = choice.label;
+            button.addEventListener('click', () => void resolveAction(card.id, choice.resolution));
+            buttons.append(button);
+        }
+        item.append(title, meta, body, buttons);
+        view.inboxList.append(item);
+    }
+}
+
+async function resolveAction(actionId: number, resolution: string): Promise<void> {
+    await callDaemon('resolve_action', { action_id: actionId, resolution });
+    await refreshInbox();
+}
+
+// ============================================================================
 // Knowledge browser
 // ============================================================================
 
@@ -875,6 +930,7 @@ function showPage(name: string): void {
     for (const page of document.querySelectorAll<HTMLElement>('.page')) {
         page.hidden = page.id !== `page-${name}`;
     }
+    if (name === 'inbox') void refreshInbox();
     if (name === 'background') void refreshQueue();
     if (name === 'knowledge') void refreshKnowledge();
 }
@@ -975,6 +1031,14 @@ async function start(): Promise<void> {
             element<HTMLInputElement>('launch-at-login').checked = Boolean(data.enabled);
             return;
         }
+        if (event === SHOW_INBOX_EVENT) {
+            showPage('inbox');
+            return;
+        }
+        if (event === 'actions.changed') {
+            void refreshInbox();
+            return;
+        }
         dispatch(reduceEvent(state, event, data));
     });
     void showLaunchAtLogin();
@@ -984,6 +1048,7 @@ async function start(): Promise<void> {
         await codex.connect();
         const status = await codex.request<Status>('status');
         dispatch(applyStatus(state, status));
+        void refreshInbox();
         view.settingsPath.textContent = status.settings_path ? `Saves to ${status.settings_path}` : '';
     } catch (error) {
         dispatch(connectionFailed(state, (error as Error).message));

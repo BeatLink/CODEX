@@ -35,7 +35,7 @@
 - [x] Read mail from Maildir folders as events
 - [ ] Work the events that need real work as task trees
 - [ ] Read mail over IMAP as events
-- [ ] Show proposed actions in the window and tray
+- [x] Show proposed actions in the window and tray
 - [ ] Taint runs started by external events and gate their side effects on approval
 - [ ] Track entities and commitments, and drive idle work from them
 - [x] Keep the loaded model between requests and share it with the background worker

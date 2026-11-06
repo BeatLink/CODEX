@@ -16,6 +16,7 @@
         <div class="brand">CODEX</div>
         <nav class="tabs" role="tablist" aria-label="Pages">
             <button class="tab" role="tab" data-page="workbench" aria-selected="true">Workbench</button>
+            <button id="inbox-tab" class="tab" role="tab" data-page="inbox" aria-selected="false">Inbox</button>
             <button class="tab" role="tab" data-page="background" aria-selected="false">Background</button>
             <button class="tab" role="tab" data-page="knowledge" aria-selected="false">Knowledge</button>
             <button class="tab" role="tab" data-page="options" aria-selected="false">Options</button>
@@ -77,6 +78,13 @@
                     <div id="output-final" class="output markdown"></div>
                 </section>
             </div>
+        </section>
+
+        <!-- Inbox -->
+        <section id="page-inbox" class="page padded" hidden>
+            <h2 class="eyebrow">Proposed by the assistant</h2>
+            <ul id="inbox-list" class="inbox-list" aria-label="Proposed actions"></ul>
+            <p id="inbox-empty" class="muted small-text">Nothing needs your attention.</p>
         </section>
 
         <!-- Background -->

@@ -102,6 +102,18 @@ export type ResearchJob = {
     error: string | null;
 };
 
+export type ProposedAction = {
+    id: number;
+    event_id: number | null;
+    kind: string;
+    title: string;
+    body: string;
+    // JSON text of what the handler recorded, such as the category and importance of a mail.
+    payload: string;
+    status: string;
+    created_at: number;
+};
+
 export type SizeChoice = {
     context_size: number;
     max_tokens: number;

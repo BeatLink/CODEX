@@ -28,10 +28,13 @@ export type TrayState = {
     suspended: boolean;
     researching: boolean;
     launchAtLogin: boolean;
+    // Proposed actions waiting for the user.
+    inbox: number;
 };
 
 export type TrayActions = {
     toggleWindow: () => void;
+    showInbox: () => void;
     toggleResearch: () => void;
     toggleAutostart: () => void;
     quit: () => void;
@@ -41,6 +44,9 @@ export function trayItems(state: TrayState, actions: TrayActions): MenuItem[] {
     const items: MenuItem[] = [{ label: state.showing ? 'Hide CODEX' : 'Show CODEX', action: actions.toggleWindow }];
     if (state.suspended) {
         items.push({ label: SUSPENDED_TEXT, action: null });
+    }
+    if (state.inbox > 0) {
+        items.push({ label: `Inbox (${state.inbox})`, action: actions.showInbox });
     }
     items.push(
         { label: null },
@@ -52,8 +58,9 @@ export function trayItems(state: TrayState, actions: TrayActions): MenuItem[] {
     return items;
 }
 
-export function trayTooltip(suspended: boolean): string {
-    return suspended ? SUSPENDED_TEXT : TRAY_TITLE;
+export function trayTooltip(suspended: boolean, inbox = 0): string {
+    const state = suspended ? SUSPENDED_TEXT : TRAY_TITLE;
+    return inbox > 0 ? `${state} · ${inbox} in the inbox` : state;
 }
 
 // Turns the entries into an Electron menu template; an entry without an action is shown greyed out.

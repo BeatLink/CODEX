@@ -72,6 +72,9 @@ and a background worker uses idle time to turn it into facts, topic summaries an
   `suspended.changed`. What triggers them is left to the user's launcher.
 - **The tray** ([tray.ts](../src/main/tray.ts)) lives in the Electron main process, not the
   daemon: an Electron `Tray` whose menu is rebuilt from the daemon's status and events. The main
+  process also counts the proposed actions on `actions.changed` ([inbox.ts](../src/main/inbox.ts)),
+  lists `Inbox (n)` in the menu, and raises a desktop notification for actions newer than the last
+  one it announced, unless the window is in front. Choosing either opens the window's Inbox page. The main
   process checks over D-Bus (`busctl`) whether a StatusNotifierWatcher is running, and only hides
   the window to the tray while one is. Hiding the window keeps the window connected, so the
   daemon's unused-exit timer never starts.

@@ -37,6 +37,12 @@ describe('daemon requests from the window', () => {
         expect(caller.call).not.toHaveBeenCalled();
     });
 
+    it('lets the window list and resolve actions but not post events', () => {
+        expect(ALLOWED_METHODS.has('actions')).toBe(true);
+        expect(ALLOWED_METHODS.has('resolve_action')).toBe(true);
+        expect(ALLOWED_METHODS.has('post_event')).toBe(false);
+    });
+
     it('rejects params that are not an object', async () => {
         const envelope = await handleRequest({ call: vi.fn() }, 'status', [1]);
 

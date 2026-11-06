@@ -384,8 +384,10 @@ List Maildir folders (the ones a mail syncer such as mbsync fills) in `mail_mail
 in `settings.json` to have the daemon read new messages. Mail from lists and automatic
 senders is skipped, and the model looks at the rest and proposes a notification for what
 a person needs to see. Messages older than `mail_max_age_days` are not read, and the
-daemon only reads files; it never holds a mail password. Read the proposals with the
-`actions` daemon method; the window does not show them yet.
+daemon only reads files; it never holds a mail password. The proposals appear on the
+window's **Inbox** page, where **Done** and **Dismiss** clear them. The tray menu lists
+`Inbox (n)` while any are waiting, and a desktop notification announces new ones while
+the window is not in front.
 
 Background work runs on the main model unless `background_model_path` names
 another GGUF file. That model gets its own cache, so the two never evict each
