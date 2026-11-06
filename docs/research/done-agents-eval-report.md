@@ -1,6 +1,6 @@
 # Agents: status report
 
-Where the agent hierarchy stands, what the evaluation has shown so far, and what comes next. The design is in [agent-hierarchy.md](agent-hierarchy.md).
+Where the agent hierarchy stands, what the evaluation has shown so far, and what comes next. The design is in [agent-hierarchy.md](done-agent-hierarchy.md).
 
 ## What we want to achieve
 

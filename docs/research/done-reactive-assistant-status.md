@@ -1,6 +1,6 @@
 # Reactive assistant: where things stand
 
-A status report on the move from a request-and-answer harness to an assistant that reacts to events and works while idle. The design is in [reactive-assistant.md](reactive-assistant.md); this report says how far it has got, what the finished thing looks like, and what is left.
+A status report on the move from a request-and-answer harness to an assistant that reacts to events and works while idle. The design is in [reactive-assistant.md](done-reactive-assistant.md); this report says how far it has got, what the finished thing looks like, and what is left.
 
 ## Where things stand
 

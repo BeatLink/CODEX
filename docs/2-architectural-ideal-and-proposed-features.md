@@ -1,6 +1,10 @@
 # Architectural ideal and proposed features
 
+<<<<<<< HEAD
 Source: `research/architecture.md` (describes the system as built) and `research/agent-hierarchy.md`. Paths are under `src/`. Statuses are from research files, not yet verified against code.
+=======
+Source: `research/done-architecture.md` (describes the system as built) and `research/done-agent-hierarchy.md`. Paths are under `src/`. Statuses are from research files, not yet verified against code.
+>>>>>>> d4db434 (Docs restructuring)
 
 ## Core architecture (built)
 
@@ -91,7 +95,11 @@ else: requeue topics researched longer ago than background_refresh_interval_hour
       worked → wait 0.2 s, else poll interval
 ```
 
+<<<<<<< HEAD
 - **Events:** `MailConnector` (`core/mail.ts`, Maildir folders in `mail_maildir_paths`) and `ImapConnector` (`core/imap.ts`, `mail_imap_accounts`) queue events. `handleNextEvent` (`core/events.ts`) claims the most important event and runs its type's handler: `notify` → proposed action; `email.received` → triage (`core/triage.ts`); no handler → `ignored`. `email.draft` and `user.request` are worked as task trees (`core/eventTree.ts`): holds the model lock, stops when foreground work arrives (event requeued), result becomes a `draft`/`result` action. A tree from an `external`-trust event runs with `trust: 'external'`: no `act`, file writes, test runs or MCP tools; research may search but not fetch pages or read files. Interfaces use `post_event`, `events`, `actions`, `resolve_action`. Design: `research/reactive-assistant.md` (not yet processed).
+=======
+- **Events:** `MailConnector` (`core/mail.ts`, Maildir folders in `mail_maildir_paths`) and `ImapConnector` (`core/imap.ts`, `mail_imap_accounts`) queue events. `handleNextEvent` (`core/events.ts`) claims the most important event and runs its type's handler: `notify` → proposed action; `email.received` → triage (`core/triage.ts`); no handler → `ignored`. `email.draft` and `user.request` are worked as task trees (`core/eventTree.ts`): holds the model lock, stops when foreground work arrives (event requeued), result becomes a `draft`/`result` action. A tree from an `external`-trust event runs with `trust: 'external'`: no `act`, file writes, test runs or MCP tools; research may search but not fetch pages or read files. Interfaces use `post_event`, `events`, `actions`, `resolve_action`. Detail: "Reactive assistant" section below.
+>>>>>>> d4db434 (Docs restructuring)
 - **`researchOneTopic`** (`core/background.ts`): claim highest-priority job; `web_search` the topic, fetch + summarize the first two distinct pages (skip near-duplicate text); number all page summaries and snippets as sources; extract ≤5 facts per page and from snippets together, each with source number and `low|medium|high` confidence (0.3/0.6/0.9), in small groups so one failure loses only its own; drop facts stating a version/date absent from all sources, and demote to low confidence facts whose values or half their words are missing from the cited source (or that cite none); one overview call yields topic summary + ≤5 entity relationships (drop summary sentences with unsupported versions/dates); store all. Tree placement is left to consolidation. Paused job → `pending`; other error → `failed` with message; jobs left `running` by a dead daemon → `pending` at next start.
 - **`learnFromEpisodes`:** ≤5 unprocessed episodes → durable preferences, projects, corrections (secrets and personal identifiers explicitly excluded) plus ≤3 general subjects worth researching (queued if no facts yet). Episodes marked processed even on failure so one bad batch can't block.
 - **Consolidation** (`core/consolidation.ts`): one small step per pass so it yields fast.
@@ -151,8 +159,155 @@ Built (prototype; verify against code in the later codebase review):
 - `delegate` in the task tree with nested run, per-agent MCP servers and instructions.
 - Interfaces show only `delegate` plus the agent name, not the nested tree.
 
+<<<<<<< HEAD
+=======
+Agents eval assets (on an unmerged branch at the time of the report; verify):
+- `evals/fake_mcp_server.mjs` + `evals/fake_catalogue.json`: six canned MCP servers (mail, calendar, notes, contacts, weather, todos), 32 tools, no real accounts needed.
+- `evals/agents/`: seven agent files; `comms` has `mail` and `contacts` as sub-agents (tests nesting).
+- `evals/agents_tasks.json`: eight tasks: six need one specialist, one needs two hops (find a contact, then search their mail), one needs two unrelated specialists. Per-task `servers` field.
+- An `agents` runner beside the flat `tree` runner; they differ only in whether agent files are present.
+
+>>>>>>> d4db434 (Docs restructuring)
 Proposed, not built:
 - **Per-agent persistence:** a memory scope per agent in the knowledge store, filled by learning from that agent's episodes, plus a scratchpad folder under the state directory.
 - **Resume inside an agent:** checkpoints save the delegating task, not the nested run, so a resume restarts the delegation.
 - **Show the nested tree** in the interfaces.
 - **Per-agent skills and tool allow lists** beyond MCP servers.
+<<<<<<< HEAD
+=======
+
+## Reactive assistant
+
+Source: `research/done-reactive-assistant.md`. The built plumbing (queue, scheduler, handler registry) is already summarised under "Background worker" above; this adds detail.
+
+### Data
+
+- `events`: source, type, dedupe key, trust (`user`|`external`), priority, JSON payload, status (`pending`, `running`, `done`, `ignored`, `failed`), outcome, error, times. Unique per (source, dedupe key) when a key exists, so a connector can post the same message twice safely.
+- `actions`: kind, title, body, JSON payload, status (`proposed`, `approved`, `rejected`, `done`), source event.
+- Planned: entities, commitments, observations.
+
+### Scheduler
+
+A job = name + class + step (same signature as existing background steps). The daemon builds the list from its dependencies so tests can replace any. Order when not suspended/paused/running: reactive (`handle_events`) first, then maintenance (research, index, learn, consolidate). Event handling claims one event, runs the handler registered for its type, records the outcome; a handler paused by a foreground run puts its event back.
+
+### Daemon methods
+`post_event`, `events`, `actions`, `resolve_action`, `queue_request` (queues a `user.request` event with `user` trust).
+
+### Mail
+- **Maildir** (`core/mail.ts`): polls `new/` of each `mail_maildir_paths` entry every background pass. Message → `email.received`, `external` trust, dedupe key = Maildir name minus client flags, payload = sender, recipient, subject, date, message id, `bulk` reason, ≤4,000 chars body. Skips mail older than `mail_max_age_days`; ≤25 queued per poll.
+- **IMAP** (`core/imap.ts`): each `mail_imap_accounts` entry at most every 2 min, TLS with certificate checked, keyed by UIDVALIDITY + UID (queued once). A failed login reports only that the server refused it.
+- **Triage** (`core/triage.ts`): (1) no model: mail marked automatic/bulk/list/no-reply → `ignored` with reason. (2) one model call (email inside the untrusted fence, no tools, schema-constrained): summary, category, whether a person awaits a reply, importance. Low importance and no reply wanted → `ignored`; else a `notify` action with the summary. Model failure or bad reply → still a `notify` action, marked not triaged. A hostile email can at worst mislabel itself.
+- **Drafting:** if `mail_draft_replies` is true, triage queues one `email.draft` event (lower priority than triage; dedupe key from message id) for mail awaiting reply; the handler runs a task tree on the mail inside the untrusted fence and proposes a `draft` action. Nothing is sent.
+
+### Trust taint
+
+`executeTaskTree` takes `trust: 'user' | 'external'` (`core/taskTree.ts`). An external run:
+- can't write files, run tests or call MCP tools whatever the settings (`act` never offered);
+- is held to `draft` mode, and ignores a memory command or `/do`-style prefix in its prompt's first words (they came from outside);
+- passes the taint to every agent it delegates to, and saves it in its checkpoint so a resume isn't widened;
+- may search the web but not fetch pages or read local files, so nothing it read can leak in a URL.
+
+Event runs (`core/eventTree.ts`) additionally never act, even for `user` events. A `user.request` may use the web and local files; its answer waits in the Inbox.
+
+### The ideal (target behaviour)
+
+An assistant that notices, prepares and asks, and acts alone only where the user has said it may.
+- **Many sources, one queue:** mail, calendar, files, timers, webhooks post events; the same queue, scheduler and Inbox serve them.
+- **Work shaped like the event:** cheap triage first; a task tree only if needed; result is a draft, filed item, calendar entry or nothing.
+- **Autonomy ladder per event class:** approving moves a class up, a rejection moves it down; rules are stored as memories the user can read and delete.
+- **Untrusted text never steers:** fenced, read with no tools or the narrowest set, can't widen its own permissions.
+- **Model of the user's world:** people, threads, commitments with a lifecycle (open/done/overdue), so "who am I waiting on" and "what did I promise" have answers.
+- **Idle time with a purpose:** meeting pre-research, stale-commitment sweep, entity profiles from past requests, daily digest; pruning/consolidation as upkeep, not the main job; budgeted.
+- **Always yields to the user:** a foreground request takes the model from any background run within one call.
+
+### Planned features
+- **Approval and autonomy ladder** (observe → notify → draft → act with approval → act unattended; rules learned from approvals/rejections). Until it exists no event run can change anything.
+- **Entities and commitments**, then idle jobs driven by them: pre-research for tomorrow's meetings, stale-commitment sweeps, entity profiles from episodes, daily digest.
+- Other connectors: calendar, file watchers, timers, webhooks.
+- Mailbox coalescing / backlog policy; rolling thread summaries; idle-work budget.
+
+## Model escalation (proposed)
+
+Default to the 4B model in a fixed harness-owned pipeline. Proposed: escalate planning and steps that fail repeatedly to Qwen3.5-35B-A3B (~3B active parameters). Not built. See rationale doc, "Is a 4B model enough?".
+
+## Voting and red-flagging (proposed, from MAKER)
+
+Sample a step several times and decide by first-to-ahead-by-K voting; discard confused answers (too long, badly formatted) before they vote and resample. Candidate for control-flow calls (decisions, checks) where replies are schema-constrained and cheap. Not built. Evidence is from one perfectly verifiable domain; test on Codex's own evals before adopting.
+
+## Mascot emotions (UI feature; nothing in the UI uses it yet)
+
+Source: `research/done-mascot-emotions.md`. The Codex icon's robot shows an emotion by animating eyes, mouth and antenna.
+
+**Existing assets:** `resources/mascot/mascot.css` (all animations, selected by `data-state` on the mascot `svg`); `resources/mascot/preview.html` (all emotions side by side + markup to copy; `replay` button; `?t=<ms>` freezes animations at that time); `resources/mascot/roboeyes.json` (the same 11 emotions as RoboEyes moods; nothing loads it yet).
+
+**11 emotions:** `calm` (slow blink, smirk), `thinking` (eyes glance up/sideways, flat mouth, antenna pulses), `curious` (slightly wide, glancing up), `happy` (`^ ^` eyes, faint smile), `sad` (drooping, tilted, faint frown), `asleep` (closed lines, floating z's), `worried` (tilted, darting, wiggly mouth), `excited` (big, bouncing), `focused` (narrowed, scanning), `startled` (eyes pop wider once), `waking` (opens slowly, ends as `calm`). Only one head movement (slow vertical bob, same in all). `startled` and `waking` play their opening once then hold, so they suit a brief moment before moving on.
+
+**Suggested mapping** (state from `src/renderer/runState.ts`):
+
+| Emotion | Use | State |
+| --- | --- | --- |
+| `calm` | connected, nothing running | `connection: 'connected'` and not `running` |
+| `thinking` | run in progress | `running` |
+| `curious` | question or approval wanted | `clarifications` not empty |
+| `happy` | run finished OK | run ends `Complete` |
+| `sad` | run failed / error notification | `notify` effect with `error` |
+| `asleep` | daemon suspended, GPU freed | `suspended` |
+| `worried` | daemon unreachable | `connection: 'unavailable'` |
+| `excited` | final answer arrives / task starts | `phase: 'final'` or new run |
+| `focused` | background research working | `backgroundStatus` not `Idle` |
+| `startled` | user cancels a run | `cancelling` |
+| `waking` | resume from suspend / connecting at launch | `suspended` turns false, or `connection: 'connecting'` |
+
+**To decide first:** priority when several states hold (suggested order: `worried`, `asleep`, `startled`, `curious`, `thinking`, `focused`, `calm`); `happy`/`sad`/`excited` are moments (a few seconds, then fall back to `calm`), not lasting states; placement (the tray icon is a still image so only one exported pose; animations suit the window's top bar, an empty workbench, or where an answer will appear).
+
+**RoboEyes migration notes:**
+- RoboEyes already has moods named `thinking`, `curious`, `happy`, `sad`, `asleep`, `worried`, `startled`, `waking`, and `configure()` merges into a mood rather than replacing, so null those names first, then apply the file:
+  ```js
+  import moods from '../../resources/mascot/roboeyes.json' with { type: 'json' };
+  face.configure({ moods: Object.fromEntries(Object.keys(moods.moods).map((name) => [name, null])) });
+  face.configure(moods);
+  face.setMood('calm');
+  ```
+- Lost in the move: antenna pulse, floating z's, worried-mouth wiggle, head bob.
+- Tilted eyes (sad, worried) become tilted eyelids; `happy` arches are RoboEyes' happy eyelids.
+- `startled`/`waking` use mood intros; setting the mood again while in use doesn't replay the intro.
+- Moments: `face.setMood('happy', { for: 3000 })` returns to the underlying mood afterwards.
+- RoboEyes honours `prefers-reduced-motion` itself.
+- The file sets `mouth.moodWidth` so each mouth state keeps its own length. Face size and proportions (`begin()`, `eyes`, `mouth`) still need choosing to match the icon.
+
+## Speech output (proposed)
+
+Source: `research/done-research-open-source-tts.md`. Give the mascot a voice: a TTS engine feeds RoboEyes' `speakVisemes` with real phonemes and durations, and a mood value drives eyes, mouth and voice together. Engine choice and trade-offs are in the rationale doc ("Text-to-speech"). Chatterbox would be an optional backend behind a small local server on a machine with enough VRAM; the dev laptop's 4 GB GPU is shared with the main model (see GPU lock), so voice must not compete for it. Not built.
+
+## Ideas from the founding conversation (all proposed unless noted)
+
+Source: `research/done-core-structure-ideas.md`. Rationale and caveats are in doc 1 ("Founding ideas"). Nothing below is known to be built; check each in the codebase review.
+
+### Verified self-authored skills
+
+A skill is a markdown guide the harness injects into a fresh context when a request matches it (matching exists, by approach).
+1. **Attempt:** the task runs normally.
+2. **Judge:** the harness decides whether the run was messy or failed, from deterministic signals (tool errors, failed checks, user correction), not from the model's opinion.
+3. **Reflect:** the trace is fed back with a prompt asking for a reusable checklist for that kind of request.
+4. **Gate:** the draft is saved only if a non-LLM check passes: a generated test run against a sandbox or mock state (`run_tests`), a schema validator, or a deterministic baseline. Generate several, keep those that pass; discard the rest.
+5. **Store and retrieve:** save under a skills folder; retrieve by keyword or embedding match against the request.
+- Error-driven variant: when schema validation fails on extraction (e.g. a missing `deadline`), ask the model to rewrite its instruction and save the patch, again behind the gate.
+- Why the gate: unverified self-generated text drifts ("copy of a copy"), and a wrong skill is injected into every later matching call.
+
+### Blueprints for recurring requests
+
+Hard-coded task graphs for requests that always have the same shape (e.g. "process my morning inbox": fetch unread, loop in code, one item plus strict schema per model call, deterministic summary). Mail triage and drafting already work this way. Open question: which other recurring requests justify one, versus letting `decide` split them.
+
+### Specialist models (alternative to one big model)
+
+Keep several 1–4B task-specific models on disk (extraction/classification, code, summarisation; ~2–2.5 GB each at 4-bit per the chat) and load the right one per task into the 4 GB GPU, unloading after. Built parts that help: `ModelCache` reload, optional separate background model, GPU lock. Missing: a router choosing the model, specialist selection, measured swap latency (unmeasured; the chat says "a fraction of a second to a few seconds"). Constraints: the router must be reliable; the specialist sees only pre-filtered context. Compare against the escalation proposal below.
+
+### Procedural memory and retry feedback
+
+- Log each tool/format failure mode to a lessons file and inject it into later system prompts (partly covered by learned corrections; a failure-mode log specifically is unconfirmed).
+- On invalid output, feed the validation error back for one cheap correction turn (current design: grammar-forced JSON, fallbacks, one revise pass).
+
+### Drives and mood (open, not adopted)
+
+The chat suggests numeric state variables in the prompt (e.g. curiosity, task urgency) to modulate tone and priority, and a continuous perceive → update memory → evaluate goals → plan → act → review loop. Closest existing pieces: the scheduler's priority classes, the idle worker, and the mascot's mood (see "Mascot emotions"). Any drive or self-set goal must stay inside the autonomy ladder; the user, not the model, sets goals.
+>>>>>>> d4db434 (Docs restructuring)

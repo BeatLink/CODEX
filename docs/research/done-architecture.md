@@ -276,7 +276,7 @@ stops when foreground work arrives (the event goes back in the queue), and its r
 approach, write files, run tests or call MCP tools, and its research may search the web but not fetch pages or
 read files. A paused handler puts its event back in the queue. Interfaces post events with `post_event` and read them and the
 actions with `events`, `actions` and `resolve_action`. The design behind this is in
-[reactive-assistant.md](reactive-assistant.md).
+[reactive-assistant.md](done-reactive-assistant.md).
 
 `researchOneTopic` ([background.ts](../src/core/background.ts)) claims the highest-priority
 pending job and:

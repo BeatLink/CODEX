@@ -45,4 +45,4 @@ CODEX has already shown this failure. Before commit `8e7cea8`, no tool ever ran 
 
 Compare the 4B model's pass rate on the `evals/` tasks against the 35B model's. If the gap is small on the tasks that matter, the 4B model is good enough here.
 
-See also [research-task-decomposition-harnesses.md](research-task-decomposition-harnesses.md).
+See also [research-task-decomposition-harnesses.md](done-research-task-decomposition-harnesses.md).
