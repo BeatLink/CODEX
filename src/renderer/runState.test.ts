@@ -150,6 +150,18 @@ describe('a run from start to finish', () => {
         expect(dropped.effects.map((effect) => effect.kind)).toEqual(['notify', 'notify']);
     });
 
+    it('shows the daemon as connected again when it reports after a drop', () => {
+        const dropped = reduceEvent(beginRun(initialState(), 1), DISCONNECTED_EVENT, {}).state;
+        const status: Status = { settings, settings_path: '/home/u/settings.json', run: null, background: { status: 'Idle', output: '' }, unfinished_runs: [] };
+
+        const back = applyStatus(dropped, status).state;
+
+        expect(dropped.connection).toBe('unavailable');
+        expect(back.connection).toBe('connected');
+        expect(back.running).toBe(false);
+        expect(back.status).toBe('Ready');
+    });
+
     it('clears only when no run is going', () => {
         const finished = events(beginRun(initialState(), 1), ['run.finished', { result: 'answer' }]);
 

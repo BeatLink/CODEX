@@ -28,6 +28,7 @@ import {
     clarificationAnswered,
     clearWorkbench,
     connectionFailed,
+    DISCONNECTED_EVENT,
     initialState,
     reduceEvent,
     setTaskOpen,
@@ -62,6 +63,7 @@ import type { CodexApi, Knowledge, ProposedAction, ResearchJob, Settings, SizeCh
 
 const codex = (window as unknown as { codex: CodexApi }).codex;
 const RENDER_INTERVAL_MILLISECONDS = 150;
+const RECONNECT_SECONDS = 3;
 const NOTICE_SECONDS = 8;
 const COMMAND_CACHE_MILLISECONDS = 5000;
 // The main process sends this alongside the daemon's events when launch at login changes from the tray.
@@ -1182,6 +1184,27 @@ function bindControls(): void {
 // Start
 // ============================================================================
 
+let reconnectTimer: number | null = null;
+
+// Connects to the daemon and shows what it reports; a restart of the daemon is retried until it answers.
+async function connectToDaemon(): Promise<void> {
+    await codex.connect();
+    const status = await codex.request<Status>('status');
+    dispatch(applyStatus(state, status));
+    void refreshInbox();
+    view.settingsPath.textContent = status.settings_path ? `Saves to ${status.settings_path}` : '';
+}
+
+function reconnectSoon(): void {
+    if (reconnectTimer !== null) {
+        return;
+    }
+    reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = null;
+        connectToDaemon().catch(reconnectSoon);
+    }, RECONNECT_SECONDS * 1000);
+}
+
 async function start(): Promise<void> {
     buildOptionsForm();
     bindControls();
@@ -1199,19 +1222,19 @@ async function start(): Promise<void> {
             return;
         }
         dispatch(reduceEvent(state, event, data));
+        if (event === DISCONNECTED_EVENT) {
+            reconnectSoon();
+        }
     });
     void showLaunchAtLogin();
     startMascot();
     render();
     view.prompt.focus();
     try {
-        await codex.connect();
-        const status = await codex.request<Status>('status');
-        dispatch(applyStatus(state, status));
-        void refreshInbox();
-        view.settingsPath.textContent = status.settings_path ? `Saves to ${status.settings_path}` : '';
+        await connectToDaemon();
     } catch (error) {
         dispatch(connectionFailed(state, (error as Error).message));
+        reconnectSoon();
     }
 }
 

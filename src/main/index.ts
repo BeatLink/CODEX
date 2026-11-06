@@ -38,7 +38,7 @@ let inboxRead = false;
 // Daemon connection
 // ============================================================================
 
-// Connects once per app; a daemon this starts exits by itself once no interface uses it.
+// Connects once per connection, and again after the daemon goes away; a daemon this starts exits by itself once no interface uses it.
 function connectOnce(): Promise<{ socket_path: string; started: boolean }> {
     if (connection === null) {
         connection = connectToDaemon(options.socketPath, {
@@ -47,6 +47,7 @@ function connectOnce(): Promise<{ socket_path: string; started: boolean }> {
                 forwardEvent(mainWindow, event, data);
                 if (event === DISCONNECTED_EVENT) {
                     client = null;
+                    connection = null;
                 } else if (event === 'settings.changed') {
                     researching = Boolean((data.settings as Record<string, unknown> | undefined)?.background_research_enabled);
                     refreshTray();
