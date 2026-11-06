@@ -8,7 +8,7 @@ Status claims in docs 2–3 were checked against `src/`: tables, approaches, dae
 
 ## Then: a fast, trustworthy eval loop
 
-Every open strategic question (doc 1) is settled by eval runs, so this comes before any architecture bet. Runs today take ~30 s per model call and whether the model runs on the GPU is unconfirmed (see Agent hierarchy, next steps 1 and 3). Make one eval round cheap enough to repeat, with answers and tool calls saved for every failing run. Then benchmark on real maintenance tasks, not only the fixed sets.
+Every open strategic question (doc 1) is settled by eval runs, so this comes before any architecture bet. Speed is fixed (2026-11-06): all 33 layers of the 4B load on the GPU under CUDA, a model call averages ~4 s, and one 16-run round of the agents eval takes ~10 min. The earlier ~30 s calls date from before the 2026-11-05 reboot, when CUDA fell back to the CPU. `--output` now records every run's tool calls (name and arguments) beside its answer. Still to do: benchmark on real maintenance tasks, not only the fixed sets.
 
 ## In progress
 
@@ -16,24 +16,31 @@ Every open strategic question (doc 1) is settled by eval runs, so this comes bef
 
 ## Agent hierarchy
 
-**Gate:** the hierarchy is worth keeping only if it beats the flat task tree on tool tasks. Build the items below only after it does; if it doesn't, change or drop the idea.
+**Direction (2026-11-06):** the hierarchy stays as the design for scale. Long tasks and projects can be split again and again, and a flat tool list stops working once dozens of servers are connected. Small atomic steps with only the context they need are the part with evidence behind it (MAKER, doc 1), and both runners already have that. What the evals decide is how agents are built (routing, depth, what each agent sees), not whether they exist. The 8-task eval is a baseline and a bug-finder: with 6 servers and 32 tools it cannot show a scaling advantage, so the real test is a scaled task set (next steps 5 and 6).
 
 ### Status
 
 - **Prototype landed:** `delegate`, agent files, nested runs (depth ≤ 3), per-agent MCP servers; covered by scripted-model unit tests.
-- **Eval built, not run to completion** (assets on `main`): see the eval assets in doc 2. 42 tests pass in `src/core/evaluation.test.ts`.
-- **Results so far are not a comparison.** `inbox-newest`: first run 0/2 on both runners (`tree` 634 s, `agents` 300 s; cause unknown); second `agents` run 2/2 in 239 s (7 model calls, 314 tokens). Model is Qwen3.5-4B-UD-Q4_K_XL; the 35B was never loaded (file deleted). Runs are slow (~30 s per model call), load average ~15 during the second run, GPU vs CPU use unconfirmed.
+- **Eval built and run** (assets on `main`): see the eval assets in doc 2. Model is Qwen3.5-4B-UD-Q4_K_XL; the 35B was never loaded (file deleted).
+- **First full round (2026-11-06, one run each):** `tree` 3/8 tasks (6/14 checks, 83 calls, 356 s); `agents` 0/8 (0/14, 57 calls, 205 s). Rerunning three of the tasks gave `agents` 2/3 and `tree` 1/3, so single rounds swing widely and only repeated rounds count. Three rounds before the fix below: `tree` 4/24 tasks (17%, 171 calls); `agents` 2/24 (8%, 239 calls); a run reached an MCP tool in 5/24 (`tree`) and 2/24 (`agents`).
+- **Main failure: the model never reaches the connected tools.** MCP servers are reachable only through the `act` approach, but `decide` was not told which servers are connected, so a question about the user's own data read like a web lookup: `marcus-phone` made no tool calls on either runner and answered from the top task's forced web search (a real plumber of that name); `first-todo` / `tree` ran `list_directory` and four `web_search` calls instead of the to-do tools. Fixed in `e4f4b6d`: `decide` names each connected server and its tools and says a task needing them must choose `act`. Three rounds after it: `tree` 17/24 (71%, 268 calls); `agents` 8/24 (33%, 229 calls); runs reaching an MCP tool 19/24 and 8/24.
+- **Failures left after the fix** (from the recorded tool calls):
+  - *Agents don't delegate:* in an agents run every server belongs to an agent, so the top level has none, never sees the connected-tools note, and answers `marcus-phone` and `priya-last-email` itself with no tool call instead of delegating to `comms`.
+  - *Tool results don't count as evidence:* `sourceCheck` counts found URLs, recalled facts, local knowledge and `web_fetch`, not MCP results; `priya-last-email` / `tree` got the right contact and email from MCP, then searched the web, and the answer said there was no evidence.
+  - *"In my notes" reads as local files:* `garage-code` lists directories instead of calling the notes server, and in agents runs reads the eval's own `.codex/agents/notes.md`.
 
 ### Next (in order)
 
-1. Find out why runs are slow: check loaded `gpu_layers` and whether CUDA is used; rerun when the machine is quiet (no borg backup).
-2. Run one round of 16 runs (8 tasks × `tree`, `agents`). If the runners differ, repeat with `--repeat`. Command (holds the GPU lock): `flock /run/user/1000/codex-gpu.lock node dist/core/evaluation.js --tasks evals/agents_tasks.json --runners tree,agents --repeat 3 --output <file>`.
-3. Find out why the first run failed: save answers and tool calls for a failing run.
-4. If agents win, build what the prototype left out: per-agent memory scope (learned from the agent's episodes) and scratchpad folder under the state directory; checkpoint/resume inside a nested run; show the nested tree in the interfaces; per-agent skills and tool allow lists.
+1. Fix the three failures left after the connected-tools fix (Status above), each measured with the same three-round run. Command (holds the GPU lock): `flock /run/user/1000/codex-gpu.lock node dist/core/evaluation.js --tasks evals/agents_tasks.json --runners tree,agents --repeat 3 --output <file>`. For delegation, tell the top-level `decide` which servers sit behind each agent.
+2. Check the forced top-level web search: an `answer` at the top still searches the request's words, which pulls in real people and places that share a name with the user's own contacts. Skip it, or rank it below connected tools, when servers are connected.
+3. Keep the eval's agent files out of the files the model can list and read.
+4. Build what the prototype left out: per-agent memory scope (learned from the agent's episodes) and scratchpad folder under the state directory; checkpoint/resume inside a nested run; show the nested tree in the interfaces; per-agent skills and tool allow lists.
+5. **Scaled task set:** 20–30 fake servers, so the flat tool list is genuinely large, and tasks that need three or more servers. This is where flat and agents should part.
+6. **Long-horizon task set, MAKER-style:** Towers of Hanoi with N disks worked through the task tree, every step checkable. Measures the per-step error rate, how far the tree scales before `max_task_depth`, `max_task_nodes` and the no-resplit rule stop it, and later what voting adds.
 
 ### Validation method and limits
 
-Same task set with the same MCP servers configured **flat** vs **behind agents**. Measure the share of tasks that reach the right tool and finish, with the number of model calls beside it (each hop costs calls). If agents don't beat flat on tool choice, the extra calls aren't worth it.
+Same task set with the same MCP servers configured **flat** vs **behind agents**. Measure the share of tasks that reach the right tool and finish, with the number of model calls beside it (each hop costs calls). If agents lose at small scale, look at what the extra hop costs and how routing fails, and test again at scale before changing the design.
 
 The tools return canned replies, so the eval measures tool choice and delegation, not real MCP behaviour. Eight tasks and a 4B model give noisy pass rates; any difference needs repeated rounds before it counts.
 
@@ -109,7 +116,8 @@ Today: mail arrives → automatic mail dropped without the model → rest summar
 
 ## Task-decomposition ideas to evaluate
 
-- **Voting + red-flag filters** on control-flow calls (decide, check): measure whether they improve eval pass rate enough to justify the extra calls (calls are ~30 s each on the dev machine, so cost matters).
+- **Voting + red-flag filters** on control-flow calls (decide, check): measure whether they improve eval pass rate enough to justify the extra calls (calls are ~4 s each on the dev machine's GPU, so cost still matters).
+- **Alternative plans (tree of thought, lite):** at `decide`, sample 2–3 candidate plans and let `check` or a vote pick one, instead of following the single plan with one re-plan on failure. Affordable now that calls take ~4 s; measure pass rate against the extra calls.
 - **Corrective sub-plan on step failure** (brainos-style) vs the current "re-plan the rest once": compare.
 - **Capped retries** (practitioner: 3) and capped excerpts of step output passed forward: check against the current limits.
 - **Refinement loop within a run:** replace the task tree's check → revise once → check (`checkAndRevise` in `core/taskTree.ts`) with up to N rounds (start at 3) that stop as soon as the checks pass, each round revising only the requirements that failed. The old Python pipeline had this (commit `60c0bcd`); the TypeScript rewrite kept a single revise. Measure the pass-rate gain against the extra model calls, and whether later rounds fix or only churn.
