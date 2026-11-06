@@ -1,4 +1,4 @@
-// How the window shows the knowledge store and the research queue: the mind map's tree, sources, facts, graph lines and jobs.
+// How the window shows the knowledge store and the research queue: the graph's tree, sources, facts, relationships and jobs.
 import type { Fact, GraphEdge, ResearchJob, Source, Topic } from './types.js';
 
 export const MAX_GRAPH_EDGES = 50;
@@ -20,12 +20,21 @@ export type TreeChoice =
     | { kind: 'topic'; id: number }
     | { kind: 'uncategorized' }
     | { kind: 'source'; id: number }
-    | { kind: 'fact'; id: number };
+    | { kind: 'fact'; id: number }
+    | { kind: 'entity'; label: string };
 
 export type MapNode = { key: string; choice: TreeChoice; text: string; children: MapNode[] };
 
 export function choiceKey(choice: TreeChoice): string {
+    if (choice.kind === 'entity') {
+        return `entity:${choice.label}`;
+    }
     return 'id' in choice ? `${choice.kind}:${choice.id}` : choice.kind;
+}
+
+// A relationship between two named things, rather than the topic and article links the tree already shows.
+export function isRelationship(edge: GraphEdge): boolean {
+    return edge.source_kind === 'entity' && edge.target_kind === 'entity';
 }
 
 function mapNode(choice: TreeChoice, text: string, children: MapNode[] = []): MapNode {
@@ -71,26 +80,29 @@ function groupBy<Item>(items: Item[], key: (item: Item) => number | null): Map<n
     return groups;
 }
 
-export type ChosenKnowledge = { sources: Source[]; facts: Fact[] };
+export type ChosenKnowledge = { sources: Source[]; facts: Fact[]; graph: GraphEdge[] };
 
-// Picks what the side panes show for a tree row: a topic's newest articles and its findings,
-// one article and the findings it backs, or one finding and the article it came from.
-export function chosenKnowledge(choice: TreeChoice, sources: Source[], facts: Fact[]): ChosenKnowledge {
+// Picks what the side panes show for a graph node: a topic's newest articles and its findings,
+// one article and the findings it backs, one finding and the article it came from,
+// or a thing's relationships and the articles that support them.
+export function chosenKnowledge(choice: TreeChoice, sources: Source[], facts: Fact[], graph: GraphEdge[]): ChosenKnowledge {
     switch (choice.kind) {
         case 'all':
-            return { sources: sources.slice(0, MAX_LISTED_SOURCES), facts };
+            return { sources: sources.slice(0, MAX_LISTED_SOURCES), facts, graph };
         case 'topic':
             return {
                 sources: sources.filter((source) => source.topic_id === choice.id).slice(0, MAX_LISTED_SOURCES),
                 facts: facts.filter((fact) => fact.topic_id === choice.id),
+                graph,
             };
         case 'uncategorized':
-            return { sources: sources.filter((source) => source.topic_id == null).slice(0, MAX_LISTED_SOURCES), facts: [] };
+            return { sources: sources.filter((source) => source.topic_id == null).slice(0, MAX_LISTED_SOURCES), facts: [], graph };
         case 'source': {
             const source = sources.find((candidate) => candidate.id === choice.id);
             return {
                 sources: source ? [source] : [],
                 facts: source ? facts.filter((fact) => fact.source_url === source.url) : [],
+                graph: source ? graph.filter((edge) => isRelationship(edge) && edge.evidence_url === source.url) : [],
             };
         }
         case 'fact': {
@@ -98,7 +110,13 @@ export function chosenKnowledge(choice: TreeChoice, sources: Source[], facts: Fa
             return {
                 sources: fact?.source_url ? sources.filter((source) => source.url === fact.source_url) : [],
                 facts: fact ? [fact] : [],
+                graph: [],
             };
+        }
+        case 'entity': {
+            const edges = graph.filter((edge) => isRelationship(edge) && (edge.source === choice.label || edge.target === choice.label));
+            const evidence = new Set(edges.map((edge) => edge.evidence_url));
+            return { sources: sources.filter((source) => evidence.has(source.url)), facts: [], graph: edges };
         }
     }
 }

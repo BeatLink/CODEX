@@ -11,8 +11,8 @@ import {
     type TreeChoice,
 } from './knowledgeView.js';
 import { RoboEyes } from '@x-tech-laboratories/roboeyes';
+import { KnowledgeGraph } from './knowledgeGraph.js';
 import { markdownToHtml } from './markdown.js';
-import { MindMap } from './mindMap.js';
 import { lastingMood, MASCOT_SCREEN, MOMENT_MILLISECONDS, momentAfter, type MascotMood } from './mascot.js';
 import {
     applyStatus,
@@ -121,7 +121,7 @@ const view = {
     backgroundQueue: element('background-queue'),
     backgroundOutput: element('background-output'),
     knowledgeSearch: element<HTMLInputElement>('knowledge-search'),
-    mindMap: element<SVGSVGElement>('mind-map'),
+    knowledgeMap: element('knowledge-map'),
     sourcesTitle: element('sources-title'),
     knowledgeDetail: element('knowledge-detail'),
     knowledgeFacts: element('knowledge-facts'),
@@ -1033,17 +1033,23 @@ async function refreshKnowledge(): Promise<void> {
     renderKnowledge();
 }
 
-const mindMap = new MindMap(view.mindMap, { onChoose: chooseKnowledge });
+const knowledgeGraph = new KnowledgeGraph(view.knowledgeMap, { onChoose: chooseKnowledge });
 
 function renderKnowledge(): void {
-    mindMap.draw(knowledgeTree(knowledge.topics, knowledge.sources, knowledge.facts), knowledgeQuery ? null : choiceKey(knowledgeChoice));
+    knowledgeGraph.draw(
+        knowledgeTree(knowledge.topics, knowledge.sources, knowledge.facts),
+        knowledge.graph,
+        knowledge.sources,
+        knowledge.facts,
+        knowledgeQuery ? null : choiceKey(knowledgeChoice),
+    );
     const chosen = knowledgeQuery
-        ? { sources: knowledge.matches, facts: knowledge.facts }
-        : chosenKnowledge(knowledgeChoice, knowledge.sources, knowledge.facts);
+        ? { sources: knowledge.matches, facts: knowledge.facts, graph: knowledge.graph }
+        : chosenKnowledge(knowledgeChoice, knowledge.sources, knowledge.facts, knowledge.graph);
     view.sourcesTitle.textContent = knowledgeQuery ? `Sources matching "${knowledgeQuery}"` : 'Sources';
     setMarkdown(view.knowledgeDetail, sourcesMarkdown(chosen.sources));
     setMarkdown(view.knowledgeFacts, factsMarkdown(chosen.facts));
-    setMarkdown(view.knowledgeGraph, graphMarkdown(knowledge.graph));
+    setMarkdown(view.knowledgeGraph, graphMarkdown(chosen.graph));
 }
 
 function chooseKnowledge(choice: TreeChoice): void {
@@ -1150,9 +1156,9 @@ function bindControls(): void {
     });
     element('search-knowledge').addEventListener('click', searchKnowledge);
     element('refresh-knowledge').addEventListener('click', () => void refreshKnowledge());
-    element('expand-map').addEventListener('click', () => mindMap.expandAll());
-    element('collapse-map').addEventListener('click', () => mindMap.collapseAll());
-    element('reset-map').addEventListener('click', () => mindMap.resetView());
+    element('expand-map').addEventListener('click', () => knowledgeGraph.expandAll());
+    element('collapse-map').addEventListener('click', () => knowledgeGraph.collapseAll());
+    element('reset-map').addEventListener('click', () => knowledgeGraph.resetView());
 
     const launchAtLogin = element<HTMLInputElement>('launch-at-login');
     launchAtLogin.addEventListener('change', () => void setLaunchAtLogin(launchAtLogin.checked));

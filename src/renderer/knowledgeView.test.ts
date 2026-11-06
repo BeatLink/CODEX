@@ -42,12 +42,18 @@ describe('knowledge tree', () => {
         ]);
     });
 
-    it('shows a topic, an article with the findings it backs, or a finding with its article', () => {
-        expect(chosenKnowledge({ kind: 'topic', id: 2 }, sources, facts)).toEqual({ sources: [sources[0]], facts: [facts[0]] });
-        expect(chosenKnowledge({ kind: 'source', id: 10 }, sources, facts)).toEqual({ sources: [sources[0]], facts: [facts[0]] });
-        expect(chosenKnowledge({ kind: 'fact', id: 21 }, sources, facts)).toEqual({ sources: [], facts: [facts[1]] });
-        expect(chosenKnowledge({ kind: 'uncategorized' }, sources, facts)).toEqual({ sources: [sources[1]], facts: [] });
-        expect(chosenKnowledge({ kind: 'all' }, sources, facts)).toEqual({ sources, facts });
+    it('shows a topic, an article with the findings it backs, a finding with its article, or a thing with its relationships', () => {
+        const graph = [
+            { source_kind: 'entity', source: 'Rust', relation: 'uses', target_kind: 'entity', target: 'LLVM', evidence_url: 'https://r.dev' },
+            { source_kind: 'topic', source: 'Rust', relation: 'supported_by', target_kind: 'source', target: 'https://r.dev', evidence_url: 'https://r.dev' },
+        ];
+
+        expect(chosenKnowledge({ kind: 'topic', id: 2 }, sources, facts, graph)).toEqual({ sources: [sources[0]], facts: [facts[0]], graph });
+        expect(chosenKnowledge({ kind: 'source', id: 10 }, sources, facts, graph)).toEqual({ sources: [sources[0]], facts: [facts[0]], graph: [graph[0]] });
+        expect(chosenKnowledge({ kind: 'fact', id: 21 }, sources, facts, graph)).toEqual({ sources: [], facts: [facts[1]], graph: [] });
+        expect(chosenKnowledge({ kind: 'uncategorized' }, sources, facts, graph)).toEqual({ sources: [sources[1]], facts: [], graph });
+        expect(chosenKnowledge({ kind: 'all' }, sources, facts, graph)).toEqual({ sources, facts, graph });
+        expect(chosenKnowledge({ kind: 'entity', label: 'LLVM' }, sources, facts, graph)).toEqual({ sources: [sources[0]], facts: [], graph: [graph[0]] });
     });
 });
 

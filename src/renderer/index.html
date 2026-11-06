@@ -4,12 +4,13 @@
 <head>
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' 'sha256-HOsxm47pkcV8/SnUcpuEeLjPkDNiaHKPkFBdrem2+ug='; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+        content="default-src 'self'; script-src 'self' 'sha256-0DrKyJncNImMPbQ4z98g1g1xjCwSfnXboBP8dRPAjeQ='; style-src 'self' 'sha256-pgvDUBa4IjFA2yuSJ2cqcyxmNYJMborsd0ORcRv9vw8='; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="color-scheme" content="dark light" />
     <title>CODEX</title>
     <link rel="stylesheet" href="styles.css" />
-    <!-- RoboEyes loads from node_modules beside dist; the policy above allows this map by its hash. -->
-    <script type="importmap">{ "imports": { "@x-tech-laboratories/roboeyes": "../../node_modules/@x-tech-laboratories/roboeyes/dist/roboeyes.js" } }</script>
+    <!-- RoboEyes and Cytoscape load from node_modules beside dist; the policy above allows this map by its hash,
+         and Cytoscape's one-rule stylesheet that keeps its container positioned. -->
+    <script type="importmap">{ "imports": { "@x-tech-laboratories/roboeyes": "../../node_modules/@x-tech-laboratories/roboeyes/dist/roboeyes.js", "cytoscape": "../../node_modules/cytoscape/dist/cytoscape.esm.min.mjs" } }</script>
     <script type="module" src="app.js"></script>
 </head>
 
@@ -150,12 +151,12 @@
             <div class="knowledge-browser">
                 <div class="panel-column map-column">
                     <div class="map-heading">
-                        <h2 class="eyebrow">Mind map</h2>
+                        <h2 class="eyebrow">Knowledge graph</h2>
                         <button id="expand-map" class="small">Expand all</button>
                         <button id="collapse-map" class="small">Collapse all</button>
                         <button id="reset-map" class="small">Reset view</button>
                     </div>
-                    <svg id="mind-map" class="panel mind-map" role="tree" aria-label="Topics, articles and findings"></svg>
+                    <div id="knowledge-map" class="panel knowledge-map" role="img" aria-label="Graph of topics, articles, findings and relationships"></div>
                 </div>
                 <div class="panel-column grow">
                     <h2 id="sources-title" class="eyebrow">Sources</h2>

@@ -853,87 +853,9 @@ main {
     margin-right: auto;
 }
 
-.mind-map {
-    display: block;
-    width: 100%;
+.knowledge-map {
     padding: 0;
-    cursor: grab;
-    touch-action: none;
-    user-select: none;
-}
-
-.mind-map.panning {
-    cursor: grabbing;
-}
-
-.map-link {
-    fill: none;
-    stroke: var(--field-border);
-    stroke-width: 1.5;
-}
-
-.map-node {
-    cursor: pointer;
-    outline: none;
-}
-
-.map-node rect {
-    fill: var(--surface-alt);
-    stroke: var(--border);
-}
-
-.map-node text {
-    fill: var(--foreground);
-    font-size: 13px;
-    font-weight: 600;
-}
-
-.map-node[data-kind='all'] rect {
-    fill: var(--primary);
-    stroke: var(--primary);
-}
-
-.map-node[data-kind='all'] text {
-    fill: var(--primary-text);
-    font-size: 14px;
-}
-
-.map-node[data-kind='source'] rect,
-.map-node[data-kind='fact'] rect {
-    fill: var(--surface);
-}
-
-.map-node[data-kind='source'] text,
-.map-node[data-kind='fact'] text {
-    fill: var(--muted);
-    font-size: 12px;
-    font-weight: 400;
-}
-
-.map-node[data-kind='fact'] text {
-    font-style: italic;
-}
-
-.map-node:hover rect {
-    stroke: var(--field-border);
-}
-
-.map-node[aria-selected='true'] rect,
-.map-node:focus-visible rect {
-    stroke: var(--primary);
-    stroke-width: 2;
-}
-
-.map-toggle circle {
-    fill: var(--surface);
-    stroke: var(--field-border);
-}
-
-.map-toggle text {
-    fill: var(--label);
-    font-size: 12px;
-    font-weight: 600;
-    font-style: normal;
+    overflow: hidden;
 }
 
 /* ============================================================================

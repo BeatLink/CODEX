@@ -30,6 +30,7 @@
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.32.2",
         "@x-tech-laboratories/roboeyes": "github:x-tech-laboratories/RoboEyes#8de418a41e18db875605e4c74c778800625410d7",
+        "cytoscape": "^3.34.4",
         "node-llama-cpp": "^3.22.2",
         "sqlite-vec": "^0.1.9",
         "yaml": "^2.9.1"
