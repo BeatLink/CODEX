@@ -144,9 +144,9 @@ Source: `research/done-research-task-decomposition-harnesses.md` (gathered 2026-
 
 Source: `research/done-mascot-emotions.md`.
 
-- **Split between CODEX and RoboEyes:** CODEX keeps the hexagon and robot head (SVG plus CSS keyed by `data-state`, so the antenna pulse, z's and head bob stay); RoboEyes (canvas-drawn, github.com/x-tech-laboratories/RoboEyes) controls only the eyes and mouth. The CSS-only mascot this replaces is gone.
+- **CODEX draws only the hexagon with the transparent robot head; RoboEyes draws the eyes and mouth unchanged** (its own moods, colours and settings). The CSS-only mascot this replaces is gone.
 - **RoboEyes as an npm git dependency pinned to a commit,** loaded through an import map whose hash the content security policy allows. It isn't on npm; Nix builds it with `makeCacheWritable`.
-- **Emotions follow the run state by priority (`worried` first), with `happy`, `sad`, `excited` and resume's `waking` as short moments** over the lasting mood. Placement: the foot of the workbench sidebar, beside the run status.
+- **RoboEyes' built-in moods follow the run state** (`worried`, `asleep`, `thinking`, else `default`), with `happy` or `sad` for a few seconds when a run ends. Placement: the foot of the workbench sidebar, beside the run status.
 
 ## Text-to-speech for the talking face
 

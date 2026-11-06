@@ -52,15 +52,8 @@ Some of these would need decisions first:
 
 ## RoboEyes
 
-CODEX now draws the mascot with [RoboEyes](https://github.com/x-tech-laboratories/RoboEyes) for the eyes and mouth, on a canvas over the head's screen, while CODEX keeps the hexagon, head, antenna and z's as SVG and CSS. The moods are in [src/renderer/mascot.ts](../../src/renderer/mascot.ts) and the head in [src/renderer/mascot.css](../../src/renderer/mascot.css).
-
-How each emotion carried over:
-
-- The antenna pulse, the floating z's and the head's bob stay, because CODEX still draws the head. The worried mouth's wiggle is gone.
-- Tilted eyes (sad, worried) became tilted eyelids, and the `^ ^` arches of `happy` are RoboEyes' happy eyelids.
-- `startled` pops its eyes with a mood intro, and `waking` flutters them open with one.
-- RoboEyes follows `prefers-reduced-motion` on its own, keeping each pose and stopping the movement, as the CSS does.
+CODEX now draws only the icon's hexagon with a transparent robot head, and [RoboEyes](https://github.com/x-tech-laboratories/RoboEyes) draws the eyes and mouth over the head exactly as it ships. The emotions above became RoboEyes' own moods chosen by state, in [src/renderer/mascot.ts](../../src/renderer/mascot.ts): `worried`, `asleep`, `thinking` and `default`, with `happy` or `sad` briefly when a run ends. The antenna pulse, z's, head bob and the other emotions are not carried over.
 
 ## Checked
 
-Viewed in Electron with a stand-in daemon: calm, excited, thinking, happy, asleep and worried each show as expected.
+Viewed in Electron with a stand-in daemon, in the light and dark themes. On the light theme RoboEyes' white face is hard to see against the sidebar.

@@ -460,6 +460,15 @@ main {
     height: 80px;
 }
 
+/* The face is drawn at its 112 by 80 screen size and shrunk into the head's 28 by 20 cut-out, so it stays sharp. */
+.mascot-face {
+    display: block;
+    width: 112px;
+    height: 80px;
+    transform: scale(0.25);
+    transform-origin: 0 0;
+}
+
 .run-status {
     margin: 0;
     color: var(--primary);

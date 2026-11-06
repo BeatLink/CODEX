@@ -3,16 +3,7 @@ import { actionCards, inboxTabText, NO_ACTIONS_TEXT } from './inboxView.js';
 import { factsMarkdown, graphMarkdown, NO_FACTS_TEXT, queueLines, sourcesMarkdown, topicRows } from './knowledgeView.js';
 import { RoboEyes } from '@x-tech-laboratories/roboeyes';
 import { markdownToHtml } from './markdown.js';
-import {
-    MASCOT_FRAME_RATE,
-    MASCOT_SCREEN,
-    mascotConfig,
-    momentAfter,
-    shownMood,
-    startMoment,
-    type MascotMood,
-    type Moment,
-} from './mascot.js';
+import { lastingMood, MASCOT_SCREEN, MOMENT_MILLISECONDS, momentAfter, type MascotMood } from './mascot.js';
 import {
     applyStatus,
     approvalPlan,
@@ -96,8 +87,6 @@ const view = {
     taskList: element('task-list'),
     taskEmpty: element('task-empty'),
     runStatus: element('run-status'),
-    mascot: element<HTMLElement>('mascot'),
-    mascotTitle: element('mascot-title'),
     mascotFace: element<HTMLCanvasElement>('mascot-face'),
     prompt: element<HTMLTextAreaElement>('prompt'),
     suggestions: element('command-suggestions'),
@@ -146,9 +135,6 @@ const view = {
 let noticeTimer: number | null = null;
 
 function notifyUser(message: string, error = false): void {
-    if (error) {
-        showMoment('sad');
-    }
     view.noticeText.textContent = message;
     view.notice.dataset.error = String(error);
     view.notice.hidden = false;
@@ -183,10 +169,7 @@ function dispatch(reduction: Reduction | WorkbenchState): void {
     } else {
         state = reduction;
     }
-    const moment = momentAfter(previous, state);
-    if (moment !== null) {
-        showMoment(moment);
-    }
+    renderMascot(momentAfter(previous, state));
     scheduleRender();
 }
 
@@ -368,44 +351,28 @@ function renderConnection(): void {
 // Mascot
 // ============================================================================
 
-const mascotFace = new RoboEyes(view.mascotFace, { config: mascotConfig() });
-let moment: Moment | null = null;
-let momentTimer: number | null = null;
+const mascotFace = new RoboEyes(view.mascotFace);
+let mascotMood: MascotMood | null = null;
 
 function startMascot(): void {
-    mascotFace.setDisplayColors('transparent', getComputedStyle(view.mascot).getPropertyValue('--lit').trim());
-    mascotFace.begin(MASCOT_SCREEN.width, MASCOT_SCREEN.height, MASCOT_FRAME_RATE);
-    renderMascot();
+    mascotFace.begin(MASCOT_SCREEN.width, MASCOT_SCREEN.height, mascotFace.frameRate);
+    renderMascot(null);
     mascotFace.start();
 }
 
-// Shows a short emotion over the lasting one, then goes back to it.
-function showMoment(mood: MascotMood): void {
-    moment = startMoment(state, mood, Date.now());
-    if (moment === null) {
-        return;
-    }
-    if (momentTimer !== null) {
-        window.clearTimeout(momentTimer);
-    }
-    momentTimer = window.setTimeout(() => {
-        momentTimer = null;
-        renderMascot();
-    }, moment.until - Date.now());
-    renderMascot();
-}
-
-function renderMascot(): void {
-    const mood = shownMood(state, moment, Date.now());
-    if (mood !== mascotFace.mood) {
+// Sets the face's mood when the state calls for another, and plays a moment over it for a few seconds.
+function renderMascot(moment: MascotMood | null): void {
+    const mood = lastingMood(state);
+    if (mood !== mascotMood) {
+        mascotMood = mood;
         mascotFace.setMood(mood);
     }
-    view.mascot.dataset.state = mood;
-    view.mascotTitle.textContent = `CODEX, ${mood}`;
+    if (moment !== null) {
+        mascotFace.setMood(moment, { for: MOMENT_MILLISECONDS });
+    }
 }
 
 function render(): void {
-    renderMascot();
     renderConnection();
     renderWorkbench();
     renderBackground();

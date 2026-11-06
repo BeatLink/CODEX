@@ -236,29 +236,14 @@ Sample a step several times and decide by first-to-ahead-by-K voting; discard co
 
 ## Mascot emotions (built)
 
-Source: `research/done-mascot-emotions.md`. The robot from the CODEX icon sits at the foot of the workbench sidebar, beside the run status, and shows an emotion. The work is split:
+Source: `research/done-mascot-emotions.md`. The robot from the CODEX icon sits at the foot of the workbench sidebar, beside the run status.
 
-- **CODEX** draws the rounded hexagon and the head: dark screen, ears, antenna and antenna light, floating z's. The head's movements are CSS keyed by `data-state` on the `svg`: a slow bob in every mood, a head tilt for `curious`, the antenna light pulsing for `thinking`, and a dim antenna, slower bob and z's for `asleep`. Files: `src/renderer/mascot.css` and the markup in `src/renderer/index.html`.
-- **RoboEyes** (github.com/x-tech-laboratories/RoboEyes, an npm git dependency pinned to a commit) draws only the eyes and mouth, on a canvas laid over the head's screen through a `foreignObject`, so the face moves with the head. The canvas is 112 by 80 pixels, shrunk into the head's 28 by 20 units so it stays sharp. `src/renderer/mascot.ts` holds the face's settings and the 11 moods as RoboEyes face states. RoboEyes moods with the same names are replaced, not merged into.
+- **CODEX** draws only the icon's hexagon with the robot head cut out, transparent, and lays a canvas over the head (`src/renderer/index.html`).
+- **RoboEyes** (github.com/x-tech-laboratories/RoboEyes, an npm git dependency pinned to a commit) draws the eyes and mouth on that canvas exactly as it ships: its own moods, colours and settings. The canvas is RoboEyes' 112 by 80 screen shrunk into the head's 28 by 20 units, so it stays sharp.
 
-**11 emotions:** `calm` (smirk, slow blink), `thinking` (glancing up from side to side, flat mouth), `curious` (slightly wide, looking up), `happy` (happy eyelids, soft smile), `sad` (tilted eyelids, faint frown, looking down), `asleep` (closed eyes, short mouth), `worried` (tilted eyelids, wry mouth, darting), `excited` (wide, bouncing), `focused` (narrowed, scanning), `startled` (eyes pop wider once), `waking` (eyes flutter open).
+**Moods** are RoboEyes' own, chosen by state, most urgent first (`src/renderer/mascot.ts`): `worried` (daemon unavailable), `asleep` (suspended), `thinking` (run in progress), `default` otherwise. When a run ends, `happy` (completed) or `sad` (failed) shows for 3 seconds through RoboEyes' `setMood(mood, { for })`, unless the daemon is unavailable.
 
-**Lasting moods**, most urgent first (`lastingMood`):
-
-| Emotion | State |
-| --- | --- |
-| `worried` | `connection: 'unavailable'` |
-| `waking` | `connection: 'connecting'` (launch) |
-| `asleep` | `suspended` |
-| `startled` | `cancelling` |
-| `curious` | `clarifications` not empty |
-| `thinking` | `running` |
-| `focused` | background research working (`backgroundState` is `working`) |
-| `calm` | otherwise |
-
-**Moments** show for a few seconds over the lasting mood, then it comes back: `excited` (2 s) when a run starts, `happy` (3 s) when a run ends `Complete`, `waking` (2 s) when the daemon resumes, and `sad` (3 s) on any error notice. Nothing interrupts `worried`.
-
-**Loading:** the renderer has no bundler, so an import map in `index.html` points `@x-tech-laboratories/roboeyes` at `node_modules` beside `dist`; the content security policy allows the map by its hash. RoboEyes follows `prefers-reduced-motion` itself, and `mascot.css` stops the head's movement under the same setting. The tray icon stays a still image.
+**Loading:** the renderer has no bundler, so an import map in `index.html` points `@x-tech-laboratories/roboeyes` at `node_modules` beside `dist`; the content security policy allows the map by its hash. RoboEyes follows `prefers-reduced-motion` itself. The tray icon stays a still image.
 
 ## Speech output (proposed)
 
