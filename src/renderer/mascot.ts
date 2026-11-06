@@ -3,8 +3,8 @@ import { type WorkbenchState } from './runState.js';
 
 export type MascotMood = 'default' | 'thinking' | 'happy' | 'sad' | 'asleep';
 
-// The face's screen, the 24 by 16 screen inside the robot head at five pixels a unit.
-export const MASCOT_SCREEN = { width: 120, height: 80 };
+// The face's screen, the 26 by 18 screen inside the robot head at five pixels a unit.
+export const MASCOT_SCREEN = { width: 130, height: 90 };
 export const MOMENT_MILLISECONDS = 3000;
 
 // The mood that lasts while the state holds, most urgent first.

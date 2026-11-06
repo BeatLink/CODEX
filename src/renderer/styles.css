@@ -1,4 +1,4 @@
-/* CODEX window styles, using the Halon dark and light colours and following the system theme. */
+/* CODEX window styles, using the Halon dark and light colours with the X-Tech blue accent, and following the system theme. */
 
 /* ============================================================================
    Colours
@@ -13,12 +13,12 @@
     --label: #475569;
     --border: #cbd5e1;
     --field-border: #8792a3;
-    --primary: #2563eb;
-    --primary-text: #ffffff;
+    --primary: #00acff;
+    --primary-text: #06111f;
     --warning: #b45309;
     --error: #dc2626;
     --success: #047857;
-    --selection: rgba(37, 99, 235, 0.12);
+    --selection: rgba(0, 172, 255, 0.12);
     --shadow: 0 12px 40px rgba(15, 23, 42, 0.18);
     color-scheme: light;
 }
@@ -33,12 +33,12 @@
         --label: #cbd5e1;
         --border: #24324d;
         --field-border: #64748b;
-        --primary: #60a5fa;
+        --primary: #00acff;
         --primary-text: #06111f;
         --warning: #f59e0b;
         --error: #f87171;
         --success: #10b981;
-        --selection: rgba(96, 165, 250, 0.16);
+        --selection: rgba(0, 172, 255, 0.16);
         --shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
         color-scheme: dark;
     }
@@ -510,11 +510,11 @@ main {
     fill: var(--primary);
 }
 
-/* The face is drawn at twice its 120 by 80 screen size and shrunk into the head's 24 by 16 screen, so it stays sharp. */
+/* The face is drawn at twice its 130 by 90 screen size and shrunk into the head's 26 by 18 screen, so it stays sharp. */
 .mascot-face {
     display: block;
-    width: 240px;
-    height: 160px;
+    width: 260px;
+    height: 180px;
     transform: scale(0.1);
     transform-origin: 0 0;
 }
