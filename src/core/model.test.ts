@@ -1,6 +1,16 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import { chatHistory, grammarSchema, ModelCache, runStage, type ChatCompletion, type ChatCompletionRequest } from './model.js';
+import {
+    chatHistory,
+    grammarSchema,
+    isRepeating,
+    ModelCache,
+    REPEAT_WINDOW_CHARS,
+    runStage,
+    type ChatCompletion,
+    type ChatCompletionRequest,
+} from './model.js';
 
 function replying(completion: ChatCompletion, streamed: string[] = []) {
     const requests: ChatCompletionRequest[] = [];
@@ -48,6 +58,12 @@ describe('runStage', () => {
 
         const noSentence = replying({ content: 'Readers do not block wri', tool_calls: [], finish_reason: 'length' });
         await expect(runStage(noSentence, 'System', 'Input', { keepCutOff: true })).rejects.toThrow('token limit');
+    });
+
+    it('refuses a reply that was stopped for repeating itself', async () => {
+        const looping = replying({ content: "'One' rhymes with 'one'.", tool_calls: [], finish_reason: 'repetition' });
+
+        await expect(runStage(looping, 'System', 'Input', { keepCutOff: true })).rejects.toThrow('kept repeating itself');
     });
 
     it('refuses an empty reply', async () => {
@@ -103,5 +119,44 @@ describe('ModelCache', () => {
 
         expect(cache.has('model.gguf', 4096, -1)).toBe(false);
         await expect(cache.unload()).resolves.toBe(false);
+    });
+});
+
+// ============================================================================
+// Repetition
+// ============================================================================
+
+const TENS = ['Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy'];
+const ONES = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+
+const PROSE =
+    'The daemon keeps one model loaded and hands it to each run in turn, so a second request waits rather than ' +
+    'loading another copy. Background research pauses while a request is active and picks up again once the window ' +
+    'is idle. Settings changed in the Options page apply to the next run; the model is reloaded only when its path, ' +
+    'context size or GPU layers change. Each task in the tree is decided, written and checked, and a task that fails ' +
+    'its check is revised once before it is split into smaller parts. Results from earlier tasks are condensed when ' +
+    'they no longer fit, keeping the newest ones whole. The knowledge store records every page a search reads, with ' +
+    'the facts drawn from it and the date it was fetched, so a later question about the same topic can be answered ' +
+    'without going back to the web. Pages older than the refresh interval are fetched again when a run needs them. ' +
+    'Mail is read from the folders and accounts listed in the settings, and replies are drafted but never sent. ' +
+    'When a run is cancelled, the tree is saved as it stands, and the Resume button carries on from the task that ' +
+    'was in progress. Connected tools are offered only to tasks that act, and each call is shown for approval first.';
+
+describe('isRepeating', () => {
+    it('spots a reply listing the same sentence with only the number changed', () => {
+        const looping = TENS.flatMap((tens) => ONES.map((ones) => `'${tens}-${ones}' rhymes with '${tens.toLowerCase()}-${ones}'. `)).join('');
+
+        expect(isRepeating(looping)).toBe(true);
+    });
+
+    it('leaves prose, short replies and repetitive data alone', () => {
+        const catalogue = readFileSync(new URL('../../evals/fake_catalogue.json', import.meta.url), 'utf-8');
+
+        expect(PROSE.length).toBeGreaterThanOrEqual(REPEAT_WINDOW_CHARS);
+        expect(isRepeating(PROSE)).toBe(false);
+        expect(isRepeating('ha '.repeat(100))).toBe(false);
+        for (let end = REPEAT_WINDOW_CHARS; end <= catalogue.length; end += 200) {
+            expect(isRepeating(catalogue.slice(0, end))).toBe(false);
+        }
     });
 });

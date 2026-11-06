@@ -1,7 +1,7 @@
 // A model call that may use tools: the model asks for tools, gets their results, and answers within the call budget.
 import { inputCharBudget, untrustedBlock } from './contextBudget.js';
 import { MCPToolbox } from './mcpTools.js';
-import type { ChatCompletionRequest, ChatMessage, ChatModel, ToolCall, ToolDefinition } from './model.js';
+import { REPETITION_MESSAGE, type ChatCompletionRequest, type ChatMessage, type ChatModel, type ToolCall, type ToolDefinition } from './model.js';
 import type { McpServerSettings } from './settings.js';
 
 // ============================================================================
@@ -195,6 +195,9 @@ async function toolLoop(
             throw new Error(
                 'The tool stage reached the token limit; raise max_tokens (background_max_tokens for background research) or context_size, or use Auto size in Options.',
             );
+        }
+        if (completion.finish_reason === 'repetition') {
+            throw new Error(REPETITION_MESSAGE);
         }
 
         let assistantMessage: ChatMessage = { role: 'assistant', content: completion.content || null };

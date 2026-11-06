@@ -17,6 +17,7 @@ import {
     COMBINE_PROMPT,
     CONNECTED_TOOLS_NOTE,
     DECISION_PROMPT,
+    REASON_MAX_CHARS,
     REPLAN_PROMPT,
     REVISE_NOTE,
     ROOT_COMBINE_PROMPT,
@@ -455,6 +456,24 @@ describe('direct tasks', () => {
         expect(model.call('split', '1').input).toContain('Failed attempt:\nThin draft');
         expect(model.call('split', '1').input).toContain('The revision failed (A model call reached the token limit)');
         expect(trees.at(-1)![0].status).toBe('done');
+    });
+
+    it('answers directly when deciding goes in circles, instead of ending the run', async () => {
+        const { result, model, progress } = await runTree(
+            { 'decide 1': new Error('A model call kept repeating itself, so it was stopped.'), 'write 1': 'Three.' },
+            { prompt: 'What number rhymes with tree?' },
+        );
+
+        expect(result).toBe('Three.');
+        expect(model.steps()).toEqual(['decide 1', 'write 1', 'check 1']);
+        expect(progress).toContain('Task 1 · Deciding failed, using the default approach');
+    });
+
+    it('asks for a short reason, so the model cannot think aloud in it', async () => {
+        const { model } = await runTree({ 'decide 1': decision('answer'), 'write 1': 'Done.' });
+
+        expect(model.call('decide', '1').json_schema!.properties.reason).toEqual({ type: 'string', maxLength: REASON_MAX_CHARS });
+        expect(model.call('decide', '1').system).toContain("one short sentence in 'reason'");
     });
 
     it('splits a task too big to write instead', async () => {

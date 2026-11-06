@@ -58,6 +58,8 @@ export const MIN_ACT_TOOL_CALLS = 8;
 
 // Replies that are short by design get a smaller budget, leaving more of the window for their input.
 export const DECISION_MAX_TOKENS = 1024;
+// A decision's reason is one short sentence, so the model cannot think aloud in it until the reply runs out.
+export const REASON_MAX_CHARS = 300;
 export const CHECK_MAX_TOKENS = 512;
 
 // Each way a task can be done; "decompose" splits it into subtasks and "delegate" hands it to an agent.
@@ -110,7 +112,7 @@ function subtaskSchema(minItems: number): JsonSchema {
 export function decisionSchema(approaches: string[], askClarification: boolean, agentNames: string[] = []): JsonSchema {
     // Fields come in this order so the model reasons and lists facts before it picks an approach.
     const properties: Record<string, unknown> = {
-        reason: { type: 'string' },
+        reason: { type: 'string', maxLength: REASON_MAX_CHARS },
         facts_to_check: { type: 'array', items: { type: 'string' }, maxItems: MAX_FACTS_TO_CHECK },
         approach: { type: 'string', enum: approaches },
         search_queries: { type: 'array', items: { type: 'string' }, maxItems: MAX_SEARCH_QUERIES },
@@ -145,7 +147,7 @@ export const CHECK_SCHEMA: JsonSchema = {
 export const DECISION_PROMPT =
     "You manage one task in a tree of tasks that together answer the user's" +
     ' request. Decide how to complete the current task and reply with JSON' +
-    " only. Explain your choice briefly in 'reason'. In 'facts_to_check'," +
+    " only. Explain your choice in one short sentence in 'reason'. In 'facts_to_check'," +
     ' list each outside fact the task\'s result would state: what a named' +
     ' product, project, person, place, or term is, and any version, date,' +
     ' number, or specification; leave it empty when the result needs nothing' +
@@ -571,6 +573,11 @@ export class Decision {
         this.clarification = options.clarification ?? null;
         this.agent = options.agent ?? '';
     }
+}
+
+// The approach taken when the model gives no usable decision: look things up if the task needs the web, else answer.
+export function defaultDecision(node: TaskNode): Decision {
+    return new Decision(requiresWebResearch(node.prompt) ? 'research' : 'answer');
 }
 
 // Read a decision reply, or return null when it is not the expected shape.
@@ -1169,10 +1176,20 @@ export class TaskTreeRun {
         if (agentNames.length > 0) {
             systemPrompt += DELEGATE_NOTE + agentNames.map((name) => ` ${name}: ${this.agents.get(name)!.description}`).join('');
         }
-        const reply = await this.call(node, 'Deciding', systemPrompt, await this.sections(node), {
-            replyTokens: DECISION_MAX_TOKENS,
-            jsonSchema: decisionSchema(approaches, ask, agentNames),
-        });
+        let reply: string;
+        try {
+            reply = await this.call(node, 'Deciding', systemPrompt, await this.sections(node), {
+                replyTokens: DECISION_MAX_TOKENS,
+                jsonSchema: decisionSchema(approaches, ask, agentNames),
+            });
+        } catch (error) {
+            if (!this.isTaskFailure(error)) {
+                throw error;
+            }
+            // A decision that runs out of room or goes in circles falls back to the default approach instead of ending the run.
+            this.report(node, 'Deciding failed, using the default approach');
+            return defaultDecision(node);
+        }
         const decision = parseDecision(
             reply,
             node,
@@ -1181,7 +1198,7 @@ export class TaskTreeRun {
             agentNames,
         );
         if (decision === null) {
-            return new Decision(requiresWebResearch(node.prompt) ? 'research' : 'answer');
+            return defaultDecision(node);
         }
         if (ask && decision.clarification) {
             await this.askClarification(decision.clarification);

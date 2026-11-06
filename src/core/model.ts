@@ -9,6 +9,7 @@ import type {
     LlamaContextSequence,
     LlamaModel,
 } from 'node-llama-cpp';
+import { deflateRawSync } from 'node:zlib';
 
 import { GPU_LOCK } from './gpuLock.js';
 import { MAX_TOKENS, TEMPERATURE } from './settings.js';
@@ -53,7 +54,12 @@ type GeneratedResponse = {
     metadata: { stopReason: string };
 };
 
-export type FinishReason = 'stop' | 'length' | 'tool_calls';
+// 'repetition' means the reply started going round in circles and was stopped early.
+export type FinishReason = 'stop' | 'length' | 'tool_calls' | 'repetition';
+
+export const TOKEN_LIMIT_MESSAGE =
+    'A model call reached the token limit; raise max_tokens (background_max_tokens for background research) or context_size, or use Auto size in Options.';
+export const REPETITION_MESSAGE = 'A model call kept repeating itself, so it was stopped.';
 
 export type ChatCompletion = {
     content: string;
@@ -187,19 +193,32 @@ export class LocalModel implements ChatModel {
         const stopFromOutside = () => abort.abort(request.signal?.reason);
         request.signal?.addEventListener('abort', stopFromOutside, { once: true });
         let callbackError: unknown = null;
-        const onTextChunk = request.on_token
-            ? (text: string) => {
-                  if (callbackError !== null) {
-                      return;
-                  }
-                  try {
-                      request.on_token!(text);
-                  } catch (error) {
-                      callbackError = error;
-                      abort.abort(error);
-                  }
-              }
-            : undefined;
+        let generated = '';
+        let checkedLength = 0;
+        let repeating = false;
+        const onTextChunk = (text: string) => {
+            if (callbackError !== null || repeating) {
+                return;
+            }
+            generated += text;
+            if (generated.length - checkedLength >= REPEAT_CHECK_CHARS) {
+                checkedLength = generated.length;
+                if (isRepeating(generated)) {
+                    repeating = true;
+                    abort.abort(new Error(REPETITION_MESSAGE));
+                    return;
+                }
+            }
+            if (!request.on_token) {
+                return;
+            }
+            try {
+                request.on_token(text);
+            } catch (error) {
+                callbackError = error;
+                abort.abort(error);
+            }
+        };
 
         try {
             const response: GeneratedResponse = await chat.generateResponse([...history, { type: 'model', response: [] }], {
@@ -222,6 +241,9 @@ export class LocalModel implements ChatModel {
                 finish_reason: toolCalls.length > 0 ? 'tool_calls' : stopReason === 'maxTokens' ? 'length' : 'stop',
             };
         } catch (error) {
+            if (repeating && callbackError === null && !request.signal?.aborted) {
+                return { content: generated, tool_calls: [], finish_reason: 'repetition' };
+            }
             throw callbackError ?? error;
         } finally {
             request.signal?.removeEventListener('abort', stopFromOutside);
@@ -400,6 +422,23 @@ export class ModelCache {
 }
 
 // ============================================================================
+// Repetition
+// ============================================================================
+
+// Looping text compresses far better than prose, code or data does, so a reply is checked by how small its tail packs.
+export const REPEAT_WINDOW_CHARS = 1200;
+export const REPEAT_CHECK_CHARS = 200;
+export const REPEAT_RATIO = 0.2;
+
+export function isRepeating(text: string): boolean {
+    if (text.length < REPEAT_WINDOW_CHARS) {
+        return false;
+    }
+    const tail = Buffer.from(text.slice(-REPEAT_WINDOW_CHARS), 'utf-8');
+    return deflateRawSync(tail).length / tail.length < REPEAT_RATIO;
+}
+
+// ============================================================================
 // One call
 // ============================================================================
 
@@ -438,9 +477,10 @@ export async function runStage(llm: ChatModel, systemPrompt: string, userInput: 
         }
     }
     if (completion.finish_reason === 'length') {
-        throw new Error(
-            'A model call reached the token limit; raise max_tokens (background_max_tokens for background research) or context_size, or use Auto size in Options.',
-        );
+        throw new Error(TOKEN_LIMIT_MESSAGE);
+    }
+    if (completion.finish_reason === 'repetition') {
+        throw new Error(REPETITION_MESSAGE);
     }
     if (!content.trim()) {
         throw new Error('The model returned an empty completion.');
