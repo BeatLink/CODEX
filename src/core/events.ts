@@ -2,6 +2,7 @@
 import { BackgroundPaused, type BackgroundOptions } from './background.js';
 import { KnowledgeStore, type EventRecord } from './knowledge.js';
 import type { Settings } from './settings.js';
+import { emailHandler } from './triage.js';
 
 // ============================================================================
 // Handlers
@@ -36,7 +37,10 @@ export const notifyHandler: EventHandler = async (event, { store }) => {
     return { status: 'done', detail: `Proposed action ${actionId}` };
 };
 
-export const DEFAULT_EVENT_HANDLERS: ReadonlyMap<string, EventHandler> = new Map([['notify', notifyHandler]]);
+export const DEFAULT_EVENT_HANDLERS: ReadonlyMap<string, EventHandler> = new Map([
+    ['notify', notifyHandler],
+    ['email.received', emailHandler],
+]);
 
 // ============================================================================
 // Working the queue

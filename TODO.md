@@ -30,8 +30,11 @@
 - [x] Add a system tray, launch at login, and suspend and resume commands
 - [ ] Benchmark on real maintenance tasks
 - [x] Queue events and actions in the knowledge store, and order background jobs reactive before maintenance
-- [ ] Triage incoming events with a cheap model call and work the ones that need it as task trees
+- [x] Triage incoming mail with header heuristics and one schema-constrained model call
+- [x] Read mail from Maildir folders as events
+- [ ] Work the events that need real work as task trees
 - [ ] Read mail over IMAP as events
+- [ ] Show proposed actions in the window and tray
 - [ ] Taint runs started by external events and gate their side effects on approval
 - [ ] Track entities and commitments, and drive idle work from them
 - [x] Keep the loaded model between requests and share it with the background worker

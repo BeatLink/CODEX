@@ -20,5 +20,7 @@
   "background_max_pending_jobs": 100,
   "background_prune_after_days": 90,
   "background_max_store_megabytes": 1024,
+  "mail_maildir_paths": [],
+  "mail_max_age_days": 7,
   "mcp_servers": []
 }

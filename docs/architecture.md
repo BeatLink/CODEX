@@ -253,7 +253,8 @@ loop:
   otherwise:
     re-queue topics researched longer ago than background_refresh_interval_hours
       (half that for topics recalled five times and used since; most used first)
-    handleNextEvent()        — if an event is queued (reactive class)
+    pollConnectors()         — queue new Maildir messages as events (reactive class)
+    or handleNextEvent()     — if an event is queued (reactive class)
     or researchOneTopic()    — if a job was pending (maintenance class)
     or indexKnowledge()        — if facts or topics lack a vector (CPU embedding model)
     or learnFromEpisodes()    — if unprocessed episodes exist
@@ -261,10 +262,11 @@ loop:
     worked → wait 0.2 s, else wait poll interval
 ```
 
-The jobs are listed in [scheduler.ts](../src/core/scheduler.ts), reactive ones tried before
+`MailConnector` ([mail.ts](../src/core/mail.ts)) is the one connector: it reads the Maildir folders in
+`mail_maildir_paths`. The jobs are listed in [scheduler.ts](../src/core/scheduler.ts), reactive ones tried before
 maintenance ones. `handleNextEvent` ([events.ts](../src/core/events.ts)) claims the most important
 queued event and runs the handler registered for its type; the built-in `notify` handler turns the
-event into a proposed action, and an event with no handler is marked `ignored`. A paused handler
+event into a proposed action, `email.received` events are triaged ([triage.ts](../src/core/triage.ts)), and an event with no handler is marked `ignored`. A paused handler
 puts its event back in the queue. Interfaces post events with `post_event` and read them and the
 actions with `events`, `actions` and `resolve_action`. The design behind this is in
 [reactive-assistant.md](reactive-assistant.md).

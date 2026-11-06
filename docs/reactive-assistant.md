@@ -44,9 +44,18 @@ A job is a name, a class and a step with the signature the background steps alre
 ## Phases
 
 1. **Plumbing** (landed with this document): the `events` and `actions` tables, the job list, event handling with a handler registry, a built-in `notify` handler, and the `post_event`, `events`, `actions` and `resolve_action` daemon methods. A user request is not yet an event.
-2. **First connector**: IMAP, with a triage call (heuristics first, then a schema-constrained model call) and notify-only actions.
+2. **First connector** (landed): Maildir folders, with triage (header heuristics first, then a schema-constrained model call) and notify-only actions. Maildir came before IMAP because a synced Maildir (mbsync, offlineimap) needs no credentials in CODEX, and the daemon never holds a mail password. A direct IMAP connector can follow once credentials have a safe home.
 3. **Trust and approval**: the run-level taint, the autonomy ladder and rules learned from approvals.
 4. **Entities and commitments**, then idle jobs driven by them: pre-research for tomorrow's meetings, stale-commitment sweeps, entity profiles from episodes, a daily digest.
+
+## Mail
+
+`MailConnector` ([mail.ts](../src/core/mail.ts)) polls the `new/` folder of each Maildir in `mail_maildir_paths` on every background pass. A message becomes an `email.received` event with `external` trust, its Maildir name (without the client's flags) as the dedupe key, and a payload of sender, recipient, subject, date, message id, a `bulk` reason and up to 4,000 characters of body text. Messages older than `mail_max_age_days` are left alone, so connecting an old mailbox does not flood the queue, and at most 25 are queued per poll.
+
+The handler ([triage.ts](../src/core/triage.ts)) works in two steps.
+
+1. **Without the model**: mail marked automatic, bulk, from a list, or from a no-reply sender is `ignored` with the reason.
+2. **With the model**: one call returns a summary, a category, whether a person is waiting for a reply, and an importance. The email is shown inside the untrusted-data fence, the call has no tools, and the reply is a schema-constrained classification, so a hostile email can at worst mislabel itself. Mail of low importance that waits for no reply is `ignored`; the rest becomes a `notify` action carrying the summary. When the model fails or answers badly the mail still becomes a `notify` action, marked as not triaged.
 
 ## Limits to design around
 

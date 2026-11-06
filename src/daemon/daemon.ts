@@ -18,6 +18,7 @@ import {
     type NewEvent,
     type TaskRun,
 } from '../core/knowledge.js';
+import { MailConnector } from '../core/mail.js';
 import { ModelCache } from '../core/model.js';
 import { runNextJob, type BackgroundStep, type Job } from '../core/scheduler.js';
 import { backgroundModelKey, defaultSettingsPath, expandUser, saveSettings, validateSettings, type Settings } from '../core/settings.js';
@@ -208,11 +209,14 @@ export type DaemonDependencies = {
     indexKnowledge: BackgroundStep;
     learnFromEpisodes: BackgroundStep;
     consolidateKnowledge: BackgroundStep;
+    pollConnectors: BackgroundStep;
     handleEvents: BackgroundStep;
     refreshEnvironment: (settings: Settings) => Promise<boolean>;
     // Seconds on a clock that only moves forward.
     monotonic: () => number;
 };
+
+const defaultMailConnector = new MailConnector();
 
 const DEFAULT_DEPENDENCIES: DaemonDependencies = {
     executeTaskTree,
@@ -221,6 +225,7 @@ const DEFAULT_DEPENDENCIES: DaemonDependencies = {
     indexKnowledge,
     learnFromEpisodes,
     consolidateKnowledge,
+    pollConnectors: (settings, options) => defaultMailConnector.poll(settings, options),
     handleEvents: (settings, options) => handleNextEvent(settings, options),
     refreshEnvironment: (settings) => refreshEnvironment(settings),
     monotonic: () => performance.now() / 1000,
@@ -933,10 +938,11 @@ export class HarnessDaemon {
         }
     }
 
-    // Events come first, then queued research, indexing what it found, learning from past requests, and tidying.
+    // Connectors queue events and events are handled first, then queued research, indexing what it found, learning from past requests, and tidying.
     private backgroundJobs(): Job[] {
-        const { handleEvents, researchOneTopic, indexKnowledge, learnFromEpisodes, consolidateKnowledge } = this.dependencies;
+        const { pollConnectors, handleEvents, researchOneTopic, indexKnowledge, learnFromEpisodes, consolidateKnowledge } = this.dependencies;
         return [
+            { name: 'poll_connectors', jobClass: 'reactive', step: pollConnectors },
             { name: 'handle_events', jobClass: 'reactive', step: handleEvents },
             { name: 'research', jobClass: 'maintenance', step: researchOneTopic },
             { name: 'index', jobClass: 'maintenance', step: indexKnowledge },
@@ -982,7 +988,7 @@ export class HarnessDaemon {
                     const jobName = await runNextJob(this.backgroundJobs(), settings, workerOptions);
                     worked = jobName !== null;
                     this.broadcast('queue.changed');
-                    if (jobName === 'handle_events') {
+                    if (jobName === 'poll_connectors' || jobName === 'handle_events') {
                         this.broadcast('events.changed');
                         this.broadcast('actions.changed');
                     }

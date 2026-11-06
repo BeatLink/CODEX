@@ -123,7 +123,7 @@ describe('handleNextEvent', () => {
 
     it('ignores a notify event without a title and an event no handler wants', async () => {
         store.enqueueEvent({ source: 'timer', type: 'notify' });
-        store.enqueueEvent({ source: 'mail', type: 'email.received' });
+        store.enqueueEvent({ source: 'calendar', type: 'event.moved' });
 
         await handleNextEvent(settings);
         await handleNextEvent(settings);

@@ -279,7 +279,7 @@ function renderSources(sources: Source[]): Section[] {
     return sources.map((source): Section => [`Source ${source.number} (${source.url})`, source.text]);
 }
 
-function parseJson(reply: string): unknown {
+export function parseJson(reply: string): unknown {
     try {
         return JSON.parse(reply);
     } catch {

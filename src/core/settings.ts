@@ -74,6 +74,8 @@ export type Settings = {
     background_max_pending_jobs: number;
     background_prune_after_days: number;
     background_max_store_megabytes: number;
+    mail_maildir_paths: string[];
+    mail_max_age_days: number;
 };
 
 export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
@@ -108,6 +110,9 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
     background_max_pending_jobs: 100,
     background_prune_after_days: 90,
     background_max_store_megabytes: 1024,
+    // Maildir folders whose new/ messages become events; none are read until one is listed.
+    mail_maildir_paths: [],
+    mail_max_age_days: 7,
 } satisfies Settings);
 
 // ============================================================================
@@ -244,6 +249,10 @@ export function validateSettings(input: Record<string, unknown>): Settings {
     if (!isInteger(values.background_gpu_layers) || values.background_gpu_layers < -1) {
         throw new Error('background_gpu_layers must be -1 or a non-negative integer.');
     }
+    if (!Array.isArray(values.mail_maildir_paths) || values.mail_maildir_paths.some((path) => typeof path !== 'string' || !path.trim())) {
+        throw new Error('mail_maildir_paths must be a list of folder path strings.');
+    }
+    values.mail_maildir_paths = values.mail_maildir_paths.map((path: string) => path.trim());
     const ranges: Array<[string, number, number]> = [
         ['max_task_depth', 0, 6],
         ['max_task_nodes', 1, 60],
@@ -254,6 +263,7 @@ export function validateSettings(input: Record<string, unknown>): Settings {
         ['background_max_pending_jobs', 1, 1000],
         ['background_prune_after_days', 1, 3650],
         ['background_max_store_megabytes', 16, 1048576],
+        ['mail_max_age_days', 1, 365],
     ];
     for (const [name, minimum, maximum] of ranges) {
         const value = values[name];

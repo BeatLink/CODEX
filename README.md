@@ -378,6 +378,15 @@ the worker.
 resource use, and `background_max_pending_jobs` bounds the backlog. Set
 `background_research_enabled` to `false` to pause it.
 
+### Mail
+
+List Maildir folders (the ones a mail syncer such as mbsync fills) in `mail_maildir_paths`
+in `settings.json` to have the daemon read new messages. Mail from lists and automatic
+senders is skipped, and the model looks at the rest and proposes a notification for what
+a person needs to see. Messages older than `mail_max_age_days` are not read, and the
+daemon only reads files; it never holds a mail password. Read the proposals with the
+`actions` daemon method; the window does not show them yet.
+
 Background work runs on the main model unless `background_model_path` names
 another GGUF file. That model gets its own cache, so the two never evict each
 other, and loads with `background_gpu_layers` (default 0, the CPU) and
@@ -670,6 +679,8 @@ another. Unknown keys are rejected.
 	"background_max_pending_jobs": 100,
 	"background_prune_after_days": 90,
 	"background_max_store_megabytes": 1024,
+	"mail_maildir_paths": [],
+	"mail_max_age_days": 7,
 	"mcp_servers": []
 }
 ```

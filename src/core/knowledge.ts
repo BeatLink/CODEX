@@ -1715,6 +1715,18 @@ export class KnowledgeStore {
         }, 'BEGIN IMMEDIATE');
     }
 
+    // Returns the dedupe keys among the given ones that this source has already queued.
+    knownEventKeys(source: string, keys: string[]): string[] {
+        if (keys.length === 0) {
+            return [];
+        }
+        return this.withConnection((connection) =>
+            connection
+                .all(`SELECT dedupe_key FROM events WHERE source = ? AND dedupe_key IN (${keys.map(() => '?').join(', ')})`, source, ...keys)
+                .map((row) => String(row.dedupe_key)),
+        );
+    }
+
     finishEvent(eventId: number, status: 'done' | 'ignored' | 'failed', detail = ''): void {
         this.withConnection((connection) => {
             const [outcome, error] = status === 'failed' ? ['', detail] : [detail, ''];
