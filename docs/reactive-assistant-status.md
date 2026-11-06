@@ -47,7 +47,7 @@ An assistant that notices, prepares and asks, and acts alone only where the user
 
 ## Known limits
 
-- One model and one lock: events are handled one at a time, and a draft run holds the model for the whole tree, so a foreground request waits for the current model call to finish and the run is stopped and retried.
+- One model and one lock: events are handled one at a time, and a draft run holds the model for the whole tree, so a foreground request waits until the tree reaches its next stop check, and the event is then retried from the start.
 - A stopped event run leaves a resumable checkpoint in the task-run table; they are not cleaned up yet.
 - A 6,144-token window cannot hold a long thread. Only the body of the one message is used, up to 4,000 characters.
 - Triage and drafting depend on a small model's judgement. The taint limits the damage of a fooled model to a wrong summary or a poor draft, which the user reads before anything happens.
