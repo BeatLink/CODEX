@@ -15,6 +15,7 @@ import type { McpServerSettings } from './settings.js';
 import {
     CHECK_PROMPT,
     COMBINE_PROMPT,
+    CONNECTED_TOOLS_NOTE,
     DECISION_PROMPT,
     REPLAN_PROMPT,
     REVISE_NOTE,
@@ -1043,6 +1044,28 @@ describe('agents', () => {
         expect(trees.at(-1)![0].approach).toBe('delegate');
         expect(trees.at(-1)![0].status).toBe('done');
         expect(trees.at(-1)![0].note).toBe('Delegated to the mail agent');
+    });
+
+    it('names the connected servers and their tools when deciding', async () => {
+        const root = mkdtempSync(join(workDirectory, 'agents-'));
+        const contacts = { ...mcpServer('contacts'), allowed_tools: ['find_contact', 'list_contacts'] };
+
+        const { model } = await runTree(
+            { 'decide 1': decision('answer'), 'write 1': 'Done.' },
+            { prompt: "What is Marcus's phone number?", filesystemRoot: root, allowFileWrites: false, mcpServers: [contacts] },
+        );
+
+        const call = model.call('decide', '1');
+        expect(call.json_schema!.properties.approach.enum).toContain('act');
+        expect(call.system).toContain(CONNECTED_TOOLS_NOTE + ' contacts (find_contact, list_contacts).');
+    });
+
+    it('names no connected tools when no server is connected', async () => {
+        const root = mkdtempSync(join(workDirectory, 'agents-'));
+
+        const { model } = await runTree({ 'decide 1': decision('answer'), 'write 1': 'Done.' }, { filesystemRoot: root });
+
+        expect(model.call('decide', '1').system).not.toContain(CONNECTED_TOOLS_NOTE);
     });
 
     it('offers no delegate choice when there are no agents', async () => {

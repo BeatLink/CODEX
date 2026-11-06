@@ -175,6 +175,10 @@ export const DELEGATE_NOTE =
     " 'delegate' hands the task to one specialist agent named in 'agent'," +
     " and must be chosen when an agent's description covers the task;" +
     " otherwise leave 'agent' empty. Agents:";
+export const CONNECTED_TOOLS_NOTE =
+    " Connected tools hold the user's own accounts and data, which no web" +
+    " search can find, so a task that needs anything they hold must choose" +
+    " 'act'. Connected tools:";
 export const CLARIFICATION_NOTE =
     ' If a material ambiguity in the request must be resolved to answer' +
     " correctly, put one concise question in 'clarification'; otherwise set" +
@@ -1154,6 +1158,14 @@ export class TaskTreeRun {
         const ask = node.parent === null && this.clarification === null && !this.delegated;
         const agentNames = this.agentChoices();
         let systemPrompt = DECISION_PROMPT + (ask ? CLARIFICATION_NOTE : '');
+        // Without the servers' names, a question about the user's own mail or calendar reads like a web lookup.
+        const servers = this.mcpServers.filter((server) => server.enabled ?? true);
+        if (approaches.includes('act') && servers.length > 0) {
+            const lines = servers.map((server) =>
+                server.allowed_tools.length > 0 ? `${server.name} (${server.allowed_tools.join(', ')})` : server.name,
+            );
+            systemPrompt += CONNECTED_TOOLS_NOTE + ' ' + lines.join('; ') + '.';
+        }
         if (agentNames.length > 0) {
             systemPrompt += DELEGATE_NOTE + agentNames.map((name) => ` ${name}: ${this.agents.get(name)!.description}`).join('');
         }
