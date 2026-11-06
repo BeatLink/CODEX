@@ -837,7 +837,7 @@ Run the tests with `npm test`, which uses vitest.
 - Topics found by searches during a request are named after the query and stay
   at the top level until the background worker researches them.
 
-See `TODO.md` for planned work.
+See `docs/3-roadmap.md` for planned work.
 
 ## License
 

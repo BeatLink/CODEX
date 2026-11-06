@@ -21,4 +21,4 @@ Codex is a harness for running small local LLMs as personal assistants on consum
 - `2-architectural-ideal-and-proposed-features.md`: target design and features, with built/not-built status.
 - `3-roadmap.md`: what is left to build and how to measure it.
 
-They were distilled from research notes and design conversations that used to sit in `docs/research/` (see git history). Built/not-built statuses come from those notes and have not yet been checked against the code; that review is the first item in the roadmap.
+They were distilled from the research notes and design conversations kept in `docs/done/`, and from the old `TODO.md` (see git history). Built/not-built statuses come from those sources and have not yet been checked against the code; that review is the first item in the roadmap.

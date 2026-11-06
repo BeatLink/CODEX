@@ -8,7 +8,11 @@ Review the existing code to find what is already implemented but undocumented, w
 
 ## Then: a fast, trustworthy eval loop
 
-Every open strategic question (doc 1) is settled by eval runs, so this comes before any architecture bet. Runs today take ~30 s per model call and whether the model runs on the GPU is unconfirmed (see Agent hierarchy, next steps 1 and 3). Make one eval round cheap enough to repeat, with answers and tool calls saved for every failing run.
+Every open strategic question (doc 1) is settled by eval runs, so this comes before any architecture bet. Runs today take ~30 s per model call and whether the model runs on the GPU is unconfirmed (see Agent hierarchy, next steps 1 and 3). Make one eval round cheap enough to repeat, with answers and tool calls saved for every failing run. Then benchmark on real maintenance tasks, not only the fixed sets.
+
+## In progress
+
+- Name topics like chat titles, and place renamed topics again during consolidation.
 
 ## Agent hierarchy
 
@@ -81,6 +85,23 @@ Today: mail arrives → automatic mail dropped without the model → rest summar
 - Triage/drafting rely on a small model; the taint limits a fooled model to a wrong summary or poor draft that the user reads first.
 - IMAP: one folder per account, new-mail check at most every 2 min, TLS on the given port only (no STARTTLS).
 
+## Knowledge store: open work
+
+- Stop the task tree applying a recalled fact about a similarly named thing: it gives the ingest service's port for the query service in about half the seeded recall-not-stored runs. A one-call subject check in the check step caught it in every probe.
+- Let the user mark a recalled fact wrong, lowering its confidence and queueing a recheck.
+- Back up, export and reset the knowledge store, and delete a single fact or memory from the interfaces.
+- Rate-limit background fetches per domain, honour robots.txt, and cap fetches per day.
+- Show background job metrics, and how often recalled facts are cited in answers.
+
+## Coding and acting tasks
+
+- Patch-based edits and Git diff/status tools.
+- A bounded command runner for targeted checks.
+- Iterate code changes from verification failures.
+- Let an acting task write a whole file without its tool call running past `max_tokens` (the `implement-parse-duration` eval task fails at the token limit).
+- Get the working written as equations with "=" so a recompute check can read it, and measure what the check adds on the hard eval set (no recompute check was found in `src/`; confirm in the codebase review).
+- Refinement loops (scope not recorded in the old TODO; define in the codebase review).
+
 ## Model choice
 
 - **Open item:** compare the 4B model's pass rate on the `evals/` tasks against the 35B model's. If the gap is small on the tasks that matter, 4B is good enough here. (The agents eval so far used only the 4B; the 35B file was deleted from `models/`, so it must be re-obtained.)
@@ -118,3 +139,7 @@ Design in doc 2 ("Core structure ideas"); the questions they answer are in doc 1
 5. **Specialist models vs 35B escalation:** measure cold-load time for a ~2–2.5 GB model on the 4 GB GPU (reload is already in `ModelCache`), then compare 4B only, 4B plus a specialist, and 35B-A3B on the same eval tasks (the 35B file must be re-obtained; see Model choice). Report router error rate separately.
 6. **Memory drift watch:** the main risk for an always-on loop is a wrong fact entering long-term memory. Track how many learned memories and facts later get `disputed`/`superseded`, and sample stored items against their sources, to see whether grounding checks hold over weeks.
 7. **Goals, drives and initiative:** design goals and drives as harness state (doc 2, "Cognitive loop"), decide who may change them, and test whether drive-chosen idle work beats the fixed chain (ties in with Reactive assistant item 6). Actions stay bounded by the autonomy ladder (Reactive assistant items 3–4).
+
+## Housekeeping
+
+- Purge the removed LM Studio notes (`docs/design/lm-studio-models-and-settings.md`, commits 46b2616 and 538c143) from the public history. Postponed: it rewrites published history.

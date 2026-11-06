@@ -108,6 +108,20 @@ prompt → recall → "Remembered context" → decide → searchWithMemory (hit:
 research_queue → researchOneTopic (idle) → facts, summaries, graph → consolidateKnowledge (idle): merge, re-file, dispute, prune
 ```
 
+### Other built features
+
+Listed as done in the old `TODO.md`; not yet checked against the code.
+
+- **Resume:** an unfinished task tree resumes after the daemon restarts (checkpoints in the task-run table). The interfaces show a task's result when its row is chosen (`renderer/taskView.ts`).
+- **Approval gates** for consequential actions in foreground runs.
+- **Standing instructions** from `CODEX.md` or `AGENTS.md`, global and per folder, go into every model call (`core/instructions.ts`).
+- **Slash commands:** `/remember`, `/memories` and `/forget` manage memories; users define their own commands as Markdown files; `/init` writes a folder's `CODEX.md` (`core/commands.ts`, `renderer/slashCommands.ts`).
+- **Memory stores:** general, user, locations, software, project, research skills, code skills. The machine is probed to fill the environment stores (`core/environment.ts`); user memories are recalled by relevance and recency; project memories stay with their folder; each memory records why it holds; each task gets the skills its approach uses.
+- **Desktop:** system tray, launch at login (`main/autostart.ts`), suspend and resume.
+- **Window views:** knowledge store as a graph (`renderer/knowledgeGraph.ts`, force-graph) and a knowledge view (`renderer/knowledgeView.ts`), Inbox, settings form.
+- **Evals** (`core/evaluation.ts`): the bare model against the harness on a fixed task set, and with the store empty against filled. A recall benchmark scores recall against fixed questions with known relevant facts (`core/recallBenchmark.ts`).
+- **Tests of note:** untrusted-text fencing against hostile pages; schema migrations from every earlier store version.
+
 ## Agent hierarchy
 
 A task can hand its work to a named specialist agent, which works it as its own task tree with its own tools, instructions and memory. See [rationale](1-rationale-and-decisions.md#agent-hierarchy) for why.
