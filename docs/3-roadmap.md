@@ -1,10 +1,10 @@
 # Roadmap
 
-Statuses come from research files only until the codebase review below is done.
+Statuses were checked against the code on 2026-11-06 (see the first section).
 
-## Next: codebase review (later, separate pass)
+## Codebase review: first pass done (2026-11-06)
 
-Review the existing code to find what is already implemented but undocumented, what designs have changed, where the project stands, and what to do next. Then reconcile docs 1–3 and this roadmap.
+Status claims in docs 2–3 were checked against `src/`: tables, approaches, daemon methods, window pages, eval assets and the absence of every proposed mechanism (voting, escalation, scratchpad, blueprints, rule engine, model-authored skills, drives) all match. Corrected: the memories table is `user_memory`, `task_runs` was undocumented, and the agents eval assets are on `main`. Still unchecked: behaviour details (e.g. the nested tree display for delegation, validation-error retry, the failure-mode log), which need targeted tests or a live run.
 
 ## Then: a fast, trustworthy eval loop
 
@@ -21,7 +21,7 @@ Every open strategic question (doc 1) is settled by eval runs, so this comes bef
 ### Status
 
 - **Prototype landed:** `delegate`, agent files, nested runs (depth ≤ 3), per-agent MCP servers; covered by scripted-model unit tests.
-- **Eval built, not run to completion** (on an unmerged branch at the time of the report; check): see the eval assets in doc 2. 42 tests pass in `src/core/evaluation.test.ts`.
+- **Eval built, not run to completion** (assets on `main`): see the eval assets in doc 2. 42 tests pass in `src/core/evaluation.test.ts`.
 - **Results so far are not a comparison.** `inbox-newest`: first run 0/2 on both runners (`tree` 634 s, `agents` 300 s; cause unknown); second `agents` run 2/2 in 239 s (7 model calls, 314 tokens). Model is Qwen3.5-4B-UD-Q4_K_XL; the 35B was never loaded (file deleted). Runs are slow (~30 s per model call), load average ~15 during the second run, GPU vs CPU use unconfirmed.
 
 ### Next (in order)
@@ -99,8 +99,8 @@ Today: mail arrives → automatic mail dropped without the model → rest summar
 - A bounded command runner for targeted checks.
 - Iterate code changes from verification failures.
 - Let an acting task write a whole file without its tool call running past `max_tokens` (the `implement-parse-duration` eval task fails at the token limit).
-- Get the working written as equations with "=" so a recompute check can read it, and measure what the check adds on the hard eval set (no recompute check was found in `src/`; confirm in the codebase review).
-- Refinement loops (scope not recorded in the old TODO; define in the codebase review).
+- Get the working written as equations with "=" so a recompute check can read it, and measure what the check adds on the hard eval set (no recompute check exists in `src/` today).
+- Refinement loops (scope not recorded in the old TODO; define it).
 
 ## Model choice
 
@@ -132,7 +132,7 @@ Built: see doc 2, "Mascot emotions". Still open:
 
 Design in doc 2 ("Core structure ideas"); the questions they answer are in doc 1 ("Open strategic questions"). Each is tested against the built design on the same eval tasks; whichever wins becomes the design, including replacing built parts. The sources are unchecked chats, so each item starts with a cheap test.
 
-1. **Check what exists** (codebase review): model-authored skills, a failure-mode log, validation-error retry.
+1. **Check what exists** (model-authored skills, a failure-mode log, validation-error retry): no code for model-authored skills was found; the other two need a closer read.
 2. **Blueprints vs model planning:** pick one recurring request (e.g. "process my inbox"), hard-code its graph, and compare pass rate and model calls with the same request via `decide`. If blueprints win, design how requests are matched to blueprints (rules, or one constrained classification call) with `decide` as the fallback.
 3. **Fact and rule engine, mail pack first** (doc 2, "Fact and rule engine" and "Domain packs"): add the world model tables and a small rule evaluator; build the mail pack by replacing the hard-coded triage heuristics with a rule module over extracted facts, and extracting commitments from mail. Measure triage accuracy against the current path, the extraction error rate (sample world facts against their source text), and model calls per email. If it holds up, the world model replaces the planned entities and commitments tables (Reactive assistant item 5) and the learned rules (item 4) become rows in `rules`; then add calendar and tasks packs.
 4. **Verified skill writing:** build the reflect-then-gate loop. Validate by seeding known failing tasks from `evals/` and checking that (a) a gated skill is saved only when its check passes, (b) a deliberately wrong skill is rejected, (c) with the saved skill the same task passes more often over repeated runs. Measure the pass-rate change and the extra model calls.

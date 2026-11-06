@@ -1,6 +1,6 @@
 # Architectural ideal and proposed features
 
-Paths are under `src/`. "Built" sections describe the system as the research notes recorded it; statuses are not yet verified against the code. Built parts are not fixed either: doc 1, "Open strategic questions", lists where the design may change.
+Paths are under `src/`. Built/not-built statuses were checked against the code on 2026-11-06 (table names, approaches, daemon methods, window pages, eval assets, and the absence of every "proposed" mechanism); behaviour details were not re-tested. Built parts are not fixed either: doc 1, "Open strategic questions", lists where the design may change.
 
 ## Core architecture (built)
 
@@ -60,7 +60,8 @@ Rules that keep a small model on track:
 | `topics` | unique case-insensitive name, `parent_id`, priority, summary, use count, last researched/placed |
 | `sources` | URL (unique), title, snippet, page summary, query, topic, retrieved + expiry |
 | `facts` | statement under a topic, source, confidence 0–1, status (`active`/`disputed`/`pruned`), use count |
-| `memories` | stores: general, user, locations, software, project, research, code; learned/probed/user-stated; `active`/`superseded` |
+| `user_memory` (the memories) | stores: general, user, locations, software, project, research, code; learned/probed/user-stated; `active`/`superseded` |
+| `task_runs` | Checkpoint of an unfinished task tree (prompt, options, state, status, tasks done/total) so it resumes after a restart |
 | `episodes` | each finished request: prompt, mode, checklist/tree outline, answer, outcome, tree snapshot |
 | `knowledge_search` / `memory_search` | FTS5 over sources / over facts + episodes |
 | `embeddings` | vector per fact and topic, with model and source text |
@@ -160,12 +161,12 @@ Limits: depth ≤ 3; nested run keeps the task tree's node and depth limits; a r
 
 ### Status
 
-Built (prototype; verify against code in the later codebase review):
+Built (prototype):
 - `src/core/agents.ts`: loads agent files, resolves delegation targets.
 - `delegate` in the task tree with nested run, per-agent MCP servers and instructions.
 - Interfaces show only `delegate` plus the agent name, not the nested tree.
 
-Agents eval assets (on an unmerged branch at the time of the report; verify):
+Agents eval assets (on `main`):
 - `evals/fake_mcp_server.mjs` + `evals/fake_catalogue.json`: six canned MCP servers (mail, calendar, notes, contacts, weather, todos), 32 tools, no real accounts needed.
 - `evals/agents/`: seven agent files; `comms` has `mail` and `contacts` as sub-agents (tests nesting).
 - `evals/agents_tasks.json`: eight tasks: six need one specialist, one needs two hops (find a contact, then search their mail), one needs two unrelated specialists. Per-task `servers` field.
@@ -254,7 +255,7 @@ Give the mascot a voice: a TTS engine feeds RoboEyes' `speakVisemes` with real p
 
 ## Core structure ideas (proposed unless noted)
 
-Rationale, caveats and how each compares with the built design are in doc 1 ("Core structure ideas"). Check each against the code in the codebase review.
+Rationale, caveats and how each compares with the built design are in doc 1 ("Core structure ideas"). Checked 2026-11-06: none is built.
 
 ### Blueprints: deterministic task graphs
 
