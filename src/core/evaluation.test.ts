@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -10,11 +10,15 @@ import {
     DEFAULT_SEED_PATH,
     DEFAULT_TASKS_PATH,
     EVALS_DIRECTORY,
+    AGENTS_TASKS_PATH,
+    AGENT_FILES_DIRECTORY,
     EvalTask,
+    FAKE_SERVERS,
     RECALL_TASKS_PATH,
     buildSeedStore,
     checkPasses,
     compilePattern,
+    fakeServers,
     formatSummary,
     formatUnsteadyTasks,
     loadTasks,
@@ -25,7 +29,9 @@ import {
     taskPassCounts,
     type Check,
 } from './evaluation.js';
+import { loadAgents, topLevelAgents } from './agents.js';
 import { KnowledgeStore } from './knowledge.js';
+import { MCPToolbox } from './mcpTools.js';
 import { LocalModel, type ChatCompletion, type ChatCompletionRequest, type ChatModel } from './model.js';
 import { DEFAULT_SETTINGS, type Settings } from './settings.js';
 import { executeTaskTree, type ExecuteTaskTreeOptions } from './taskTree.js';
@@ -116,7 +122,7 @@ describe('loadTasks', () => {
 
         const counts = names.map((name) => loadTasks(join(EVALS_DIRECTORY, name)).length);
 
-        expect(names.length).toBe(4);
+        expect(names.length).toBe(5);
         expect(counts.every((count) => count > 0)).toBe(true);
     });
 
@@ -466,5 +472,38 @@ describe('main', () => {
         expect(missingStore).toBe(1);
         expect(unknownRunner).toBe(2);
         expect(loadModel).not.toHaveBeenCalled();
+    });
+});
+
+
+describe('the agents eval', () => {
+    it('gives every task all the canned servers and ships an agent for each', async () => {
+        const tasks = loadTasks(AGENTS_TASKS_PATH);
+        const workspace = mkdtempSync(join(tmpdir(), 'agents-eval-test-'));
+        try {
+            mkdirSync(join(workspace, '.codex'), { recursive: true });
+            cpSync(AGENT_FILES_DIRECTORY, join(workspace, '.codex', 'agents'), { recursive: true });
+            const agents = loadAgents(workspace);
+
+            expect(tasks.every((task) => task.servers.length === FAKE_SERVERS.length)).toBe(true);
+            expect(new Set(agents.keys())).toEqual(new Set(['comms', 'mail', 'contacts', 'calendar', 'notes', 'weather', 'todos']));
+            expect(topLevelAgents(agents).sort()).toEqual(['calendar', 'comms', 'notes', 'todos', 'weather']);
+        } finally {
+            rmSync(workspace, { recursive: true, force: true });
+        }
+    });
+
+    it('starts each canned server with its own tools', async () => {
+        const toolbox = new MCPToolbox(fakeServers([...FAKE_SERVERS]));
+        await toolbox.open();
+        try {
+            const names = toolbox.toolDefinitions.map((definition) => definition.function.name);
+
+            expect(names).toContain('mcp__mail__list_inbox');
+            expect(names).toContain('mcp__todos__list_todos');
+            expect(names.length).toBeGreaterThan(30);
+        } finally {
+            await toolbox.close();
+        }
     });
 });

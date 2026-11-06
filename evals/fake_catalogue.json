@@ -1,0 +1,274 @@
+{
+  "mail": [
+    {
+      "name": "list_inbox",
+      "description": "List the newest emails in the inbox, with sender and subject.",
+      "parameters": [],
+      "reply": "Newest first: 1) Invoice 4471 from Dana Whitfield, 2) Lunch on Friday from Tomas Reyes, 3) Newsletter from Gridwatch."
+    },
+    {
+      "name": "search_email",
+      "description": "Search all email by sender address or words, returning matching subjects.",
+      "parameters": [
+        "query"
+      ],
+      "reply": "Matches: \"Re: Q3 budget variance\" from priya.raman@example.org (received Tuesday)."
+    },
+    {
+      "name": "read_email",
+      "description": "Read one email by its subject.",
+      "parameters": [
+        "subject"
+      ],
+      "reply": "Invoice 4471 asks for payment of 1,280 euros by 30 November."
+    },
+    {
+      "name": "send_email",
+      "description": "Send an email to an address.",
+      "parameters": [
+        "to",
+        "subject",
+        "body"
+      ],
+      "reply": "Sent."
+    },
+    {
+      "name": "archive_email",
+      "description": "Move an email out of the inbox.",
+      "parameters": [
+        "subject"
+      ],
+      "reply": "Archived."
+    },
+    {
+      "name": "flag_email",
+      "description": "Flag an email as important.",
+      "parameters": [
+        "subject"
+      ],
+      "reply": "Flagged."
+    }
+  ],
+  "calendar": [
+    {
+      "name": "list_events",
+      "description": "List upcoming calendar events with time and attendees.",
+      "parameters": [],
+      "reply": "Next: Thursday 14:30 budget review with Priya Raman; then Friday 09:00 dentist."
+    },
+    {
+      "name": "create_event",
+      "description": "Add an event to the calendar.",
+      "parameters": [
+        "title",
+        "start",
+        "end"
+      ],
+      "reply": "Created."
+    },
+    {
+      "name": "cancel_event",
+      "description": "Cancel an event by title.",
+      "parameters": [
+        "title"
+      ],
+      "reply": "Cancelled."
+    },
+    {
+      "name": "find_free_time",
+      "description": "Find a free slot of a given length in the coming week.",
+      "parameters": [
+        "minutes"
+      ],
+      "reply": "Free: Wednesday 10:00 to 12:00."
+    },
+    {
+      "name": "move_event",
+      "description": "Move an event to a new start time.",
+      "parameters": [
+        "title",
+        "start"
+      ],
+      "reply": "Moved."
+    },
+    {
+      "name": "set_reminder",
+      "description": "Remind the user before an event.",
+      "parameters": [
+        "title",
+        "minutes"
+      ],
+      "reply": "Reminder set."
+    }
+  ],
+  "notes": [
+    {
+      "name": "search_notes",
+      "description": "Search the notes by words, returning titles.",
+      "parameters": [
+        "query"
+      ],
+      "reply": "Found: \"Garage\" and \"Boiler service\"."
+    },
+    {
+      "name": "read_note",
+      "description": "Read a note by title.",
+      "parameters": [
+        "title"
+      ],
+      "reply": "Garage: the side door code is 7391-delta."
+    },
+    {
+      "name": "create_note",
+      "description": "Write a new note.",
+      "parameters": [
+        "title",
+        "body"
+      ],
+      "reply": "Created."
+    },
+    {
+      "name": "append_note",
+      "description": "Add text to the end of a note.",
+      "parameters": [
+        "title",
+        "body"
+      ],
+      "reply": "Appended."
+    },
+    {
+      "name": "delete_note",
+      "description": "Delete a note by title.",
+      "parameters": [
+        "title"
+      ],
+      "reply": "Deleted."
+    },
+    {
+      "name": "list_notebooks",
+      "description": "List the notebooks.",
+      "parameters": [],
+      "reply": "Notebooks: Home, Work, Travel."
+    }
+  ],
+  "contacts": [
+    {
+      "name": "find_contact",
+      "description": "Find a contact by name, returning phone and email.",
+      "parameters": [
+        "name"
+      ],
+      "reply": "Marcus Oyelaran: phone +44 7700 900318, email marcus@example.org. Priya Raman: phone +44 7700 900142, email priya.raman@example.org."
+    },
+    {
+      "name": "add_contact",
+      "description": "Add a contact.",
+      "parameters": [
+        "name",
+        "phone",
+        "email"
+      ],
+      "reply": "Added."
+    },
+    {
+      "name": "update_contact",
+      "description": "Change a contact field.",
+      "parameters": [
+        "name",
+        "field",
+        "value"
+      ],
+      "reply": "Updated."
+    },
+    {
+      "name": "delete_contact",
+      "description": "Delete a contact.",
+      "parameters": [
+        "name"
+      ],
+      "reply": "Deleted."
+    },
+    {
+      "name": "list_groups",
+      "description": "List contact groups.",
+      "parameters": [],
+      "reply": "Groups: Family, Work, Neighbours."
+    }
+  ],
+  "weather": [
+    {
+      "name": "get_forecast",
+      "description": "Get tomorrow's forecast for a city.",
+      "parameters": [
+        "city"
+      ],
+      "reply": "Lisbon tomorrow: light rain, high of 14 degrees."
+    },
+    {
+      "name": "get_current",
+      "description": "Get the current weather for a city.",
+      "parameters": [
+        "city"
+      ],
+      "reply": "Currently 11 degrees and cloudy."
+    },
+    {
+      "name": "get_alerts",
+      "description": "List weather warnings for a region.",
+      "parameters": [
+        "region"
+      ],
+      "reply": "No warnings."
+    },
+    {
+      "name": "get_sunrise",
+      "description": "Get sunrise and sunset times for a city.",
+      "parameters": [
+        "city"
+      ],
+      "reply": "Sunrise 07:12, sunset 17:31."
+    }
+  ],
+  "todos": [
+    {
+      "name": "list_todos",
+      "description": "List open to-do items with due dates.",
+      "parameters": [],
+      "reply": "3 open: renew passport (due 12 Nov), book boiler service (due 20 Nov), buy a birthday card (due 28 Nov)."
+    },
+    {
+      "name": "add_todo",
+      "description": "Add a to-do item.",
+      "parameters": [
+        "title",
+        "due"
+      ],
+      "reply": "Added."
+    },
+    {
+      "name": "complete_todo",
+      "description": "Mark a to-do item done.",
+      "parameters": [
+        "title"
+      ],
+      "reply": "Done."
+    },
+    {
+      "name": "delete_todo",
+      "description": "Delete a to-do item.",
+      "parameters": [
+        "title"
+      ],
+      "reply": "Deleted."
+    },
+    {
+      "name": "set_due",
+      "description": "Change a to-do item's due date.",
+      "parameters": [
+        "title",
+        "due"
+      ],
+      "reply": "Updated."
+    }
+  ]
+}

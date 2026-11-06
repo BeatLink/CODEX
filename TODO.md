@@ -11,6 +11,7 @@
 - [x] Resume an unfinished task tree after the daemon restarts
 - [x] Show each task's result when its row is chosen in the interfaces
 - [x] Let a task delegate to a named agent with its own instructions and MCP servers (prototype)
+- [ ] Run the agents eval (`evals/agents_tasks.json`, runners tree and agents) and see [docs/agents-eval-report.md](docs/agents-eval-report.md)
 - [ ] Give agents their own memory and scratchpad, resume inside an agent, and show the nested tree
 - [ ] Refinement loops
 - [x] Tool calling

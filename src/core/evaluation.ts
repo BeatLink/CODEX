@@ -1,6 +1,6 @@
 // Compare the bare model with the task tree on a fixed task set, scoring each answer with checks that use no model.
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { DatabaseSync, backup } from 'node:sqlite';
@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { getEmbedder, type TextEmbedder } from './embeddings.js';
 import { KnowledgeStore, type SearchResult } from './knowledge.js';
 import { LocalModel, runStage, type ChatCompletion, type ChatCompletionRequest, type ChatModel } from './model.js';
-import { defaultSettingsPath, expandUser, loadSettings, validateSettings, type Settings } from './settings.js';
+import { defaultSettingsPath, expandUser, loadSettings, validateSettings, type McpServerSettings, type Settings } from './settings.js';
 import { executeTaskTree } from './taskTree.js';
 import { PYTHON_COMMAND } from './tools.js';
 
@@ -17,7 +17,13 @@ export const EVALS_DIRECTORY = resolve(dirname(fileURLToPath(import.meta.url)), 
 export const DEFAULT_TASKS_PATH = join(EVALS_DIRECTORY, 'tasks.json');
 export const RECALL_TASKS_PATH = join(EVALS_DIRECTORY, 'recall_tasks.json');
 export const DEFAULT_SEED_PATH = join(EVALS_DIRECTORY, 'seed.json');
-export const RUNNER_CHOICES = ['bare', 'tree'] as const;
+export const AGENTS_TASKS_PATH = join(EVALS_DIRECTORY, 'agents_tasks.json');
+export const AGENT_FILES_DIRECTORY = join(EVALS_DIRECTORY, 'agents');
+export const FAKE_SERVER_PATH = join(EVALS_DIRECTORY, 'fake_mcp_server.mjs');
+const FAKE_CATALOGUE_PATH = join(EVALS_DIRECTORY, 'fake_catalogue.json');
+export const FAKE_SERVERS = ['mail', 'calendar', 'notes', 'contacts', 'weather', 'todos'] as const;
+// 'tree' sees every server's tools at once; 'agents' is the same tree with the agents in evals/agents/ to hand tasks to.
+export const RUNNER_CHOICES = ['bare', 'tree', 'agents'] as const;
 // Runners that recall from the knowledge store, and so get a seeded run beside the empty one.
 export const STORE_RUNNERS: readonly string[] = ['tree'];
 export const SEEDED_SUFFIX = '+store';
@@ -163,13 +169,16 @@ export class EvalTask {
     mode: string;
     // The project the task works on, as relative path to content; the runners may change these files.
     files: Record<string, string>;
+    // The canned MCP servers the task is given, from FAKE_SERVERS.
+    servers: string[];
 
-    constructor(fields: { id: string; prompt: string; checks: Check[]; mode?: string; files?: Record<string, string> }) {
+    constructor(fields: { id: string; prompt: string; checks: Check[]; mode?: string; files?: Record<string, string>; servers?: string[] }) {
         this.id = fields.id;
         this.prompt = fields.prompt;
         this.checks = fields.checks;
         this.mode = fields.mode ?? 'auto';
         this.files = fields.files ?? {};
+        this.servers = fields.servers ?? [];
     }
 }
 
@@ -188,12 +197,16 @@ export function loadTasks(tasksPath: string): EvalTask[] {
             checks: (entry.checks ?? []) as Check[],
             mode: (entry.mode ?? 'auto') as string,
             files: (entry.files ?? {}) as Record<string, string>,
+            servers: entry.servers === 'all' ? [...FAKE_SERVERS] : ((entry.servers ?? []) as string[]),
         });
         if (!task.id || seenIds.has(task.id)) {
             throw new Error(`Each task needs a unique id; got ${pythonRepr(task.id)}.`);
         }
         if (!task.prompt) {
             throw new Error(`Task ${task.id} has no prompt.`);
+        }
+        if (!Array.isArray(task.servers) || !task.servers.every((name) => (FAKE_SERVERS as readonly string[]).includes(name))) {
+            throw new Error(`Task ${task.id}: 'servers' must be "all" or names from: ${FAKE_SERVERS.join(', ')}.`);
         }
         if (!(EVAL_MODES as readonly string[]).includes(task.mode)) {
             throw new Error(`Task ${task.id} has mode ${typeof task.mode === 'string' ? pythonRepr(task.mode) : String(task.mode)}; use one of: ${EVAL_MODES.join(', ')}.`);
@@ -582,6 +595,28 @@ export async function copyStore(seedStore: string, destination: string): Promise
     }
 }
 
+// Describe the canned servers the way a user's settings would, each started from the same script.
+export function fakeServers(names: string[]): McpServerSettings[] {
+    const catalogue = JSON.parse(readFileSync(FAKE_CATALOGUE_PATH, 'utf-8')) as Record<string, Array<{ name: string }>>;
+    return names.map((name) => ({
+        name,
+        enabled: true,
+        transport: 'stdio',
+        command: process.execPath,
+        args: [FAKE_SERVER_PATH, name],
+        env: {},
+        allowed_tools: catalogue[name].map((tool) => tool.name),
+    }));
+}
+
+// Copy the eval's agent files into the workspace folder the task tree reads agents from.
+function copyAgentFiles(directory: string): void {
+    mkdirSync(directory, { recursive: true });
+    for (const name of readdirSync(AGENT_FILES_DIRECTORY).filter((file) => file.endsWith('.md'))) {
+        copyFileSync(join(AGENT_FILES_DIRECTORY, name), join(directory, name));
+    }
+}
+
 async function answerWith(runner: string, task: EvalTask, llm: ChatModel, settings: Settings, scratchDirectory: string): Promise<string> {
     const workspace = join(scratchDirectory, 'workspace');
     const hasFiles = Object.keys(task.files).length > 0;
@@ -595,6 +630,9 @@ async function answerWith(runner: string, task: EvalTask, llm: ChatModel, settin
         }
         return answer;
     }
+    if (runner === 'agents') {
+        copyAgentFiles(join(workspace, '.codex', 'agents'));
+    }
     return executeTaskTree(task.prompt, {
         contextSize: settings.context_size,
         maxTokens: settings.max_tokens,
@@ -605,7 +643,7 @@ async function answerWith(runner: string, task: EvalTask, llm: ChatModel, settin
         enableTestExecution: hasFiles,
         maxToolCalls: settings.max_tool_calls,
         maxSearchResults: settings.max_search_results,
-        mcpServers: [],
+        mcpServers: fakeServers(task.servers),
         knowledgeDbPath: join(scratchDirectory, 'knowledge.sqlite3'),
         embeddingModelPath: settings.embedding_model_path,
         llm,
@@ -792,7 +830,7 @@ function helpText(): string {
         '  -h, --help            show this help message and exit',
         '  --tasks TASKS         Path to the JSON task set (default: evals/tasks.json).',
         '  --settings SETTINGS   Path to the JSON settings file.',
-        '  --runners RUNNERS     Comma-separated runners to compare, from: bare, tree.',
+        '  --runners RUNNERS     Comma-separated runners to compare, from: bare, tree, agents.',
         '  --only ONLY           Comma-separated task ids to run instead of the whole set.',
         '  --output OUTPUT       Write every answer and score to this JSON file.',
         '  --seed-store SEED_STORE',
