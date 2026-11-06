@@ -474,6 +474,7 @@ main {
 .run-status {
     margin: 0;
     color: var(--primary);
+    text-align: center;
 }
 
 .work {
