@@ -7,8 +7,19 @@ import { autoSize } from '../core/autoSize.js';
 import { indexKnowledge, learnFromEpisodes, researchOneTopic, type BackgroundOptions, type ModelLock } from '../core/background.js';
 import { consolidateKnowledge } from '../core/consolidation.js';
 import { refreshEnvironment } from '../core/environment.js';
-import { KnowledgeStore, RESUMABLE_TASK_RUN_STATUSES, type TaskRun } from '../core/knowledge.js';
+import { handleNextEvent } from '../core/events.js';
+import {
+    ACTION_RESOLUTIONS,
+    EVENT_TRUSTS,
+    KnowledgeStore,
+    RESUMABLE_TASK_RUN_STATUSES,
+    type ActionResolution,
+    type EventTrust,
+    type NewEvent,
+    type TaskRun,
+} from '../core/knowledge.js';
 import { ModelCache } from '../core/model.js';
+import { runNextJob, type BackgroundStep, type Job } from '../core/scheduler.js';
 import { backgroundModelKey, defaultSettingsPath, expandUser, saveSettings, validateSettings, type Settings } from '../core/settings.js';
 import { executeTaskTree, RunStopped, savedRunOptions, type ExecuteTaskTreeOptions } from '../core/taskTree.js';
 import { LineReader } from '../main/daemonBridge.js';
@@ -189,8 +200,6 @@ export class ActiveRun {
 // Daemon
 // ============================================================================
 
-type BackgroundStep = (settings: Settings, options: BackgroundOptions) => Promise<boolean>;
-
 // The work the daemon hands to other modules, replaceable so tests can run without a model.
 export type DaemonDependencies = {
     executeTaskTree: (userPrompt: string, options: ExecuteTaskTreeOptions) => Promise<string>;
@@ -199,6 +208,7 @@ export type DaemonDependencies = {
     indexKnowledge: BackgroundStep;
     learnFromEpisodes: BackgroundStep;
     consolidateKnowledge: BackgroundStep;
+    handleEvents: BackgroundStep;
     refreshEnvironment: (settings: Settings) => Promise<boolean>;
     // Seconds on a clock that only moves forward.
     monotonic: () => number;
@@ -211,6 +221,7 @@ const DEFAULT_DEPENDENCIES: DaemonDependencies = {
     indexKnowledge,
     learnFromEpisodes,
     consolidateKnowledge,
+    handleEvents: (settings, options) => handleNextEvent(settings, options),
     refreshEnvironment: (settings) => refreshEnvironment(settings),
     monotonic: () => performance.now() / 1000,
 };
@@ -250,6 +261,22 @@ function settingsObject(value: unknown): Json {
         throw new Error('settings must be a JSON object.');
     }
     return value;
+}
+
+function eventTrust(value: unknown): EventTrust {
+    const trust = text(value, 'trust', 'external');
+    if (!(EVENT_TRUSTS as readonly string[]).includes(trust)) {
+        throw new Error(`trust must be one of: ${EVENT_TRUSTS.join(', ')}.`);
+    }
+    return trust as EventTrust;
+}
+
+function actionResolution(value: unknown): ActionResolution {
+    const resolution = text(value, 'resolution', '');
+    if (!(ACTION_RESOLUTIONS as readonly string[]).includes(resolution)) {
+        throw new Error(`resolution must be one of: ${ACTION_RESOLUTIONS.join(', ')}.`);
+    }
+    return resolution as ActionResolution;
 }
 
 function flag(value: unknown, fallback: boolean): boolean {
@@ -342,6 +369,32 @@ export class HarnessDaemon {
                 'queue_topic',
                 method(['topic', 'priority'], (_, params) => this.queueTopic(text(params.topic, 'topic', ''), params.priority ?? 0)),
             ],
+            [
+                'post_event',
+                method(['source', 'type', 'payload', 'dedupe_key', 'trust', 'priority'], (_, params) =>
+                    this.postEvent({
+                        source: text(params.source, 'source', ''),
+                        type: text(params.type, 'type', ''),
+                        payload: settingsObject(params.payload),
+                        dedupeKey: text(params.dedupe_key, 'dedupe_key', ''),
+                        trust: eventTrust(params.trust),
+                        priority: integer(params.priority, 'priority', 0),
+                    }),
+                ),
+            ],
+            ['events', method(['limit'], (_, params) => this.events(integer(params.limit, 'limit', 100)))],
+            [
+                'actions',
+                method(['status', 'limit'], (_, params) =>
+                    this.actions(params.status === undefined ? null : text(params.status, 'status', ''), integer(params.limit, 'limit', 100)),
+                ),
+            ],
+            [
+                'resolve_action',
+                method(['action_id', 'resolution'], (_, params) =>
+                    this.resolveAction(integer(params.action_id, 'action_id', 0), actionResolution(params.resolution)),
+                ),
+            ],
             ['research_now', method([], () => this.researchNow())],
             ['queue_status', method([], () => this.queueStatus())],
             [
@@ -370,7 +423,9 @@ export class HarnessDaemon {
 
     startBackgroundWorker(): void {
         // A daemon stopped mid-job leaves that job running, and nothing else would ever pick it up again.
-        this.knowledgeStore(this.getSettings().knowledge_db_path).requeueInterruptedJobs();
+        const store = this.knowledgeStore(this.getSettings().knowledge_db_path);
+        store.requeueInterruptedJobs();
+        store.requeueInterruptedEvents();
         this.worker = this.backgroundLoop();
     }
 
@@ -768,6 +823,35 @@ export class HarnessDaemon {
     }
 
     // ========================================================================
+    // Events and actions
+    // ========================================================================
+
+    postEvent(event: NewEvent): Json {
+        const posted = this.knowledgeStore(this.getSettings().knowledge_db_path).enqueueEvent(event);
+        if (!posted.duplicate) {
+            this.workerWakeup.set();
+            this.broadcast('events.changed');
+        }
+        return posted;
+    }
+
+    events(limit = 100): Json[] {
+        return this.knowledgeStore(this.getSettings().knowledge_db_path).events(limit);
+    }
+
+    actions(status: string | null = null, limit = 100): Json[] {
+        return this.knowledgeStore(this.getSettings().knowledge_db_path).actions(status, limit);
+    }
+
+    resolveAction(actionId: number, resolution: ActionResolution): Json {
+        const resolved = this.knowledgeStore(this.getSettings().knowledge_db_path).resolveAction(actionId, resolution);
+        if (resolved) {
+            this.broadcast('actions.changed');
+        }
+        return { resolved };
+    }
+
+    // ========================================================================
     // Background research
     // ========================================================================
 
@@ -849,6 +933,18 @@ export class HarnessDaemon {
         }
     }
 
+    // Events come first, then queued research, indexing what it found, learning from past requests, and tidying.
+    private backgroundJobs(): Job[] {
+        const { handleEvents, researchOneTopic, indexKnowledge, learnFromEpisodes, consolidateKnowledge } = this.dependencies;
+        return [
+            { name: 'handle_events', jobClass: 'reactive', step: handleEvents },
+            { name: 'research', jobClass: 'maintenance', step: researchOneTopic },
+            { name: 'index', jobClass: 'maintenance', step: indexKnowledge },
+            { name: 'learn', jobClass: 'maintenance', step: learnFromEpisodes },
+            { name: 'consolidate', jobClass: 'maintenance', step: consolidateKnowledge },
+        ];
+    }
+
     private async backgroundLoop(): Promise<void> {
         while (!this.stopping) {
             const settings = this.getSettings();
@@ -883,13 +979,13 @@ export class HarnessDaemon {
                     };
                     // The machine probe needs no model, so it never takes the turn of the model work below.
                     const probed = await this.dependencies.refreshEnvironment(settings);
-                    // Queued research comes first, then indexing what it found, learning from past requests, and tidying.
-                    worked =
-                        (await this.dependencies.researchOneTopic(settings, workerOptions)) ||
-                        (await this.dependencies.indexKnowledge(settings, workerOptions)) ||
-                        (await this.dependencies.learnFromEpisodes(settings, workerOptions)) ||
-                        (await this.dependencies.consolidateKnowledge(settings, workerOptions));
+                    const jobName = await runNextJob(this.backgroundJobs(), settings, workerOptions);
+                    worked = jobName !== null;
                     this.broadcast('queue.changed');
+                    if (jobName === 'handle_events') {
+                        this.broadcast('events.changed');
+                        this.broadcast('actions.changed');
+                    }
                     if (worked || probed) {
                         this.broadcast('knowledge.changed');
                         waitSeconds = 0.2;

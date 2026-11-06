@@ -570,6 +570,8 @@ const PYTHON_SCHEMA_OBJECTS = [
     ['table', 'task_runs'],
     ['table', 'topics'],
 ];
+// Objects added by migrations after the Python store stopped writing the file.
+const LATER_SCHEMA_OBJECTS = new Set(['events', 'events_dedupe', 'events_pending', 'actions', 'actions_status']);
 const PYTHON_MEMORIES_TABLE = "CREATE TABLE \"memories\" (\n        id INTEGER PRIMARY KEY,\n        store TEXT NOT NULL,\n        statement TEXT NOT NULL UNIQUE COLLATE NOCASE,\n        created_at REAL NOT NULL,\n        last_used_at REAL,\n        use_count INTEGER NOT NULL DEFAULT 0\n    , status TEXT NOT NULL DEFAULT 'active', reason TEXT NOT NULL DEFAULT '', origin TEXT NOT NULL DEFAULT 'learned', scope TEXT NOT NULL DEFAULT '')";
 
 function countRows(database: DatabaseSync, table: string): number {
@@ -651,8 +653,11 @@ describe('KnowledgeStore migrations', () => {
 
         // The schema objects and the memories table's text are what the Python store writes for the same database.
         withDatabase(path, (database) => {
-            const objects = database.prepare('SELECT type, name, sql FROM sqlite_master ORDER BY type, name').all();
-            expect(scalar(database, 'PRAGMA user_version')).toBe(8);
+            const objects = database
+                .prepare('SELECT type, name, sql FROM sqlite_master ORDER BY type, name')
+                .all()
+                .filter((row) => !LATER_SCHEMA_OBJECTS.has(String(row.name)));
+            expect(scalar(database, 'PRAGMA user_version')).toBe(MIGRATIONS.length);
             expect(objects.map((row) => [row.type, row.name])).toEqual(PYTHON_SCHEMA_OBJECTS);
             expect(objects.find((row) => row.name === 'memories')!.sql).toBe(PYTHON_MEMORIES_TABLE);
         });

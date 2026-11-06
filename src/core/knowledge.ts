@@ -158,7 +158,79 @@ export const MIGRATIONS: readonly string[] = [
     ALTER TABLE memories RENAME COLUMN kind TO store;
     UPDATE memories SET store = CASE store WHEN 'project' THEN 'project' WHEN 'reference' THEN 'locations' ELSE 'user' END;
     `,
+    `
+    CREATE TABLE events (
+        id INTEGER PRIMARY KEY,
+        source TEXT NOT NULL,
+        type TEXT NOT NULL,
+        dedupe_key TEXT NOT NULL DEFAULT '',
+        trust TEXT NOT NULL DEFAULT 'external',
+        priority INTEGER NOT NULL DEFAULT 0,
+        payload TEXT NOT NULL DEFAULT '{}',
+        status TEXT NOT NULL DEFAULT 'pending',
+        received_at REAL NOT NULL,
+        started_at REAL,
+        finished_at REAL,
+        outcome TEXT NOT NULL DEFAULT '',
+        error TEXT NOT NULL DEFAULT ''
+    );
+    CREATE UNIQUE INDEX events_dedupe ON events(source, dedupe_key) WHERE dedupe_key != '';
+    CREATE INDEX events_pending ON events(status, priority DESC, received_at);
+    CREATE TABLE actions (
+        id INTEGER PRIMARY KEY,
+        event_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL DEFAULT '',
+        payload TEXT NOT NULL DEFAULT '{}',
+        status TEXT NOT NULL DEFAULT 'proposed',
+        created_at REAL NOT NULL,
+        resolved_at REAL
+    );
+    CREATE INDEX actions_status ON actions(status, created_at);
+    `,
 ];
+
+// ============================================================================
+// Events and actions
+// ============================================================================
+
+export const EVENT_TRUSTS = ['user', 'external'] as const;
+export type EventTrust = (typeof EVENT_TRUSTS)[number];
+
+export const ACTION_RESOLUTIONS = ['approved', 'rejected', 'done'] as const;
+export type ActionResolution = (typeof ACTION_RESOLUTIONS)[number];
+
+// Largest serialized payload an event may carry; bigger material belongs behind a reference in the payload.
+export const MAX_EVENT_PAYLOAD_CHARS = 100_000;
+
+export type NewEvent = {
+    source: string;
+    type: string;
+    payload?: Record<string, unknown>;
+    dedupeKey?: string;
+    trust?: EventTrust;
+    priority?: number;
+};
+
+export type EventRecord = {
+    id: number;
+    source: string;
+    type: string;
+    dedupe_key: string;
+    trust: EventTrust;
+    priority: number;
+    payload: Record<string, unknown>;
+    received_at: number;
+};
+
+export type NewAction = {
+    eventId?: number | null;
+    kind: string;
+    title: string;
+    body?: string;
+    payload?: Record<string, unknown>;
+};
 
 // ============================================================================
 // Constants
@@ -1577,6 +1649,142 @@ export class KnowledgeStore {
                     'ORDER BY q.requested_at DESC LIMIT 100',
             ),
         );
+    }
+
+    // ==========================================================================
+    // Events and actions
+    // ==========================================================================
+
+    // Queues an event; one with a dedupe key already stored for its source is not queued again.
+    enqueueEvent(event: NewEvent, options: { maxPending?: number } = {}): { id: number; duplicate: boolean } {
+        const source = event.source.trim();
+        const type = event.type.trim();
+        if (!source || !type) {
+            throw new Error('An event needs a source and a type.');
+        }
+        const trust = event.trust ?? 'external';
+        if (!EVENT_TRUSTS.includes(trust)) {
+            throw new Error(`An event's trust must be one of: ${EVENT_TRUSTS.join(', ')}.`);
+        }
+        const payload = JSON.stringify(event.payload ?? {});
+        if (payload.length > MAX_EVENT_PAYLOAD_CHARS) {
+            throw new Error(`An event's payload is over ${MAX_EVENT_PAYLOAD_CHARS} characters.`);
+        }
+        const dedupeKey = event.dedupeKey ?? '';
+        const maxPending = options.maxPending ?? 1000;
+        return this.withConnection((connection) => {
+            if (dedupeKey) {
+                const existing = connection.get('SELECT id FROM events WHERE source = ? AND dedupe_key = ?', source, dedupeKey);
+                if (existing) {
+                    return { id: Number(existing.id), duplicate: true };
+                }
+            }
+            const pendingCount = Number(connection.value("SELECT COUNT(*) FROM events WHERE status = 'pending'"));
+            if (pendingCount >= maxPending) {
+                throw new Error(`The event queue is full (${maxPending} pending events).`);
+            }
+            const result = connection.run(
+                'INSERT INTO events(source, type, dedupe_key, trust, priority, payload, received_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                source, type, dedupeKey, trust, event.priority ?? 0, payload, now(),
+            );
+            return { id: result.lastInsertRowid, duplicate: false };
+        }, 'BEGIN IMMEDIATE');
+    }
+
+    // Takes the most important pending event, oldest first, and marks it running.
+    claimEvent(): EventRecord | null {
+        return this.withConnection((connection) => {
+            const row = connection.get(
+                "SELECT id, source, type, dedupe_key, trust, priority, payload, received_at FROM events WHERE status = 'pending' " +
+                    'ORDER BY priority DESC, received_at, id LIMIT 1',
+            );
+            if (!row) {
+                return null;
+            }
+            connection.run("UPDATE events SET status = 'running', started_at = ? WHERE id = ?", now(), row.id);
+            let payload: Record<string, unknown> = {};
+            try {
+                const parsed: unknown = JSON.parse(String(row.payload));
+                if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+                    payload = parsed as Record<string, unknown>;
+                }
+            } catch {
+                // A payload that cannot be read is handled as an empty one.
+            }
+            return { ...row, payload } as EventRecord;
+        }, 'BEGIN IMMEDIATE');
+    }
+
+    finishEvent(eventId: number, status: 'done' | 'ignored' | 'failed', detail = ''): void {
+        this.withConnection((connection) => {
+            const [outcome, error] = status === 'failed' ? ['', detail] : [detail, ''];
+            connection.run(
+                'UPDATE events SET status = ?, finished_at = ?, outcome = ?, error = ? WHERE id = ?',
+                status, now(), firstChars(outcome, 1000), firstChars(error, 1000), eventId,
+            );
+        });
+    }
+
+    // Puts a running event back in the queue, such as one paused by a foreground run.
+    deferEvent(eventId: number): void {
+        this.withConnection((connection) => {
+            connection.run("UPDATE events SET status = 'pending', started_at = NULL WHERE id = ? AND status = 'running'", eventId);
+        });
+    }
+
+    requeueInterruptedEvents(): number {
+        return this.withConnection((connection) =>
+            connection.run("UPDATE events SET status = 'pending', started_at = NULL WHERE status = 'running'").changes,
+        );
+    }
+
+    events(limit = 100): Row[] {
+        return this.withConnection((connection) =>
+            connection.all(
+                'SELECT id, source, type, dedupe_key, trust, priority, status, received_at, finished_at, outcome, error ' +
+                    'FROM events ORDER BY received_at DESC, id DESC LIMIT ?',
+                limit,
+            ),
+        );
+    }
+
+    addAction(action: NewAction): number {
+        const kind = action.kind.trim();
+        const title = action.title.trim();
+        if (!kind || !title) {
+            throw new Error('An action needs a kind and a title.');
+        }
+        return this.withConnection(
+            (connection) =>
+                connection.run(
+                    'INSERT INTO actions(event_id, kind, title, body, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+                    action.eventId ?? null, kind, title, action.body ?? '', JSON.stringify(action.payload ?? {}), now(),
+                ).lastInsertRowid,
+        );
+    }
+
+    actions(status: string | null = null, limit = 100): Row[] {
+        return this.withConnection((connection) =>
+            connection.all(
+                'SELECT id, event_id, kind, title, body, payload, status, created_at, resolved_at FROM actions ' +
+                    'WHERE (? IS NULL OR status = ?) ORDER BY created_at DESC, id DESC LIMIT ?',
+                status, status, limit,
+            ),
+        );
+    }
+
+    // Marks a proposed action approved, rejected or done, returning whether one was waiting.
+    resolveAction(actionId: number, resolution: ActionResolution): boolean {
+        if (!ACTION_RESOLUTIONS.includes(resolution)) {
+            throw new Error(`An action is resolved as one of: ${ACTION_RESOLUTIONS.join(', ')}.`);
+        }
+        return this.withConnection((connection) => {
+            const allowed = resolution === 'done' ? "('proposed', 'approved')" : "('proposed')";
+            return (
+                connection.run(`UPDATE actions SET status = ?, resolved_at = ? WHERE id = ? AND status IN ${allowed}`, resolution, now(), actionId)
+                    .changes > 0
+            );
+        });
     }
 
     exportSourceJson(source: Record<string, unknown>): string {

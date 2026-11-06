@@ -348,6 +348,36 @@ describe('HarnessDaemon', () => {
         expect(researched).toBe(true);
     });
 
+    it('handles a posted event in the background and lets the user resolve its action', async () => {
+        settings.background_research_enabled = true;
+        const idle = async (): Promise<boolean> => false;
+        const daemon = await start({ researchOneTopic: idle, indexKnowledge: idle, learnFromEpisodes: idle, consolidateKnowledge: idle }, true);
+        const events = new EventLog();
+        const client = await daemon.client(events.handler);
+
+        const posted = await client.call<{ id: number; duplicate: boolean }>('post_event', {
+            source: 'timer',
+            type: 'notify',
+            payload: { title: 'Stand up' },
+            dedupe_key: 'noon',
+        });
+        await events.waitFor('actions.changed');
+
+        expect((await client.call<Array<Record<string, unknown>>>('events'))[0]).toMatchObject({ id: posted.id, status: 'done', trust: 'external' });
+        const [action] = await client.call<Array<Record<string, unknown>>>('actions', { status: 'proposed' });
+        expect(action).toMatchObject({ kind: 'notify', title: 'Stand up' });
+        expect(await client.call('post_event', { source: 'timer', type: 'notify', dedupe_key: 'noon' })).toEqual({ id: posted.id, duplicate: true });
+        expect(await client.call('resolve_action', { action_id: action.id, resolution: 'approved' })).toEqual({ resolved: true });
+        expect(await client.call('actions', { status: 'proposed' })).toEqual([]);
+    });
+
+    it('rejects an event with an unknown trust and an unknown resolution', async () => {
+        const client = await (await start()).client();
+
+        await expect(client.call('post_event', { source: 'mail', type: 'x', trust: 'friend' })).rejects.toThrow('trust must be one of');
+        await expect(client.call('resolve_action', { action_id: 1, resolution: 'maybe' })).rejects.toThrow('resolution must be one of');
+    });
+
     it('rejects a priority that is not an integer', async () => {
         const client = await (await start()).client();
 

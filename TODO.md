@@ -29,6 +29,11 @@
 - [x] Split memory into stores (general, user, locations, software, project, research skills, code skills), probe the machine for the environment stores, and give each task the skills its approach uses
 - [x] Add a system tray, launch at login, and suspend and resume commands
 - [ ] Benchmark on real maintenance tasks
+- [x] Queue events and actions in the knowledge store, and order background jobs reactive before maintenance
+- [ ] Triage incoming events with a cheap model call and work the ones that need it as task trees
+- [ ] Read mail over IMAP as events
+- [ ] Taint runs started by external events and gate their side effects on approval
+- [ ] Track entities and commitments, and drive idle work from them
 - [x] Keep the loaded model between requests and share it with the background worker
 - [x] Return structured JSON from stages using llama.cpp schema-constrained output
 - [x] Route each request by task type so simple requests skip stages they do not need

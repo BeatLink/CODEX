@@ -197,6 +197,8 @@ with its version bump, and a database newer than the code is refused.
 | `graph_nodes`, `graph_edges` | Topic, source and entity nodes; `contains`, `supported_by` and extracted relations, each edge optionally tied to a source |
 | `research_queue` | Jobs per topic: pending, running, done or failed, at most one pending per topic |
 | `consolidation_checks` | The stored verdict for each topic, fact or memory pair already compared |
+| `events` | Queued events from connectors and timers: source, type, dedupe key, trust, priority, JSON payload, status, outcome |
+| `actions` | What handling an event proposed to the user: kind, title, body, and `proposed`, `approved`, `rejected` or `done` |
 
 The knowledge is organised in three layers that mirror each other:
 
@@ -251,12 +253,21 @@ loop:
   otherwise:
     re-queue topics researched longer ago than background_refresh_interval_hours
       (half that for topics recalled five times and used since; most used first)
-    researchOneTopic()       — if a job was pending
+    handleNextEvent()        — if an event is queued (reactive class)
+    or researchOneTopic()    — if a job was pending (maintenance class)
     or indexKnowledge()        — if facts or topics lack a vector (CPU embedding model)
     or learnFromEpisodes()    — if unprocessed episodes exist
     or consolidateKnowledge() — if anything is left to tidy
     worked → wait 0.2 s, else wait poll interval
 ```
+
+The jobs are listed in [scheduler.ts](../src/core/scheduler.ts), reactive ones tried before
+maintenance ones. `handleNextEvent` ([events.ts](../src/core/events.ts)) claims the most important
+queued event and runs the handler registered for its type; the built-in `notify` handler turns the
+event into a proposed action, and an event with no handler is marked `ignored`. A paused handler
+puts its event back in the queue. Interfaces post events with `post_event` and read them and the
+actions with `events`, `actions` and `resolve_action`. The design behind this is in
+[reactive-assistant.md](reactive-assistant.md).
 
 `researchOneTopic` ([background.ts](../src/core/background.ts)) claims the highest-priority
 pending job and:
