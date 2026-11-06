@@ -6,21 +6,11 @@ Statuses come from research files only until the codebase review below is done.
 
 Review the existing code to find what is already implemented but undocumented, what designs have changed, where the project stands, and what to do next. Then reconcile docs 1–3 and this roadmap.
 
+## Then: a fast, trustworthy eval loop
+
+Every open strategic question (doc 1) is settled by eval runs, so this comes before any architecture bet. Runs today take ~30 s per model call and whether the model runs on the GPU is unconfirmed (see Agent hierarchy, next steps 1 and 3). Make one eval round cheap enough to repeat, with answers and tool calls saved for every failing run.
+
 ## Agent hierarchy
-
-<<<<<<< HEAD
-Open work, in no fixed order:
-
-1. Per-agent memory scope in the knowledge store, learned from the agent's episodes; scratchpad folder under the state directory.
-2. Checkpoint and resume inside a nested run.
-3. Show the nested tree in the interfaces.
-4. Per-agent skills and tool allow lists.
-
-### Validation
-
-Run `codex eval` on one task set with the same MCP servers configured **flat** vs **behind agents**. Measure the share of tasks that reach the right tool and finish, and the number of model calls beside it (each hop costs calls). If agents do not beat flat on tool choice, the added calls are not worth it, and the feature should be reconsidered.
-=======
-Sources: `research/done-agent-hierarchy.md`, `research/done-agents-eval-report.md`.
 
 **Gate:** the hierarchy is worth keeping only if it beats the flat task tree on tool tasks. Build the items below only after it does; if it doesn't, change or drop the idea.
 
@@ -45,7 +35,7 @@ The tools return canned replies, so the eval measures tool choice and delegation
 
 ## Core architecture: known weak points
 
-Source: `research/done-architecture.md`. Properties of the code as it stood; record changes against them. Candidate improvements, unprioritized:
+Properties of the code as it stood; record changes against them. Candidate improvements, unprioritized:
 
 - **Source search is lexical:** the stored-sources lookup before a web search needs shared words (facts/topics already use meaning).
 - **Vector search is brute force:** every recall compares against every vector; fine for thousands of facts, slow for millions.
@@ -58,8 +48,6 @@ Source: `research/done-architecture.md`. Properties of the code as it stood; rec
 - **Use counts only grow:** long-ago popular topics keep refreshing frequently.
 
 ## Reactive assistant
-
-Sources: `research/done-reactive-assistant.md`, `research/done-reactive-assistant-status.md`.
 
 ### Status
 
@@ -95,44 +83,38 @@ Today: mail arrives → automatic mail dropped without the model → rest summar
 
 ## Model choice
 
-Source: `research/done-research-4b-model-as-assistant.md`.
-
 - **Open item:** compare the 4B model's pass rate on the `evals/` tasks against the 35B model's. If the gap is small on the tasks that matter, 4B is good enough here. (The agents eval so far used only the 4B; the 35B file was deleted from `models/`, so it must be re-obtained.)
 - **Escalation path:** design and test routing planning and repeatedly failing steps to Qwen3.5-35B-A3B. Not built.
+- **Reasoning-tuned 4B:** try Phi-4-mini-reasoning (3.8B) on logic-heavy eval tasks against Qwen3.5-4B; measure pass rate and latency with its thinking constrained and unconstrained.
 
 ## Task-decomposition ideas to evaluate
-
-Source: `research/done-research-task-decomposition-harnesses.md`.
 
 - **Voting + red-flag filters** on control-flow calls (decide, check): measure whether they improve eval pass rate enough to justify the extra calls (calls are ~30 s each on the dev machine, so cost matters).
 - **Corrective sub-plan on step failure** (brainos-style) vs the current "re-plan the rest once": compare.
 - **Capped retries** (practitioner: 3) and capped excerpts of step output passed forward: check against the current limits.
-- **Scratchpad persistence** between steps: see per-agent scratchpad under Agent hierarchy.
+- **Scratchpad contract** between steps (doc 2): add a grammar-enforced scratchpad field to task outputs, inject it into dependent tasks, and compare pass rate against dependency results alone. Per-agent scratchpad folder: see Agent hierarchy.
 
 ## Mascot
-
-Source: `research/done-mascot-emotions.md`.
 
 Built: see doc 2, "Mascot emotions". Still open:
 
 1. Try other placements (top bar, an empty workbench, the answer area) once the sidebar one has been lived with.
+2. Map more states to moods (clarification waiting, background research, unreachable daemon, cancelling, waking): see doc 2, "Mascot emotions", Not built.
 
 ## Speech output
-
-Source: `research/done-research-open-source-tts.md`.
 
 1. Browser-only Kokoro (`kokoro-js`) demo feeding `speakVisemes`.
 2. Optional Chatterbox server backend for machines with ≥ ~8 GB VRAM.
 3. First re-verify licences, versions and memory figures (the research was written from memory).
 
-## Founding-conversation ideas
+## Core structure ideas and strategic options
 
-Source: `research/done-core-structure-ideas.md`. Target design is in doc 2; the source is an unverified chat, so each item starts with a cheap test before any build. Not prioritised against the other sections.
+Design in doc 2 ("Core structure ideas"); the questions they answer are in doc 1 ("Open strategic questions"). Each is tested against the built design on the same eval tasks; whichever wins becomes the design, including replacing built parts. The sources are unchecked chats, so each item starts with a cheap test.
 
 1. **Check what exists** (codebase review): model-authored skills, a failure-mode log, validation-error retry.
-2. **Verified skill writing:** build the reflect-then-gate loop. Validate by seeding known failing tasks from `evals/` and checking that (a) a gated skill is saved only when its check passes, (b) a deliberately wrong skill is rejected, (c) with the saved skill the same task passes more often over repeated runs. Measure the pass-rate change and the extra model calls (~30 s each on the dev machine).
-3. **Blueprints:** pick one recurring request, hard-code its graph, and compare pass rate and calls with the same request via `decide`. Adopt only if it wins.
-4. **Specialist models vs 35B escalation:** measure cold-load time for a ~2–2.5 GB model on the 4 GB GPU (reload is already in `ModelCache`), then compare 4B only, 4B plus a specialist, and 35B-A3B on the same eval tasks (the 35B file must be re-obtained; see Model choice). Router error rate must be reported separately.
-5. **Memory drift watch:** the chat's main risk for an always-on loop is a wrong fact entering long-term memory. Track how many learned memories and facts later get `disputed`/`superseded`, and sample stored items against their sources, to see whether grounding checks hold over weeks.
-6. **Drives/self-set goals:** no work until the autonomy ladder (Reactive assistant, item 3–4) exists; then decide whether numeric drives add anything over the scheduler's priorities.
->>>>>>> d4db434 (Docs restructuring)
+2. **Blueprints vs model planning:** pick one recurring request (e.g. "process my inbox"), hard-code its graph, and compare pass rate and model calls with the same request via `decide`. If blueprints win, design how requests are matched to blueprints (rules, or one constrained classification call) with `decide` as the fallback.
+3. **Fact and rule engine:** prototype the rule layer on one case that is rule-shaped today (mail triage heuristics, or the autonomy ladder's learned sender rules): model extracts facts, rules decide, model phrases. Compare accuracy, auditability and model calls against the current path. Decide the memory shape (doc 1, open question 3) before adding the entities and commitments tables.
+4. **Verified skill writing:** build the reflect-then-gate loop. Validate by seeding known failing tasks from `evals/` and checking that (a) a gated skill is saved only when its check passes, (b) a deliberately wrong skill is rejected, (c) with the saved skill the same task passes more often over repeated runs. Measure the pass-rate change and the extra model calls.
+5. **Specialist models vs 35B escalation:** measure cold-load time for a ~2–2.5 GB model on the 4 GB GPU (reload is already in `ModelCache`), then compare 4B only, 4B plus a specialist, and 35B-A3B on the same eval tasks (the 35B file must be re-obtained; see Model choice). Report router error rate separately.
+6. **Memory drift watch:** the main risk for an always-on loop is a wrong fact entering long-term memory. Track how many learned memories and facts later get `disputed`/`superseded`, and sample stored items against their sources, to see whether grounding checks hold over weeks.
+7. **Goals, drives and initiative:** design goals and drives as harness state (doc 2, "Cognitive loop"), decide who may change them, and test whether drive-chosen idle work beats the fixed chain (ties in with Reactive assistant item 6). Actions stay bounded by the autonomy ladder (Reactive assistant items 3–4).

@@ -1,10 +1,6 @@
 # Architectural ideal and proposed features
 
-<<<<<<< HEAD
-Source: `research/architecture.md` (describes the system as built) and `research/agent-hierarchy.md`. Paths are under `src/`. Statuses are from research files, not yet verified against code.
-=======
-Source: `research/done-architecture.md` (describes the system as built) and `research/done-agent-hierarchy.md`. Paths are under `src/`. Statuses are from research files, not yet verified against code.
->>>>>>> d4db434 (Docs restructuring)
+Paths are under `src/`. "Built" sections describe the system as the research notes recorded it; statuses are not yet verified against the code. Built parts are not fixed either: doc 1, "Open strategic questions", lists where the design may change.
 
 ## Core architecture (built)
 
@@ -95,11 +91,7 @@ else: requeue topics researched longer ago than background_refresh_interval_hour
       worked → wait 0.2 s, else poll interval
 ```
 
-<<<<<<< HEAD
-- **Events:** `MailConnector` (`core/mail.ts`, Maildir folders in `mail_maildir_paths`) and `ImapConnector` (`core/imap.ts`, `mail_imap_accounts`) queue events. `handleNextEvent` (`core/events.ts`) claims the most important event and runs its type's handler: `notify` → proposed action; `email.received` → triage (`core/triage.ts`); no handler → `ignored`. `email.draft` and `user.request` are worked as task trees (`core/eventTree.ts`): holds the model lock, stops when foreground work arrives (event requeued), result becomes a `draft`/`result` action. A tree from an `external`-trust event runs with `trust: 'external'`: no `act`, file writes, test runs or MCP tools; research may search but not fetch pages or read files. Interfaces use `post_event`, `events`, `actions`, `resolve_action`. Design: `research/reactive-assistant.md` (not yet processed).
-=======
 - **Events:** `MailConnector` (`core/mail.ts`, Maildir folders in `mail_maildir_paths`) and `ImapConnector` (`core/imap.ts`, `mail_imap_accounts`) queue events. `handleNextEvent` (`core/events.ts`) claims the most important event and runs its type's handler: `notify` → proposed action; `email.received` → triage (`core/triage.ts`); no handler → `ignored`. `email.draft` and `user.request` are worked as task trees (`core/eventTree.ts`): holds the model lock, stops when foreground work arrives (event requeued), result becomes a `draft`/`result` action. A tree from an `external`-trust event runs with `trust: 'external'`: no `act`, file writes, test runs or MCP tools; research may search but not fetch pages or read files. Interfaces use `post_event`, `events`, `actions`, `resolve_action`. Detail: "Reactive assistant" section below.
->>>>>>> d4db434 (Docs restructuring)
 - **`researchOneTopic`** (`core/background.ts`): claim highest-priority job; `web_search` the topic, fetch + summarize the first two distinct pages (skip near-duplicate text); number all page summaries and snippets as sources; extract ≤5 facts per page and from snippets together, each with source number and `low|medium|high` confidence (0.3/0.6/0.9), in small groups so one failure loses only its own; drop facts stating a version/date absent from all sources, and demote to low confidence facts whose values or half their words are missing from the cited source (or that cite none); one overview call yields topic summary + ≤5 entity relationships (drop summary sentences with unsupported versions/dates); store all. Tree placement is left to consolidation. Paused job → `pending`; other error → `failed` with message; jobs left `running` by a dead daemon → `pending` at next start.
 - **`learnFromEpisodes`:** ≤5 unprocessed episodes → durable preferences, projects, corrections (secrets and personal identifiers explicitly excluded) plus ≤3 general subjects worth researching (queued if no facts yet). Episodes marked processed even on failure so one bad batch can't block.
 - **Consolidation** (`core/consolidation.ts`): one small step per pass so it yields fast.
@@ -159,26 +151,21 @@ Built (prototype; verify against code in the later codebase review):
 - `delegate` in the task tree with nested run, per-agent MCP servers and instructions.
 - Interfaces show only `delegate` plus the agent name, not the nested tree.
 
-<<<<<<< HEAD
-=======
 Agents eval assets (on an unmerged branch at the time of the report; verify):
 - `evals/fake_mcp_server.mjs` + `evals/fake_catalogue.json`: six canned MCP servers (mail, calendar, notes, contacts, weather, todos), 32 tools, no real accounts needed.
 - `evals/agents/`: seven agent files; `comms` has `mail` and `contacts` as sub-agents (tests nesting).
 - `evals/agents_tasks.json`: eight tasks: six need one specialist, one needs two hops (find a contact, then search their mail), one needs two unrelated specialists. Per-task `servers` field.
 - An `agents` runner beside the flat `tree` runner; they differ only in whether agent files are present.
 
->>>>>>> d4db434 (Docs restructuring)
 Proposed, not built:
 - **Per-agent persistence:** a memory scope per agent in the knowledge store, filled by learning from that agent's episodes, plus a scratchpad folder under the state directory.
 - **Resume inside an agent:** checkpoints save the delegating task, not the nested run, so a resume restarts the delegation.
 - **Show the nested tree** in the interfaces.
 - **Per-agent skills and tool allow lists** beyond MCP servers.
-<<<<<<< HEAD
-=======
 
 ## Reactive assistant
 
-Source: `research/done-reactive-assistant.md`. The built plumbing (queue, scheduler, handler registry) is already summarised under "Background worker" above; this adds detail.
+The built plumbing (queue, scheduler, handler registry) is already summarised under "Background worker" above; this adds detail.
 
 ### Data
 
@@ -223,7 +210,7 @@ An assistant that notices, prepares and asks, and acts alone only where the user
 ### Planned features
 - **Approval and autonomy ladder** (observe → notify → draft → act with approval → act unattended; rules learned from approvals/rejections). Until it exists no event run can change anything.
 - **Entities and commitments**, then idle jobs driven by them: pre-research for tomorrow's meetings, stale-commitment sweeps, entity profiles from episodes, daily digest.
-- Other connectors: calendar, file watchers, timers, webhooks.
+- Other connectors: calendar, tasks/to-dos, bookmarks, notes, file watchers, timers, webhooks.
 - Mailbox coalescing / backlog policy; rolling thread summaries; idle-work budget.
 
 ## Model escalation (proposed)
@@ -236,7 +223,7 @@ Sample a step several times and decide by first-to-ahead-by-K voting; discard co
 
 ## Mascot emotions (built)
 
-Source: `research/done-mascot-emotions.md`. The robot from the CODEX icon sits at the foot of the workbench sidebar, above the run status, at about two thirds of the sidebar's width.
+The robot from the CODEX icon sits at the foot of the workbench sidebar, above the run status, at about two thirds of the sidebar's width.
 
 - **CODEX** draws only the robot: head border, ears and antenna in the theme colour (`--primary`) (the X-Tech blue, `#00acff`) around a black screen with a thin border, with a canvas over the screen (`src/renderer/index.html`). The black screen keeps RoboEyes' white face visible on both themes.
 - **RoboEyes** (github.com/x-tech-laboratories/RoboEyes, an npm git dependency pinned to a commit) draws the eyes and mouth on that canvas exactly as it ships: its own moods, colours and settings. The canvas is RoboEyes' 130 by 90 screen, drawn at twice that and shrunk into the head's 26 by 18 unit screen, so it stays sharp.
@@ -245,13 +232,23 @@ Source: `research/done-mascot-emotions.md`. The robot from the CODEX icon sits a
 
 **Loading:** the renderer has no bundler, so an import map in `index.html` points `@x-tech-laboratories/roboeyes` at `node_modules` beside `dist`; the content security policy allows the map by its hash. RoboEyes follows `prefers-reduced-motion` itself. The tray icon stays a still image.
 
+**Not built:** more states mapped to moods. Candidates (state in `src/renderer/runState.ts`): a clarification or approval waiting (`clarifications` not empty; curious), background research working (`backgroundStatus` not `Idle`; focused), daemon unreachable (`connection: 'unavailable'`; worried, today `asleep`), the user cancelling (`cancelling`; startled), resuming from suspend or connecting at launch (waking), a final answer arriving (`phase: 'final'`; excited). Needs a priority order when several hold at once (e.g. worried, asleep, startled, curious, thinking, focused, calm), with happy/sad/excited as brief moments rather than states. The removed CSS mascot also had an antenna pulse while thinking, floating z's while asleep and a slow head bob (git history); RoboEyes draws none of these.
+
 ## Speech output (proposed)
 
-Source: `research/done-research-open-source-tts.md`. Give the mascot a voice: a TTS engine feeds RoboEyes' `speakVisemes` with real phonemes and durations, and a mood value drives eyes, mouth and voice together. Engine choice and trade-offs are in the rationale doc ("Text-to-speech"). Chatterbox would be an optional backend behind a small local server on a machine with enough VRAM; the dev laptop's 4 GB GPU is shared with the main model (see GPU lock), so voice must not compete for it. Not built.
+Give the mascot a voice: a TTS engine feeds RoboEyes' `speakVisemes` with real phonemes and durations, and a mood value drives eyes, mouth and voice together. Engine choice and trade-offs are in the rationale doc ("Text-to-speech"). Chatterbox would be an optional backend behind a small local server on a machine with enough VRAM; the dev laptop's 4 GB GPU is shared with the main model (see GPU lock), so voice must not compete for it. Not built.
 
-## Ideas from the founding conversation (all proposed unless noted)
+## Core structure ideas (proposed unless noted)
 
-Source: `research/done-core-structure-ideas.md`. Rationale and caveats are in doc 1 ("Founding ideas"). Nothing below is known to be built; check each in the codebase review.
+Rationale, caveats and how each compares with the built design are in doc 1 ("Core structure ideas"). Check each against the code in the codebase review.
+
+### Blueprints: deterministic task graphs
+
+Hard-coded task graphs for requests whose shape is known (e.g. "process my morning inbox": fetch unread, loop in code, one item plus a strict schema per model call, deterministic summary). The model never plans these; it fills one narrow slot per node. Mail triage and drafting already work this way. Open: whether blueprints become the main way requests are worked, with `decide` as the fallback for requests no blueprint covers, or stay a few special cases (doc 1, open question 1). A rule engine could choose the blueprint (see "Fact and rule engine").
+
+### Model-planned task graphs
+
+For requests no blueprint fits, the model's first turn emits a JSON task graph of atomic items and the harness executes it item by item. `decide` is a per-task version of this (built).
 
 ### Verified self-authored skills
 
@@ -264,20 +261,32 @@ A skill is a markdown guide the harness injects into a fresh context when a requ
 - Error-driven variant: when schema validation fails on extraction (e.g. a missing `deadline`), ask the model to rewrite its instruction and save the patch, again behind the gate.
 - Why the gate: unverified self-generated text drifts ("copy of a copy"), and a wrong skill is injected into every later matching call.
 
-### Blueprints for recurring requests
-
-Hard-coded task graphs for requests that always have the same shape (e.g. "process my morning inbox": fetch unread, loop in code, one item plus strict schema per model call, deterministic summary). Mail triage and drafting already work this way. Open question: which other recurring requests justify one, versus letting `decide` split them.
-
-### Specialist models (alternative to one big model)
-
-Keep several 1–4B task-specific models on disk (extraction/classification, code, summarisation; ~2–2.5 GB each at 4-bit per the chat) and load the right one per task into the 4 GB GPU, unloading after. Built parts that help: `ModelCache` reload, optional separate background model, GPU lock. Missing: a router choosing the model, specialist selection, measured swap latency (unmeasured; the chat says "a fraction of a second to a few seconds"). Constraints: the router must be reliable; the specialist sees only pre-filtered context. Compare against the escalation proposal below.
-
 ### Procedural memory and retry feedback
 
-- Log each tool/format failure mode to a lessons file and inject it into later system prompts (partly covered by learned corrections; a failure-mode log specifically is unconfirmed).
+- Log each tool/format failure mode to a lessons store and inject it into later prompts for the same tool (partly covered by learned corrections and skill lessons; a failure-mode log specifically is unconfirmed).
 - On invalid output, feed the validation error back for one cheap correction turn (current design: grammar-forced JSON, fallbacks, one revise pass).
+- Reflection after failure (Reflexion-style): give the model the failure log and ask why the plan failed and what to change; store the answer behind the same verifier gate as skills.
 
-### Drives and mood (open, not adopted)
+### Scratchpad contract
 
-The chat suggests numeric state variables in the prompt (e.g. curiosity, task urgency) to modulate tone and priority, and a continuous perceive → update memory → evaluate goals → plan → act → review loop. Closest existing pieces: the scheduler's priority classes, the idle worker, and the mascot's mood (see "Mascot emotions"). Any drive or self-set goal must stay inside the autonomy ladder; the user, not the model, sets goals.
->>>>>>> d4db434 (Docs restructuring)
+Each node writes working notes in a grammar-enforced block (`<scratchpad>…</scratchpad>` beside `<output>`, or a `scratchpad` field in the JSON schema). The harness stores the scratchpad with the task and injects it into later nodes that depend on it, as memory scoped to the run. Today only dependency results are passed forward; a per-agent scratchpad folder is proposed under Agent hierarchy.
+
+### Specialist models
+
+Keep several 1–4B task-specific models on disk (extraction/classification, code, summarisation, a reasoning-tuned model such as Phi-4-mini-reasoning for logic nodes; ~2–2.5 GB each at 4-bit per the chat) and load the right one per task into the 4 GB GPU, unloading after. Built parts that help: `ModelCache` reload, optional separate background model, GPU lock. Missing: a router choosing the model, specialist selection, measured swap latency (the chat says "a fraction of a second to a few seconds"). Constraints: the router must be reliable; the specialist sees only pre-filtered context; a reasoning model's long thinking must be constrained or it costs latency. Compare against "Model escalation" above.
+
+### Fact and rule engine (neuro-symbolic)
+
+A deterministic rule layer beside the model; rationale in doc 1 ("Neuro-symbolic reasoning").
+- **Facts:** structured predicates extracted by the model from text (schema-constrained), plus facts the harness knows directly (event headers, dates, settings, approvals).
+- **Rules:** `IF condition THEN action` over those facts, stored as data the user can read and edit, evaluated in TypeScript or SQL over the SQLite store. Rules decide; the model never does in their domain.
+- **Two directions:** model → rules (extract facts, rules decide) and rules → model (rules decide, the model only phrases the fixed result).
+- **First uses, all rule-shaped already:** mail triage heuristics, the autonomy ladder's learned rules (sender/class → ignore, notify, draft, act), the commitments overdue sweep, choosing a blueprint for a request, and the deterministic checks.
+- **Learning rules:** a rule proposed by the model (e.g. from repeated approvals) is stored only behind the verifier gate or the user's approval.
+
+### Cognitive loop: goals, drives and initiative
+
+The long-range aim (doc 0): perceive → update memory → evaluate goals → plan → act → review feedback, run continuously by the harness. Built parts: connectors and the event queue (perceive), recall and consolidation (memory), the scheduler's priority classes (prioritise), checks (review), idle research (curiosity). Proposed:
+- **Goals and drives as harness state:** numeric levels (e.g. curiosity, urgency, upkeep) and a goal list stored in the database, visible and editable by the user, injected into prompts to modulate priority and tone, and readable by rules. The same mood value could drive the mascot and the voice.
+- **Initiative:** the scheduler picks idle work from goals and drives instead of a fixed chain (see "Goal-driven idle jobs" in the roadmap).
+- **Limits:** whether the model may propose or change goals is open; any change it makes should be gated (user approval or a rule) and every action stays within the autonomy ladder.

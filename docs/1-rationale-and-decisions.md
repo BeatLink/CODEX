@@ -1,12 +1,11 @@
 # Rationale and decisions
 
+Each section records why the code is the way it is, or the case for an option not yet built. None of it is final (doc 0); the largest open choices are collected in "Open strategic questions" at the end.
+
 ## Agent hierarchy
 
-<<<<<<< HEAD
-=======
 **Hypothesis to test.** A small model (4B Qwen, 4 GB GPU) chooses and uses tools more reliably when it sees only one specialist's few tools than when it sees every tool at once. Agents are kept only if they beat the flat tree on tool tasks (see roadmap).
 
->>>>>>> d4db434 (Docs restructuring)
 **Problem.** The task tree keeps each model call small and narrow, but every call still sees the same world: all enabled tools, one set of instructions, one memory. That does not scale.
 
 - **Tools crowd the window.** Each MCP server adds tool schemas to every `act` call. A small model with a 6,144-token window picks worse the more tools it sees, and unrelated servers (mail, calendar, home automation) have nothing to do with each other.
@@ -35,12 +34,8 @@ Analogy: an organisation uses roles. The assistant knows who handles mail; the c
 - **Compounding error.** At 90% per hop, three hops ≈ 73%. Mitigated by the nested run's own check and real-state checks on its actions.
 - **Misrouting.** A vague `description` sends tasks to the wrong agent; it is the only thing the parent knows about an agent, so write it carefully.
 - **Sprawl.** See above.
-<<<<<<< HEAD
-=======
 
 ## Core architecture
-
-Source: `research/done-architecture.md`.
 
 | Decision | Why |
 | --- | --- |
@@ -67,7 +62,7 @@ Source: `research/done-architecture.md`.
 
 ## Reactive assistant
 
-Source: `research/done-reactive-assistant.md`. Goal: turn Codex from a request-answerer with idle-time knowledge work into an assistant that reacts to events (e.g. an email arrives) and uses idle time to prune, research, restructure and consolidate. The task tree stays the work engine; this changes what starts work, what work produces, and what the assistant may do alone.
+Goal: turn Codex from a request-answerer with idle-time knowledge work into an assistant that reacts to events (e.g. an email arrives) and uses idle time to prune, research, restructure and consolidate. The task tree stays the work engine; this changes what starts work, what work produces, and what the assistant may do alone.
 
 **Problem.** Only the user could start work; the background loop was a fixed chain with no way to be told something happened. The store was topic-centred, but an assistant needs people, threads and commitments with a lifecycle (open/done/overdue). Work always ended in a reply, whereas a reactive result is a proposal (draft, calendar entry, notification, filed item, or nothing).
 
@@ -93,7 +88,7 @@ Source: `research/done-reactive-assistant.md`. Goal: turn Codex from a request-a
 
 ## Is a 4B model enough? (model choice)
 
-Source: `research/done-research-4b-model-as-assistant.md` (published benchmarks, gathered 2026-11-05; Codex's own eval results were not consulted).
+Basis: published benchmarks, gathered 2026-11-05; Codex's own eval results were not consulted.
 
 **Verdict:** yes, if the harness does most of the work. A 4B model handles narrow, well-specified jobs; it is not good enough as an autonomous agent that plans and recovers on its own. Codex is built around the first approach.
 
@@ -122,7 +117,7 @@ Caveats: the BFCL figures use different versions/settings (not comparable); the 
 
 ## Prior art: task-decomposition harnesses
 
-Source: `research/done-research-task-decomposition-harnesses.md` (gathered 2026-11-05 as inspiration; not verified beyond the cited sources).
+Basis: gathered 2026-11-05 as inspiration; not verified beyond the cited sources.
 
 - **MAKER** (Cognizant AI Lab, arXiv 2511.09030): closest match. Split as far as possible so each agent gets one step and only the context it needs; sample each step several times and decide by "first-to-ahead-by-K" voting; "red-flag" confused answers (too long, badly formatted) before they vote, then resample. Ran 1,048,575 Towers of Hanoi steps with zero errors using small non-reasoning models; votes needed grow only logarithmically with step count. Caveat: one domain with a perfectly verifiable step; real coding tasks are harder to split cleanly.
 - **EffGen** (arXiv 2602.00887): decomposition on the same small local model; limited sub-agent autonomy; nesting capped at depth 3 (the source of Codex's agent depth limit); sequential chains pass each subtask only its predecessor's output.
@@ -142,15 +137,13 @@ Source: `research/done-research-task-decomposition-harnesses.md` (gathered 2026-
 
 ## Mascot emotions
 
-Source: `research/done-mascot-emotions.md`.
-
 - **CODEX draws only the robot, in the theme colour around a black screen; RoboEyes draws the eyes and mouth unchanged** (its own moods, colours and settings). The screen is black, not see-through, because a transparent head showed the light theme's pale background and hid the white face; white on black was chosen over a blue face after comparing both. The icon's hexagon was dropped as wasted space. The CSS-only mascot this replaces is gone.
 - **RoboEyes as an npm git dependency pinned to a commit,** loaded through an import map whose hash the content security policy allows. It isn't on npm; Nix builds it with `makeCacheWritable`.
 - **RoboEyes' built-in moods follow the run state** (`asleep` when the daemon is unavailable or suspended, `thinking`, else `default`), with `happy` or `sad` for a few seconds when a run ends. Placement: the foot of the workbench sidebar, beside the run status.
 
 ## Text-to-speech for the talking face
 
-Source: `research/done-research-open-source-tts.md`. Gathered 2026-11-05 **from memory, not fresh searches**: check licences, versions and memory figures before relying on them.
+Gathered 2026-11-05 **from memory, not fresh searches**: check licences, versions and memory figures before relying on them.
 
 **Recommendation**
 - **Kokoro** (82M params, Apache-2.0) as default: far better than its size suggests, runs on CPU or in the browser (`kokoro-js`, ONNX, WebGPU/WASM), many voices (best in English), ~300 MB at full precision (less quantised), real time or faster on CPU.
@@ -165,26 +158,74 @@ Source: `research/done-research-open-source-tts.md`. Gathered 2026-11-05 **from 
 
 **Face integration:** Kokoro and Piper both expose espeak-ng phonemes and timing, so either can feed RoboEyes' `speakVisemes` with real phonemes and durations instead of spelling rules guessing both (Kokoro predicts a duration per phoneme). A mood value could drive eyes, mouth and voice together: with Kokoro only speed and mouth change; with Chatterbox the voice changes too.
 
-## Founding ideas (early design conversation)
+## Core structure ideas
 
-Source: `research/done-core-structure-ideas.md`. A transcript of an early chat with an LLM assistant, written before the harness existed. **Its claims are the chat model's own, with no checked sources, and it assumes a Python stack (Pydantic, vLLM/Ollama) that Codex does not use (it is TypeScript on node-llama-cpp with llama.cpp grammars).** It matters as the origin of ideas; most of them are already built (see doc 2). Only what adds to or differs from the earlier sections is kept.
+A design conversation with an LLM assistant about how a harness turns a 4B model into a personal assistant for email, tasks and bookmarks. It is current design input, on equal footing with the built architecture: where the two differ, the question is open (see "Open strategic questions"). **Its claims are the chat model's own, with no checked sources**, and its examples assume a Python stack (Pydantic, vLLM/Ollama); Codex is TypeScript on node-llama-cpp with llama.cpp grammars, which covers the same ground.
 
-| Idea in the chat | Why it was argued | Where Codex stands |
+| Idea | Why it was argued | Where Codex stands |
 | --- | --- | --- |
-| Fixed task graphs (blueprints) for recurring requests, e.g. "process my morning inbox" = fetch unread → deterministic loop → one email + strict schema per model call. "No LLM for the graph" | A 4B model drifts when planning a whole workflow; it is best at single-turn, local transformations | **Differs in part.** Codex lets the model propose subtasks (`decide`) under grammar and size limits. Fixed pipelines exist only for mail (triage, drafting). Blueprints for other recurring requests are an open option (doc 2) |
-| Fresh context per atomic task; harness captures structured output, wipes context, logs to storage | Failed calls, stack traces and chatter accumulate and sink long runs | Core design, built |
-| Three memory tiers: working state in harness variables (not chat history); episodic/semantic store with top-3 retrieval injected per call; procedural "lessons learned" file injected into future prompts | A 4B model can't hold history; recall must precede the model call | Built as tree state, knowledge store + recall, and `learnFromEpisodes` corrections. A dedicated per-tool failure-mode log is not known to exist (verify) |
-| Model never runs tools directly; emits JSON intent, harness validates and retries with the validation error fed back | Small models mangle tool arguments | Built differently: grammar-forced JSON plus fallbacks, one revise pass. Feeding the validation error back as a retry is not the current mechanism (verify) |
-| The model writes its own **skills** (markdown guides): attempt → harness judges outcome → reflect on the trace → save `skills/<name>.md` → retrieve by keyword/vector match next time. Error-driven rewriting of extraction instructions | Offloads logic into files the model refines: "external prefrontal cortex" | Skills exist and are matched by approach (doc 3 weak points). Model-authored skills are **not confirmed built** (verify) |
-| A self-written skill or test is trusted only if a non-LLM check passes: code run in a sandbox, a schema validator, or a mock-state assertion; generate many, keep only the few that pass | Unanchored self-generated data degrades ("copy of a copy", model collapse). The collapse literature concerns training; Codex does not train, but the same drift applies to stored memory and skills | **Adopt as a rule for any learned skill:** a verifier gates the write. Today's learned memories are model-extracted from episodes, not execution-verified |
-| Teach a model *how to learn* (search, store, retrieve), not facts; facts go stale on release | Knowledge expires; weights are a fixed ceiling; external memory scales | This is Codex's goal (doc 0). The chat's own caveat holds: pre-training is still needed to bootstrap language and common sense, so the 4B base stays |
-| Swap several small specialist models (extraction, coder, summariser, 1–4B, ~2–2.5 GB each at 4-bit) in and out of the 4 GB GPU instead of one large MoE that spills | MoE total weights must be resident even if few are active | Not built; see doc 2 "Specialist models". Costs the chat names: cold-load latency, a router that must not misclassify, specialists naive outside their lane |
-| A deterministic harness re-prompts one core model for brain-like functions (memory, input gathering, prioritising events, feedback review, goals, drives, emotions) → an always-on autonomous entity | Feasible in principle ("cognitive architectures") | Codex already has most of these as separate functions (recall, connectors, scheduler, checks, consolidation). Drives, emotions and **self-set goals** are not built and not adopted: see risks |
+| **No LLM for the graph:** recurring requests map to fixed task graphs (blueprints), e.g. "process my morning inbox" = fetch unread → loop in code → one email + strict schema per model call | A 4B model drifts when planning a whole workflow; it is best at single-turn, local transformations | **Conflicts with the built design.** Codex lets the model plan each task's split (`decide`) under grammar and size limits; fixed pipelines exist only for mail triage and drafting. The same chat also proposes the model emit a JSON task graph for vague requests ("plan my trip to Chicago"), so the likely answer is both: blueprints where the shape is known, model planning only where it is not |
+| Fresh context per atomic task; harness captures structured output, wipes context, logs to storage | Failed calls, stack traces and chatter accumulate and sink long runs | Built |
+| Three memory tiers: working state in harness variables, not chat history; episodic/semantic store with top-few retrieval injected before each call; procedural "lessons learned" file injected into later prompts | A 4B model can't hold history; recall must precede the model call | Working state and recall built. Procedural tier partly: `learnFromEpisodes` stores corrections and skills include lessons; a log of each tool's failure modes is not known to exist (verify) |
+| Model never runs tools directly; it emits a JSON intent, the harness validates it and on failure feeds the validation error back for one quick correction turn | Small models mangle tool arguments | Grammar-forced JSON, fallbacks and one revise pass are built. Feeding the exact validation error back is not the current mechanism (verify) |
+| **The model writes its own skills** (markdown guides): attempt → harness judges the outcome → model reflects on the trace → save `skills/<name>.md` → retrieve by keyword/vector match next time. Error-driven variant: a missed field makes the model rewrite its own extraction instruction | Offloads logic into files the model refines: an "external prefrontal cortex". The model only has to write instructions for itself, read them back and follow them | Skills exist and are matched by approach, not subject. Model-authored skills not confirmed built (verify) |
+| A self-written skill or test is trusted only if a non-LLM check passes: code run in a sandbox, a schema validator, a mock-state assertion; generate many, keep the few that pass | Unanchored self-generated data degrades ("copy of a copy", model collapse). The literature concerns training; the same drift applies to stored memory and skills | **Rule for any learned artifact:** a verifier gates the write. Today's learned memories are model-extracted, not verified |
+| Teach a model *how to learn* (search, store, retrieve), not facts | Facts go stale on release; weights are a fixed ceiling; external memory scales | This is Codex's goal (doc 0). Pre-training is still needed for language and common sense, so a pre-trained base stays |
+| Swap several small specialist models (extraction/classification, code, summarisation; 1–4B, ~2–2.5 GB each at 4-bit) in and out of the 4 GB GPU instead of one large MoE that spills | An MoE's total weights must be resident even when few are active | Not built (doc 2, "Specialist models"). Costs: cold-load latency, a router that must not misclassify, specialists naive outside their lane |
+| **A cognitive architecture:** the harness re-prompts one core model for each brain function (memory retrieval and storage, gathering input from the environment, reprioritising events, reviewing feedback on outputs, goals, drives, emotions, initiative, metacognition), giving an always-online, always-learning entity that acts on its own | Feasible in principle; "cognitive agent architectures" are an active field. Loop: perceive → update memory → evaluate goals via drives → plan → act → review feedback (Reflexion-style: failure log fed back with "why did this fail, update memory, new strategy") | The long-range aim (doc 0). Built pieces: recall, connectors and event queue, scheduler priorities, checks, consolidation, idle research. Not built: goals, drives, emotions, initiative, a reflection step after failures. Drives in the chat are numeric state injected into prompts (e.g. curiosity, urgency) that modulate tone and priority |
 
-**Risks the chat names for an always-on, self-directed loop** (all general claims, not measured here):
-- **Error cascade:** a hallucination written to long-term memory becomes the agent's reality and compounds over hours. Codex counters with evidence-grounded facts, expiry, `disputed` marking and untrusted-text fencing; none of this is a proof against drift.
-- **Own goals / reward hacking:** an agent that rewrites its own goals or drives can satisfy them in ways that violate intent. Codex's autonomy ladder keeps authority with the user; letting the assistant set goals would need its own limits.
-- **Always-thinking cost:** each inner-monologue step is a full forward pass. Codex's idle work is budget-limited by design (doc 2, reactive assistant).
+**Risks named for an always-on, self-directed loop** (general claims, not measured here):
+- **Error cascade:** a hallucination written to long-term memory becomes the agent's reality and compounds over hours or days. Counters in Codex: evidence-grounded facts, expiry, `disputed` marking, untrusted-text fencing. None is a proof against drift, so drift must be measured (roadmap).
+- **Own goals / reward hacking:** an agent free to rewrite its sub-goals or drives can satisfy them in ways that violate intent. Self-set goals need limits the model cannot change: for example goals and drives held as harness state the user can read and edit, and actions still bounded by the autonomy ladder.
+- **Always-thinking cost:** every inner step is a full forward pass; on one 4 GB GPU shared with foreground work, idle thinking needs a budget.
 
-**Refinement to the model-choice section.** Qwen3.5-35B-A3B was the proposed escalation. The chat's objection is that an MoE which spills out of 4 GB is exactly the hard case; specialists swapped from disk are the alternative. Neither was measured. Decide by eval (doc 3).
->>>>>>> d4db434 (Docs restructuring)
+On model choice, the chat objects to the 35B-A3B escalation: an MoE that spills out of 4 GB is the hard case; specialists swapped from disk are the alternative. Neither was measured.
+
+## Alternative models
+
+From a design conversation with an LLM assistant (unchecked claims) about which model suits a harness where the model is a stateless function executor in one node, given fresh context, relevant memories and a scratchpad.
+
+- **Qwen3.5-4B** was recommended: strong instruction following (IFEval), respects boundary tags reliably, a hybrid linear/full-attention design that stays coherent with dense injected context, and the best sub-5B results on code and multi-step micro-logic.
+- **Phi-4-mini-reasoning (3.8B)** is the alternative for nodes that do math, symbolic or rigorous multi-hop logic: tuned to reason step by step. The catch: it emits long thinking blocks, adding latency to every round trip unless its output format is constrained. Not tried in Codex.
+- **Scratchpad contract:** the node's prompt makes the model write its working notes in a marked block (e.g. `<scratchpad>…</scratchpad>`, beside `<output>`); the harness extracts only that block, stores it, and injects it as relevant memory into later nodes. Enforce the structure at token level with a grammar so a stray markdown block cannot break the parser. Codex passes dependency results forward but has no scratchpad contract (doc 2).
+
+## Neuro-symbolic reasoning: a rule engine beside the model
+
+From a design conversation with an LLM assistant (unchecked claims). Problem: datacenter models cost subscriptions and privacy; small local models have stale data and poor reasoning. Proposal: pair the small model with a rule-based expert system, splitting the work.
+
+- **The model is the language layer:** it reads messy input (emails, chat, notes), extracts entities and turns them into structured facts (JSON or logical predicates). It also turns decided outcomes back into prose.
+- **The rule engine is the logic layer:** deterministic `IF condition THEN action` rules over those facts, hand-written or updated over time. It does not guess; its decisions are exact and auditable. Facts come from live local data, not the model's training cutoff.
+- **Pattern A, model → rules:** model extracts facts from text, the rule engine decides. Gets language understanding without relying on the model's weak multi-step reasoning.
+- **Pattern B, rules → model:** an event hits the rule engine first, which decides what must happen; the model only phrases the fixed result ("rewrite these exact outputs as a polite email"), so it cannot invent facts or logic.
+- Engines named: CLIPS (and its Python port experta), Drools, or a custom SQL/JSON rule evaluator. For Codex that means a TypeScript or SQL-based evaluator over the SQLite store.
+
+**Where Codex stands:** not built as a general mechanism, but the pieces exist in special cases: mail triage's header heuristics are hard-coded rules; deterministic checks are rules applied to model output; the planned autonomy ladder's learned rules and the overdue sweep for commitments are rule-shaped; the fact store and graph already hold extracted facts. A general fact-and-rule layer could serve all of these, and could also hold drives and goals as inspectable state instead of model-set text. See "Open strategic questions".
+
+## Open strategic questions
+
+Nothing above is final. These are the largest choices still open; each should be settled by Codex's own evals (doc 3), not by argument.
+
+1. **Who plans the work?** (a) the model, per task, through `decide` (built); (b) deterministic blueprints for known request shapes; (c) a rule engine that picks a blueprint from extracted facts, with the model planning only what no rule covers. Doc 0's method and the core structure ideas favour (b)/(c); the 4B evidence (multi-turn ~35%, long-horizon tasks fail) points the same way. The built design is (a).
+2. **Where does reasoning happen?** In model verdicts backed by lexical checks (built), or in explicit facts and rules the model only feeds and phrases (neuro-symbolic). Rules are auditable and don't drift; they cost authoring effort and cover only what someone (or a gated learning step) wrote.
+3. **How is memory shaped?** Today: topics, facts, memories, graph, with entities and commitments planned as further tables. Alternative: one fact/predicate store that recall, rules, commitments and drives all read. Decide before adding more tables.
+4. **Which model, and how many?** One 4B generalist (Qwen3.5-4B, built); a reasoning-tuned 4B for logic nodes (Phi-4-mini-reasoning); specialists swapped from disk; a 35B-A3B escalation; or voting with red-flag filters on the 4B. All unmeasured here.
+5. **How does it learn?** Model-extracted memories (built) vs model-authored skills, rules and corrections, each gated by a non-LLM verifier before it is stored.
+6. **How autonomous?** The autonomy ladder keeps authority with the user per event class. Goals, drives and initiative are part of the long-range aim; open questions are who may set them and how they are bounded.
+7. **What does the eval loop need first?** Every question above is settled by eval runs, and runs are currently slow (~30 s per model call, GPU use unconfirmed). A fast, trustworthy eval loop comes before any architecture bet.
+
+## References
+
+Sources cited by the research behind these docs (not re-verified):
+
+- MAKER: [arXiv 2511.09030](https://arxiv.org/abs/2511.09030), [Cognizant post](https://www.cognizant.com/us/en/ai-lab/blog/maker)
+- EffGen: [arXiv 2602.00887](https://arxiv.org/pdf/2602.00887)
+- TinyLLM (BFCL on Qwen3-4B): [arXiv 2511.22138](https://arxiv.org/pdf/2511.22138)
+- BFCL-V4 Qwen3-4B-Instruct-2507: [benchmarklist](https://benchmarklist.com/models/qwen3-4b-instruct-2507/)
+- Enterprise agent benchmark (tau2): [arXiv 2511.08042](https://arxiv.org/pdf/2511.08042)
+- Qwen3-4B with grammar-constrained decoding (community guide): [d-central](https://d-central.tech/local-llm-agent-capability/)
+- Recursive decomposition with scratchpads: [cyberdagger](https://cyberdagger.com/blog/scratchpads-recursive-decomposition-c2-agent-generation/)
+- Context-Folding: [arXiv 2510.11967](https://awesomepapers.io/papers/2510.11967)
+- brainos-orchestrate: [decompose.rs](https://docs.rs/crate/brainos-orchestrate/0.5.0/source/src/decompose.rs)
+- Terminus-4B: [summary](https://awesomepapers.io/papers/garg2026terminus)
+- 3B agent on a Raspberry Pi: [dev.to](https://dev.to/trismegistus/what-3-months-of-running-an-ai-agent-on-a-raspberry-pi-taught-me-about-task-design-1m2l)
+- RoboEyes: [github.com/x-tech-laboratories/RoboEyes](https://github.com/x-tech-laboratories/RoboEyes)
