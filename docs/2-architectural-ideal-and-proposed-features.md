@@ -209,7 +209,7 @@ An assistant that notices, prepares and asks, and acts alone only where the user
 
 ### Planned features
 - **Approval and autonomy ladder** (observe → notify → draft → act with approval → act unattended; rules learned from approvals/rejections). Until it exists no event run can change anything.
-- **Entities and commitments**, then idle jobs driven by them: pre-research for tomorrow's meetings, stale-commitment sweeps, entity profiles from episodes, daily digest.
+- **Entities and commitments** (as structured facts in the world model, see "Fact and rule engine"), then idle jobs driven by them: pre-research for tomorrow's meetings, stale-commitment sweeps, entity profiles from episodes, daily digest.
 - Other connectors: calendar, tasks/to-dos, bookmarks, notes, file watchers, timers, webhooks.
 - Mailbox coalescing / backlog policy; rolling thread summaries; idle-work budget.
 
@@ -283,6 +283,32 @@ A deterministic rule layer beside the model; rationale in doc 1 ("Neuro-symbolic
 - **Two directions:** model → rules (extract facts, rules decide) and rules → model (rules decide, the model only phrases the fixed result).
 - **First uses, all rule-shaped already:** mail triage heuristics, the autonomy ladder's learned rules (sender/class → ignore, notify, draft, act), the commitments overdue sweep, choosing a blueprint for a request, and the deterministic checks.
 - **Learning rules:** a rule proposed by the model (e.g. from repeated approvals) is stored only behind the verifier gate or the user's approval.
+
+**Store layout.** The engine does not replace the knowledge store. The evidence layer (topics, sources, facts, memories, episodes, FTS5, vectors, graph) stays for recall and grounding. A new **world model** holds the structured facts about the user's world:
+- `world_facts`: predicate, arguments (entity ids or values), source (event, episode, source row, or `user`), the source text span, extracting model call, confidence, valid from/to, status (`active`/`retracted`/`superseded`).
+- `entities`: people, organisations, threads, projects, with aliases; shared by every domain.
+- `rules`: domain, name, conditions, action, priority, origin (`builtin`/`user`/`learned`), enabled, with approvals for learned ones.
+- `rule_firings`: which rule fired on which facts and what it did, so every decision traces back to source text.
+
+Rules act only on facts at or above a confidence threshold; below it they propose or ask instead. Rule modules are split by domain and run for their domain's events; cross-domain rules form a separate small module. All modules read one shared world model.
+
+**Engine.** A small forward-chaining evaluator in TypeScript, or Datalog-style recursive queries in SQLite, so the stack stays Node + SQLite (Drools needs a JVM, CLIPS/experta are C/Python).
+
+### Domain packs
+
+A domain pack is the unit a domain is added as, one folder per domain (global and per working folder, folder wins, like agents and skills):
+
+| Part | Holds |
+| --- | --- |
+| Extraction schema | The predicates the model extracts from this domain's text, as a JSON schema enforced by grammar |
+| Rule module | The domain's rules (also editable in the `rules` table) |
+| Blueprints | Fixed task graphs for the domain's recurring requests |
+| Agent file | Instructions, tools and MCP servers (see Agent hierarchy) |
+| Autonomy settings | Starting rung on the autonomy ladder per event class |
+
+Flow for an event: the connector posts it → the pack's extraction call turns its text into world facts (fenced as untrusted, schema-constrained, no tools) → the pack's rules and cross-domain rules fire → each outcome is an action on the ladder, a blueprint run, or, if no rule covers it, a task tree. The model phrases results (drafts, summaries, notifications) from the decided outcome.
+
+First pack: mail, since triage heuristics and drafting exist. Then calendar and tasks, which share people and commitments with mail.
 
 ### Cognitive loop: goals, drives and initiative
 

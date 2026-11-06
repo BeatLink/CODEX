@@ -74,7 +74,7 @@ Goal: turn Codex from a request-answerer with idle-time knowledge work into an a
 | Results are `actions` (proposed → approved/rejected/done), not replies | Assistant proposes; user decides. |
 | Trust follows provenance: events are `user` or `external` trust; external runs may not use side-effecting tools without approval | Third-party text (email body) is the main prompt-injection route. Only the user, or a user-written rule, widens trust. |
 | Autonomy ladder per event class: observe, notify, draft, act with approval, act unattended; rules learned from approvals/rejections, stored as memories | Graduated, learnable trust. |
-| Entities and commitments get their own tables, not folded into the graph | They have a lifecycle topic/fact/memory tables don't model. |
+| Entities and commitments get their own tables, not folded into the graph | They have a lifecycle topic/fact/memory tables don't model. *Proposed instead: structured facts in the world model, see "Memory layers and domain rule sets".* |
 | Maildir before IMAP | A synced Maildir (mbsync, offlineimap) needs no credentials in Codex; the daemon never holds a mail password. |
 | IMAP password comes from running `password_command` (program + args, never a shell string) at poll time; mailbox opened read-only (`EXAMINE`), `BODY.PEEK` | Settings and DB never hold the password; polling changes nothing on the server. |
 | Event runs never act, even for `user` events | Nobody is there to approve; acting stays in the foreground until approval exists. |
@@ -199,7 +199,24 @@ From a design conversation with an LLM assistant (unchecked claims). Problem: da
 - **Pattern B, rules → model:** an event hits the rule engine first, which decides what must happen; the model only phrases the fixed result ("rewrite these exact outputs as a polite email"), so it cannot invent facts or logic.
 - Engines named: CLIPS (and its Python port experta), Drools, or a custom SQL/JSON rule evaluator. For Codex that means a TypeScript or SQL-based evaluator over the SQLite store.
 
-**Where Codex stands:** not built as a general mechanism, but the pieces exist in special cases: mail triage's header heuristics are hard-coded rules; deterministic checks are rules applied to model output; the planned autonomy ladder's learned rules and the overdue sweep for commitments are rule-shaped; the fact store and graph already hold extracted facts. A general fact-and-rule layer could serve all of these, and could also hold drives and goals as inspectable state instead of model-set text. See "Open strategic questions".
+**Where Codex stands:** not built as a general mechanism, but the pieces exist in special cases: mail triage's header heuristics are hard-coded rules; deterministic checks are rules applied to model output; the planned autonomy ladder's learned rules and the overdue sweep for commitments are rule-shaped; the fact store and graph already hold extracted facts. A general fact-and-rule layer could serve all of these, and could also hold drives and goals as inspectable state instead of model-set text.
+
+### Memory layers and domain rule sets
+
+**The rule engine does not replace the memory store.** Rules always run over a base of facts, so the question is what shape the store takes. Knowledge splits in two:
+
+| Kind | Examples | Fits rules? |
+| --- | --- | --- |
+| The user's world | people, threads, commitments, deadlines, events, preferences, approvals, goals | Yes: small structured facts, e.g. `commitment(me, send_report, alice, due=2026-11-10, status=open)`, that rules can reason over exactly |
+| World knowledge and evidence | research facts, page summaries, sources, episodes, free-text memories | No: prose, found by meaning (search and vectors); forcing it into predicates loses most of its content |
+
+So the store has two layers: the **evidence layer** (today's sources, summaries, facts, episodes, FTS5 and vectors) for recall and grounding, and a **world model** of structured facts, each with a source link, confidence and valid-from/valid-to times, with the rules themselves stored as data beside them. The world model replaces the planned entities and commitments tables and a separate store of learned rules.
+
+**Every structured fact links back to the text it came from.** A 4B model does the extraction, and a rule acting on a wrongly extracted fact is confidently wrong while looking auditable. Rules act only on facts above a confidence threshold, and every decision can be traced back to the source line.
+
+**Rules are split into modules by domain** (mail, calendar, tasks, bookmarks, research upkeep, ...), each small enough to read, unable to clash silently with another, with its own priority, and run only for its domain's events. **The facts are not split:** the same person appears in mail, calendar and tasks, and the most useful rules cross domains (an email saying "let's meet Thursday" becomes a commitment, a calendar entry and pre-meeting research). One shared world model, one rule module per domain, plus a small set of rules that work across domains.
+
+**A domain pack** bundles what is otherwise spread across separate features: the domain's extraction schema (which facts the model pulls from text), its rule module, its blueprints, its agent file (instructions, tools, MCP servers) and its autonomy-ladder settings. The model is then left three narrow jobs: text → facts, decision → prose, and requests no rule covers. This is doc 0's method applied per domain.
 
 ## Open strategic questions
 
@@ -207,7 +224,7 @@ Nothing above is final. These are the largest choices still open; each should be
 
 1. **Who plans the work?** (a) the model, per task, through `decide` (built); (b) deterministic blueprints for known request shapes; (c) a rule engine that picks a blueprint from extracted facts, with the model planning only what no rule covers. Doc 0's method and the core structure ideas favour (b)/(c); the 4B evidence (multi-turn ~35%, long-horizon tasks fail) points the same way. The built design is (a).
 2. **Where does reasoning happen?** In model verdicts backed by lexical checks (built), or in explicit facts and rules the model only feeds and phrases (neuro-symbolic). Rules are auditable and don't drift; they cost authoring effort and cover only what someone (or a gated learning step) wrote.
-3. **How is memory shaped?** Today: topics, facts, memories, graph, with entities and commitments planned as further tables. Alternative: one fact/predicate store that recall, rules, commitments and drives all read. Decide before adding more tables.
+3. **How is memory shaped?** Proposed: keep the evidence layer and add a structured world model of facts with provenance, read by rule modules split by domain and bundled into domain packs (see "Memory layers and domain rule sets"). Open until the mail pack prototype is measured; decide before adding the entities and commitments tables.
 4. **Which model, and how many?** One 4B generalist (Qwen3.5-4B, built); a reasoning-tuned 4B for logic nodes (Phi-4-mini-reasoning); specialists swapped from disk; a 35B-A3B escalation; or voting with red-flag filters on the 4B. All unmeasured here.
 5. **How does it learn?** Model-extracted memories (built) vs model-authored skills, rules and corrections, each gated by a non-LLM verifier before it is stored.
 6. **How autonomous?** The autonomy ladder keeps authority with the user per event class. Goals, drives and initiative are part of the long-range aim; open questions are who may set them and how they are bounded.
