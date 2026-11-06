@@ -320,10 +320,44 @@ A domain pack is the unit a domain is added as, one folder per domain (global an
 | Blueprints | Fixed task graphs for the domain's recurring requests |
 | Agent file | Instructions, tools and MCP servers (see Agent hierarchy) |
 | Autonomy settings | Starting rung on the autonomy ladder per event class |
+| Memory scope | The domain's own memories and lessons, beside the shared store (see "Self-improving domains") |
+| Validators | Non-LLM checks of what correct means here: a draft names the right recipient, a calendar entry doesn't clash |
+| Goals | Standing goals that create jobs unprompted, e.g. "no mail awaiting reply older than two days" |
+| Success signal | The outcome measured after the fact, e.g. approve/reject, edit distance of a sent draft, tests passing |
 
 Flow for an event: the connector posts it → the pack's extraction call turns its text into world facts (fenced as untrusted, schema-constrained, no tools) → the pack's rules and cross-domain rules fire → each outcome is an action on the ladder, a blueprint run, or, if no rule covers it, a task tree. The model phrases results (drafts, summaries, notifications) from the decided outcome.
 
 First pack: mail, since triage heuristics and drafting exist. Then calendar and tasks, which share people and commitments with mail.
+
+### Self-improving domains
+
+Rationale in doc 1 ("Self-improving domains"). A domain pack becomes the unit the system gets better at, not only the unit it is configured by.
+
+**Cognitive processes are job types, written once.** Planner, researcher, executor, auditor, pruner, collator and reflection are each one implementation that the scheduler runs *for* a domain: `audit(mail)`, `prune(calendar)`, `research(projects)`. The domain supplies the data (memory scope, tools, instructions, validators, goals, success signal); the process supplies the method. No per-domain copies of the processes.
+
+| Process | Built today as | Per-domain job |
+| --- | --- | --- |
+| Planner | `decide` / `decompose`, blueprints (proposed) | plans with the domain's blueprints and tools |
+| Memory | `recall`, `searchWithMemory` | recalls from the domain's scope plus the shared store |
+| Researcher | gather tool loop, `researchOneTopic` | researches topics the domain's goals name |
+| Executor | `act`, MCP tools | only the domain's tools, on the autonomy ladder |
+| Auditor | `check`, `checks.ts` | the domain's validators, plus re-reading real state after an action |
+| Pruner / collator | consolidation, `tidy` | consolidates the domain's memory scope |
+| Reflection | `learnFromEpisodes` (generic) | turns recorded outcomes into proposed changes (below) |
+
+**Improvement loop per domain:**
+1. **Record:** every run and event outcome is stored with the domain's success signal once it is known (an Inbox approval, the sent text of a draft, a test result).
+2. **Reflect:** a reflection job reads recent failures and proposes one change: a rule, an instruction line, a memory, a validator or a skill.
+3. **Test:** the change is replayed on that domain's stored past cases (a held-out set kept per domain) against the current setup.
+4. **Keep or drop:** kept only if it scores better and breaks no passing case; otherwise dropped, or put in the Inbox for the user to decide. Every kept change is a readable row with its origin, score and date, so it can be rolled back.
+
+Improvements live in data (rules, instructions, memories, validators, skills), never in weights. This is "Verified self-authored skills" and "Refinement across runs" generalised to everything a domain holds, with the domain's past cases as the gate.
+
+**Scheduler.** One model runs one prompt at a time; the scheduler decides which. Jobs come from three sources: reactive (events), goal-driven (a domain's standing goals, checked against the store) and maintenance (research, consolidation, reflection). Priority = urgency × expected value × staleness, with a budget per domain per day so one busy domain cannot starve the rest. A foreground request still pre-empts everything, as today.
+
+**What stays shared.** Requests cross domains ("the email from Sam about Thursday" touches mail, calendar and contacts), so domains are not silos:
+- The task tree stays the top-level coordinator: it routes a request to one or more domains and combines their results. Domains nest at most one or two levels; each hand-off loses detail.
+- User memory, entities (people, organisations, threads) and the world model are shared; a domain's scope holds only what is specific to it. This matches "Memory layers and domain rule sets" in doc 1: facts shared, rule modules per domain.
 
 ### Cognitive loop: goals, drives and initiative
 

@@ -141,6 +141,19 @@ Design in doc 2 ("Core structure ideas"); the questions they answer are in doc 1
 6. **Memory drift watch:** the main risk for an always-on loop is a wrong fact entering long-term memory. Track how many learned memories and facts later get `disputed`/`superseded`, and sample stored items against their sources, to see whether grounding checks hold over weeks.
 7. **Goals, drives and initiative:** design goals and drives as harness state (doc 2, "Cognitive loop"), decide who may change them, and test whether drive-chosen idle work beats the fixed chain (ties in with Reactive assistant item 6). Actions stay bounded by the autonomy ladder (Reactive assistant items 3–4).
 
+## Self-improving domains: mail slice first
+
+Design in doc 2 ("Self-improving domains"), rationale in doc 1. Build one domain end to end before generalising; mail first, because connectors, triage, drafting and the Inbox's approve/reject signal already exist. Shares work with Core structure ideas item 3 (mail pack) and Reactive assistant items 4 and 6.
+
+1. **Record outcomes:** store each mail event's triage class and draft beside what the user then did (approved, rejected, edited and sent, ignored). This is the success signal and the past-case set.
+2. **Mail memory scope:** memories and lessons tagged with the domain, recalled for mail runs beside the shared store.
+3. **Mail validators:** non-LLM checks for drafts (recipient and subject match the thread, no date or name absent from the thread) and for triage (class consistent with the learned sender rules).
+4. **Reflection job:** reads recent rejected or heavily edited outcomes and proposes one change (rule, instruction line, memory, validator).
+5. **Replay gate:** test the proposed change on the stored mail cases against the current setup; keep only if better and nothing that passed breaks, otherwise send to the Inbox. Keep a log of kept changes with score and origin, and a way to roll one back.
+6. **Scheduler:** add goal-driven jobs and a per-domain budget beside the reactive and maintenance classes in `core/scheduler.ts`.
+
+**Validation:** over a few weeks of real mail, track triage agreement with the user's actions and draft edit distance, before and after kept changes. Check that a deliberately wrong change is rejected by the replay gate. If mail improves, generalise the shape to calendar and tasks; if it doesn't, find out whether the signal, the reflection or the gate is at fault before adding domains.
+
 ## Housekeeping
 
 - Purge the removed LM Studio notes (`docs/design/lm-studio-models-and-settings.md`, commits 46b2616 and 538c143) from the public history. Postponed: it rewrites published history.
