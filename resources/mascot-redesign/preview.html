@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>CODEX mascot</title>
+    <link rel="stylesheet" href="mascot.css" />
+    <style>
+        body { margin: 0; padding: 24px; background: #16181d; color: #cfd3da; font: 14px system-ui, sans-serif; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, 150px); gap: 18px; }
+        .card { text-align: center; }
+        .card svg { width: 128px; height: 128px; margin: 0 auto; }
+        .card button { margin-top: 6px; }
+        .sizes { display: flex; gap: 18px; align-items: center; padding: 12px 16px; border-radius: 10px; margin-top: 18px; }
+        .sizes.light { background: #f4f5f7; }
+        .sizes.dark { background: #0e0f12; }
+        .sizes svg:nth-child(1) { width: 24px; height: 24px; }
+        .sizes svg:nth-child(2) { width: 32px; height: 32px; }
+        .sizes svg:nth-child(3) { width: 48px; height: 48px; }
+        .sizes svg:nth-child(4) { width: 72px; height: 72px; }
+    </style>
+</head>
+
+<body>
+    <div class="grid" id="grid"></div>
+    <div class="sizes dark" id="dark"></div>
+    <div class="sizes light" id="light"></div>
+    <script>
+        // The markup to copy into the UI. It has no ids, so it can be repeated on a page as is.
+        function mascotMarkup(state) {
+            const eye = (side, x, d) => `<g class="eye-${side}" transform="translate(${x} 34.5)"><g class="eye-look"><g class="eye-blink">
+                <path class="eye-shape" d="${d}" />
+            </g></g></g>`;
+            return `<svg class="mascot" data-state="${state}" viewBox="0 0 64 64" role="img" aria-label="CODEX">
+    <title>CODEX</title>
+    <path class="body" stroke-width="6" stroke-linejoin="round" d="M60 32 46 56.25 18 56.25 4 32 18 7.75 46 7.75Z" />
+    <g transform="translate(32 37) scale(1.15) translate(-32 -37)">
+        <g class="head">
+            <rect class="screen" x="14" y="33" width="4.5" height="8" rx="2" />
+            <rect class="screen" x="45.5" y="33" width="4.5" height="8" rx="2" />
+            <rect class="screen" x="31" y="21" width="2" height="7" />
+            <circle class="screen" cx="32" cy="19.5" r="3" />
+            <circle class="antenna-light" cx="32" cy="19.5" r="1.5" />
+            <rect class="screen" x="18" y="27" width="28" height="20" rx="6" />
+            ${eye('left', 26, 'M-1.45 -3.25C-0.48 -3.25 0.48 -3.25 1.45 -3.25C2.44 -3.25 3.25 -2.44 3.25 -1.45C3.25 -0.48 3.25 0.48 3.25 1.45C3.25 2.44 2.44 3.25 1.45 3.25C0.48 3.25 -0.48 3.25 -1.45 3.25C-2.44 3.25 -3.25 2.44 -3.25 1.45C-3.25 0.48 -3.25 -0.48 -3.25 -1.45C-3.25 -2.44 -2.44 -3.25 -1.45 -3.25Z')}
+            ${eye('right', 38, 'M1.45 -3.25C0.48 -3.25 -0.48 -3.25 -1.45 -3.25C-2.44 -3.25 -3.25 -2.44 -3.25 -1.45C-3.25 -0.48 -3.25 0.48 -3.25 1.45C-3.25 2.44 -2.44 3.25 -1.45 3.25C-0.48 3.25 0.48 3.25 1.45 3.25C2.44 3.25 3.25 2.44 3.25 1.45C3.25 0.48 3.25 -0.48 3.25 -1.45C3.25 -2.44 2.44 -3.25 1.45 -3.25Z')}
+            <path class="mouth" d="M28.00 40.45C28.48 41.07 29.27 41.25 30.40 41.25C31.47 41.25 32.53 41.25 33.60 41.25C34.73 41.25 35.52 41.25 36.00 41.25C36.48 41.25 36.48 42.55 36.00 42.55C35.52 42.55 34.73 42.55 33.60 42.55C32.53 42.55 31.47 42.55 30.40 42.55C29.27 42.55 28.48 42.37 28.00 41.75C27.52 41.75 27.52 40.45 28.00 40.45Z" />
+        </g>
+    </g>
+    <g stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
+        <g transform="translate(47 22)"><path class="zzz" d="M0 0H3.6L0 4.6H3.6" /></g>
+        <g class="zzz-small" transform="translate(50.5 18) scale(0.7)"><path class="zzz" d="M0 0H3.6L0 4.6H3.6" /></g>
+    </g>
+</svg>`;
+        }
+
+        const states = ['calm', 'thinking', 'focused', 'curious', 'happy', 'excited', 'sad', 'worried', 'startled', 'asleep', 'waking'];
+        const grid = document.getElementById('grid');
+        states.forEach((state) => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = mascotMarkup(state) + `<div>${state}</div><button>replay</button>`;
+            card.querySelector('button').onclick = () => {
+                const svg = card.querySelector('svg');
+                svg.removeAttribute('data-state');
+                void svg.getBoundingClientRect();
+                svg.setAttribute('data-state', state);
+            };
+            grid.appendChild(card);
+        });
+        ['dark', 'light'].forEach((id) => {
+            document.getElementById(id).innerHTML = [0, 1, 2, 3].map(() => mascotMarkup('calm')).join('');
+        });
+
+        // ?t=<milliseconds> freezes every animation at that time, for stills.
+        const frozen_at = new URLSearchParams(location.search).get('t');
+        if (frozen_at !== null) {
+            requestAnimationFrame(() => document.getAnimations().forEach((animation) => {
+                animation.pause();
+                animation.currentTime = Number(frozen_at);
+            }));
+        }
+    </script>
+</body>
+
+</html>

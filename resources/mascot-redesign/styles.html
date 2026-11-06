@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>CODEX mascot: style directions</title>
+    <link rel="stylesheet" href="mascot.css" />
+    <style>
+        body { margin: 0; padding: 28px; background: #16181d; color: #cfd3da; font: 14px/1.4 system-ui, sans-serif; }
+        h2 { font-size: 15px; margin: 0 0 2px; color: #fff; }
+        p { margin: 0 0 12px; color: #8b93a1; max-width: 760px; }
+        section { margin-bottom: 34px; }
+        .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: end; }
+        .cell { text-align: center; font-size: 12px; color: #8b93a1; }
+        .cell svg { width: 112px; height: 112px; }
+        .sizes { display: flex; gap: 18px; align-items: center; padding: 12px 16px; border-radius: 10px; margin-top: 10px; }
+        .sizes.dark { background: #0e0f12; }
+        .sizes.light { background: #f4f5f7; }
+        .sizes svg.s24 { width: 24px; height: 24px; }
+        .sizes svg.s32 { width: 32px; height: 32px; }
+        .sizes svg.s48 { width: 48px; height: 48px; }
+        .sizes svg.s72 { width: 72px; height: 72px; }
+
+        /* Visor direction: the face is a dark screen with lit eyes, so it no longer depends on the page behind it. */
+        .mascot.visor { --screen: #0b1322; --lit: #8fd6ff; }
+        .mascot.visor .eye-shape,
+        .mascot.visor .mouth,
+        .mascot.visor .antenna-ball { filter: drop-shadow(0 0 0.9px var(--lit)); }
+        .mascot.visor.no-mouth .mouth { display: none; }
+    </style>
+</head>
+
+<body>
+    <section>
+        <h2>A · Current, refined</h2>
+        <p>Same idea as today: the head is a cut-out in the hexagon. Rounded corners so the hexagon matches the soft head. The face still takes its colour from whatever is behind it, so on a light page it turns into a white hole.</p>
+        <div class="row" data-variant="a"></div>
+        <div class="sizes dark" data-variant="a" data-sizes></div>
+        <div class="sizes light" data-variant="a" data-sizes></div>
+    </section>
+
+    <section>
+        <h2>B · Visor</h2>
+        <p>The head becomes a dark glass screen with softly lit eyes, mouth and antenna light. It reads as a device rather than a clip-art icon, looks the same on any background, and the antenna light works as a status light (it pulses while thinking). Head is 15% larger so the face holds up at small sizes.</p>
+        <div class="row" data-variant="b"></div>
+        <div class="sizes dark" data-variant="b" data-sizes></div>
+        <div class="sizes light" data-variant="b" data-sizes></div>
+    </section>
+
+    <section>
+        <h2>C · Visor, eyes only</h2>
+        <p>Same as B without the mouth. All emotion comes from the eyes, the antenna light and small head moves: the most restrained, and the "coolest", but sad and worried rely on eye shape alone.</p>
+        <div class="row" data-variant="c"></div>
+        <div class="sizes dark" data-variant="c" data-sizes></div>
+        <div class="sizes light" data-variant="c" data-sizes></div>
+    </section>
+
+    <script>
+        const HEX_ROUNDED = 'M60 32 46 56.25 18 56.25 4 32 18 7.75 46 7.75Z';
+        const EYE = 'M-2.4 0C-2.4 -3 2.4 -3 2.4 0C2.4 3 -2.4 3 -2.4 0Z';
+        const MOUTH = 'M27 41C27.6 41.8 28.6 42.2 30 42.2C32.3 42.2 34.7 42.2 37 42.2';
+        const ZZZ = `<g transform="translate(47 22)"><path class="zzz" d="M0 0H3.6L0 4.6H3.6" /></g>
+            <g class="zzz-small" transform="translate(50.5 18) scale(0.7)"><path class="zzz" d="M0 0H3.6L0 4.6H3.6" /></g>`;
+
+        function face(color, eyeStroke) {
+            return `<g class="eye-left" transform="translate(26 34.5)"><g class="eye-look"><path class="eye-shape" fill="${color}" stroke="${color}" stroke-width="${eyeStroke}" stroke-linejoin="round" d="${EYE}" /></g></g>
+            <g class="eye-right" transform="translate(38 34.5)"><g class="eye-look"><path class="eye-shape" fill="${color}" stroke="${color}" stroke-width="${eyeStroke}" stroke-linejoin="round" d="${EYE}" /></g></g>
+            <path class="mouth" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="${MOUTH}" />`;
+        }
+
+        // A: today's cut-out construction with a rounded hexagon.
+        function variantA(id, state, cls = '') {
+            return `<svg class="mascot ${cls}" data-state="${state}" viewBox="0 0 64 64" role="img" aria-label="CODEX">
+    <mask id="${id}-cut">
+        <rect width="64" height="64" fill="#fff" />
+        <g class="head" fill="#000">
+            <rect x="18" y="27" width="28" height="20" rx="6" />
+            <rect x="13.5" y="33" width="5" height="8" rx="2" />
+            <rect x="45.5" y="33" width="5" height="8" rx="2" />
+            <rect x="30.5" y="21" width="3" height="7" />
+            <circle class="antenna-ball" cx="32" cy="19.5" r="3" />
+        </g>
+        <g fill="none" stroke="#000" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">${ZZZ}</g>
+    </mask>
+    <path fill="currentColor" stroke="currentColor" stroke-width="6" stroke-linejoin="round" mask="url(#${id}-cut)" d="${HEX_ROUNDED}" />
+    <g class="head">${face('currentColor', 1.1)}</g>
+</svg>`;
+        }
+
+        // B and C: a solid dark screen for the face, scaled up 15% around the head's centre.
+        function variantB(id, state, cls = '') {
+            return `<svg class="mascot visor ${cls}" data-state="${state}" viewBox="0 0 64 64" role="img" aria-label="CODEX">
+    <path fill="currentColor" stroke="currentColor" stroke-width="6" stroke-linejoin="round" d="${HEX_ROUNDED}" />
+    <g transform="translate(32 37) scale(1.15) translate(-32 -37)">
+        <g class="head">
+            <rect x="14" y="33" width="4.5" height="8" rx="2" fill="var(--screen)" />
+            <rect x="45.5" y="33" width="4.5" height="8" rx="2" fill="var(--screen)" />
+            <rect x="31" y="21" width="2" height="7" fill="var(--screen)" />
+            <circle cx="32" cy="19.5" r="3" fill="var(--screen)" />
+            <circle class="antenna-ball" cx="32" cy="19.5" r="1.5" fill="var(--lit)" />
+            <rect x="18" y="27" width="28" height="20" rx="6" fill="var(--screen)" />
+            ${face('var(--lit)', 1.1)}
+        </g>
+    </g>
+    <g fill="none" stroke="var(--screen)" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">${ZZZ}</g>
+</svg>`;
+        }
+
+        const builders = { a: variantA, b: variantB, c: (id, s) => variantB(id, s, 'no-mouth') };
+        const states = ['calm', 'thinking', 'focused', 'curious', 'happy', 'excited', 'sad', 'worried', 'asleep'];
+        let n = 0;
+
+        document.querySelectorAll('[data-variant]').forEach((el) => {
+            const build = builders[el.dataset.variant];
+            if (el.hasAttribute('data-sizes')) {
+                el.innerHTML = ['s24', 's32', 's48', 's72'].map((size) =>
+                    build('m' + n++, 'calm').replace('class="mascot', `class="${size} mascot`)).join('');
+            } else {
+                el.innerHTML = states.map((state) =>
+                    `<div class="cell">${build('m' + n++, state)}<div>${state}</div></div>`).join('');
+            }
+        });
+
+        // ?t=<milliseconds> freezes every animation at that time, for stills.
+        const frozen_at = new URLSearchParams(location.search).get('t');
+        if (frozen_at !== null) {
+            requestAnimationFrame(() => document.getAnimations().forEach((animation) => {
+                animation.pause();
+                animation.currentTime = Number(frozen_at);
+            }));
+        }
+    </script>
+</body>
+
+</html>
