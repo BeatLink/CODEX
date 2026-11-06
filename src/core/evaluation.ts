@@ -423,16 +423,23 @@ export function describeCheck(check: Check): string {
 
 type CompletionWithUsage = ChatCompletion & { usage?: { completion_tokens?: number } };
 
-// Wrap the loaded model to count its calls and the tokens it generates.
+// One tool call the model asked for, kept so a failing run shows which tools it reached.
+export type RecordedToolCall = { name: string; arguments: string };
+
+// Wrap the loaded model to count its calls and the tokens it generates, and record the tools it calls.
 export class CountingModel implements ChatModel {
     calls = 0;
     completionTokens = 0;
+    toolCalls: RecordedToolCall[] = [];
 
     constructor(private readonly llm: ChatModel) {}
 
     async createChatCompletion(request: ChatCompletionRequest): Promise<ChatCompletion> {
         this.calls += 1;
         const response: CompletionWithUsage = await this.llm.createChatCompletion(request);
+        for (const call of response.tool_calls ?? []) {
+            this.toolCalls.push({ name: call.function.name, arguments: call.function.arguments });
+        }
         // A reply without a usage count is measured by tokenizing what it says.
         const usage = response.usage?.completion_tokens;
         if (typeof usage === 'number') {
@@ -466,6 +473,7 @@ export class RunResult {
     seconds = 0.0;
     model_calls = 0;
     completion_tokens = 0;
+    tool_calls: RecordedToolCall[] = [];
     // Which round of a repeated eval this run belongs to, counting from 1.
     attempt = 1;
 
@@ -492,6 +500,7 @@ export class RunResult {
             seconds: this.seconds,
             model_calls: this.model_calls,
             completion_tokens: this.completion_tokens,
+            tool_calls: this.tool_calls,
             attempt: this.attempt,
             passed: this.passed,
         };
@@ -533,6 +542,7 @@ export async function runTask(
         result.seconds = roundTo((performance.now() - started) / 1000, 2);
         result.model_calls = countingModel.calls;
         result.completion_tokens = countingModel.completionTokens;
+        result.tool_calls = countingModel.toolCalls;
         if (!result.error) {
             for (const check of task.checks) {
                 if (await checkPasses(result.answer, check, task, workspace)) {

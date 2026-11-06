@@ -219,6 +219,22 @@ describe('runTask', () => {
         expect([result.model_calls, result.completion_tokens]).toEqual([1, 7]);
     });
 
+    it('records the tools the model calls', async () => {
+        const toolCall = { id: 'call-1', type: 'function', function: { name: 'mail__list_inbox', arguments: '{"limit":1}' } };
+        fakeTree.mockImplementation(async (_prompt, options = {}) => {
+            await options.llm!.createChatCompletion({ messages: [] });
+            return '4';
+        });
+        const model = {
+            createChatCompletion: async () => ({ content: '', tool_calls: [toolCall], finish_reason: 'tool_calls' }) as ChatCompletion,
+        };
+
+        const result = await runTask(sumTask(undefined, 'answer'), 'tree', model, SETTINGS);
+
+        expect(result.tool_calls).toEqual([{ name: 'mail__list_inbox', arguments: '{"limit":1}' }]);
+        expect(result.toJson().tool_calls).toEqual(result.tool_calls);
+    });
+
     it('gives the tree runner an empty store and a scratch root', async () => {
         let seen: ExecuteTaskTreeOptions = {};
         fakeTree.mockImplementation(async (_prompt, options = {}) => {
