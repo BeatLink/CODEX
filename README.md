@@ -493,7 +493,6 @@ To work on it, enter the dev shell, which provides Node 24 and Electron:
 
 ```bash
 nix develop
-npm install
 npm ci
 npm run build
 npm test

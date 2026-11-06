@@ -88,7 +88,11 @@
           electron
           pkgs.util-linux
         ];
+        # npm scripts put node_modules/.bin first on PATH; point them at the Nix wrapper instead.
+        ELECTRON = "${electron}/bin/electron";
         ELECTRON_OVERRIDE_DIST_PATH = "${electron}/libexec/electron";
+        # The npm electron package runs the bare binary, which dumps core without the wrapper's sandbox path.
+        CHROME_DEVEL_SANDBOX = "${electron}/libexec/electron/chrome-sandbox";
         ELECTRON_SKIP_BINARY_DOWNLOAD = "1";
         LD_LIBRARY_PATH = runtimeLibraryPath;
       };
