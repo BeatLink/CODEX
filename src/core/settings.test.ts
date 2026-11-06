@@ -120,6 +120,41 @@ describe('settings', () => {
 });
 
 // ============================================================================
+// Mail
+// ============================================================================
+
+describe('imap accounts', () => {
+    const account = { name: 'home', host: 'imap.example.test', username: 'me', password_command: ['mail-password', 'home'] };
+
+    it('defaults the port and folder, and has no accounts at first', () => {
+        expect(DEFAULT_SETTINGS.mail_imap_accounts).toEqual([]);
+        expect(validateSettings({ ...DEFAULT_SETTINGS, mail_imap_accounts: [account] }).mail_imap_accounts).toEqual([
+            { ...account, port: 993, folder: 'INBOX' },
+        ]);
+    });
+
+    it('takes the password from a command, never from settings', () => {
+        expect(() => validateSettings({ ...DEFAULT_SETTINGS, mail_imap_accounts: [{ ...account, password: 'x' }] })).toThrow(/Unknown field.*password/);
+        expect(() => validateSettings({ ...DEFAULT_SETTINGS, mail_imap_accounts: [{ ...account, password_command: [] }] })).toThrow(/password_command/);
+        expect(() => validateSettings({ ...DEFAULT_SETTINGS, mail_imap_accounts: [{ ...account, password_command: 'mail-password home' }] })).toThrow(/password_command/);
+    });
+
+    it('checks names, hosts, ports and folders', () => {
+        const bad = (change: object) => () => validateSettings({ ...DEFAULT_SETTINGS, mail_imap_accounts: [{ ...account, ...change }] });
+        expect(bad({ name: 'a b' })).toThrow(/name/);
+        expect(bad({ host: 'imap.example.test:993' })).toThrow(/host/);
+        expect(bad({ port: 0 })).toThrow(/port/);
+        expect(bad({ folder: 'IN"BOX' })).toThrow(/folder/);
+        expect(() => validateSettings({ ...DEFAULT_SETTINGS, mail_imap_accounts: [account, account] })).toThrow(/unique/);
+    });
+
+    it('needs a boolean for drafting replies, which is on by default', () => {
+        expect(DEFAULT_SETTINGS.mail_draft_replies).toBe(true);
+        expect(() => validateSettings({ ...DEFAULT_SETTINGS, mail_draft_replies: 'yes' })).toThrow(/mail_draft_replies/);
+    });
+});
+
+// ============================================================================
 // MCP servers
 // ============================================================================
 

@@ -69,10 +69,33 @@ describe('email triage', () => {
 
         await handleNextEvent(settings, options);
 
-        expect(store.events()[0].status).toBe('done');
+        expect(store.events().find((event) => event.type === 'email.received')?.status).toBe('done');
         const [action] = store.actions();
         expect(action).toMatchObject({ kind: 'notify', title: 'Alice <alice@example.test>: Lunch?', body: 'Alice asks about lunch.' });
         expect(JSON.parse(String(action.payload))).toMatchObject({ category: 'personal', importance: 'normal', needs_reply: true });
+    });
+
+    it('queues one draft event, with outside trust, for mail that waits for a reply', async () => {
+        receive({ message_id: '<1@example.test>' });
+        fakes.runStage.mockResolvedValueOnce(verdict());
+
+        await handleNextEvent(settings, options);
+
+        const drafts = store.events().filter((event) => event.type === 'email.draft');
+        expect(drafts).toHaveLength(1);
+        expect(drafts[0]).toMatchObject({ trust: 'external', priority: -1, dedupe_key: 'draft:<1@example.test>' });
+    });
+
+    it('queues no draft when the setting is off or no reply is wanted', async () => {
+        receive();
+        receive({ subject: 'FYI' });
+        fakes.runStage.mockResolvedValueOnce(verdict({ needs_reply: false, importance: 'high' }));
+        settings = { ...settings, mail_draft_replies: false };
+        await handleNextEvent(settings, options);
+        fakes.runStage.mockResolvedValueOnce(verdict());
+        await handleNextEvent(settings, options);
+
+        expect(store.events().filter((event) => event.type === 'email.draft')).toEqual([]);
     });
 
     it('shows the email to the model inside the untrusted fence, with no tools', async () => {
@@ -98,7 +121,7 @@ describe('email triage', () => {
         await handleNextEvent(settings, options);
         await handleNextEvent(settings, options);
 
-        expect(store.events().map((event) => event.status).reverse()).toEqual(['ignored', 'done']);
+        expect(store.events().filter((event) => event.type === 'email.received').map((event) => event.status).reverse()).toEqual(['ignored', 'done']);
         expect(store.actions()).toHaveLength(1);
     });
 

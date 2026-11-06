@@ -18,6 +18,7 @@ import {
     type NewEvent,
     type TaskRun,
 } from '../core/knowledge.js';
+import { ImapConnector } from '../core/imap.js';
 import { MailConnector } from '../core/mail.js';
 import { ModelCache } from '../core/model.js';
 import { runNextJob, type BackgroundStep, type Job } from '../core/scheduler.js';
@@ -217,6 +218,7 @@ export type DaemonDependencies = {
 };
 
 const defaultMailConnector = new MailConnector();
+const defaultImapConnector = new ImapConnector();
 
 const DEFAULT_DEPENDENCIES: DaemonDependencies = {
     executeTaskTree,
@@ -225,7 +227,11 @@ const DEFAULT_DEPENDENCIES: DaemonDependencies = {
     indexKnowledge,
     learnFromEpisodes,
     consolidateKnowledge,
-    pollConnectors: (settings, options) => defaultMailConnector.poll(settings, options),
+    pollConnectors: async (settings, options) => {
+        const maildir = await defaultMailConnector.poll(settings, options);
+        const imap = await defaultImapConnector.poll(settings, options);
+        return maildir || imap;
+    },
     handleEvents: (settings, options) => handleNextEvent(settings, options),
     refreshEnvironment: (settings) => refreshEnvironment(settings),
     monotonic: () => performance.now() / 1000,
@@ -386,6 +392,10 @@ export class HarnessDaemon {
                         priority: integer(params.priority, 'priority', 0),
                     }),
                 ),
+            ],
+            [
+                'queue_request',
+                method(['prompt'], (_, params) => this.queueRequest(text(params.prompt, 'prompt', ''))),
             ],
             ['events', method(['limit'], (_, params) => this.events(integer(params.limit, 'limit', 100)))],
             [
@@ -838,6 +848,15 @@ export class HarnessDaemon {
             this.broadcast('events.changed');
         }
         return posted;
+    }
+
+    // Leaves a request for the assistant to work while idle; its answer waits in the Inbox.
+    queueRequest(prompt: string): Json {
+        const trimmed = prompt.trim();
+        if (!trimmed) {
+            throw new Error('A request needs a prompt.');
+        }
+        return this.postEvent({ source: 'user', type: 'user.request', trust: 'user', payload: { prompt: trimmed }, priority: 1 });
     }
 
     events(limit = 100): Json[] {

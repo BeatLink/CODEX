@@ -112,6 +112,17 @@ export const emailHandler: EventHandler = async (event, { settings, store, optio
     if (verdict.importance === 'low' && !verdict.needs_reply) {
         return { status: 'ignored', detail: `Low importance: ${verdict.summary}` };
     }
+    // The mail is only read here; the reply is drafted later, so the person sees the mail first.
+    if (verdict.needs_reply && settings.mail_draft_replies) {
+        store.enqueueEvent({
+            source: event.source,
+            type: 'email.draft',
+            dedupeKey: `draft:${mail.message_id || event.id}`,
+            trust: 'external',
+            priority: -1,
+            payload: event.payload,
+        });
+    }
     const actionId = store.addAction({
         eventId: event.id,
         kind: 'notify',

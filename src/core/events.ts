@@ -1,17 +1,23 @@
 // Handle the events queued in the knowledge store: each type has a handler that turns the event into actions for the user.
 import { BackgroundPaused, type BackgroundOptions } from './background.js';
+import { draftReplyHandler, userRequestHandler } from './eventTree.js';
 import { KnowledgeStore, type EventRecord } from './knowledge.js';
 import type { Settings } from './settings.js';
+import { executeTaskTree, type ExecuteTaskTreeOptions } from './taskTree.js';
 import { emailHandler } from './triage.js';
 
 // ============================================================================
 // Handlers
 // ============================================================================
 
+export type TreeRunner = (prompt: string, options: ExecuteTaskTreeOptions) => Promise<string>;
+
 export type EventContext = {
     settings: Settings;
     store: KnowledgeStore;
     options: BackgroundOptions;
+    // Works a prompt as a task tree; replaceable so tests need no model.
+    runTree: TreeRunner;
 };
 
 export type EventOutcome = { status: 'done' | 'ignored'; detail: string };
@@ -40,6 +46,8 @@ export const notifyHandler: EventHandler = async (event, { store }) => {
 export const DEFAULT_EVENT_HANDLERS: ReadonlyMap<string, EventHandler> = new Map([
     ['notify', notifyHandler],
     ['email.received', emailHandler],
+    ['email.draft', draftReplyHandler],
+    ['user.request', userRequestHandler],
 ]);
 
 // ============================================================================
@@ -51,6 +59,7 @@ export async function handleNextEvent(
     settings: Settings,
     options: BackgroundOptions = {},
     handlers: ReadonlyMap<string, EventHandler> = DEFAULT_EVENT_HANDLERS,
+    runTree: TreeRunner = executeTaskTree,
 ): Promise<boolean> {
     const store = new KnowledgeStore(settings.knowledge_db_path);
     const event = store.claimEvent();
@@ -68,7 +77,7 @@ export async function handleNextEvent(
         if (options.shouldPause?.()) {
             throw new BackgroundPaused();
         }
-        const outcome = await handler(event, { settings, store, options });
+        const outcome = await handler(event, { settings, store, options, runTree });
         store.finishEvent(event.id, outcome.status, outcome.detail);
     } catch (error) {
         if (error instanceof BackgroundPaused) {

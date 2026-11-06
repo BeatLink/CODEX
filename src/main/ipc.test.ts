@@ -41,6 +41,7 @@ describe('daemon requests from the window', () => {
         expect(ALLOWED_METHODS.has('actions')).toBe(true);
         expect(ALLOWED_METHODS.has('resolve_action')).toBe(true);
         expect(ALLOWED_METHODS.has('post_event')).toBe(false);
+        expect(ALLOWED_METHODS.has('queue_request')).toBe(true);
     });
 
     it('rejects params that are not an object', async () => {

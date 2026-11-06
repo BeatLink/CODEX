@@ -371,6 +371,21 @@ describe('HarnessDaemon', () => {
         expect(await client.call('actions', { status: 'proposed' })).toEqual([]);
     });
 
+    it('queues a request the user leaves for later as a trusted event', async () => {
+        const client = await (await start()).client();
+
+        const posted = await client.call<{ id: number }>('queue_request', { prompt: '  Summarise my notes on WAL  ' });
+
+        expect((await client.call<Array<Record<string, unknown>>>('events'))[0]).toMatchObject({
+            id: posted.id,
+            source: 'user',
+            type: 'user.request',
+            trust: 'user',
+            status: 'pending',
+        });
+        await expect(client.call('queue_request', { prompt: '   ' })).rejects.toThrow('needs a prompt');
+    });
+
     it('rejects an event with an unknown trust and an unknown resolution', async () => {
         const client = await (await start()).client();
 

@@ -45,6 +45,16 @@ export type HttpServerSettings = {
 
 export type McpServerSettings = StdioServerSettings | HttpServerSettings;
 
+// An IMAP mailbox read over TLS; the password comes from running password_command, so settings never hold it.
+export type ImapAccount = {
+    name: string;
+    host: string;
+    port: number;
+    username: string;
+    password_command: string[];
+    folder: string;
+};
+
 export type Settings = {
     model_path: string;
     context_size: number;
@@ -76,6 +86,8 @@ export type Settings = {
     background_max_store_megabytes: number;
     mail_maildir_paths: string[];
     mail_max_age_days: number;
+    mail_imap_accounts: ImapAccount[];
+    mail_draft_replies: boolean;
 };
 
 export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
@@ -113,6 +125,9 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
     // Maildir folders whose new/ messages become events; none are read until one is listed.
     mail_maildir_paths: [],
     mail_max_age_days: 7,
+    mail_imap_accounts: [],
+    // A message that needs an answer gets a drafted reply, which the model works as a task tree; it is never sent.
+    mail_draft_replies: true,
 } satisfies Settings);
 
 // ============================================================================
@@ -253,6 +268,10 @@ export function validateSettings(input: Record<string, unknown>): Settings {
         throw new Error('mail_maildir_paths must be a list of folder path strings.');
     }
     values.mail_maildir_paths = values.mail_maildir_paths.map((path: string) => path.trim());
+    values.mail_imap_accounts = validateImapAccounts(values.mail_imap_accounts);
+    if (typeof values.mail_draft_replies !== 'boolean') {
+        throw new Error('mail_draft_replies must be a boolean.');
+    }
     const ranges: Array<[string, number, number]> = [
         ['max_task_depth', 0, 6],
         ['max_task_nodes', 1, 60],
@@ -306,6 +325,52 @@ export function mcpServersFromJson(text: string): McpServerSettings[] {
         throw new Error(`MCP servers must be valid JSON: ${(error as Error).message}`);
     }
     return validateMcpServers(servers);
+}
+
+const ALLOWED_IMAP_FIELDS = new Set(['name', 'host', 'port', 'username', 'password_command', 'folder']);
+
+export function validateImapAccounts(accounts: unknown): ImapAccount[] {
+    if (!Array.isArray(accounts)) {
+        throw new Error('mail_imap_accounts must be a list.');
+    }
+    const seenNames = new Set<string>();
+    return accounts.map((account: unknown, index): ImapAccount => {
+        const where = `mail_imap_accounts[${index}]`;
+        if (!isObject(account)) {
+            throw new Error(`${where} must be an object.`);
+        }
+        const unknownFields = Object.keys(account).filter((key) => !ALLOWED_IMAP_FIELDS.has(key));
+        if (unknownFields.length > 0) {
+            throw new Error(`Unknown field(s) in ${where}: ${unknownFields.sort().join(', ')}`);
+        }
+        const { name, host, username } = account;
+        if (typeof name !== 'string' || !/^[A-Za-z0-9_-]{1,32}$/.test(name)) {
+            throw new Error(`${where}.name must be 1-32 letters, numbers, '_' or '-'.`);
+        }
+        if (seenNames.has(name)) {
+            throw new Error(`IMAP account names must be unique: ${name}.`);
+        }
+        seenNames.add(name);
+        if (typeof host !== 'string' || !/^[A-Za-z0-9.-]+$/.test(host.trim())) {
+            throw new Error(`${where}.host must be a host name.`);
+        }
+        if (typeof username !== 'string' || !username.trim()) {
+            throw new Error(`${where}.username must be a non-empty string.`);
+        }
+        const port = account.port ?? 993;
+        if (!isInteger(port) || port < 1 || port > 65535) {
+            throw new Error(`${where}.port must be an integer from 1 to 65535.`);
+        }
+        const command = account.password_command;
+        if (!Array.isArray(command) || command.length === 0 || command.some((part) => typeof part !== 'string' || !part)) {
+            throw new Error(`${where}.password_command must be a program and its arguments, such as ["pass", "show", "mail"].`);
+        }
+        const folder = account.folder ?? 'INBOX';
+        if (typeof folder !== 'string' || !/^[^\r\n"\\]+$/.test(folder)) {
+            throw new Error(`${where}.folder must be a mailbox name.`);
+        }
+        return { name, host: host.trim(), port, username: username.trim(), password_command: command as string[], folder };
+    });
 }
 
 const ALLOWED_SERVER_FIELDS = new Set(['name', 'enabled', 'transport', 'command', 'args', 'env', 'url', 'headers', 'allowed_tools']);

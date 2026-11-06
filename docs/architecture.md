@@ -265,12 +265,16 @@ loop:
     worked → wait 0.2 s, else wait poll interval
 ```
 
-`MailConnector` ([mail.ts](../src/core/mail.ts)) is the one connector: it reads the Maildir folders in
-`mail_maildir_paths`. The jobs are listed in [scheduler.ts](../src/core/scheduler.ts), reactive ones tried before
+`MailConnector` ([mail.ts](../src/core/mail.ts)) reads the Maildir folders in `mail_maildir_paths`, and
+`ImapConnector` ([imap.ts](../src/core/imap.ts)) reads the IMAP mailboxes in `mail_imap_accounts`. The jobs are listed in [scheduler.ts](../src/core/scheduler.ts), reactive ones tried before
 maintenance ones. `handleNextEvent` ([events.ts](../src/core/events.ts)) claims the most important
 queued event and runs the handler registered for its type; the built-in `notify` handler turns the
-event into a proposed action, `email.received` events are triaged ([triage.ts](../src/core/triage.ts)), and an event with no handler is marked `ignored`. A paused handler
-puts its event back in the queue. Interfaces post events with `post_event` and read them and the
+event into a proposed action, `email.received` events are triaged ([triage.ts](../src/core/triage.ts)), and an event with no handler is marked `ignored`. `email.draft` and `user.request`
+events are worked as task trees ([eventTree.ts](../src/core/eventTree.ts)): the run holds the model lock,
+stops when foreground work arrives (the event goes back in the queue), and its result becomes a `draft` or
+`result` action. A tree started by an `external` event runs with `trust: 'external'`: it cannot offer the act
+approach, write files, run tests or call MCP tools, and its research may search the web but not fetch pages or
+read files. A paused handler puts its event back in the queue. Interfaces post events with `post_event` and read them and the
 actions with `events`, `actions` and `resolve_action`. The design behind this is in
 [reactive-assistant.md](reactive-assistant.md).
 

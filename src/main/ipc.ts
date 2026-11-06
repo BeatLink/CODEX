@@ -33,6 +33,7 @@ export const ALLOWED_METHODS = new Set([
     'cancel',
     'answer_clarification',
     'queue_topic',
+    'queue_request',
     'research_now',
     'queue_status',
     'actions',

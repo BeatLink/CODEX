@@ -45,8 +45,9 @@ A job is a name, a class and a step with the signature the background steps alre
 
 1. **Plumbing** (landed with this document): the `events` and `actions` tables, the job list, event handling with a handler registry, a built-in `notify` handler, and the `post_event`, `events`, `actions` and `resolve_action` daemon methods. A user request is not yet an event.
 2. **First connector** (landed): Maildir folders, with triage (header heuristics first, then a schema-constrained model call) and notify-only actions. Maildir came before IMAP because a synced Maildir (mbsync, offlineimap) needs no credentials in CODEX, and the daemon never holds a mail password. A direct IMAP connector can follow once credentials have a safe home.
-3. **Trust and approval**: the run-level taint, the autonomy ladder and rules learned from approvals.
-4. **Entities and commitments**, then idle jobs driven by them: pre-research for tomorrow's meetings, stale-commitment sweeps, entity profiles from episodes, a daily digest.
+3. **Trust taint and events as task trees** (landed): a run started by an `external` event is held to research and writing (see Trust below). `email.draft` drafts a reply for mail that waits for one, `user.request` works a request the user left for later, and both end as actions in the Inbox. An IMAP connector reads mailboxes whose password comes from a command.
+4. **Approval and the autonomy ladder**: acting with approval and acting unattended, with rules learned from approvals and rejections. Not started. Until it exists no event run can change anything.
+5. **Entities and commitments**, then idle jobs driven by them: pre-research for tomorrow's meetings, stale-commitment sweeps, entity profiles from episodes, a daily digest.
 
 ## Mail
 
@@ -56,6 +57,25 @@ The handler ([triage.ts](../src/core/triage.ts)) works in two steps.
 
 1. **Without the model**: mail marked automatic, bulk, from a list, or from a no-reply sender is `ignored` with the reason.
 2. **With the model**: one call returns a summary, a category, whether a person is waiting for a reply, and an importance. The email is shown inside the untrusted-data fence, the call has no tools, and the reply is a schema-constrained classification, so a hostile email can at worst mislabel itself. Mail of low importance that waits for no reply is `ignored`; the rest becomes a `notify` action carrying the summary. When the model fails or answers badly the mail still becomes a `notify` action, marked as not triaged.
+
+## Trust
+
+`executeTaskTree` takes `trust: 'user' | 'external'` ([taskTree.ts](../src/core/taskTree.ts)). An external run:
+
+- cannot write files, run tests or call MCP tools, whatever the settings say, so the `act` approach is never offered;
+- is held to the `draft` mode, and does not read a memory command or a `/do`-style prefix from the first words of its prompt, since those words came from outside;
+- passes the taint to every agent it delegates to, and saves it with its checkpoint so a resumed run is not widened;
+- may search the web but not fetch pages or read local files in its research, so nothing it has read can be sent out in a URL.
+
+Event runs (`eventTree.ts`) go further: they never act, even for a `user` event, because nobody is there to approve a change. A `user.request` can use the web and local files, and its answer waits in the Inbox. Approving and then carrying out a change belongs to the next phase, and until it lands acting stays in the foreground, where the user is asked.
+
+## Drafting and requests
+
+Triage queues one `email.draft` event (priority below the triage events, dedupe key from the message id) for mail that waits for a reply, when `mail_draft_replies` is true. The draft handler shows the mail to a task tree inside the untrusted fence and proposes the result as a `draft` action; nothing is ever sent. `queue_request` (a daemon method the window may call) queues a `user.request` event with `user` trust.
+
+## IMAP
+
+`ImapConnector` ([imap.ts](../src/core/imap.ts)) reads each account in `mail_imap_accounts` at most every two minutes, over TLS with the certificate checked. The password comes from running `password_command` (a program and its arguments, never a shell string) at poll time, so settings and the database never hold it, and a failed login reports only that the server refused it. The mailbox is opened read-only (`EXAMINE`) and messages are fetched with `BODY.PEEK`, so polling changes nothing on the server. A message is keyed by the mailbox's UIDVALIDITY and its UID, so it is queued once.
 
 ## Limits to design around
 

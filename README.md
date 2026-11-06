@@ -389,6 +389,13 @@ window's **Inbox** page, where **Done** and **Dismiss** clear them. The tray men
 `Inbox (n)` while any are waiting, and a desktop notification announces new ones while
 the window is not in front.
 
+A message that waits for a reply also gets a drafted answer (`mail_draft_replies`), which
+appears in the Inbox as a draft; CODEX never sends mail. To read an IMAP mailbox directly,
+add it to `mail_imap_accounts` with a `host`, `username` and a `password_command`, the
+program and arguments that print the password (for example your password manager's
+command); the password is never stored in settings. The `queue_request` daemon method
+leaves a request for the assistant to work while idle, and its answer waits in the Inbox.
+
 Background work runs on the main model unless `background_model_path` names
 another GGUF file. That model gets its own cache, so the two never evict each
 other, and loads with `background_gpu_layers` (default 0, the CPU) and
@@ -683,6 +690,8 @@ another. Unknown keys are rejected.
 	"background_max_store_megabytes": 1024,
 	"mail_maildir_paths": [],
 	"mail_max_age_days": 7,
+	"mail_imap_accounts": [],
+	"mail_draft_replies": true,
 	"mcp_servers": []
 }
 ```

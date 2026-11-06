@@ -22,5 +22,7 @@
   "background_max_store_megabytes": 1024,
   "mail_maildir_paths": [],
   "mail_max_age_days": 7,
+  "mail_imap_accounts": [],
+  "mail_draft_replies": true,
   "mcp_servers": []
 }

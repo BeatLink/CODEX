@@ -29,7 +29,7 @@ import {
     type SectionSummarizer,
 } from './evidence.js';
 import { INSTRUCTIONS_LABEL, SKILLS_LABEL, loadInstructions, loadSkills } from './instructions.js';
-import { KnowledgeStore, MAX_RECALLED_RELATIONSHIPS, casefold, type Recalled, type Row, type RecalledFact, type RecalledRelationship } from './knowledge.js';
+import { KnowledgeStore, MAX_RECALLED_RELATIONSHIPS, casefold, type EventTrust as Trust, type Recalled, type Row, type RecalledFact, type RecalledRelationship } from './knowledge.js';
 import { loadModel, runStage, type ChatModel, type ModelCache } from './model.js';
 import {
     CONTEXT_SIZE,
@@ -677,6 +677,8 @@ export type TaskTreeRunOptions = TaskTreeCallbacks & {
     agents?: Map<string, AgentDefinition> | null;
     agent?: AgentDefinition | null;
     agentDepth?: number;
+    // External means the request was written by someone else, such as an email's sender, so the run may not change anything.
+    trust?: Trust;
 };
 
 export type TaskRunState = {
@@ -753,6 +755,7 @@ export class TaskTreeRun {
     readonly taskActions = new Map<string, ActionRecord[]>();
     readonly mode: string;
     readonly canAct: boolean;
+    readonly trust: Trust;
 
     constructor(
         readonly userPrompt: string,
@@ -766,6 +769,7 @@ export class TaskTreeRun {
         this.delegated = options.delegated ?? false;
         this.agent = options.agent ?? null;
         this.agentDepth = options.agentDepth ?? 0;
+        this.trust = options.trust ?? 'user';
         this.allMcpServers = options.mcpServers ?? [];
         this.instructions = options.instructions ?? '';
         this.confirmActions = options.confirmActions ?? true;
@@ -773,9 +777,11 @@ export class TaskTreeRun {
         this.maxTokens = options.maxTokens ?? MAX_TOKENS;
         this.temperature = options.temperature ?? TEMPERATURE;
         this.maxToolCalls = options.maxToolCalls ?? 5;
-        this.allowFileWrites = options.allowFileWrites ?? false;
-        this.enableTestExecution = options.enableTestExecution ?? false;
-        this.mcpServers = serversFor(this.agent, this.agents, this.allMcpServers);
+        // A run started by outside content never writes files, runs tests, or calls MCP tools, whatever it is given.
+        const trusted = this.trust === 'user';
+        this.allowFileWrites = trusted && (options.allowFileWrites ?? false);
+        this.enableTestExecution = trusted && (options.enableTestExecution ?? false);
+        this.mcpServers = !trusted ? [] : serversFor(this.agent, this.agents, this.allMcpServers);
         this.maxPendingResearchJobs = options.maxPendingResearchJobs ?? 100;
         this.showThinking = options.showThinking ?? false;
         this.clarificationCallback = options.clarificationCallback ?? null;
@@ -1206,6 +1212,7 @@ export class TaskTreeRun {
             agents: this.agents,
             agent,
             agentDepth: this.agentDepth + 1,
+            trust: this.trust,
         });
         run.actionsDecision = this.actionsDecision;
         let result: string;
@@ -1347,7 +1354,7 @@ export class TaskTreeRun {
         const userInput = await this.fit(node, await this.sections(node, evidence), budget, 3);
         const toolOptions = {
             research: {
-                allowedTools: new Set(['web_search', 'web_fetch', 'list_directory', 'read_file']),
+                allowedTools: new Set(this.trust === 'user' ? ['web_search', 'web_fetch', 'list_directory', 'read_file'] : ['web_search']),
                 pageSummarizer: pageSummarizer(this.llm, this.knowledgeStore, this.maxTokens, this.temperature, this.contextSize),
             },
             files: { allowedTools: new Set(['list_directory', 'read_file']) },
@@ -1616,6 +1623,7 @@ export const RESUMABLE_OPTIONS = [
     'max_task_depth',
     'max_task_nodes',
     'mode',
+    'trust',
 ] as const;
 
 // A leading word such as /plan picks the mode for the whole request.
@@ -1672,6 +1680,7 @@ export type ExecuteTaskTreeOptions = TaskTreeCallbacks & {
     mode?: string;
     resumeRunId?: number | null;
     confirmActions?: boolean;
+    trust?: Trust;
 };
 
 function camelCase(name: string): string {
@@ -1699,9 +1708,11 @@ export async function executeTaskTree(userPrompt: string, options: ExecuteTaskTr
     const filesystemRoot = options.filesystemRoot ?? '.';
     const maxToolCalls = options.maxToolCalls ?? 5;
     const maxSearchResults = options.maxSearchResults ?? 5;
-    const enableTestExecution = options.enableTestExecution ?? false;
-    const allowFileWrites = options.allowFileWrites ?? false;
-    const mcpServers = options.mcpServers ?? null;
+    const trust: Trust = options.trust ?? 'user';
+    const external = trust === 'external';
+    const enableTestExecution = !external && (options.enableTestExecution ?? false);
+    const allowFileWrites = !external && (options.allowFileWrites ?? false);
+    const mcpServers = external ? [] : (options.mcpServers ?? null);
     const showThinking = options.showThinking ?? false;
     const knowledgeDbPath = options.knowledgeDbPath ?? null;
     const embeddingModelPath = options.embeddingModelPath ?? '';
@@ -1709,7 +1720,8 @@ export async function executeTaskTree(userPrompt: string, options: ExecuteTaskTr
     const maxTaskDepth = options.maxTaskDepth ?? MAX_TASK_DEPTH;
     const maxTaskNodes = options.maxTaskNodes ?? MAX_TASK_NODES;
     const resumeRunId = options.resumeRunId ?? null;
-    let mode = options.mode ?? 'auto';
+    // Outside content only drafts: its run neither acts nor takes a command from its own first words.
+    let mode = external ? 'draft' : (options.mode ?? 'auto');
     const resumable: Record<(typeof RESUMABLE_OPTIONS)[number], unknown> = {
         model_path: modelPath,
         context_size: contextSize,
@@ -1728,19 +1740,20 @@ export async function executeTaskTree(userPrompt: string, options: ExecuteTaskTr
         max_task_depth: maxTaskDepth,
         max_task_nodes: maxTaskNodes,
         mode,
+        trust,
     };
 
     if (!(MODE_CHOICES as readonly string[]).includes(mode)) {
         throw new ValueError(`mode must be one of: ${MODE_CHOICES.join(', ')}.`);
     }
-    if (resumeRunId === null && isMemoryCommand(userPrompt)) {
+    if (resumeRunId === null && !external && isMemoryCommand(userPrompt)) {
         // Memory commands change the store directly, so no model is loaded for them.
         const store = knowledgeDbPath ? new KnowledgeStore(knowledgeDbPath) : null;
         return runMemoryCommand(userPrompt, store, resolvePath(resolve(expandUser(filesystemRoot))));
     }
     // A leading word such as /plan, /init, or a user command picks the mode.
-    const [prefixMode, prompt] = resumeRunId !== null ? [null, userPrompt] : preparePrompt(userPrompt, filesystemRoot, allowFileWrites);
-    mode = prefixMode ?? mode;
+    const [prefixMode, prompt] = resumeRunId !== null || external ? [null, userPrompt] : preparePrompt(userPrompt, filesystemRoot, allowFileWrites);
+    mode = external ? mode : (prefixMode ?? mode);
     if (!prompt.trim()) {
         throw new ValueError('The prompt cannot be empty.');
     }
@@ -1785,6 +1798,7 @@ export async function executeTaskTree(userPrompt: string, options: ExecuteTaskTr
         signal: options.signal,
         shouldStop: options.shouldStop,
         mode,
+        trust,
         checkpointId: resumeRunId,
         instructions: loadInstructions(toolbox.root),
         confirmActions: options.confirmActions ?? true,

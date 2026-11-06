@@ -33,10 +33,12 @@
 - [x] Queue events and actions in the knowledge store, and order background jobs reactive before maintenance
 - [x] Triage incoming mail with header heuristics and one schema-constrained model call
 - [x] Read mail from Maildir folders as events
-- [ ] Work the events that need real work as task trees
-- [ ] Read mail over IMAP as events
+- [x] Work the events that need real work as task trees
+- [x] Read mail over IMAP as events
+- [ ] Add a request box to the Inbox page for `queue_request`
 - [x] Show proposed actions in the window and tray
-- [ ] Taint runs started by external events and gate their side effects on approval
+- [x] Taint runs started by external events so they cannot act
+- [ ] Approve and carry out an event's proposed change (the act-with-approval rung), and learn rules from approvals
 - [ ] Track entities and commitments, and drive idle work from them
 - [x] Keep the loaded model between requests and share it with the background worker
 - [x] Return structured JSON from stages using llama.cpp schema-constrained output
