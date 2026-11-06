@@ -619,8 +619,10 @@ On 2026-10-21, with Qwen3-Embedding-0.6B on a busy CPU:
   and Discard buttons.
 - **Background**: queue topics, start research now, pause or resume the worker,
   and watch its output and queue.
-- **Knowledge**: browse topics, stored sources and summaries, facts, and graph
-  relationships with their supporting URLs, or search the stored evidence.
+- **Knowledge**: a mind map of every topic, with its subtopics, articles and
+  findings as branches you can fold, drag and zoom; choosing one shows its
+  sources and summaries and its facts beside it. Graph relationships with their
+  supporting URLs sit below, and the stored evidence can be searched.
 - **Options**: every setting, including model, task tree limits, folder access,
   tool limits, background research, and the MCP server list, which is edited as
   JSON. **Apply** uses the changes now and **Save settings** writes them back to

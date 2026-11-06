@@ -5,12 +5,13 @@ import {
     factsMarkdown,
     formatTimestamp,
     graphMarkdown,
-    knowledgeTreeRows,
+    knowledgeTree,
     NO_GRAPH_TEXT,
     NO_JOBS_TEXT,
     NO_SOURCES_TEXT,
     queueLines,
     sourcesMarkdown,
+    type MapNode,
 } from './knowledgeView.js';
 
 describe('knowledge tree', () => {
@@ -29,20 +30,15 @@ describe('knowledge tree', () => {
         { id: 21, statement: 'Languages differ.', confidence: 0.5, status: 'active', topic_id: 1, topic: 'Languages', source_url: null },
     ];
 
-    it('puts each article and finding on its own row under its topic, after the subtopics', () => {
-        const rows = knowledgeTreeRows(topics, sources, facts);
+    it('nests subtopics, then articles and findings, under each topic', () => {
+        const outline = (node: MapNode): unknown => [node.key, node.text, ...node.children.map(outline)];
 
-        expect(rows).toEqual([
-            { choice: { kind: 'all' }, text: 'All topics', depth: 0 },
-            { choice: { kind: 'topic', id: 1 }, text: 'Languages  (0)', depth: 0 },
-            { choice: { kind: 'topic', id: 2 }, text: 'Rust  (1)', depth: 1 },
-            { choice: { kind: 'source', id: 10 }, text: 'Rust book', depth: 2 },
-            { choice: { kind: 'fact', id: 20 }, text: 'Rust has no GC.', depth: 2 },
-            { choice: { kind: 'fact', id: 21 }, text: 'Languages differ.', depth: 1 },
-            { choice: { kind: 'topic', id: 3 }, text: 'Loop A  (0)', depth: 0 },
-            { choice: { kind: 'topic', id: 4 }, text: 'Loop B  (0)', depth: 1 },
-            { choice: { kind: 'uncategorized' }, text: 'Uncategorized  (1)', depth: 0 },
-            { choice: { kind: 'source', id: 11 }, text: 'https://x.dev', depth: 1 },
+        expect(outline(knowledgeTree(topics, sources, facts))).toEqual([
+            'all',
+            'All topics',
+            ['topic:1', 'Languages  (0)', ['topic:2', 'Rust  (1)', ['source:10', 'Rust book'], ['fact:20', 'Rust has no GC.']], ['fact:21', 'Languages differ.']],
+            ['topic:3', 'Loop A  (0)', ['topic:4', 'Loop B  (0)']],
+            ['uncategorized', 'Uncategorized  (1)', ['source:11', 'https://x.dev']],
         ]);
     });
 

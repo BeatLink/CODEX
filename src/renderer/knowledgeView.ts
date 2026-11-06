@@ -1,4 +1,4 @@
-// How the window shows the knowledge store and the research queue: tree rows, sources, facts, graph lines and jobs.
+// How the window shows the knowledge store and the research queue: the mind map's tree, sources, facts, graph lines and jobs.
 import type { Fact, GraphEdge, ResearchJob, Source, Topic } from './types.js';
 
 export const MAX_GRAPH_EDGES = 50;
@@ -22,57 +22,43 @@ export type TreeChoice =
     | { kind: 'source'; id: number }
     | { kind: 'fact'; id: number };
 
-export type TreeRow = { choice: TreeChoice; text: string; depth: number };
+export type MapNode = { key: string; choice: TreeChoice; text: string; children: MapNode[] };
 
-export function sameChoice(first: TreeChoice, second: TreeChoice): boolean {
-    return first.kind === second.kind && ('id' in first ? first.id : null) === ('id' in second ? second.id : null);
+export function choiceKey(choice: TreeChoice): string {
+    return 'id' in choice ? `${choice.kind}:${choice.id}` : choice.kind;
 }
 
-// Orders the store as a tree under "All topics": each topic, then its subtopics, articles and findings,
-// parents before children, keeping any topic a loop would hide and grouping articles with no topic last.
-export function knowledgeTreeRows(topics: Topic[], sources: Source[], facts: Fact[]): TreeRow[] {
-    const children = new Map<number | null, Topic[]>();
-    for (const topic of topics) {
-        const siblings = children.get(topic.parent_id) ?? [];
-        siblings.push(topic);
-        children.set(topic.parent_id, siblings);
-    }
+function mapNode(choice: TreeChoice, text: string, children: MapNode[] = []): MapNode {
+    return { key: choiceKey(choice), choice, text, children };
+}
+
+// Builds the store as a tree under "All topics": each topic holds its subtopics, then its articles and findings;
+// topics a parent loop would hide stay at the top, and articles with no topic gather under "Uncategorized" last.
+export function knowledgeTree(topics: Topic[], sources: Source[], facts: Fact[]): MapNode {
+    const children = groupBy(topics, (topic) => topic.parent_id);
     const sourcesByTopic = groupBy(sources, (source) => source.topic_id ?? null);
     const factsByTopic = groupBy(facts, (fact) => fact.topic_id);
-    const rows: TreeRow[] = [{ choice: { kind: 'all' }, text: 'All topics', depth: 0 }];
-    const addEntries = (topicId: number | null, depth: number): void => {
-        for (const source of sourcesByTopic.get(topicId) ?? []) {
-            rows.push({ choice: { kind: 'source', id: source.id }, text: source.title || source.url, depth });
-        }
-        for (const fact of factsByTopic.get(topicId) ?? []) {
-            rows.push({ choice: { kind: 'fact', id: fact.id }, text: fact.statement, depth });
-        }
-    };
+    const entries = (topicId: number | null): MapNode[] => [
+        ...(sourcesByTopic.get(topicId) ?? []).map((source) => mapNode({ kind: 'source', id: source.id }, source.title || source.url)),
+        ...(factsByTopic.get(topicId) ?? []).map((fact) => mapNode({ kind: 'fact', id: fact.id }, fact.statement)),
+    ];
     const visited = new Set<number>();
-    const add = (topic: Topic, depth: number): void => {
+    const build = (topic: Topic): MapNode => {
         visited.add(topic.id);
-        rows.push({ choice: { kind: 'topic', id: topic.id }, text: `${topic.name}  (${topic.source_count})`, depth });
-        for (const child of children.get(topic.id) ?? []) {
-            if (!visited.has(child.id)) {
-                add(child, depth + 1);
-            }
-        }
-        addEntries(topic.id, depth + 1);
+        const subtopics = (children.get(topic.id) ?? []).filter((child) => !visited.has(child.id)).map(build);
+        return mapNode({ kind: 'topic', id: topic.id }, `${topic.name}  (${topic.source_count})`, [...subtopics, ...entries(topic.id)]);
     };
-    for (const topic of children.get(null) ?? []) {
-        add(topic, 0);
-    }
+    const branches = (children.get(null) ?? []).map(build);
     for (const topic of topics) {
         if (!visited.has(topic.id)) {
-            add(topic, 0);
+            branches.push(build(topic));
         }
     }
-    const uncategorized = sourcesByTopic.get(null) ?? [];
+    const uncategorized = entries(null);
     if (uncategorized.length > 0) {
-        rows.push({ choice: { kind: 'uncategorized' }, text: `${UNCATEGORIZED_TEXT}  (${uncategorized.length})`, depth: 0 });
-        addEntries(null, 1);
+        branches.push(mapNode({ kind: 'uncategorized' }, `${UNCATEGORIZED_TEXT}  (${uncategorized.length})`, uncategorized));
     }
-    return rows;
+    return mapNode({ kind: 'all' }, 'All topics', branches);
 }
 
 function groupBy<Item>(items: Item[], key: (item: Item) => number | null): Map<number | null, Item[]> {

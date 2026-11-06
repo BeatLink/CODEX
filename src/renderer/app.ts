@@ -1,17 +1,18 @@
 // The CODEX window: wires the pages to the daemon through the preload API and draws the workbench state.
 import { actionCards, inboxTabText, NO_ACTIONS_TEXT } from './inboxView.js';
 import {
+    choiceKey,
     chosenKnowledge,
     factsMarkdown,
     graphMarkdown,
-    knowledgeTreeRows,
+    knowledgeTree,
     queueLines,
-    sameChoice,
     sourcesMarkdown,
     type TreeChoice,
 } from './knowledgeView.js';
 import { RoboEyes } from '@x-tech-laboratories/roboeyes';
 import { markdownToHtml } from './markdown.js';
+import { MindMap } from './mindMap.js';
 import { lastingMood, MASCOT_SCREEN, MOMENT_MILLISECONDS, momentAfter, type MascotMood } from './mascot.js';
 import {
     applyStatus,
@@ -78,12 +79,12 @@ let inbox: ProposedAction[] = [];
 // Elements
 // ============================================================================
 
-function element<T extends HTMLElement = HTMLElement>(id: string): T {
+function element<T extends Element = HTMLElement>(id: string): T {
     const found = document.getElementById(id);
     if (found === null) {
         throw new Error(`Missing element #${id}`);
     }
-    return found as T;
+    return found as Element as T;
 }
 
 const view = {
@@ -120,7 +121,7 @@ const view = {
     backgroundQueue: element('background-queue'),
     backgroundOutput: element('background-output'),
     knowledgeSearch: element<HTMLInputElement>('knowledge-search'),
-    topicList: element('topic-list'),
+    mindMap: element<SVGSVGElement>('mind-map'),
     sourcesTitle: element('sources-title'),
     knowledgeDetail: element('knowledge-detail'),
     knowledgeFacts: element('knowledge-facts'),
@@ -1032,33 +1033,10 @@ async function refreshKnowledge(): Promise<void> {
     renderKnowledge();
 }
 
+const mindMap = new MindMap(view.mindMap, { onChoose: chooseKnowledge });
+
 function renderKnowledge(): void {
-    view.topicList.textContent = '';
-    for (const row of knowledgeTreeRows(knowledge.topics, knowledge.sources, knowledge.facts)) {
-        const item = document.createElement('li');
-        const button = document.createElement('button');
-        button.className = 'topic-row-item';
-        button.dataset.kind = row.choice.kind;
-        button.textContent = row.text;
-        button.title = row.text;
-        button.style.paddingLeft = `${8 + row.depth * 16}px`;
-        button.setAttribute('role', 'option');
-        button.setAttribute('aria-selected', String(!knowledgeQuery && sameChoice(row.choice, knowledgeChoice)));
-        button.addEventListener('click', () => {
-            const searched = knowledgeQuery !== '';
-            knowledgeQuery = '';
-            view.knowledgeSearch.value = '';
-            knowledgeChoice = row.choice;
-            // Choosing a row needs nothing new from the daemon; leaving a search refreshes the store.
-            if (searched) {
-                void refreshKnowledge();
-            } else {
-                renderKnowledge();
-            }
-        });
-        item.append(button);
-        view.topicList.append(item);
-    }
+    mindMap.draw(knowledgeTree(knowledge.topics, knowledge.sources, knowledge.facts), knowledgeQuery ? null : choiceKey(knowledgeChoice));
     const chosen = knowledgeQuery
         ? { sources: knowledge.matches, facts: knowledge.facts }
         : chosenKnowledge(knowledgeChoice, knowledge.sources, knowledge.facts);
@@ -1066,6 +1044,19 @@ function renderKnowledge(): void {
     setMarkdown(view.knowledgeDetail, sourcesMarkdown(chosen.sources));
     setMarkdown(view.knowledgeFacts, factsMarkdown(chosen.facts));
     setMarkdown(view.knowledgeGraph, graphMarkdown(knowledge.graph));
+}
+
+function chooseKnowledge(choice: TreeChoice): void {
+    const searched = knowledgeQuery !== '';
+    knowledgeQuery = '';
+    view.knowledgeSearch.value = '';
+    knowledgeChoice = choice;
+    // Choosing a node needs nothing new from the daemon; leaving a search refreshes the store.
+    if (searched) {
+        void refreshKnowledge();
+    } else {
+        renderKnowledge();
+    }
 }
 
 function searchKnowledge(): void {
@@ -1159,6 +1150,9 @@ function bindControls(): void {
     });
     element('search-knowledge').addEventListener('click', searchKnowledge);
     element('refresh-knowledge').addEventListener('click', () => void refreshKnowledge());
+    element('expand-map').addEventListener('click', () => mindMap.expandAll());
+    element('collapse-map').addEventListener('click', () => mindMap.collapseAll());
+    element('reset-map').addEventListener('click', () => mindMap.resetView());
 
     const launchAtLogin = element<HTMLInputElement>('launch-at-login');
     launchAtLogin.addEventListener('change', () => void setLaunchAtLogin(launchAtLogin.checked));

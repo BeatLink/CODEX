@@ -148,7 +148,15 @@
                 <button id="refresh-knowledge">Refresh</button>
             </div>
             <div class="knowledge-browser">
-                <ul id="topic-list" class="panel topic-list" role="listbox" aria-label="Topics"></ul>
+                <div class="panel-column map-column">
+                    <div class="map-heading">
+                        <h2 class="eyebrow">Mind map</h2>
+                        <button id="expand-map" class="small">Expand all</button>
+                        <button id="collapse-map" class="small">Collapse all</button>
+                        <button id="reset-map" class="small">Reset view</button>
+                    </div>
+                    <svg id="mind-map" class="panel mind-map" role="tree" aria-label="Topics, articles and findings"></svg>
+                </div>
                 <div class="panel-column grow">
                     <h2 id="sources-title" class="eyebrow">Sources</h2>
                     <div id="knowledge-detail" class="panel output markdown">Select a topic or search stored evidence.</div>
