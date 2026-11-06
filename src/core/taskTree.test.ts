@@ -458,6 +458,34 @@ describe('direct tasks', () => {
         expect(trees.at(-1)![0].status).toBe('done');
     });
 
+    it('records each step of a task with its state and timing', async () => {
+        const { trees } = await runTree({ 'decide 1': decision('answer'), 'write 1': 'Four.' }, { prompt: 'What is 2 + 2?' });
+
+        const steps = trees.at(-1)![0].steps;
+        expect(steps.map((step) => [step.name, step.status, step.error])).toEqual([
+            ['Deciding', 'done', ''],
+            ['Writing', 'done', ''],
+            ['Checking', 'done', ''],
+        ]);
+        expect(steps.every((step) => step.ended_at !== null && step.ended_at >= step.started_at)).toBe(true);
+        expect(trees.some((tree) => tree[0].steps.at(-1)?.status === 'running')).toBe(true);
+    });
+
+    it('records a failed step with its error', async () => {
+        const { trees } = await runTree({ 'decide 1': new Error('A model call kept repeating itself, so it was stopped.'), 'write 1': 'Three.' });
+
+        expect(trees.at(-1)![0].steps[0]).toMatchObject({ name: 'Deciding', status: 'failed', error: 'A model call kept repeating itself, so it was stopped.' });
+    });
+
+    it('marks a step cut off by a restart as interrupted', () => {
+        const running = { name: 'Writing', status: 'running' as const, started_at: 5, ended_at: null, error: '' };
+        const saved = { ...new TaskNode('1', 'Do it', 'Done').state(), steps: [running] };
+
+        const tree = TaskTree.fromState('Do it', [saved], 3, 20);
+
+        expect(tree.root.steps).toEqual([{ ...running, status: 'failed', ended_at: 5, error: 'Interrupted' }]);
+    });
+
     it('answers directly when deciding goes in circles, instead of ending the run', async () => {
         const { result, model, progress } = await runTree(
             { 'decide 1': new Error('A model call kept repeating itself, so it was stopped.'), 'write 1': 'Three.' },

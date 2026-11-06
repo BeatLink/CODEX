@@ -9,6 +9,8 @@ export type Settings = Record<string, unknown> & {
     mcp_servers: unknown[];
 };
 
+export type StepRecord = { name: string; status: string; started_at: number; ended_at: number | null; error: string };
+
 export type TaskNode = {
     id: string;
     prompt: string;
@@ -19,6 +21,7 @@ export type TaskNode = {
     note?: string | null;
     result?: string | null;
     result_shortened?: boolean;
+    steps?: StepRecord[];
 };
 
 export type RunSnapshot = {

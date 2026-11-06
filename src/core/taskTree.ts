@@ -320,6 +320,12 @@ export function declinedActionsNote(reply: string): string {
 // Task nodes
 // ============================================================================
 
+// One step of a task, such as deciding or writing, with how it went.
+export const STEP_STATUSES = ['running', 'done', 'failed'] as const;
+export type StepStatus = (typeof STEP_STATUSES)[number];
+
+export type StepRecord = { name: string; status: StepStatus; started_at: number; ended_at: number | null; error: string };
+
 export type TaskSnapshot = {
     id: string;
     parent: string | null;
@@ -331,6 +337,7 @@ export type TaskSnapshot = {
     result: string;
     result_shortened: boolean;
     note: string;
+    steps: StepRecord[];
 };
 
 export type TaskState = TaskSnapshot & { replans: number; from_split: boolean };
@@ -342,6 +349,7 @@ export class TaskNode {
     approach = '';
     result = '';
     note = '';
+    steps: StepRecord[] = [];
     replans = 0;
     // A task made by splitting a failed task is not split again when it fails too, so splits cannot cascade.
     fromSplit: boolean;
@@ -389,6 +397,7 @@ export class TaskNode {
             result: this.result.slice(0, SNAPSHOT_RESULT_CHARS),
             result_shortened: this.result.length > SNAPSHOT_RESULT_CHARS,
             note: this.note,
+            steps: this.steps.map((step) => ({ ...step })),
         };
     }
 }
@@ -452,6 +461,10 @@ export class TaskTree {
             node.approach = saved.approach;
             node.result = saved.result;
             node.note = saved.note;
+            // A step cut off by a crash or restart shows as failed; the task runs it again.
+            node.steps = (saved.steps ?? []).map((step) =>
+                step.status === 'running' ? { ...step, status: 'failed', ended_at: step.started_at, error: 'Interrupted' } : step,
+            );
             node.replans = saved.replans;
             node.fromSplit = saved.from_split;
             if (parent !== null) {
@@ -968,18 +981,39 @@ export class TaskTreeRun {
         sections: Section[],
         options: { pinned?: number; replyTokens?: number | null; jsonSchema?: JsonSchema | null } = {},
     ): Promise<string> {
-        const label = this.report(node, step);
-        const replyTokens = Math.min(this.maxTokens, options.replyTokens || this.maxTokens);
-        const budget = inputTokenBudget(this.contextSize, replyTokens, this.countTokens, systemPrompt);
-        const userInput = await this.fit(node, sections, budget, options.pinned ?? 3);
-        this.stageInputCallback?.(label, systemPrompt, userInput);
-        return runStage(this.llm, systemPrompt, userInput, {
-            maxTokens: replyTokens,
-            temperature: this.temperature,
-            onToken: this.tokenCallbackFor(label),
-            jsonSchema: options.jsonSchema ?? null,
-            signal: this.signal ?? undefined,
+        return this.step(node, step, async (label) => {
+            const replyTokens = Math.min(this.maxTokens, options.replyTokens || this.maxTokens);
+            const budget = inputTokenBudget(this.contextSize, replyTokens, this.countTokens, systemPrompt);
+            const userInput = await this.fit(node, sections, budget, options.pinned ?? 3);
+            this.stageInputCallback?.(label, systemPrompt, userInput);
+            return runStage(this.llm, systemPrompt, userInput, {
+                maxTokens: replyTokens,
+                temperature: this.temperature,
+                onToken: this.tokenCallbackFor(label),
+                jsonSchema: options.jsonSchema ?? null,
+                signal: this.signal ?? undefined,
+            });
         });
+    }
+
+    // Run one step of a task as its own record, so interfaces can show each step's state, timing and error.
+    async step<Result>(node: TaskNode, name: string, work: (label: string) => Promise<Result>): Promise<Result> {
+        const label = this.report(node, name);
+        const record: StepRecord = { name, status: 'running', started_at: Date.now() / 1000, ended_at: null, error: '' };
+        node.steps.push(record);
+        this.publish();
+        try {
+            const result = await work(label);
+            record.status = 'done';
+            return result;
+        } catch (error) {
+            record.status = 'failed';
+            record.error = error instanceof Error ? error.message : String(error);
+            throw error;
+        } finally {
+            record.ended_at = Date.now() / 1000;
+            this.publish();
+        }
     }
 
     // Render a call's input within its budget, condensing earlier results before trimming them.
@@ -1384,11 +1418,6 @@ export class TaskTreeRun {
         if (decision.approach === 'act') {
             systemPrompt += this.sourceCheck(false) + this.testNote();
         }
-        const label = this.report(node, APPROACH_STEPS[decision.approach]);
-        // Half the room goes to the input and half stays free for tool results.
-        const budget = Math.floor(inputTokenBudget(this.contextSize, this.maxTokens, this.countTokens, systemPrompt) / 2);
-        const userInput = await this.fit(node, await this.sections(node, evidence), budget, 3);
-        this.stageInputCallback?.(label, systemPrompt, userInput);
         const toolOptions = {
             research: {
                 allowedTools: new Set(this.trust === 'user' ? ['web_search', 'web_fetch', 'list_directory', 'read_file'] : ['web_search']),
@@ -1399,11 +1428,17 @@ export class TaskTreeRun {
         }[decision.approach as 'research' | 'files' | 'act'];
         const actionsBefore = this.toolbox.actionLog.length;
         const toolCalls = decision.approach === 'act' ? Math.max(this.maxToolCalls, MIN_ACT_TOOL_CALLS) : this.maxToolCalls;
-        const findings = await runToolStage(this.llm, systemPrompt, userInput, this.toolbox, this.maxTokens, this.temperature, toolCalls, {
-            onToken: this.tokenCallbackFor(label),
-            contextSize: this.contextSize,
-            signal: this.signal ?? undefined,
-            ...toolOptions,
+        const findings = await this.step(node, APPROACH_STEPS[decision.approach], async (label) => {
+            // Half the room goes to the input and half stays free for tool results.
+            const budget = Math.floor(inputTokenBudget(this.contextSize, this.maxTokens, this.countTokens, systemPrompt) / 2);
+            const userInput = await this.fit(node, await this.sections(node, evidence), budget, 3);
+            this.stageInputCallback?.(label, systemPrompt, userInput);
+            return runToolStage(this.llm, systemPrompt, userInput, this.toolbox, this.maxTokens, this.temperature, toolCalls, {
+                onToken: this.tokenCallbackFor(label),
+                contextSize: this.contextSize,
+                signal: this.signal ?? undefined,
+                ...toolOptions,
+            });
         });
         if (decision.approach === 'act') {
             this.taskActions.set(node.id, this.toolbox.actionLog.slice(actionsBefore));
