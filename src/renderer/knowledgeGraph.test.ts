@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { hiddenKeys, knowledgeElements, label, MAX_LABEL_CHARS } from './knowledgeGraph.js';
+import { hiddenKeys, knowledgeElements, label, MAX_LABEL_CHARS, visibleElements } from './knowledgeGraph.js';
 import { knowledgeTree } from './knowledgeView.js';
 
 const topics = [
@@ -40,6 +40,16 @@ describe('knowledge graph elements', () => {
 
         expect([...hiddenKeys(tree, new Set(['topic:1']))]).toEqual(['topic:2', 'source:10', 'fact:20']);
         expect(hiddenKeys(tree, new Set())).toEqual(new Set());
+    });
+
+    it('leaves out a folded branch and the things only its articles support', () => {
+        const tree = knowledgeTree(topics, sources, facts);
+        const elements = knowledgeElements(tree, graph, sources, facts);
+
+        const shown = visibleElements(elements, hiddenKeys(tree, new Set(['topic:2'])));
+
+        expect(shown.nodes.map((node) => node.id)).toEqual(['all', 'topic:1', 'topic:2', 'entity:Cargo']);
+        expect(shown.links.map((link) => link.id)).toEqual(['tree:all>topic:1', 'tree:topic:1>topic:2']);
     });
 
     it('shortens long labels and flattens their whitespace', () => {

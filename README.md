@@ -622,8 +622,9 @@ On 2026-10-21, with Qwen3-Embedding-0.6B on a busy CPU:
 - **Knowledge**: a graph of every topic with its subtopics, articles and
   findings, plus the things the store has learned about and the named
   relationships between them; dashed lines join each finding and relationship
-  to the article that supports it. Drag and zoom to move around, and
-  double-click a topic to fold its branch. Choosing a node shows its sources
+  to the article that supports it. The graph is drawn with force-graph, the
+  library behind Trilium's note map: it follows the panel's size, keeps
+  settling as nodes are dragged, and double-clicking a topic folds its branch. Choosing a node shows its sources
   and summaries, facts and relationships in the panes beside and below, and the
   stored evidence can be searched.
 - **Options**: every setting, including model, task tree limits, folder access,

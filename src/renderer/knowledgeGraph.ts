@@ -1,18 +1,26 @@
-// The knowledge page's graph, drawn with Cytoscape and laid out by force: the topic tree around "All topics",
-// with relationships between things and the evidence behind findings drawn as extra connections.
-import cytoscape from 'cytoscape';
+// The knowledge page's graph, drawn with force-graph (the library behind Trilium's note map): the topic tree
+// around "All topics", with relationships between things and the evidence behind findings as extra connections.
+import type ForceGraphType from 'force-graph';
 
 import { choiceKey, isRelationship, type MapNode, type TreeChoice } from './knowledgeView.js';
 import type { Fact, GraphEdge, Source } from './types.js';
 
+// force-graph loads as its self-contained browser bundle, which sets this global.
+declare const ForceGraph: typeof ForceGraphType;
+
 export const MAX_LABEL_CHARS = 48;
-const FIT_PADDING = 30;
+const FIT_PADDING = 40;
+// Fitting a few nodes stops at this zoom rather than filling the panel with them.
+const MAX_FIT_ZOOM = 1.5;
+const DOUBLE_CLICK_MILLISECONDS = 350;
+// Below this zoom only topics keep their labels, so a zoomed-out graph stays readable.
+const LEAF_LABEL_ZOOM = 0.8;
 
 // ============================================================================
 // Elements
 // ============================================================================
 
-// What a graph node or connection stands for; the stylesheet draws each kind differently.
+// What a graph node or connection stands for; each kind is drawn differently.
 export type ElementKind = TreeChoice['kind'] | 'tree' | 'relation' | 'evidence';
 
 export type GraphNode = { id: string; label: string; text: string; kind: ElementKind; choice: TreeChoice };
@@ -94,218 +102,267 @@ export function hiddenKeys(tree: MapNode, folded: Set<string>): Set<string> {
     return hidden;
 }
 
+// Leaves out what folded branches hold, and every thing whose supporting articles are all folded away;
+// a thing no article mentions always shows.
+export function visibleElements(elements: KnowledgeElements, hidden: Set<string>): KnowledgeElements {
+    const shownArticles = new Map<string, boolean>();
+    for (const link of elements.links) {
+        if (link.kind === 'evidence' && link.target.startsWith('entity:')) {
+            shownArticles.set(link.target, (shownArticles.get(link.target) ?? false) || !hidden.has(link.source));
+        }
+    }
+    const nodes = elements.nodes.filter((node) => !hidden.has(node.id) && shownArticles.get(node.id) !== false);
+    const shown = new Set(nodes.map((node) => node.id));
+    return { nodes, links: elements.links.filter((link) => shown.has(link.source) && shown.has(link.target)) };
+}
+
 // ============================================================================
 // Drawing
 // ============================================================================
 
 export type KnowledgeGraphOptions = { onChoose: (choice: TreeChoice) => void };
 
-function colour(name: string): string {
-    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+// The simulation's copies: force-graph adds positions to nodes and swaps link ends for the node objects.
+type SimNode = GraphNode & { x?: number; y?: number; vx?: number; vy?: number };
+type SimLink = Omit<GraphLink, 'source' | 'target'> & { source: string | SimNode; target: string | SimNode };
+
+type Palette = { foreground: string; muted: string; primary: string; line: string; surface: string; entity: string; font: string };
+
+function palette(): Palette {
+    const style = getComputedStyle(document.documentElement);
+    const colour = (name: string): string => style.getPropertyValue(name).trim();
+    return {
+        foreground: colour('--foreground'),
+        muted: colour('--muted'),
+        primary: colour('--primary'),
+        line: colour('--field-border'),
+        surface: colour('--surface'),
+        entity: colour('--success'),
+        font: getComputedStyle(document.body).fontFamily,
+    };
 }
 
-function stylesheet(): cytoscape.StylesheetJson {
-    const foreground = colour('--foreground');
-    const muted = colour('--muted');
-    const primary = colour('--primary');
-    const line = colour('--field-border');
-    const surface = colour('--surface');
-    return [
-        {
-            selector: 'node',
-            style: {
-                label: 'data(label)',
-                color: foreground,
-                'font-family': getComputedStyle(document.body).fontFamily,
-                'font-size': 12,
-                'text-valign': 'bottom',
-                'text-margin-y': 4,
-                'text-wrap': 'wrap',
-                'text-max-width': '160px',
-                'text-outline-color': surface,
-                'text-outline-width': 2,
-                'background-color': line,
-                width: 12,
-                height: 12,
-            },
-        },
-        { selector: 'node[kind = "all"]', style: { 'background-color': primary, width: 28, height: 28, 'font-size': 14, 'font-weight': 'bold' } },
-        {
-            selector: 'node[kind = "topic"], node[kind = "uncategorized"]',
-            style: { 'background-color': primary, 'background-opacity': 0.7, width: 18, height: 18, 'font-weight': 'bold' },
-        },
-        { selector: 'node[kind = "source"]', style: { shape: 'round-rectangle', color: muted, 'font-size': 11 } },
-        { selector: 'node[kind = "fact"]', style: { shape: 'diamond', color: muted, 'font-size': 11, 'font-style': 'italic' } },
-        { selector: 'node[kind = "entity"]', style: { shape: 'hexagon', 'background-color': colour('--success'), width: 16, height: 16 } },
-        { selector: 'node.folded', style: { 'border-width': 3, 'border-color': primary, 'border-style': 'double' } },
-        { selector: 'node:selected', style: { 'border-width': 3, 'border-color': foreground, 'border-style': 'solid' } },
-        { selector: 'edge', style: { width: 1.5, 'line-color': line, 'curve-style': 'bezier', opacity: 0.8 } },
-        {
-            selector: 'edge[kind = "relation"]',
-            style: {
-                label: 'data(label)',
-                'line-color': colour('--success'),
-                'target-arrow-color': colour('--success'),
-                'target-arrow-shape': 'triangle',
-                color: muted,
-                'font-size': 10,
-                'text-rotation': 'autorotate',
-                'text-outline-color': surface,
-                'text-outline-width': 2,
-            },
-        },
-        { selector: 'edge[kind = "evidence"]', style: { 'line-style': 'dashed', width: 1, opacity: 0.5 } },
-    ];
+const RADIUS: Record<string, number> = { all: 9, topic: 6, uncategorized: 6, entity: 5, source: 4, fact: 4 };
+const DISTANCE: Record<string, number> = { tree: 40, relation: 70, evidence: 90 };
+
+function shape(context: CanvasRenderingContext2D, node: SimNode, radius: number): void {
+    const x = node.x ?? 0;
+    const y = node.y ?? 0;
+    context.beginPath();
+    if (node.kind === 'source') {
+        context.rect(x - radius, y - radius, radius * 2, radius * 2);
+    } else if (node.kind === 'fact') {
+        context.moveTo(x, y - radius * 1.3);
+        context.lineTo(x + radius * 1.3, y);
+        context.lineTo(x, y + radius * 1.3);
+        context.lineTo(x - radius * 1.3, y);
+        context.closePath();
+    } else if (node.kind === 'entity') {
+        for (let corner = 0; corner < 6; corner++) {
+            const angle = (Math.PI / 3) * corner;
+            context.lineTo(x + radius * Math.cos(angle), y + radius * Math.sin(angle));
+        }
+        context.closePath();
+    } else {
+        context.arc(x, y, radius, 0, Math.PI * 2);
+    }
 }
 
-// Keeps a Cytoscape graph of the knowledge store, with branches folded by double-click and the view kept across redraws.
+// Keeps a live force-directed graph of the knowledge store: it follows the panel's size, settles again
+// whenever nodes are dragged or branches fold, and a double-click on a branch folds or unfolds it.
 export class KnowledgeGraph {
-    private readonly cy: cytoscape.Core;
+    private readonly graph: ForceGraphType<SimNode, SimLink>;
     private readonly folded = new Set<string>();
-    private readonly choices = new Map<string, TreeChoice>();
+    private colours = palette();
     private tree: MapNode | null = null;
+    private elements: KnowledgeElements = { nodes: [], links: [] };
+    private simNodes = new Map<string, SimNode>();
+    private chosenKey: string | null = null;
     private drawnIds = '';
+    private fitPending = true;
+    private lastClick = { id: '', time: 0 };
 
     constructor(
         private readonly container: HTMLElement,
-        options: KnowledgeGraphOptions,
+        private readonly options: KnowledgeGraphOptions,
     ) {
-        this.cy = cytoscape({
-            container,
-            style: stylesheet(),
-            boxSelectionEnabled: false,
-            minZoom: 0.1,
-            maxZoom: 3,
-        });
-        this.cy.on('tap', 'node', (event) => {
-            const choice = this.choices.get(event.target.id());
-            if (choice !== undefined) {
-                options.onChoose(choice);
+        this.graph = new ForceGraph<SimNode, SimLink>(container)
+            .nodeId('id')
+            // The layout settles a while before the first frame, then runs on for a few seconds.
+            .warmupTicks(100)
+            .cooldownTime(4000)
+            .nodeLabel(() => '')
+            .nodeCanvasObject((node, context, scale) => this.drawNode(node, context, scale))
+            .nodePointerAreaPaint((node, colour, context) => {
+                context.fillStyle = colour;
+                shape(context, node, (RADIUS[node.kind] ?? 4) + 3);
+                context.fill();
+            })
+            .linkColor((link) => (link.kind === 'relation' ? this.colours.entity : this.colours.line))
+            .linkWidth((link) => (link.kind === 'evidence' ? 0.6 : 1.2))
+            .linkLineDash((link) => (link.kind === 'evidence' ? [3, 3] : null))
+            .linkDirectionalArrowLength((link) => (link.kind === 'relation' ? 4 : 0))
+            .linkDirectionalArrowRelPos(1)
+            .linkCanvasObjectMode((link) => (link.kind === 'relation' ? 'after' : undefined))
+            .linkCanvasObject((link, context, scale) => this.drawRelationName(link, context, scale))
+            .onNodeClick((node) => this.click(node))
+            .onNodeHover((node) => {
+                // Labels are shortened, so the full text shows as the pointer's tooltip.
+                this.container.title = node?.text ?? '';
+            })
+            .onEngineStop(() => {
+                if (this.fitPending) {
+                    this.fitPending = false;
+                    this.resetView();
+                }
+            });
+        const links = this.graph.d3Force('link') as unknown as { distance(length: (link: SimLink) => number): void } | undefined;
+        links?.distance((link) => DISTANCE[link.kind] ?? 50);
+        const charge = this.graph.d3Force('charge') as unknown as { strength(strength: number): void } | undefined;
+        charge?.strength(-150);
+        // The canvas follows the panel's size, and the graph is fitted to it again.
+        new ResizeObserver(() => {
+            if (container.clientWidth > 0 && container.clientHeight > 0) {
+                this.graph.width(container.clientWidth).height(container.clientHeight);
+                this.resetView();
             }
+        }).observe(container);
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+            this.colours = palette();
         });
-        this.cy.on('dbltap', 'node', (event) => this.toggle(event.target.id()));
-        // Labels are shortened, so the full text shows as the pointer's tooltip.
-        this.cy.on('mouseover', 'node', (event) => {
-            this.container.title = event.target.data('text');
-        });
-        this.cy.on('mouseout', 'node', () => {
-            this.container.title = '';
-        });
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.cy.style(stylesheet()));
     }
 
     draw(tree: MapNode, graph: GraphEdge[], sources: Source[], facts: Fact[], chosenKey: string | null): void {
         this.tree = tree;
-        const { nodes, links } = knowledgeElements(tree, graph, sources, facts);
-        this.choices.clear();
-        for (const node of nodes) {
-            this.choices.set(node.id, node.choice);
-        }
-        const ids = [...nodes.map((node) => node.id), ...links.map((item) => item.id)].join('\n');
+        this.chosenKey = chosenKey;
+        this.elements = knowledgeElements(tree, graph, sources, facts);
+        const ids = [...this.elements.nodes.map((node) => node.id), ...this.elements.links.map((link) => link.id)].join('\n');
         if (ids !== this.drawnIds) {
+            this.fitPending = this.drawnIds === '';
             this.drawnIds = ids;
-            this.cy.elements().remove();
-            this.cy.add([
-                ...nodes.map((node) => ({ group: 'nodes' as const, data: { id: node.id, label: node.label, text: node.text, kind: node.kind } })),
-                ...links.map((item) => ({ group: 'edges' as const, data: { ...item } })),
-            ]);
-            this.applyFolds(true);
-        }
-        this.cy.$(':selected').unselect();
-        if (chosenKey !== null) {
-            this.cy.getElementById(chosenKey).select();
+            this.applyFolds();
         }
     }
 
     expandAll(): void {
         this.folded.clear();
-        this.applyFolds(true);
+        this.fitPending = true;
+        this.applyFolds();
     }
 
-    // Folds every branch below the root, leaving only the top-level topics and the things they relate.
+    // Folds every branch below the root, leaving only the top-level topics and the things no article mentions.
     collapseAll(): void {
         for (const branch of this.tree?.children ?? []) {
             if (branch.children.length > 0) {
                 this.folded.add(branch.key);
             }
         }
-        this.applyFolds(true);
+        this.fitPending = true;
+        this.applyFolds();
     }
 
     resetView(): void {
-        this.cy.fit(this.cy.elements(':visible'), FIT_PADDING);
-        if (this.cy.zoom() > 1) {
-            this.cy.zoom(1);
-            this.cy.center(this.cy.elements(':visible'));
+        // Until the simulation has placed the nodes there is nothing to fit, and fitting would leave the zoom unset.
+        if (![...this.simNodes.values()].some((node) => Number.isFinite(node.x))) {
+            return;
+        }
+        this.graph.zoomToFit(0, FIT_PADDING);
+        if (this.graph.zoom() > MAX_FIT_ZOOM) {
+            this.graph.zoom(MAX_FIT_ZOOM);
+        }
+    }
+
+    // One click chooses a node; a second on the same branch soon after folds or unfolds it.
+    private click(node: SimNode): void {
+        const now = Date.now();
+        const twice = this.lastClick.id === node.id && now - this.lastClick.time < DOUBLE_CLICK_MILLISECONDS;
+        this.lastClick = { id: node.id, time: twice ? 0 : now };
+        if (twice) {
+            this.toggle(node.id);
+        } else {
+            this.options.onChoose(node.choice);
         }
     }
 
     private toggle(key: string): void {
-        const node = this.findNode(key);
-        if (node === null || node.children.length === 0) {
+        if (!this.elements.links.some((link) => link.kind === 'tree' && link.source === key)) {
             return;
         }
         if (!this.folded.delete(key)) {
             this.folded.add(key);
         }
-        this.applyFolds(false);
+        this.applyFolds();
     }
 
-    private findNode(key: string): MapNode | null {
-        const search = (node: MapNode): MapNode | null => {
-            if (node.key === key) {
-                return node;
-            }
-            for (const child of node.children) {
-                const found = search(child);
-                if (found !== null) {
-                    return found;
-                }
-            }
-            return null;
-        };
-        return this.tree === null ? null : search(this.tree);
-    }
-
-    // Hides what folded branches hold, marks the folded nodes, and lays the shown graph out again.
-    private applyFolds(fit: boolean): void {
+    // Hands the simulation what is shown, reusing each node's old position so the graph moves on rather than restarting.
+    private applyFolds(): void {
         if (this.tree === null) {
             return;
         }
-        const hidden = hiddenKeys(this.tree, this.folded);
-        this.cy.batch(() => {
-            this.cy.nodes().forEach((node) => {
-                node.style('display', hidden.has(node.id()) ? 'none' : 'element');
-                node.toggleClass('folded', this.folded.has(node.id()));
-            });
+        const shown = visibleElements(this.elements, hiddenKeys(this.tree, this.folded));
+        const previous = this.simNodes;
+        this.simNodes = new Map(
+            shown.nodes.map((node) => {
+                const old = previous.get(node.id);
+                return [node.id, { ...node, x: old?.x, y: old?.y, vx: old?.vx, vy: old?.vy }];
+            }),
+        );
+        this.graph.graphData({
+            nodes: [...this.simNodes.values()],
+            links: shown.links.map((link) => ({ ...link })),
         });
-        // A thing folds away with the articles that evidence it; one no article mentions always shows.
-        this.cy.nodes('[kind = "entity"]').forEach((node) => {
-            const articles = node.connectedEdges('[kind = "evidence"]').sources().map((article) => article.id());
-            const shown = articles.length === 0 || articles.some((article) => !hidden.has(article));
-            node.style('display', shown ? 'element' : 'none');
-        });
-        // Tree lines pull tightest, relationships less, and evidence lines only loosely.
-        const length = { tree: 80, relation: 140, evidence: 180 } as Record<string, number>;
-        const elasticity = { tree: 100, relation: 60, evidence: 10 } as Record<string, number>;
-        const layout = this.cy.elements(':visible').layout({
-            name: 'cose',
-            // A fresh drawing starts from scratch; a fold moves the nodes on from where they are.
-            randomize: fit,
-            animate: !fit,
-            animationDuration: 300,
-            fit: false,
-            nodeDimensionsIncludeLabels: true,
-            idealEdgeLength: (edge: cytoscape.EdgeSingular) => length[edge.data('kind')] ?? 100,
-            edgeElasticity: (edge: cytoscape.EdgeSingular) => elasticity[edge.data('kind')] ?? 50,
-            nodeRepulsion: () => 40000,
-            nodeOverlap: 20,
-            gravity: 0.4,
-            numIter: 2500,
-        });
-        if (fit) {
-            layout.one('layoutstop', () => this.resetView());
+    }
+
+    private drawNode(node: SimNode, context: CanvasRenderingContext2D, scale: number): void {
+        const colours = this.colours;
+        const radius = RADIUS[node.kind] ?? 4;
+        shape(context, node, radius);
+        context.fillStyle =
+            node.kind === 'entity' ? colours.entity : node.kind === 'source' || node.kind === 'fact' ? colours.line : colours.primary;
+        context.fill();
+        if (this.folded.has(node.id)) {
+            context.lineWidth = 2 / scale;
+            context.strokeStyle = colours.primary;
+            shape(context, node, radius + 3 / scale);
+            context.stroke();
         }
-        layout.run();
+        if (node.id === this.chosenKey) {
+            context.lineWidth = 2 / scale;
+            context.strokeStyle = colours.foreground;
+            shape(context, node, radius + 1.5 / scale);
+            context.stroke();
+        }
+        const leaf = node.kind === 'source' || node.kind === 'fact' || node.kind === 'entity';
+        if (leaf && scale < LEAF_LABEL_ZOOM) {
+            return;
+        }
+        const size = (node.kind === 'all' ? 14 : leaf ? 11 : 12) / scale;
+        context.font = `${leaf ? '' : '600 '}${node.kind === 'fact' ? 'italic ' : ''}${size}px ${colours.font}`;
+        context.textAlign = 'center';
+        context.textBaseline = 'top';
+        context.lineWidth = 3 / scale;
+        context.strokeStyle = colours.surface;
+        const textY = (node.y ?? 0) + radius + 2 / scale;
+        context.strokeText(node.label, node.x ?? 0, textY);
+        context.fillStyle = leaf ? colours.muted : colours.foreground;
+        context.fillText(node.label, node.x ?? 0, textY);
+    }
+
+    private drawRelationName(link: SimLink, context: CanvasRenderingContext2D, scale: number): void {
+        const start = link.source;
+        const end = link.target;
+        if (typeof start === 'string' || typeof end === 'string' || scale < LEAF_LABEL_ZOOM) {
+            return;
+        }
+        const x = ((start.x ?? 0) + (end.x ?? 0)) / 2;
+        const y = ((start.y ?? 0) + (end.y ?? 0)) / 2;
+        context.font = `${10 / scale}px ${this.colours.font}`;
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.lineWidth = 3 / scale;
+        context.strokeStyle = this.colours.surface;
+        context.strokeText(link.label, x, y);
+        context.fillStyle = this.colours.muted;
+        context.fillText(link.label, x, y);
     }
 }

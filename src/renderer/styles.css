@@ -854,6 +854,7 @@ main {
 }
 
 .knowledge-map {
+    position: relative;
     padding: 0;
     overflow: hidden;
 }
