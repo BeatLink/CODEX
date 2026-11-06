@@ -30,6 +30,8 @@ export type WorkbenchState = {
     phase: Phase;
     chosenTaskId: string | null;
     collapsedTaskIds: string[];
+    // True while the task graph shows above the output.
+    graphShown: boolean;
     nodes: TaskNode[];
     steps: StepSection[];
     lastStepLabel: string;
@@ -69,6 +71,7 @@ export function initialState(): WorkbenchState {
         phase: 'final',
         chosenTaskId: null,
         collapsedTaskIds: [],
+        graphShown: false,
         nodes: [],
         steps: [],
         lastStepLabel: '',
@@ -164,6 +167,10 @@ export function chooseFinalAnswer(state: WorkbenchState): WorkbenchState {
 export function setTaskOpen(state: WorkbenchState, taskId: string, open: boolean): WorkbenchState {
     const others = state.collapsedTaskIds.filter((id) => id !== taskId);
     return { ...state, collapsedTaskIds: open ? others : [...others, taskId] };
+}
+
+export function setGraphShown(state: WorkbenchState, shown: boolean): WorkbenchState {
+    return { ...state, graphShown: shown };
 }
 
 export function chosenTask(state: WorkbenchState): TaskNode | null {

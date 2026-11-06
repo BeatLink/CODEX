@@ -89,7 +89,11 @@
                 </section>
 
                 <section class="output-area">
-                    <h2 id="phase-title" class="eyebrow">Final answer</h2>
+                    <div class="output-heading">
+                        <h2 id="phase-title" class="eyebrow">Final answer</h2>
+                        <button id="graph-toggle" class="small" aria-pressed="false" title="Show the tasks as a graph above the output">Graph</button>
+                    </div>
+                    <div id="task-graph" class="panel task-graph" role="img" aria-label="Graph of the tasks and the tasks each builds on" hidden></div>
                     <div id="output-task" class="output task-detail" hidden>
                         <div id="task-summary" class="markdown"></div>
                         <h3 class="detail-heading">Prompt and context</h3>

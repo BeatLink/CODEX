@@ -615,6 +615,32 @@ main {
     flex-direction: column;
 }
 
+.output-heading {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.output-heading .eyebrow {
+    margin: 0 auto 0 0;
+}
+
+.output-heading button[aria-pressed='true'] {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.task-graph {
+    flex: none;
+    height: 300px;
+    min-height: 120px;
+    margin-bottom: 10px;
+    padding: 0;
+    overflow: hidden;
+    resize: vertical;
+}
+
 .output {
     flex: 1;
     min-height: 0;

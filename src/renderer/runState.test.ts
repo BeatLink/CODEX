@@ -16,6 +16,7 @@ import {
     initialState,
     reduceEvent,
     RESUMED_TEXT,
+    setGraphShown,
     setTaskOpen,
     SUSPENDED_TEXT,
     unfinishedRunText,
@@ -112,6 +113,14 @@ describe('a run from start to finish', () => {
 
         expect(closed.collapsedTaskIds).toEqual(['1.1']);
         expect(reopened.collapsedTaskIds).toEqual([]);
+    });
+
+    it('shows and hides the task graph, and keeps the choice across runs', () => {
+        const shown = setGraphShown(initialState(), true);
+
+        expect(shown.graphShown).toBe(true);
+        expect(beginRun(shown, 1).graphShown).toBe(true);
+        expect(setGraphShown(shown, false).graphShown).toBe(false);
     });
 
     it('follows a run another interface starts, but not one this window already began', () => {

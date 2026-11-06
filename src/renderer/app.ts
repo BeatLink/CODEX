@@ -31,6 +31,7 @@ import {
     DISCONNECTED_EVENT,
     initialState,
     reduceEvent,
+    setGraphShown,
     setTaskOpen,
     showUnfinishedRuns,
     stopRun,
@@ -58,6 +59,7 @@ import {
     type PathField,
 } from './settingsForm.js';
 import { commandSuggestions, completeCommand, type CommandSuggestion } from './slashCommands.js';
+import { TaskGraph } from './taskGraph.js';
 import { stepName, taskOutputMarkdown, taskSummaryMarkdown, taskTreeBranches, visibleTaskIds, type TaskBranch } from './taskView.js';
 import type { CodexApi, Knowledge, ProposedAction, ResearchJob, Settings, SizeChoice, Status, UnfinishedRun, UserCommand } from './types.js';
 
@@ -110,6 +112,8 @@ const view = {
     resumeBar: element('resume-bar'),
     resumeText: element('resume-text'),
     phaseTitle: element('phase-title'),
+    graphToggle: element<HTMLButtonElement>('graph-toggle'),
+    taskGraph: element('task-graph'),
     outputTask: element('output-task'),
     taskSummary: element('task-summary'),
     taskInputs: element('task-inputs'),
@@ -356,6 +360,27 @@ function moveInTree(event: KeyboardEvent): void {
 }
 
 // ============================================================================
+// Task graph
+// ============================================================================
+
+const taskGraph = new TaskGraph(view.taskGraph, { onChoose: (taskId) => dispatch(chooseTask(state, taskId)) });
+let graphedNodes: unknown = null;
+let graphedChoice: string | null = null;
+
+// Shows the graph once there are tasks, and redraws it only when the tasks or the chosen task change.
+function renderTaskGraph(): void {
+    view.graphToggle.setAttribute('aria-pressed', String(state.graphShown));
+    view.taskGraph.hidden = !state.graphShown || state.nodes.length === 0;
+    const choice = state.phase === 'task' ? state.chosenTaskId : null;
+    if (view.taskGraph.hidden || (graphedNodes === state.nodes && graphedChoice === choice)) {
+        return;
+    }
+    graphedNodes = state.nodes;
+    graphedChoice = choice;
+    taskGraph.draw(state.nodes, choice);
+}
+
+// ============================================================================
 // Task detail
 // ============================================================================
 
@@ -443,6 +468,7 @@ function renderWorkbench(): void {
     view.phaseTitle.textContent = state.phase === 'task' ? `Task ${state.chosenTaskId ?? ''}` : 'Final answer';
 
     renderTaskTree();
+    renderTaskGraph();
     if (state.phase === 'task') {
         renderTaskDetail();
     }
@@ -1110,6 +1136,7 @@ function bindControls(): void {
         }
     });
     view.taskTree.addEventListener('keydown', moveInTree);
+    view.graphToggle.addEventListener('click', () => dispatch(setGraphShown(state, !state.graphShown)));
     element('notice-close').addEventListener('click', () => {
         view.notice.hidden = true;
     });
