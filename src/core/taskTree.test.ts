@@ -214,6 +214,19 @@ describe('direct tasks', () => {
         expect(trees.at(-1)![0].approach).toBe('answer');
     });
 
+    it("reports each model call's instructions and input under its step", async () => {
+        const inputs: Array<[string, string, string]> = [];
+
+        const { model } = await runTree(
+            { 'decide 1': decision('answer'), 'write 1': 'Four.' },
+            { prompt: 'What is 2 + 2?', stageInputCallback: (label, system, input) => inputs.push([label, system, input]) },
+        );
+
+        expect(inputs.map(([label]) => label)).toEqual(['Task 1 · Deciding', 'Task 1 · Writing', 'Task 1 · Checking']);
+        expect(inputs[1][1]).toBe(model.call('write', '1').system);
+        expect(inputs[1][2]).toBe(model.call('write', '1').input);
+    });
+
     it('offers only the approaches the settings allow', async () => {
         const first = await runTree({ 'decide 1': decision('answer'), 'write 1': 'Done.' });
         expect(offered(first.model, '1')).toEqual(['answer', 'research', 'files', 'decompose']);

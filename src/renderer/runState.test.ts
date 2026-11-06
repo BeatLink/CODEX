@@ -5,9 +5,10 @@ import {
     applyStatus,
     approvalPlan,
     beginRun,
+    chooseFinalAnswer,
     chooseTask,
-    choosePhase,
     chosenTask,
+    chosenTaskSteps,
     clarificationAnswered,
     clearWorkbench,
     DISCONNECTED_EVENT,
@@ -15,6 +16,7 @@ import {
     initialState,
     reduceEvent,
     RESUMED_TEXT,
+    setTaskOpen,
     SUSPENDED_TEXT,
     unfinishedRunText,
     type WorkbenchState,
@@ -36,7 +38,7 @@ function events(state: WorkbenchState, ...steps: Array<[string, Record<string, u
 // ============================================================================
 
 describe('a run from start to finish', () => {
-    it('streams steps under a heading per step and ends on the final answer', () => {
+    it('keeps each step with its input and streamed text, and ends on the final answer', () => {
         const running = beginRun(initialState(), 1);
 
         const finished = events(
@@ -44,6 +46,7 @@ describe('a run from start to finish', () => {
             ['run.progress', { run_id: 1, label: 'Loading model' }],
             ['run.tree', { run_id: 1, nodes: [node('1', 'running')] }],
             ['run.progress', { run_id: 1, label: 'Task 1 · research' }],
+            ['run.input', { run_id: 1, label: 'Task 1 · research', system: 'Search well', input: 'Original user request' }],
             ['run.token', { run_id: 1, label: 'Task 1 · research', token: 'Look' }],
             ['run.token', { run_id: 1, label: 'Task 1 · research', token: 'ing' }],
             ['run.token', { run_id: 1, label: 'Planning', token: 'ignored' }],
@@ -52,8 +55,8 @@ describe('a run from start to finish', () => {
         );
 
         expect(finished.steps).toEqual([
-            { label: 'Task 1 · research', text: 'Looking' },
-            { label: 'Task 1 · answer', text: 'Done' },
+            { label: 'Task 1 · research', system: 'Search well', input: 'Original user request', text: 'Looking' },
+            { label: 'Task 1 · answer', system: '', input: '', text: 'Done' },
         ]);
         expect(finished.running).toBe(false);
         expect(finished.finalText).toBe('# Answer');
@@ -62,16 +65,18 @@ describe('a run from start to finish', () => {
         expect(finished.status).toBe('Complete');
     });
 
-    it('shows the loading step in plain words and follows task steps until the user picks a page', () => {
-        const running = beginRun(initialState(), 1);
+    it('shows the loading step in plain words and follows the running task until the user picks a row', () => {
+        const running = { ...beginRun(initialState(), 1), collapsedTaskIds: ['1', '1.2'] };
 
         const loading = events(running, ['run.progress', { label: 'Loading model' }]);
-        const following = events(loading, ['run.progress', { label: 'Task 1 · plan' }]);
-        const picked = choosePhase(following, 'final');
+        const following = events(loading, ['run.progress', { label: 'Task 1.2.1 · plan' }]);
+        const picked = chooseFinalAnswer(following);
         const stillOnFinal = events(picked, ['run.progress', { label: 'Task 2 · plan' }]);
 
         expect(loading.status).toBe('Loading local model...');
-        expect(following.phase).toBe('steps');
+        expect(following.phase).toBe('task');
+        expect(following.chosenTaskId).toBe('1.2.1');
+        expect(following.collapsedTaskIds).toEqual([]);
         expect(stillOnFinal.phase).toBe('final');
         expect(stillOnFinal.status).toBe('Task 2 · plan');
     });
@@ -87,11 +92,33 @@ describe('a run from start to finish', () => {
         expect(chosenTask(updated)?.result).toBe('Found it');
     });
 
+    it("lists only the chosen task's steps, not those of tasks under it", () => {
+        const ran = events(
+            beginRun(initialState(), 1),
+            ['run.progress', { label: 'Task 1 · plan' }],
+            ['run.progress', { label: 'Task 1.1 · research' }],
+            ['run.progress', { label: 'Task 1 · combine' }],
+        );
+
+        const steps = chosenTaskSteps(chooseTask(ran, '1'));
+
+        expect(steps.map((step) => step.label)).toEqual(['Task 1 · plan', 'Task 1 · combine']);
+    });
+
+    it('opens and closes a branch of the tree', () => {
+        const closed = setTaskOpen(initialState(), '1.1', false);
+
+        const reopened = setTaskOpen(closed, '1.1', true);
+
+        expect(closed.collapsedTaskIds).toEqual(['1.1']);
+        expect(reopened.collapsedTaskIds).toEqual([]);
+    });
+
     it('follows a run another interface starts, but not one this window already began', () => {
         const idle = initialState();
 
         const watching = events(idle, ['run.started', { run_id: 7, prompt: 'x' }]);
-        const ours = { ...beginRun(idle, 3), steps: [{ label: 'Task 1 · a', text: 'kept' }] };
+        const ours = { ...beginRun(idle, 3), steps: [{ label: 'Task 1 · a', system: '', input: '', text: 'kept' }] };
         const unchanged = events(ours, ['run.started', { run_id: 3, prompt: 'x' }]);
 
         expect(watching.running).toBe(true);
@@ -151,6 +178,7 @@ describe('daemon status and other events', () => {
                 tree: [node('1', 'running')],
                 progress: ['Loading model', 'Task 1 · draft'],
                 outputs: { 'Task 1 · draft': 'Hello', Planning: 'hidden' },
+                inputs: { 'Task 1 · draft': { system: 'Write it well', input: 'Original user request' } },
             },
             background: { status: 'Foreground prompt active', output: 'old notes' },
             unfinished_runs: [],
@@ -162,8 +190,9 @@ describe('daemon status and other events', () => {
         expect(state.running).toBe(true);
         expect(state.runId).toBe(5);
         expect(state.nodes).toHaveLength(1);
-        expect(state.steps).toEqual([{ label: 'Task 1 · draft', text: 'Hello' }]);
-        expect(state.phase).toBe('steps');
+        expect(state.steps).toEqual([{ label: 'Task 1 · draft', system: 'Write it well', input: 'Original user request', text: 'Hello' }]);
+        expect(state.phase).toBe('task');
+        expect(state.chosenTaskId).toBe('1');
         expect(state.backgroundOutput).toBe('old notes');
         expect(effects.map((effect) => effect.kind)).toEqual(['show_settings', 'refresh_knowledge', 'refresh_queue']);
     });

@@ -41,11 +41,7 @@
         <section id="page-workbench" class="page workbench">
             <aside class="sidebar">
                 <h2 class="eyebrow">Task tree</h2>
-                <div class="phase-list">
-                    <button class="phase" data-phase="steps">Steps</button>
-                    <button class="phase" data-phase="final">Final answer</button>
-                </div>
-                <ol id="task-list" class="task-list" role="listbox" aria-label="Tasks"></ol>
+                <ul id="task-tree" class="task-tree" role="tree" aria-label="Task tree"></ul>
                 <p id="task-empty" class="muted small-text">Tasks appear here once a request is planned.</p>
                 <div class="sidebar-foot">
                     <svg class="mascot" viewBox="13.5 16.5 37 30.5" role="img" aria-label="CODEX">
@@ -90,8 +86,15 @@
 
                 <section class="output-area">
                     <h2 id="phase-title" class="eyebrow">Final answer</h2>
-                    <div id="output-steps" class="output steps" hidden></div>
-                    <div id="output-task" class="output markdown" hidden></div>
+                    <div id="output-task" class="output task-detail" hidden>
+                        <div id="task-summary" class="markdown"></div>
+                        <h3 class="detail-heading">Prompt and context</h3>
+                        <div id="task-inputs" class="task-inputs"></div>
+                        <h3 class="detail-heading">Thinking</h3>
+                        <div id="task-thinking" class="step-text"></div>
+                        <h3 class="detail-heading">Output</h3>
+                        <div id="task-output" class="markdown"></div>
+                    </div>
                     <div id="output-final" class="output markdown"></div>
                 </section>
             </div>

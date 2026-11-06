@@ -640,6 +640,7 @@ export class RunStopped extends Error {
 export type TreeCallback = (nodes: TaskSnapshot[]) => void;
 export type ProgressCallback = (label: string) => void;
 export type StageOutputCallback = (label: string, token: string) => void;
+export type StageInputCallback = (label: string, systemPrompt: string, userInput: string) => void;
 
 export type TaskTreeCallbacks = {
     // Asks the user a question and returns their answer; becomes the daemon's run.clarification.
@@ -648,6 +649,8 @@ export type TaskTreeCallbacks = {
     progressCallback?: ProgressCallback | null;
     // Gets each streamed token with its step label; becomes run.token {label, token}.
     stageOutputCallback?: StageOutputCallback | null;
+    // Gets each model call's instructions and input with its step label; becomes run.input {label, system, input}.
+    stageInputCallback?: StageInputCallback | null;
     // Gets the whole tree after every change; becomes run.tree {nodes}.
     treeCallback?: TreeCallback | null;
     // Stops the run at its next step or token; either one makes run() throw RunStopped.
@@ -734,6 +737,7 @@ export class TaskTreeRun {
     readonly clarificationCallback: ClarificationCallback | null;
     readonly progressCallback: ProgressCallback | null;
     readonly stageOutputCallback: StageOutputCallback | null;
+    readonly stageInputCallback: StageInputCallback | null;
     readonly treeCallback: TreeCallback | null;
     readonly signal: AbortSignal | null;
     readonly shouldStop: (() => boolean) | null;
@@ -787,6 +791,7 @@ export class TaskTreeRun {
         this.clarificationCallback = options.clarificationCallback ?? null;
         this.progressCallback = options.progressCallback ?? null;
         this.stageOutputCallback = options.stageOutputCallback ?? null;
+        this.stageInputCallback = options.stageInputCallback ?? null;
         this.treeCallback = options.treeCallback ?? null;
         this.signal = options.signal ?? null;
         this.shouldStop = options.shouldStop ?? null;
@@ -956,6 +961,7 @@ export class TaskTreeRun {
         const replyTokens = Math.min(this.maxTokens, options.replyTokens || this.maxTokens);
         const budget = inputTokenBudget(this.contextSize, replyTokens, this.countTokens, systemPrompt);
         const userInput = await this.fit(node, sections, budget, options.pinned ?? 3);
+        this.stageInputCallback?.(label, systemPrompt, userInput);
         return runStage(this.llm, systemPrompt, userInput, {
             maxTokens: replyTokens,
             temperature: this.temperature,
@@ -1201,6 +1207,7 @@ export class TaskTreeRun {
             clarificationCallback: null,
             progressCallback: this.progressCallback,
             stageOutputCallback: this.stageOutputCallback,
+            stageInputCallback: this.stageInputCallback,
             treeCallback: null,
             // Stopping the parent stops the agent's run too.
             signal: this.signal,
@@ -1352,6 +1359,7 @@ export class TaskTreeRun {
         // Half the room goes to the input and half stays free for tool results.
         const budget = Math.floor(inputTokenBudget(this.contextSize, this.maxTokens, this.countTokens, systemPrompt) / 2);
         const userInput = await this.fit(node, await this.sections(node, evidence), budget, 3);
+        this.stageInputCallback?.(label, systemPrompt, userInput);
         const toolOptions = {
             research: {
                 allowedTools: new Set(this.trust === 'user' ? ['web_search', 'web_fetch', 'list_directory', 'read_file'] : ['web_search']),
@@ -1794,6 +1802,7 @@ export async function executeTaskTree(userPrompt: string, options: ExecuteTaskTr
         clarificationCallback: options.clarificationCallback,
         progressCallback: options.progressCallback,
         stageOutputCallback: options.stageOutputCallback,
+        stageInputCallback: options.stageInputCallback,
         treeCallback: options.treeCallback,
         signal: options.signal,
         shouldStop: options.shouldStop,

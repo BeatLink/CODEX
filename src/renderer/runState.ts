@@ -1,10 +1,8 @@
 // The workbench's state and how each daemon event and user action changes it, kept free of the DOM so it can be tested.
-import { TASK_STEP_PREFIX } from './taskView.js';
-import type { RunSnapshot, Settings, Status, TaskNode, UnfinishedRun } from './types.js';
+import { TASK_STEP_PREFIX, stepTaskId } from './taskView.js';
+import type { RunSnapshot, Settings, Status, StepInput, TaskNode, UnfinishedRun } from './types.js';
 
 export const FINAL_WAITING_TEXT = 'Your final response will appear here.';
-export const STEPS_WAITING_TEXT = 'Each step of each task will appear here as it runs.';
-export const TASK_DETAIL_WAITING_TEXT = 'Choose a task in the tree to see what it asks for and its result.';
 export const BACKGROUND_WAITING_TEXT = 'Waiting for background work...';
 export const DISCONNECTED_EVENT = 'daemon.disconnected';
 // The task tree asks for approval with this question before any task changes files, runs tests, or calls MCP tools.
@@ -14,8 +12,8 @@ export const UNFINISHED_PROMPT_CHARS = 80;
 export const SUSPENDED_TEXT = 'Suspended';
 export const RESUMED_TEXT = 'CODEX is working again.';
 
-export type Phase = 'steps' | 'task' | 'final';
-export type StepSection = { label: string; text: string };
+export type Phase = 'task' | 'final';
+export type StepSection = { label: string; system: string; input: string; text: string };
 export type Clarification = { run_id: number; clarification_id: number; question: string; approval: boolean };
 export type Connection = 'connecting' | 'connected' | 'unavailable';
 
@@ -27,9 +25,11 @@ export type WorkbenchState = {
     running: boolean;
     cancelling: boolean;
     lastAnswer: string;
+    // True while the view moves to each task as it starts running.
     followSteps: boolean;
     phase: Phase;
     chosenTaskId: string | null;
+    collapsedTaskIds: string[];
     nodes: TaskNode[];
     steps: StepSection[];
     lastStepLabel: string;
@@ -68,6 +68,7 @@ export function initialState(): WorkbenchState {
         followSteps: true,
         phase: 'final',
         chosenTaskId: null,
+        collapsedTaskIds: [],
         nodes: [],
         steps: [],
         lastStepLabel: '',
@@ -86,7 +87,7 @@ export function initialState(): WorkbenchState {
 // ============================================================================
 
 function resetRunView(state: WorkbenchState): WorkbenchState {
-    return { ...state, followSteps: true, steps: [], lastStepLabel: '', chosenTaskId: null, nodes: [], phase: 'final' };
+    return { ...state, followSteps: true, steps: [], lastStepLabel: '', chosenTaskId: null, collapsedTaskIds: [], nodes: [], phase: 'final' };
 }
 
 export function beginRun(state: WorkbenchState, runId: number | null): WorkbenchState {
@@ -100,12 +101,22 @@ export function beginRun(state: WorkbenchState, runId: number | null): Workbench
     };
 }
 
-// Starts a new heading in the steps view whenever the step changes.
+// Starts a new step whenever the step changes.
 function noteStep(state: WorkbenchState, label: string): WorkbenchState {
     if (label === state.lastStepLabel) {
         return state;
     }
-    return { ...state, lastStepLabel: label, steps: [...state.steps, { label, text: '' }] };
+    return { ...state, lastStepLabel: label, steps: [...state.steps, { label, system: '', input: '', text: '' }] };
+}
+
+export function appendStepInput(state: WorkbenchState, label: string, input: StepInput): WorkbenchState {
+    if (!label.startsWith(TASK_STEP_PREFIX)) {
+        return state;
+    }
+    const noted = noteStep(state, label);
+    const steps = noted.steps.slice();
+    steps[steps.length - 1] = { ...steps[steps.length - 1], system: input.system, input: input.input };
+    return { ...noted, steps };
 }
 
 export function appendStepOutput(state: WorkbenchState, label: string, token: string): WorkbenchState {
@@ -115,7 +126,7 @@ export function appendStepOutput(state: WorkbenchState, label: string, token: st
     const noted = noteStep(state, label);
     const steps = noted.steps.slice();
     const last = steps[steps.length - 1];
-    steps[steps.length - 1] = { label: last.label, text: last.text + token };
+    steps[steps.length - 1] = { ...last, text: last.text + token };
     return { ...noted, steps };
 }
 
@@ -126,7 +137,7 @@ export function updateProgress(state: WorkbenchState, label: string): WorkbenchS
     }
     next = { ...next, status: label };
     if (label.startsWith(TASK_STEP_PREFIX) && next.followSteps) {
-        next = { ...next, phase: 'steps' };
+        next = showTask(next, stepTaskId(label));
     }
     return next;
 }
@@ -135,17 +146,32 @@ export function showTaskTree(state: WorkbenchState, nodes: TaskNode[]): Workbenc
     return { ...state, nodes };
 }
 
-// Choosing a task or a page is the user's own pick, so the view stops following the running step.
-export function chooseTask(state: WorkbenchState, taskId: string): WorkbenchState {
-    return { ...state, chosenTaskId: taskId, phase: 'task', followSteps: state.running ? false : state.followSteps };
+// Shows a task and opens every branch above it, so its row is in sight.
+function showTask(state: WorkbenchState, taskId: string): WorkbenchState {
+    const collapsedTaskIds = state.collapsedTaskIds.filter((id) => !taskId.startsWith(`${id}.`));
+    return { ...state, chosenTaskId: taskId, phase: 'task', collapsedTaskIds };
 }
 
-export function choosePhase(state: WorkbenchState, phase: 'steps' | 'final'): WorkbenchState {
-    return { ...state, phase, chosenTaskId: null, followSteps: state.running ? false : state.followSteps };
+// Choosing a task or the final answer is the user's own pick, so the view stops following the running task.
+export function chooseTask(state: WorkbenchState, taskId: string): WorkbenchState {
+    return { ...showTask(state, taskId), followSteps: state.running ? false : state.followSteps };
+}
+
+export function chooseFinalAnswer(state: WorkbenchState): WorkbenchState {
+    return { ...state, phase: 'final', chosenTaskId: null, followSteps: state.running ? false : state.followSteps };
+}
+
+export function setTaskOpen(state: WorkbenchState, taskId: string, open: boolean): WorkbenchState {
+    const others = state.collapsedTaskIds.filter((id) => id !== taskId);
+    return { ...state, collapsedTaskIds: open ? others : [...others, taskId] };
 }
 
 export function chosenTask(state: WorkbenchState): TaskNode | null {
     return state.nodes.find((node) => node.id === state.chosenTaskId) ?? null;
+}
+
+export function chosenTaskSteps(state: WorkbenchState): StepSection[] {
+    return state.chosenTaskId === null ? [] : state.steps.filter((step) => stepTaskId(step.label) === state.chosenTaskId);
 }
 
 export function finishRun(state: WorkbenchState, result: string): WorkbenchState {
@@ -268,8 +294,12 @@ export function applyStatus(state: WorkbenchState, status: Status): Reduction {
         next = { ...next, status: next.suspended ? SUSPENDED_TEXT : 'Ready' };
     } else {
         next = showTaskTree(beginRun(next, run.run_id), run.tree);
-        for (const [label, text] of Object.entries(run.outputs)) {
-            next = appendStepOutput(next, label, text);
+        const inputs = run.inputs ?? {};
+        for (const label of new Set([...run.progress, ...Object.keys(inputs), ...Object.keys(run.outputs)])) {
+            if (label in inputs) {
+                next = appendStepInput(next, label, inputs[label]);
+            }
+            next = appendStepOutput(next, label, run.outputs[label] ?? '');
         }
         if (run.progress.length > 0) {
             next = updateProgress(next, run.progress[run.progress.length - 1]);
@@ -307,6 +337,8 @@ export function reduceEvent(state: WorkbenchState, event: string, data: Record<s
             return { state: showTaskTree(state, (data.nodes as TaskNode[]) ?? []), effects: [] };
         case 'run.progress':
             return { state: updateProgress(state, text(data.label)), effects: [] };
+        case 'run.input':
+            return { state: appendStepInput(state, text(data.label), { system: text(data.system), input: text(data.input) }), effects: [] };
         case 'run.token':
             return { state: appendStepOutput(state, text(data.label), text(data.token)), effects: [] };
         case 'run.clarification':

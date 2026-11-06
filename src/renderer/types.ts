@@ -27,7 +27,10 @@ export type RunSnapshot = {
     tree: TaskNode[];
     progress: string[];
     outputs: Record<string, string>;
+    inputs?: Record<string, StepInput>;
 };
+
+export type StepInput = { system: string; input: string };
 
 export type UnfinishedRun = {
     id: number;

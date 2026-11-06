@@ -375,14 +375,6 @@ main {
     overflow: auto;
 }
 
-.phase-list {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin-bottom: 12px;
-}
-
-.phase,
 .task-row,
 .topic-row-item {
     text-align: left;
@@ -393,26 +385,79 @@ main {
     white-space: normal;
 }
 
-.phase[aria-selected='true'],
-.task-row[aria-selected='true'],
+[role='treeitem'][aria-selected='true'] > .task-row,
 .topic-row-item[aria-selected='true'] {
     background: var(--selection);
     color: var(--foreground);
 }
 
-.task-list,
+.task-tree,
+.task-tree [role='group'],
 .topic-list {
     list-style: none;
     margin: 0;
     padding: 0;
 }
 
+.task-tree {
+    margin-bottom: 8px;
+}
+
+.task-tree [role='treeitem']:focus {
+    outline: none;
+}
+
+.task-tree [role='treeitem']:focus-visible > .task-row {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+}
+
+/* Each branch draws a faint line down from its parent, so the nesting reads at a glance. */
+.task-tree [role='group'] {
+    position: relative;
+}
+
+.task-tree [role='group']::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 4px;
+    left: calc(var(--depth-line, 0px) + 11px);
+    border-left: 1px solid var(--border);
+}
+
 .task-row {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     width: 100%;
     font-size: 12.5px;
     color: var(--muted);
+    cursor: pointer;
+}
+
+.task-row:hover {
+    background: var(--surface-alt);
+}
+
+.task-row[data-status='final'] {
+    color: var(--foreground);
+    font-weight: 600;
+}
+
+.task-row .twisty {
+    flex: none;
+    width: 1em;
+    text-align: center;
+    color: var(--muted);
+}
+
+.task-row .twisty[data-toggle]:hover {
+    color: var(--primary);
+}
+
+.task-row .task-prompt {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .task-row .state {
@@ -588,6 +633,53 @@ main {
     white-space: pre-wrap;
     font-family: ui-monospace, 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
     font-size: 12.5px;
+}
+
+.task-detail .detail-heading {
+    margin: 18px 0 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--label);
+}
+
+.task-detail [data-empty='true']::before {
+    content: attr(data-empty-text);
+    color: var(--muted);
+    font-style: italic;
+}
+
+.input-step {
+    margin-bottom: 4px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-alt);
+}
+
+.input-step summary {
+    padding: 4px 8px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.input-title {
+    margin: 6px 8px 2px;
+    font-size: 11px;
+    color: var(--label);
+}
+
+.input-text,
+.step-text {
+    white-space: pre-wrap;
+    font-family: ui-monospace, 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
+    font-size: 12.5px;
+}
+
+.input-text {
+    margin: 0 8px 8px;
+    max-height: 320px;
+    overflow: auto;
 }
 
 .step-heading {

@@ -20,18 +20,18 @@ import {
     beginRun,
     BACKGROUND_WAITING_TEXT,
     cancelRequested,
+    chooseFinalAnswer,
     chooseTask,
-    choosePhase,
     chosenTask,
+    chosenTaskSteps,
     clarificationAnswered,
     clearWorkbench,
     connectionFailed,
     initialState,
     reduceEvent,
+    setTaskOpen,
     showUnfinishedRuns,
     stopRun,
-    STEPS_WAITING_TEXT,
-    TASK_DETAIL_WAITING_TEXT,
     unfinishedRunText,
     type Clarification,
     type Effect,
@@ -56,7 +56,7 @@ import {
     type PathField,
 } from './settingsForm.js';
 import { commandSuggestions, completeCommand, type CommandSuggestion } from './slashCommands.js';
-import { taskDetailMarkdown, taskTreeRows } from './taskView.js';
+import { stepName, taskOutputMarkdown, taskSummaryMarkdown, taskTreeBranches, visibleTaskIds, type TaskBranch } from './taskView.js';
 import type { CodexApi, Knowledge, ProposedAction, ResearchJob, Settings, SizeChoice, Status, UnfinishedRun, UserCommand } from './types.js';
 
 const codex = (window as unknown as { codex: CodexApi }).codex;
@@ -93,7 +93,7 @@ const view = {
     backgroundDot: element('background-dot'),
     backgroundPillText: element('background-pill-text'),
     backgroundToggle: element<HTMLButtonElement>('background-toggle'),
-    taskList: element('task-list'),
+    taskTree: element('task-tree'),
     taskEmpty: element('task-empty'),
     runStatus: element('run-status'),
     mascotFace: element<HTMLCanvasElement>('mascot-face'),
@@ -107,8 +107,11 @@ const view = {
     resumeBar: element('resume-bar'),
     resumeText: element('resume-text'),
     phaseTitle: element('phase-title'),
-    outputSteps: element('output-steps'),
     outputTask: element('output-task'),
+    taskSummary: element('task-summary'),
+    taskInputs: element('task-inputs'),
+    taskThinking: element('task-thinking'),
+    taskOutput: element('task-output'),
     outputFinal: element('output-final'),
     backgroundStatus: element('background-status'),
     backgroundEnabled: element<HTMLInputElement>('background-enabled'),
@@ -238,72 +241,187 @@ function setMarkdown(target: HTMLElement, text: string): void {
     }
 }
 
-let drawnSteps: Array<{ label: string; body: Text }> = [];
+// ============================================================================
+// Task tree
+// ============================================================================
 
-function renderSteps(): void {
-    const output = view.outputSteps;
-    if (state.steps.length === 0) {
-        if (drawnSteps.length > 0 || output.textContent !== STEPS_WAITING_TEXT) {
-            drawnSteps = [];
-            output.textContent = STEPS_WAITING_TEXT;
-        }
-        return;
-    }
-    keepFollowing(output, () => {
-        if (drawnSteps.length === 0 || drawnSteps.length > state.steps.length || drawnSteps[0].label !== state.steps[0].label) {
-            drawnSteps = [];
-            output.textContent = '';
-        }
-        state.steps.forEach((section, index) => {
-            if (index >= drawnSteps.length) {
-                const heading = document.createElement('span');
-                heading.className = 'step-heading';
-                heading.textContent = `▸ ${section.label}`;
-                const body = document.createTextNode('');
-                output.append(heading, body);
-                drawnSteps.push({ label: section.label, body });
-            }
-            const body = drawnSteps[index].body;
-            const text = index === 0 ? section.text.replace(/^\s+/, '') : section.text;
-            if (body.data !== text) {
-                body.data = text;
-            }
-        });
-    });
-}
+// The final answer sits at the top of the tree under this id, above the tasks.
+const FINAL_ROW_ID = 'final';
+const TREE_INDENT_PIXELS = 14;
 
 let drawnNodes: unknown = null;
-let drawnChosen: string | null | undefined;
+let drawnCollapsed: unknown = null;
 
+function treeRow(id: string, depth: number, label: HTMLElement[], branch: TaskBranch | null, open: boolean): HTMLLIElement {
+    const item = document.createElement('li');
+    item.setAttribute('role', 'treeitem');
+    item.setAttribute('aria-level', String(depth + 1));
+    item.dataset.rowId = id;
+    const row = document.createElement('div');
+    row.className = 'task-row';
+    row.dataset.status = branch?.status ?? 'final';
+    row.style.paddingLeft = `${4 + depth * TREE_INDENT_PIXELS}px`;
+    const twisty = document.createElement('span');
+    twisty.className = 'twisty';
+    if (branch !== null && branch.children.length > 0) {
+        item.setAttribute('aria-expanded', String(open));
+        twisty.dataset.toggle = id;
+        twisty.textContent = open ? '▾' : '▸';
+    }
+    row.append(twisty, ...label);
+    item.append(row);
+    return item;
+}
+
+function span(className: string, text: string): HTMLSpanElement {
+    const part = document.createElement('span');
+    part.className = className;
+    part.textContent = text;
+    return part;
+}
+
+function treeBranch(branch: TaskBranch, depth: number): HTMLLIElement {
+    const open = !state.collapsedTaskIds.includes(branch.id);
+    const label = [span('state', branch.state), span('task-id', branch.id), span('task-prompt', branch.prompt)];
+    const item = treeRow(branch.id, depth, label, branch, open);
+    if (branch.children.length > 0) {
+        const group = document.createElement('ul');
+        group.setAttribute('role', 'group');
+        group.hidden = !open;
+        group.style.setProperty('--depth-line', `${depth * TREE_INDENT_PIXELS}px`);
+        group.append(...branch.children.map((child) => treeBranch(child, depth + 1)));
+        item.append(group);
+    }
+    return item;
+}
+
+function chosenRowId(): string {
+    return state.phase === 'task' && state.chosenTaskId !== null ? state.chosenTaskId : FINAL_ROW_ID;
+}
+
+// Rebuilds the tree only when the tasks or open branches change, and marks the chosen row every time.
 function renderTaskTree(): void {
-    if (drawnNodes === state.nodes && drawnChosen === state.chosenTaskId) {
+    if (drawnNodes !== state.nodes || drawnCollapsed !== state.collapsedTaskIds) {
+        const hadFocus = view.taskTree.contains(document.activeElement);
+        drawnNodes = state.nodes;
+        drawnCollapsed = state.collapsedTaskIds;
+        const finalRow = treeRow(FINAL_ROW_ID, 0, [span('task-prompt', 'Final answer')], null, false);
+        view.taskTree.replaceChildren(finalRow, ...taskTreeBranches(state.nodes).map((branch) => treeBranch(branch, 0)));
+        view.taskEmpty.hidden = state.nodes.length > 0;
+        if (hadFocus) {
+            chosenTreeItem()?.focus();
+        }
+    }
+    const chosen = chosenRowId();
+    for (const item of view.taskTree.querySelectorAll<HTMLElement>('[role="treeitem"]')) {
+        const selected = item.dataset.rowId === chosen;
+        item.setAttribute('aria-selected', String(selected));
+        item.tabIndex = selected ? 0 : -1;
+    }
+}
+
+function chosenTreeItem(): HTMLElement | null {
+    return view.taskTree.querySelector<HTMLElement>(`[data-row-id="${CSS.escape(chosenRowId())}"]`);
+}
+
+function chooseRow(id: string): void {
+    dispatch(id === FINAL_ROW_ID ? chooseFinalAnswer(state) : chooseTask(state, id));
+}
+
+// Arrow keys move through the rows that show; right and left open and close a branch, or step into and out of it.
+function moveInTree(event: KeyboardEvent): void {
+    const branches = taskTreeBranches(state.nodes);
+    const rows = [FINAL_ROW_ID, ...visibleTaskIds(branches, state.collapsedTaskIds)];
+    const current = chosenRowId();
+    const index = rows.indexOf(current);
+    const hasChildren = state.nodes.some((node) => node.id.startsWith(`${current}.`));
+    const open = !state.collapsedTaskIds.includes(current);
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        const next = rows[Math.min(rows.length - 1, Math.max(0, index + (event.key === 'ArrowDown' ? 1 : -1)))];
+        chooseRow(next);
+    } else if (event.key === 'ArrowRight' && hasChildren) {
+        dispatch(open ? chooseTask(state, rows[index + 1]) : setTaskOpen(state, current, true));
+    } else if (event.key === 'ArrowLeft' && hasChildren && open) {
+        dispatch(setTaskOpen(state, current, false));
+    } else if (event.key === 'ArrowLeft' && current.includes('.')) {
+        chooseRow(current.split('.').slice(0, -1).join('.'));
+    } else {
         return;
     }
-    drawnNodes = state.nodes;
-    drawnChosen = state.chosenTaskId;
-    view.taskList.textContent = '';
-    for (const row of taskTreeRows(state.nodes)) {
-        const item = document.createElement('li');
-        const button = document.createElement('button');
-        button.className = 'task-row';
-        button.dataset.taskId = row.id;
-        button.dataset.status = row.status;
-        button.setAttribute('role', 'option');
-        button.setAttribute('aria-selected', String(row.id === state.chosenTaskId));
-        button.style.paddingLeft = `${8 + row.depth * 14}px`;
-        const stateWord = document.createElement('span');
-        stateWord.className = 'state';
-        stateWord.textContent = row.state;
-        const identifier = document.createElement('span');
-        identifier.className = 'task-id';
-        identifier.textContent = row.id;
-        const prompt = document.createElement('span');
-        prompt.textContent = row.prompt;
-        button.append(stateWord, identifier, prompt);
-        item.append(button);
-        view.taskList.append(item);
+    event.preventDefault();
+    window.setTimeout(() => chosenTreeItem()?.focus(), RENDER_INTERVAL_MILLISECONDS);
+}
+
+// ============================================================================
+// Task detail
+// ============================================================================
+
+const NO_INPUT_TEXT = 'Shown once this task makes its first model call.';
+const NO_THINKING_TEXT = 'Each step of this task streams here as it runs.';
+
+type DrawnStep = { label: string; system: HTMLPreElement; input: HTMLPreElement; inputBlock: HTMLDetailsElement; body: Text };
+
+let drawnTaskId: string | null = null;
+let drawnSteps: DrawnStep[] = [];
+
+function inputPart(title: string): [HTMLElement, HTMLPreElement] {
+    const heading = document.createElement('p');
+    heading.className = 'input-title';
+    heading.textContent = title;
+    const text = document.createElement('pre');
+    text.className = 'input-text';
+    return [heading, text];
+}
+
+function setText(target: HTMLElement | Text, text: string): void {
+    if (target.textContent !== text) {
+        target.textContent = text;
     }
-    view.taskEmpty.hidden = state.nodes.length > 0;
+}
+
+// Adds new steps and fills in streamed text without rebuilding, so open sections and scrolling stay put.
+function renderTaskSteps(): void {
+    const steps = chosenTaskSteps(state);
+    if (drawnTaskId !== state.chosenTaskId || drawnSteps.length > steps.length || drawnSteps.some((drawn, index) => drawn.label !== steps[index].label)) {
+        drawnTaskId = state.chosenTaskId;
+        drawnSteps = [];
+        view.taskInputs.replaceChildren();
+        view.taskThinking.replaceChildren();
+    }
+    steps.forEach((step, index) => {
+        if (index >= drawnSteps.length) {
+            const inputBlock = document.createElement('details');
+            inputBlock.className = 'input-step';
+            const summary = document.createElement('summary');
+            summary.textContent = stepName(step.label);
+            const [systemTitle, system] = inputPart('Instructions');
+            const [inputTitle, input] = inputPart('Input and context');
+            inputBlock.append(summary, systemTitle, system, inputTitle, input);
+            view.taskInputs.append(inputBlock);
+            const heading = span('step-heading', `▸ ${stepName(step.label)}`);
+            const body = document.createTextNode('');
+            view.taskThinking.append(heading, body);
+            drawnSteps.push({ label: step.label, system, input, inputBlock, body });
+        }
+        const drawn = drawnSteps[index];
+        drawn.inputBlock.hidden = !step.input;
+        setText(drawn.system, step.system);
+        setText(drawn.input, step.input);
+        setText(drawn.body, step.text.replace(/^\s+/, ''));
+    });
+    view.taskInputs.dataset.empty = String(!steps.some((step) => step.input));
+    view.taskInputs.dataset.emptyText = NO_INPUT_TEXT;
+    view.taskThinking.dataset.empty = String(steps.length === 0);
+    view.taskThinking.dataset.emptyText = NO_THINKING_TEXT;
+}
+
+function renderTaskDetail(): void {
+    const task = chosenTask(state);
+    keepFollowing(view.outputTask, () => {
+        setMarkdown(view.taskSummary, task === null ? `### Task ${state.chosenTaskId ?? ''}` : taskSummaryMarkdown(task));
+        renderTaskSteps();
+        setMarkdown(view.taskOutput, task === null ? '_No output yet._' : taskOutputMarkdown(task));
+    });
 }
 
 function renderWorkbench(): void {
@@ -317,19 +435,14 @@ function renderWorkbench(): void {
     view.resumeBar.hidden = resume === null;
     view.resumeText.textContent = resume ?? '';
 
-    for (const button of document.querySelectorAll<HTMLButtonElement>('.phase')) {
-        button.setAttribute('aria-selected', String(button.dataset.phase === state.phase));
-    }
-    view.outputSteps.hidden = state.phase !== 'steps';
     view.outputTask.hidden = state.phase !== 'task';
     view.outputFinal.hidden = state.phase !== 'final';
-    view.phaseTitle.textContent =
-        state.phase === 'steps' ? 'Steps' : state.phase === 'task' ? `Task ${state.chosenTaskId ?? ''}` : 'Final answer';
+    view.phaseTitle.textContent = state.phase === 'task' ? `Task ${state.chosenTaskId ?? ''}` : 'Final answer';
 
     renderTaskTree();
-    renderSteps();
-    const task = chosenTask(state);
-    setMarkdown(view.outputTask, task === null ? TASK_DETAIL_WAITING_TEXT : taskDetailMarkdown(task));
+    if (state.phase === 'task') {
+        renderTaskDetail();
+    }
     keepFollowing(view.outputFinal, () => setMarkdown(view.outputFinal, state.finalText));
 }
 
@@ -987,13 +1100,17 @@ function bindControls(): void {
     for (const tab of document.querySelectorAll<HTMLButtonElement>('.tab')) {
         tab.addEventListener('click', () => showPage(tab.dataset.page ?? 'workbench'));
     }
-    for (const button of document.querySelectorAll<HTMLButtonElement>('.phase')) {
-        button.addEventListener('click', () => dispatch(choosePhase(state, button.dataset.phase === 'steps' ? 'steps' : 'final')));
-    }
-    view.taskList.addEventListener('click', (event) => {
-        const row = (event.target as HTMLElement).closest<HTMLElement>('.task-row');
-        if (row?.dataset.taskId) dispatch(chooseTask(state, row.dataset.taskId));
+    view.taskTree.addEventListener('click', (event) => {
+        const target = event.target as HTMLElement;
+        const toggle = target.closest<HTMLElement>('[data-toggle]')?.dataset.toggle;
+        const item = target.closest<HTMLElement>('[role="treeitem"]');
+        if (toggle) {
+            dispatch(setTaskOpen(state, toggle, state.collapsedTaskIds.includes(toggle)));
+        } else if (item?.dataset.rowId) {
+            chooseRow(item.dataset.rowId);
+        }
     });
+    view.taskTree.addEventListener('keydown', moveInTree);
     element('notice-close').addEventListener('click', () => {
         view.notice.hidden = true;
     });

@@ -168,6 +168,7 @@ export class ActiveRun {
     tree: unknown[] = [];
     progress: string[] = [];
     outputs: Record<string, string> = {};
+    inputs: Record<string, { system: string; input: string }> = {};
     clarification: Clarification | null = null;
     readonly cancelRequested = new AbortController();
 
@@ -194,6 +195,7 @@ export class ActiveRun {
             tree: [...this.tree],
             progress: [...this.progress],
             outputs: { ...this.outputs },
+            inputs: { ...this.inputs },
         };
     }
 }
@@ -740,6 +742,11 @@ export class HarnessDaemon {
             run.outputs[label] = (run.outputs[label] ?? '') + token;
             this.broadcast('run.token', { run_id: run.id, label, token });
         };
+        const reportInput = (label: string, system: string, input: string): void => {
+            raiseIfCancelled();
+            run.inputs[label] = { system, input };
+            this.broadcast('run.input', { run_id: run.id, label, system, input });
+        };
         const reportTree = (nodes: unknown[]): void => {
             raiseIfCancelled();
             run.tree = nodes;
@@ -776,6 +783,7 @@ export class HarnessDaemon {
             confirmActions: (settings ?? this.getSettings()).confirm_actions,
             progressCallback: reportProgress,
             stageOutputCallback: reportToken,
+            stageInputCallback: reportInput,
             treeCallback: reportTree,
             modelCache: this.modelCache,
             signal: run.cancelRequested.signal,

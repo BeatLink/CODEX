@@ -49,9 +49,10 @@ describe('HarnessDaemon', () => {
         return daemon;
     }
 
-    it('streams a run’s progress and tokens, then its result', async () => {
+    it('streams a run’s progress, step inputs and tokens, then its result', async () => {
         const executeTaskTree = vi.fn(async (prompt: string, options: ExecuteTaskTreeOptions) => {
             options.progressCallback!('Task 1 · Deciding');
+            options.stageInputCallback!('Task 1 · Deciding', 'Decide', 'The request');
             options.stageOutputCallback!('Task 1 · Deciding', 'token');
             return `Answer to ${prompt}`;
         });
@@ -64,7 +65,7 @@ describe('HarnessDaemon', () => {
         await events.waitFor('runs.changed');
 
         expect(finished).toEqual({ run_id: runId, result: 'Answer to Draft a plan' });
-        expect(events.names()).toEqual(['run.started', 'run.progress', 'run.token', 'run.finished', 'runs.changed']);
+        expect(events.names()).toEqual(['run.started', 'run.progress', 'run.input', 'run.token', 'run.finished', 'runs.changed']);
         expect((executeTaskTree.mock.calls[0] as TaskTreeCall)[1].maxTokens).toBe(512);
         expect(daemon.harness.settings.max_tokens).toBe(DEFAULT_SETTINGS.max_tokens);
         expect((await client.call<Record<string, unknown>>('status')).run).toBeNull();
