@@ -411,17 +411,15 @@ describe('HarnessDaemon', () => {
         const client = await (await start()).client();
 
         const knowledge = await client.call<Record<string, Array<Record<string, unknown>>>>('knowledge', { query: 'Docker builds' });
+        const unsearched = await client.call<Record<string, Array<Record<string, unknown>>>>('knowledge', {});
         const topicId = knowledge.topics[0].id;
-        const chosen = await client.call<Record<string, Array<Record<string, unknown>>>>('knowledge', { topic_id: topicId });
-        const other = await client.call<Record<string, Array<Record<string, unknown>>>>('knowledge', { topic_id: Number(topicId) + 100 });
 
         expect(knowledge.topics.map((topic) => topic.name)).toEqual(['Docker']);
-        expect(knowledge.sources[0].url).toBe('https://example.test/docker');
+        expect(knowledge.sources.map((source) => [source.url, source.topic_id])).toEqual([['https://example.test/docker', topicId]]);
+        expect(knowledge.facts.map((fact) => [fact.statement, fact.topic_id])).toEqual([['Multi-stage builds keep images small.', topicId]]);
         expect(knowledge.graph[0].relation).toBe('supported_by');
-        expect(knowledge.facts.map((fact) => fact.statement)).toEqual(['Multi-stage builds keep images small.']);
-        expect(chosen.facts).toHaveLength(1);
-        expect(chosen.sources[0].url).toBe('https://example.test/docker');
-        expect(other.facts).toEqual([]);
+        expect(knowledge.matches[0].url).toBe('https://example.test/docker');
+        expect(unsearched.matches).toEqual([]);
     });
 
     it('replaces a stale socket when binding but not a live one', async () => {

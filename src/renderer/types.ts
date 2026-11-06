@@ -59,13 +59,14 @@ export type Topic = {
 };
 
 export type Source = {
-    id?: number;
+    id: number;
     title?: string | null;
     url: string;
     snippet?: string;
     summary?: string;
     query?: string;
     retrieved_at: number;
+    topic_id?: number | null;
     topic?: string | null;
 };
 
@@ -74,6 +75,7 @@ export type Fact = {
     statement: string;
     confidence: number;
     status: string;
+    topic_id: number;
     topic: string;
     source_url?: string | null;
 };
@@ -87,11 +89,13 @@ export type GraphEdge = {
     evidence_url: string | null;
 };
 
+// Every topic, article and finding in the store, plus the articles a search matched.
 export type Knowledge = {
     topics: Topic[];
     sources: Source[];
+    facts: Fact[];
     graph: GraphEdge[];
-    facts?: Fact[];
+    matches: Source[];
 };
 
 export type ResearchJob = {

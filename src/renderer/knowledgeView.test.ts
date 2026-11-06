@@ -1,35 +1,57 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    chosenKnowledge,
     factsMarkdown,
     formatTimestamp,
     graphMarkdown,
+    knowledgeTreeRows,
     NO_GRAPH_TEXT,
     NO_JOBS_TEXT,
     NO_SOURCES_TEXT,
     queueLines,
     sourcesMarkdown,
-    topicRows,
 } from './knowledgeView.js';
 
-describe('topic rows', () => {
-    it('lists parents before their children and keeps topics a loop would hide', () => {
-        const topics = [
-            { id: 1, name: 'Languages', parent_id: null, source_count: 2 },
-            { id: 2, name: 'Rust', parent_id: 1, source_count: 5 },
-            { id: 3, name: 'Loop A', parent_id: 4, source_count: 0 },
-            { id: 4, name: 'Loop B', parent_id: 3, source_count: 0 },
-        ];
+describe('knowledge tree', () => {
+    const topics = [
+        { id: 1, name: 'Languages', parent_id: null, source_count: 0 },
+        { id: 2, name: 'Rust', parent_id: 1, source_count: 1 },
+        { id: 3, name: 'Loop A', parent_id: 4, source_count: 0 },
+        { id: 4, name: 'Loop B', parent_id: 3, source_count: 0 },
+    ];
+    const sources = [
+        { id: 10, title: 'Rust book', url: 'https://r.dev', topic_id: 2, retrieved_at: 0 },
+        { id: 11, title: '', url: 'https://x.dev', topic_id: null, retrieved_at: 0 },
+    ];
+    const facts = [
+        { id: 20, statement: 'Rust has no GC.', confidence: 0.9, status: 'active', topic_id: 2, topic: 'Rust', source_url: 'https://r.dev' },
+        { id: 21, statement: 'Languages differ.', confidence: 0.5, status: 'active', topic_id: 1, topic: 'Languages', source_url: null },
+    ];
 
-        const rows = topicRows(topics);
+    it('puts each article and finding on its own row under its topic, after the subtopics', () => {
+        const rows = knowledgeTreeRows(topics, sources, facts);
 
         expect(rows).toEqual([
-            { id: null, text: 'All topics', depth: 0 },
-            { id: 1, text: 'Languages  (2)', depth: 0 },
-            { id: 2, text: 'Rust  (5)', depth: 1 },
-            { id: 3, text: 'Loop A  (0)', depth: 0 },
-            { id: 4, text: 'Loop B  (0)', depth: 1 },
+            { choice: { kind: 'all' }, text: 'All topics', depth: 0 },
+            { choice: { kind: 'topic', id: 1 }, text: 'Languages  (0)', depth: 0 },
+            { choice: { kind: 'topic', id: 2 }, text: 'Rust  (1)', depth: 1 },
+            { choice: { kind: 'source', id: 10 }, text: 'Rust book', depth: 2 },
+            { choice: { kind: 'fact', id: 20 }, text: 'Rust has no GC.', depth: 2 },
+            { choice: { kind: 'fact', id: 21 }, text: 'Languages differ.', depth: 1 },
+            { choice: { kind: 'topic', id: 3 }, text: 'Loop A  (0)', depth: 0 },
+            { choice: { kind: 'topic', id: 4 }, text: 'Loop B  (0)', depth: 1 },
+            { choice: { kind: 'uncategorized' }, text: 'Uncategorized  (1)', depth: 0 },
+            { choice: { kind: 'source', id: 11 }, text: 'https://x.dev', depth: 1 },
         ]);
+    });
+
+    it('shows a topic, an article with the findings it backs, or a finding with its article', () => {
+        expect(chosenKnowledge({ kind: 'topic', id: 2 }, sources, facts)).toEqual({ sources: [sources[0]], facts: [facts[0]] });
+        expect(chosenKnowledge({ kind: 'source', id: 10 }, sources, facts)).toEqual({ sources: [sources[0]], facts: [facts[0]] });
+        expect(chosenKnowledge({ kind: 'fact', id: 21 }, sources, facts)).toEqual({ sources: [], facts: [facts[1]] });
+        expect(chosenKnowledge({ kind: 'uncategorized' }, sources, facts)).toEqual({ sources: [sources[1]], facts: [] });
+        expect(chosenKnowledge({ kind: 'all' }, sources, facts)).toEqual({ sources, facts });
     });
 });
 
@@ -38,8 +60,8 @@ describe('sources, facts and graph', () => {
         const retrieved = new Date(2026, 0, 2, 3, 4).getTime() / 1000;
 
         const text = sourcesMarkdown([
-            { title: 'Rust book', url: 'https://doc.rust-lang.org', topic: 'Rust', retrieved_at: retrieved, snippet: 'Ownership', summary: 'Covers borrowing' },
-            { title: '', url: 'https://x.dev', topic: null, retrieved_at: retrieved },
+            { id: 1, title: 'Rust book', url: 'https://doc.rust-lang.org', topic: 'Rust', retrieved_at: retrieved, snippet: 'Ownership', summary: 'Covers borrowing' },
+            { id: 2, title: '', url: 'https://x.dev', topic: null, retrieved_at: retrieved },
         ]);
 
         expect(formatTimestamp(retrieved)).toBe('2026-01-02 03:04');
@@ -53,8 +75,8 @@ describe('sources, facts and graph', () => {
 
     it('writes facts with their confidence and evidence', () => {
         const text = factsMarkdown([
-            { id: 1, statement: 'Rust has no GC.', confidence: 0.9, status: 'active', topic: 'Rust', source_url: 'https://r.dev' },
-            { id: 2, statement: 'Old claim.', confidence: 0.25, status: 'superseded', topic: 'Rust', source_url: null },
+            { id: 1, statement: 'Rust has no GC.', confidence: 0.9, status: 'active', topic_id: 1, topic: 'Rust', source_url: 'https://r.dev' },
+            { id: 2, statement: 'Old claim.', confidence: 0.25, status: 'superseded', topic_id: 1, topic: 'Rust', source_url: null },
         ]);
 
         expect(text).toBe(

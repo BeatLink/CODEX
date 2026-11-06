@@ -789,7 +789,7 @@ export class KnowledgeStore {
         return this.withConnection((connection) =>
             connection.all(
                 'SELECT s.id, s.title, s.url, s.snippet, s.summary, s.query, ' +
-                    's.retrieved_at, s.expires_at, t.name AS topic FROM sources s ' +
+                    's.retrieved_at, s.expires_at, s.topic_id, t.name AS topic FROM sources s ' +
                     'LEFT JOIN topics t ON t.id = s.topic_id ' +
                     'WHERE (? IS NULL OR s.topic_id = ?) ORDER BY s.retrieved_at DESC LIMIT ?',
                 topicId, topicId, limit,
@@ -872,7 +872,7 @@ export class KnowledgeStore {
         return this.withConnection((connection) =>
             connection.all(
                 'SELECT f.id, f.statement, f.confidence, f.status, f.use_count, f.created_at, ' +
-                    't.name AS topic, s.url AS source_url FROM facts f ' +
+                    'f.topic_id, t.name AS topic, s.url AS source_url FROM facts f ' +
                     'JOIN topics t ON t.id = f.topic_id LEFT JOIN sources s ON s.id = f.source_id ' +
                     'WHERE (? IS NULL OR f.topic_id = ?) ORDER BY f.created_at DESC LIMIT ?',
                 topicId, topicId, limit,

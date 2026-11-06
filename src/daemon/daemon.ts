@@ -414,9 +414,7 @@ export class HarnessDaemon {
             ['queue_status', method([], () => this.queueStatus())],
             [
                 'knowledge',
-                method(['query', 'topic_id'], (_, params) =>
-                    this.knowledge(text(params.query, 'query', ''), optionalInteger(params.topic_id, 'topic_id')),
-                ),
+                method(['query'], (_, params) => this.knowledge(text(params.query, 'query', ''))),
             ],
             ['unfinished_runs', method([], () => this.unfinishedRuns())],
             [
@@ -1070,14 +1068,17 @@ export class HarnessDaemon {
     // Knowledge
     // ========================================================================
 
-    knowledge(query = '', topicId: number | null = null): Json {
+    // Everything the knowledge page's tree lists, plus the articles a search matched.
+    knowledge(query = ''): Json {
         const store = this.knowledgeStore(this.getSettings().knowledge_db_path);
         const trimmed = query.trim();
         return {
             topics: store.topics(),
-            sources: trimmed ? store.search(trimmed) : store.sources(topicId, { limit: 30 }),
+            // A negative limit is SQLite's "no limit": the tree shows every article and finding.
+            sources: store.sources(null, { limit: -1 }),
+            facts: store.facts({ limit: -1 }),
             graph: store.graph(),
-            facts: store.facts({ topicId }),
+            matches: trimmed ? store.search(trimmed) : [],
         };
     }
 

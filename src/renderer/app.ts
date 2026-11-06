@@ -1,6 +1,15 @@
 // The CODEX window: wires the pages to the daemon through the preload API and draws the workbench state.
 import { actionCards, inboxTabText, NO_ACTIONS_TEXT } from './inboxView.js';
-import { factsMarkdown, graphMarkdown, NO_FACTS_TEXT, queueLines, sourcesMarkdown, topicRows } from './knowledgeView.js';
+import {
+    chosenKnowledge,
+    factsMarkdown,
+    graphMarkdown,
+    knowledgeTreeRows,
+    queueLines,
+    sameChoice,
+    sourcesMarkdown,
+    type TreeChoice,
+} from './knowledgeView.js';
 import { RoboEyes } from '@x-tech-laboratories/roboeyes';
 import { markdownToHtml } from './markdown.js';
 import { lastingMood, MASCOT_SCREEN, MOMENT_MILLISECONDS, momentAfter, type MascotMood } from './mascot.js';
@@ -60,9 +69,9 @@ const AUTOSTART_CHANGED_EVENT = 'autostart.changed';
 const SHOW_INBOX_EVENT = 'inbox.show';
 
 let state: WorkbenchState = initialState();
-let knowledge: Knowledge = { topics: [], sources: [], graph: [] };
+let knowledge: Knowledge = { topics: [], sources: [], facts: [], graph: [], matches: [] };
 let knowledgeQuery = '';
-let knowledgeTopicId: number | null = null;
+let knowledgeChoice: TreeChoice = { kind: 'all' };
 let inbox: ProposedAction[] = [];
 
 // ============================================================================
@@ -902,7 +911,7 @@ async function resolveAction(actionId: number, resolution: string): Promise<void
 async function refreshKnowledge(): Promise<void> {
     let reply: Knowledge;
     try {
-        reply = await codex.request<Knowledge>('knowledge', { query: knowledgeQuery, topic_id: knowledgeTopicId });
+        reply = await codex.request<Knowledge>('knowledge', { query: knowledgeQuery });
     } catch {
         return;
     }
@@ -912,33 +921,43 @@ async function refreshKnowledge(): Promise<void> {
 
 function renderKnowledge(): void {
     view.topicList.textContent = '';
-    for (const row of topicRows(knowledge.topics)) {
+    for (const row of knowledgeTreeRows(knowledge.topics, knowledge.sources, knowledge.facts)) {
         const item = document.createElement('li');
         const button = document.createElement('button');
         button.className = 'topic-row-item';
+        button.dataset.kind = row.choice.kind;
         button.textContent = row.text;
         button.title = row.text;
         button.style.paddingLeft = `${8 + row.depth * 16}px`;
         button.setAttribute('role', 'option');
-        button.setAttribute('aria-selected', String(!knowledgeQuery && row.id === knowledgeTopicId));
+        button.setAttribute('aria-selected', String(!knowledgeQuery && sameChoice(row.choice, knowledgeChoice)));
         button.addEventListener('click', () => {
+            const searched = knowledgeQuery !== '';
             knowledgeQuery = '';
             view.knowledgeSearch.value = '';
-            knowledgeTopicId = row.id;
-            void refreshKnowledge();
+            knowledgeChoice = row.choice;
+            // Choosing a row needs nothing new from the daemon; leaving a search refreshes the store.
+            if (searched) {
+                void refreshKnowledge();
+            } else {
+                renderKnowledge();
+            }
         });
         item.append(button);
         view.topicList.append(item);
     }
+    const chosen = knowledgeQuery
+        ? { sources: knowledge.matches, facts: knowledge.facts }
+        : chosenKnowledge(knowledgeChoice, knowledge.sources, knowledge.facts);
     view.sourcesTitle.textContent = knowledgeQuery ? `Sources matching "${knowledgeQuery}"` : 'Sources';
-    setMarkdown(view.knowledgeDetail, sourcesMarkdown(knowledge.sources));
-    setMarkdown(view.knowledgeFacts, knowledge.facts ? factsMarkdown(knowledge.facts) : NO_FACTS_TEXT);
+    setMarkdown(view.knowledgeDetail, sourcesMarkdown(chosen.sources));
+    setMarkdown(view.knowledgeFacts, factsMarkdown(chosen.facts));
     setMarkdown(view.knowledgeGraph, graphMarkdown(knowledge.graph));
 }
 
 function searchKnowledge(): void {
     knowledgeQuery = view.knowledgeSearch.value.trim();
-    knowledgeTopicId = null;
+    knowledgeChoice = { kind: 'all' };
     void refreshKnowledge();
 }
 

@@ -1,4 +1,4 @@
-// How the window shows the knowledge store and the research queue: topic rows, sources, facts, graph lines and jobs.
+// How the window shows the knowledge store and the research queue: tree rows, sources, facts, graph lines and jobs.
 import type { Fact, GraphEdge, ResearchJob, Source, Topic } from './types.js';
 
 export const MAX_GRAPH_EDGES = 50;
@@ -9,29 +9,55 @@ export const NO_FACTS_TEXT = '_No facts stored for this choice._';
 export const NO_JOBS_TEXT = 'No research jobs';
 
 // ============================================================================
-// Topics
+// Tree
 // ============================================================================
 
-export type TopicRow = { id: number | null; text: string; depth: number };
+export const MAX_LISTED_SOURCES = 30;
+export const UNCATEGORIZED_TEXT = 'Uncategorized';
 
-// Orders topics as a tree under "All topics", parents before children, and keeps any topic a loop would hide.
-export function topicRows(topics: Topic[]): TopicRow[] {
+export type TreeChoice =
+    | { kind: 'all' }
+    | { kind: 'topic'; id: number }
+    | { kind: 'uncategorized' }
+    | { kind: 'source'; id: number }
+    | { kind: 'fact'; id: number };
+
+export type TreeRow = { choice: TreeChoice; text: string; depth: number };
+
+export function sameChoice(first: TreeChoice, second: TreeChoice): boolean {
+    return first.kind === second.kind && ('id' in first ? first.id : null) === ('id' in second ? second.id : null);
+}
+
+// Orders the store as a tree under "All topics": each topic, then its subtopics, articles and findings,
+// parents before children, keeping any topic a loop would hide and grouping articles with no topic last.
+export function knowledgeTreeRows(topics: Topic[], sources: Source[], facts: Fact[]): TreeRow[] {
     const children = new Map<number | null, Topic[]>();
     for (const topic of topics) {
         const siblings = children.get(topic.parent_id) ?? [];
         siblings.push(topic);
         children.set(topic.parent_id, siblings);
     }
-    const rows: TopicRow[] = [{ id: null, text: 'All topics', depth: 0 }];
+    const sourcesByTopic = groupBy(sources, (source) => source.topic_id ?? null);
+    const factsByTopic = groupBy(facts, (fact) => fact.topic_id);
+    const rows: TreeRow[] = [{ choice: { kind: 'all' }, text: 'All topics', depth: 0 }];
+    const addEntries = (topicId: number | null, depth: number): void => {
+        for (const source of sourcesByTopic.get(topicId) ?? []) {
+            rows.push({ choice: { kind: 'source', id: source.id }, text: source.title || source.url, depth });
+        }
+        for (const fact of factsByTopic.get(topicId) ?? []) {
+            rows.push({ choice: { kind: 'fact', id: fact.id }, text: fact.statement, depth });
+        }
+    };
     const visited = new Set<number>();
     const add = (topic: Topic, depth: number): void => {
         visited.add(topic.id);
-        rows.push({ id: topic.id, text: `${topic.name}  (${topic.source_count})`, depth });
+        rows.push({ choice: { kind: 'topic', id: topic.id }, text: `${topic.name}  (${topic.source_count})`, depth });
         for (const child of children.get(topic.id) ?? []) {
             if (!visited.has(child.id)) {
                 add(child, depth + 1);
             }
         }
+        addEntries(topic.id, depth + 1);
     };
     for (const topic of children.get(null) ?? []) {
         add(topic, 0);
@@ -41,7 +67,54 @@ export function topicRows(topics: Topic[]): TopicRow[] {
             add(topic, 0);
         }
     }
+    const uncategorized = sourcesByTopic.get(null) ?? [];
+    if (uncategorized.length > 0) {
+        rows.push({ choice: { kind: 'uncategorized' }, text: `${UNCATEGORIZED_TEXT}  (${uncategorized.length})`, depth: 0 });
+        addEntries(null, 1);
+    }
     return rows;
+}
+
+function groupBy<Item>(items: Item[], key: (item: Item) => number | null): Map<number | null, Item[]> {
+    const groups = new Map<number | null, Item[]>();
+    for (const item of items) {
+        const group = groups.get(key(item)) ?? [];
+        group.push(item);
+        groups.set(key(item), group);
+    }
+    return groups;
+}
+
+export type ChosenKnowledge = { sources: Source[]; facts: Fact[] };
+
+// Picks what the side panes show for a tree row: a topic's newest articles and its findings,
+// one article and the findings it backs, or one finding and the article it came from.
+export function chosenKnowledge(choice: TreeChoice, sources: Source[], facts: Fact[]): ChosenKnowledge {
+    switch (choice.kind) {
+        case 'all':
+            return { sources: sources.slice(0, MAX_LISTED_SOURCES), facts };
+        case 'topic':
+            return {
+                sources: sources.filter((source) => source.topic_id === choice.id).slice(0, MAX_LISTED_SOURCES),
+                facts: facts.filter((fact) => fact.topic_id === choice.id),
+            };
+        case 'uncategorized':
+            return { sources: sources.filter((source) => source.topic_id == null).slice(0, MAX_LISTED_SOURCES), facts: [] };
+        case 'source': {
+            const source = sources.find((candidate) => candidate.id === choice.id);
+            return {
+                sources: source ? [source] : [],
+                facts: source ? facts.filter((fact) => fact.source_url === source.url) : [],
+            };
+        }
+        case 'fact': {
+            const fact = facts.find((candidate) => candidate.id === choice.id);
+            return {
+                sources: fact?.source_url ? sources.filter((source) => source.url === fact.source_url) : [],
+                facts: fact ? [fact] : [],
+            };
+        }
+    }
 }
 
 // ============================================================================

@@ -98,11 +98,11 @@ describe('daemon client', () => {
 
         const [first, second] = await Promise.all([
             client.call('status'),
-            client.call('knowledge', { query: 'rust', topic_id: null }),
+            client.call('knowledge', { query: 'rust' }),
         ]);
 
         expect(first).toEqual({ method: 'status', params: {} });
-        expect(second).toEqual({ method: 'knowledge', params: { query: 'rust', topic_id: null } });
+        expect(second).toEqual({ method: 'knowledge', params: { query: 'rust' } });
         client.close();
     });
 
