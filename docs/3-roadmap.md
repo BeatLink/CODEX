@@ -100,7 +100,6 @@ Today: mail arrives → automatic mail dropped without the model → rest summar
 - Iterate code changes from verification failures.
 - Let an acting task write a whole file without its tool call running past `max_tokens` (the `implement-parse-duration` eval task fails at the token limit).
 - Get the working written as equations with "=" so a recompute check can read it, and measure what the check adds on the hard eval set (no recompute check exists in `src/` today).
-- Refinement loops (scope not recorded in the old TODO; define it).
 
 ## Model choice
 
@@ -113,6 +112,8 @@ Today: mail arrives → automatic mail dropped without the model → rest summar
 - **Voting + red-flag filters** on control-flow calls (decide, check): measure whether they improve eval pass rate enough to justify the extra calls (calls are ~30 s each on the dev machine, so cost matters).
 - **Corrective sub-plan on step failure** (brainos-style) vs the current "re-plan the rest once": compare.
 - **Capped retries** (practitioner: 3) and capped excerpts of step output passed forward: check against the current limits.
+- **Refinement loop within a run:** replace the task tree's check → revise once → check (`checkAndRevise` in `core/taskTree.ts`) with up to N rounds (start at 3) that stop as soon as the checks pass, each round revising only the requirements that failed. The old Python pipeline had this (commit `60c0bcd`); the TypeScript rewrite kept a single revise. Measure the pass-rate gain against the extra model calls, and whether later rounds fix or only churn.
+- **Refinement across runs:** a failed run's trace becomes a stored, verifier-gated lesson so the next similar request goes better. Designed in doc 2 under "Verified self-authored skills" and "Procedural memory and retry feedback"; built under Core structure ideas, item 4.
 - **Scratchpad contract** between steps (doc 2): add a grammar-enforced scratchpad field to task outputs, inject it into dependent tasks, and compare pass rate against dependency results alone. Per-agent scratchpad folder: see Agent hierarchy.
 
 ## Mascot
