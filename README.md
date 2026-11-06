@@ -1,3 +1,4 @@
+
 # CODEX
 
 A harness that makes small, locally run LLMs more capable on tasks they would
@@ -69,13 +70,13 @@ Every request is worked as a tree of tasks.
 The request becomes the top task, whose deliverable is a complete reply to it.
 Each task is worked the same way:
 
-| Step | What the model does | Reply |
-| --- | --- | --- |
-| Decide | Choose how to do the task: `answer` it without tools, `research` it, read local `files`, `act` with file, test, or MCP tools, or `decompose` it into 2 to 5 subtasks, each with a prompt, a deliverable, and the earlier subtasks it depends on | JSON |
-| Gather | Run the chosen tools: stored knowledge and web searches first, then the tool-calling loop with only that approach's tools | Findings |
-| Write | Produce exactly what the task's deliverable describes | Text |
-| Check | Mark whether the result delivers it: met, partly met, or missing, with the correction needed | JSON |
-| Revise | Apply the correction once | Text |
+| Step   | What the model does                                                                                                                                                                                                                                       | Reply    |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| Decide | Choose how to do the task: `answer` it without tools, `research` it, read local `files`, `act` with file, test, or MCP tools, or `decompose` it into 2 to 5 subtasks, each with a prompt, a deliverable, and the earlier subtasks it depends on | JSON     |
+| Gather | Run the chosen tools: stored knowledge and web searches first, then the tool-calling loop with only that approach's tools                                                                                                                                 | Findings |
+| Write  | Produce exactly what the task's deliverable describes                                                                                                                                                                                                     | Text     |
+| Check  | Mark whether the result delivers it: met, partly met, or missing, with the correction needed                                                                                                                                                              | JSON     |
+| Revise | Apply the correction once                                                                                                                                                                                                                                 | Text     |
 
 A decomposed task runs its subtasks in order, then a combine step writes its
 result from theirs, and that result is checked and revised in the same way. The
@@ -185,10 +186,10 @@ written rule far more reliably than one it has to work out.
 Guides for one kind of work go only to the tasks doing it, so they cost the
 rest nothing. Each skill has a folder of Markdown files, read in name order:
 
-| Skill | Folders | Tasks that get it |
-| --- | --- | --- |
-| Researching and fact finding | `~/.config/codex/skills/research/`, then the folder's `.codex/skills/research/` | Tasks that chose `research` |
-| Code review and editing | `~/.config/codex/skills/code/`, then the folder's `.codex/skills/code/` | Tasks that chose `files` or `act` |
+| Skill                        | Folders                                                                             | Tasks that get it                     |
+| ---------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------- |
+| Researching and fact finding | `~/.config/codex/skills/research/`, then the folder's `.codex/skills/research/` | Tasks that chose `research`         |
+| Code review and editing      | `~/.config/codex/skills/code/`, then the folder's `.codex/skills/code/`         | Tasks that chose `files` or `act` |
 
 A skill's guides are cut at 3000 characters. They reach every step of the task
 after its decision (gathering, writing, checking, and revising) beside the
@@ -199,12 +200,12 @@ lessons of the same skill that memory holds (see below).
 A prompt may start with a command. Besides the mode prefixes (`/ask`, `/plan`,
 `/do`, and the rest), these work in every interface:
 
-| Command | What it does |
-| --- | --- |
+| Command                                       | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `/remember [store] statement [Why: reason]` | Stores a memory you state yourself, without the model, in one of the memory stores below: `user` (the default), `general`, `locations`, `software`, `project`, `research`, or `code`. `preference` and `correction` also mean `user`, and `reference` means `locations`. A `project` memory belongs to the current folder; the others hold everywhere. A stated memory outlasts a probed or learned one it contradicts |
-| `/memories [store]` | Lists the memories for the current folder under each store's heading, with their numbers, or only those of one store |
-| `/forget number` or `/forget words` | Deletes one memory, by its number or by words from it; when several match, they are listed instead |
-| `/init` | Reads the folder and writes its `CODEX.md`, or improves the one there. With file writes off, it replies with the text instead |
+| `/memories [store]`                         | Lists the memories for the current folder under each store's heading, with their numbers, or only those of one store                                                                                                                                                                                                                                                                                                                             |
+| `/forget number` or `/forget words`       | Deletes one memory, by its number or by words from it; when several match, they are listed instead                                                                                                                                                                                                                                                                                                                                               |
+| `/init`                                     | Reads the folder and writes its `CODEX.md`, or improves the one there. With file writes off, it replies with the text instead                                                                                                                                                                                                                                                                                                                  |
 
 Define your own commands as Markdown files named after the command, in
 `~/.config/codex/commands/` or the folder's `.codex/commands/`
@@ -242,16 +243,15 @@ Knowledge lives in a SQLite database at `knowledge_db_path`
   reason it holds. A memory is learned from past requests, probed from the
   machine, or stated by the user, and a project memory belongs to the folder
   (`filesystem_root`) its requests were worked in.
-
-  | Store | Holds | Recalled |
-  | --- | --- | --- |
-  | `general` | Lasting facts learned from requests that are about neither the user nor the machine | Up to 4 per request |
-  | `user` | How the user likes answers, the tools, languages, and styles they use, and what they corrected | Up to 6 per request |
-  | `locations` | Folders, files, URLs, and hosts on this machine | Up to 4 per request |
-  | `software` | Programs, services, and versions installed or running on this machine | Up to 4 per request |
-  | `project` | Ongoing work and rules of one folder | Up to 6 per request, from that folder only |
-  | `research` | Lessons for researching and fact finding | Up to 5 per task that researches |
-  | `code` | Lessons for code review and editing | Up to 5 per task that reads files or acts |
+  | Store         | Holds                                                                                          | Recalled                                   |
+  | ------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------ |
+  | `general`   | Lasting facts learned from requests that are about neither the user nor the machine            | Up to 4 per request                        |
+  | `user`      | How the user likes answers, the tools, languages, and styles they use, and what they corrected | Up to 6 per request                        |
+  | `locations` | Folders, files, URLs, and hosts on this machine                                                | Up to 4 per request                        |
+  | `software`  | Programs, services, and versions installed or running on this machine                          | Up to 4 per request                        |
+  | `project`   | Ongoing work and rules of one folder                                                           | Up to 6 per request, from that folder only |
+  | `research`  | Lessons for researching and fact finding                                                       | Up to 5 per task that researches           |
+  | `code`      | Lessons for code review and editing                                                            | Up to 5 per task that reads files or acts  |
 - **Episodes**: each finished request with its mode, its task tree, any
   clarification, the answer, and how it ended (how many tasks met their
   deliverable, and how many were unverified or failed).
@@ -448,11 +448,11 @@ The model then compares pairs that share at least half their words, one pair
 per call, with a schema that lets it reply only with a short reason and one
 verdict:
 
-| Pair | Verdicts | What happens |
-| --- | --- | --- |
-| Two topics | same subject, first is broader, second is broader, different | Same subjects are merged into the one with more facts and sources, carrying over its facts, sources, subtopics, queued research, and graph edges. A broader topic adopts the narrower one when that narrows where it sits now |
-| Two facts under one topic | same, contradict, different | Same facts are merged into the more trusted one. Of two contradicting facts the less trusted is marked disputed, or both when neither is more trusted, and the topic is queued for fresh research |
-| Two memories in one store | same, contradict, different | Same memories are merged. Of two contradicting memories the older is set aside, except that one the user stated outlasts the rest and a probed one outlasts a learned one. Two probed memories are never compared. Project memories are compared only with those of their own folder |
+| Pair                      | Verdicts                                                     | What happens                                                                                                                                                                                                                                                                         |
+| ------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Two topics                | same subject, first is broader, second is broader, different | Same subjects are merged into the one with more facts and sources, carrying over its facts, sources, subtopics, queued research, and graph edges. A broader topic adopts the narrower one when that narrows where it sits now                                                        |
+| Two facts under one topic | same, contradict, different                                  | Same facts are merged into the more trusted one. Of two contradicting facts the less trusted is marked disputed, or both when neither is more trusted, and the topic is queued for fresh research                                                                                    |
+| Two memories in one store | same, contradict, different                                  | Same memories are merged. Of two contradicting memories the older is set aside, except that one the user stated outlasts the rest and a probed one outlasts a learned one. Two probed memories are never compared. Project memories are compared only with those of their own folder |
 
 Disputed and pruned facts and set-aside memories are no longer recalled. Each
 pair is compared once; its verdict is stored, and a fact or memory learned
@@ -493,6 +493,7 @@ To work on it, enter the dev shell, which provides Node 24 and Electron:
 
 ```bash
 nix develop
+npm install
 npm ci
 npm run build
 npm test
@@ -592,15 +593,15 @@ run and `--show-failures` lists what each failed question recalled.
 
 On 2026-10-21, with Qwen3-Embedding-0.6B on a busy CPU:
 
-| | Words only | With meaning |
-| --- | --- | --- |
-| Shared words | 100% | 100% |
-| Paraphrase | 0% | 100% |
-| Several facts | 50% | 100% |
-| Unrelated (nothing recalled) | 100% | 100% |
-| Expected facts found | 38% | 100% |
-| Mean reciprocal rank | 0.35 | 0.91 |
-| Seconds per recall | 0.00 | 2.29 |
+|                              | Words only | With meaning |
+| ---------------------------- | ---------- | ------------ |
+| Shared words                 | 100%       | 100%         |
+| Paraphrase                   | 0%         | 100%         |
+| Several facts                | 50%        | 100%         |
+| Unrelated (nothing recalled) | 100%       | 100%         |
+| Expected facts found         | 38%        | 100%         |
+| Mean reciprocal rank         | 0.35       | 0.91         |
+| Seconds per recall           | 0.00       | 2.29         |
 
 ### The window
 
@@ -712,14 +713,14 @@ such as piped CLI input, goes ahead as `allow_file_writes` and
 Precedence, lowest first: built-in defaults, the settings file, the
 `MODEL_PATH` environment variable, then command-line options.
 
-| Option | Effect |
-| --- | --- |
-| `--model-path`, `--context-size`, `--gpu-layers`, `--max-tokens`, `--temperature` | Override the matching setting |
-| `--allow-file-writes` | Let the model create or replace files |
-| `--enable-test-execution` | Let the model run the project's tests |
-| `--show-thinking` / `--no-show-thinking` | Stream or hide each step's output |
-| `--mode auto\|answer\|draft\|execute` | Limit what the request may do; only `auto` and `execute` may change files |
-| `--settings PATH` | Use another settings file |
+| Option                                                                                      | Effect                                                                        |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `--model-path`, `--context-size`, `--gpu-layers`, `--max-tokens`, `--temperature` | Override the matching setting                                                 |
+| `--allow-file-writes`                                                                     | Let the model create or replace files                                         |
+| `--enable-test-execution`                                                                 | Let the model run the project's tests                                         |
+| `--show-thinking` / `--no-show-thinking`                                                | Stream or hide each step's output                                             |
+| `--mode auto\|answer\|draft\|execute`                                                        | Limit what the request may do; only `auto` and `execute` may change files |
+| `--settings PATH`                                                                         | Use another settings file                                                     |
 
 `max_tokens` is reserved for the reply in most steps, so it must leave room
 for input within `context_size`. **Auto size** in Options picks the largest
@@ -730,13 +731,13 @@ background model, it sizes that model on its own device as well and sets
 
 ## Tools and safety
 
-| Tool | Approach | Notes |
-| --- | --- | --- |
-| `web_search` | research | DuckDuckGo results from its HTML search page, capped by `max_search_results` |
-| `web_fetch` | research | Public HTTP(S) pages only; private and local addresses are refused, including after redirects. The page is summarized for a focus the model supplies |
-| `list_directory`, `read_file` | research, files, act | Paths must stay under `filesystem_root` |
-| `write_file` | act | Only with `allow_file_writes`; creates or replaces files and cannot delete |
-| `run_tests` | act | Only with `enable_test_execution`; runs Python `unittest` discovery under the root with a 120-second limit |
+| Tool                              | Approach             | Notes                                                                                                                                                |
+| --------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `web_search`                    | research             | DuckDuckGo results from its HTML search page, capped by `max_search_results`                                                                       |
+| `web_fetch`                     | research             | Public HTTP(S) pages only; private and local addresses are refused, including after redirects. The page is summarized for a focus the model supplies |
+| `list_directory`, `read_file` | research, files, act | Paths must stay under `filesystem_root`                                                                                                            |
+| `write_file`                    | act                  | Only with `allow_file_writes`; creates or replaces files and cannot delete                                                                         |
+| `run_tests`                     | act                  | Only with `enable_test_execution`; runs Python `unittest` discovery under the root with a 120-second limit                                       |
 
 `filesystem_root` is resolved from the current directory. Paths are relative to
 it; an absolute path is accepted only when it points inside it. Files with
@@ -787,34 +788,34 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 
 ## Project layout
 
-| Path | Contents |
-| --- | --- |
-| `src/core/taskTree.ts` | The task tree: deciding, gathering, writing, checking, and splitting tasks |
-| `src/core/model.ts` | Loading the model and making one call to it |
-| `src/core/evidence.ts` | Searching with memory, recall formatting, page summaries, and the research queue |
-| `src/core/checks.ts` | Checks on a result that do not rely on the model |
-| `src/core/toolStage.ts` | The tool-calling loop each task's gather step runs |
-| `src/core/tools.ts` | Built-in tools and their path and URL checks |
-| `src/core/mcpTools.ts` | MCP client for stdio and HTTP servers |
-| `src/core/contextBudget.ts` | Fitting each call's input into the context window |
-| `src/core/knowledge.ts` | SQLite knowledge store, memory stores, queue, and graph |
-| `src/core/environment.ts` | Probing the machine for the locations and software memory stores |
-| `src/core/agents.ts` | Reading agent definitions and the MCP servers each one may use |
-| `src/core/recallBenchmark.ts` | Scoring recall against questions with known relevant facts |
-| `src/core/embeddings.ts` | The embedding model used to find facts and topics by meaning |
-| `src/core/background.ts` | One background research job |
-| `src/core/consolidation.ts` | One background consolidation step: merging, re-filing, and pruning the store |
-| `src/core/gpuLock.ts` | The GPU lock file shared with other programs |
-| `src/core/autoSize.ts` | Auto size: fitting context and token limits to the memory available |
-| `src/core/settings.ts` | Defaults and validation |
-| `src/core/evaluation.ts`, `evals/tasks.json` | The eval harness and its fixed task set |
-| `src/core/taskView.ts` | Task tree lines and task details |
-| `src/daemon/daemon.ts` | The daemon: model, runs, background worker, and socket server |
-| `src/daemon/client.ts`, `src/shared/protocol.ts` | Connecting to the daemon and the message format |
-| `src/cli/index.ts` | The one-shot command line, with the `eval` and `recall-benchmark` subcommands |
-| `src/main/tray.ts`, `src/main/autostart.ts` | The system tray icon and menu, and the login autostart entry |
-| `src/main`, `src/renderer` | The Electron window: the main process that starts the daemon and relays its messages, and the page it shows |
-| `evals/seed.json`, `evals/recall_tasks.json` | The seed store's made-up facts and the tasks only recall can answer |
+| Path                                                 | Contents                                                                                                    |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `src/core/taskTree.ts`                             | The task tree: deciding, gathering, writing, checking, and splitting tasks                                  |
+| `src/core/model.ts`                                | Loading the model and making one call to it                                                                 |
+| `src/core/evidence.ts`                             | Searching with memory, recall formatting, page summaries, and the research queue                            |
+| `src/core/checks.ts`                               | Checks on a result that do not rely on the model                                                            |
+| `src/core/toolStage.ts`                            | The tool-calling loop each task's gather step runs                                                          |
+| `src/core/tools.ts`                                | Built-in tools and their path and URL checks                                                                |
+| `src/core/mcpTools.ts`                             | MCP client for stdio and HTTP servers                                                                       |
+| `src/core/contextBudget.ts`                        | Fitting each call's input into the context window                                                           |
+| `src/core/knowledge.ts`                            | SQLite knowledge store, memory stores, queue, and graph                                                     |
+| `src/core/environment.ts`                          | Probing the machine for the locations and software memory stores                                            |
+| `src/core/agents.ts`                               | Reading agent definitions and the MCP servers each one may use                                              |
+| `src/core/recallBenchmark.ts`                      | Scoring recall against questions with known relevant facts                                                  |
+| `src/core/embeddings.ts`                           | The embedding model used to find facts and topics by meaning                                                |
+| `src/core/background.ts`                           | One background research job                                                                                 |
+| `src/core/consolidation.ts`                        | One background consolidation step: merging, re-filing, and pruning the store                                |
+| `src/core/gpuLock.ts`                              | The GPU lock file shared with other programs                                                                |
+| `src/core/autoSize.ts`                             | Auto size: fitting context and token limits to the memory available                                         |
+| `src/core/settings.ts`                             | Defaults and validation                                                                                     |
+| `src/core/evaluation.ts`, `evals/tasks.json`     | The eval harness and its fixed task set                                                                     |
+| `src/core/taskView.ts`                             | Task tree lines and task details                                                                            |
+| `src/daemon/daemon.ts`                             | The daemon: model, runs, background worker, and socket server                                               |
+| `src/daemon/client.ts`, `src/shared/protocol.ts` | Connecting to the daemon and the message format                                                             |
+| `src/cli/index.ts`                                 | The one-shot command line, with the `eval` and `recall-benchmark` subcommands                           |
+| `src/main/tray.ts`, `src/main/autostart.ts`      | The system tray icon and menu, and the login autostart entry                                                |
+| `src/main`, `src/renderer`                       | The Electron window: the main process that starts the daemon and relays its messages, and the page it shows |
+| `evals/seed.json`, `evals/recall_tasks.json`     | The seed store's made-up facts and the tasks only recall can answer                                         |
 
 Test files named `*.test.ts` sit beside the source files they cover.
 
@@ -826,7 +827,6 @@ Run the tests with `npm test`, which uses vitest.
 
 - Subtasks run one after another. Resuming restarts the task that was cut off
   from its decision, so the work it had done before the stop is redone.
-
 - One-shot CLI runs without a daemon load the model for each run; the daemon
   keeps it loaded and shares it with the background worker.
 - Topics found by searches during a request are named after the query and stay
