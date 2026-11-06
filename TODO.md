@@ -39,6 +39,9 @@
 - [x] Show proposed actions in the window and tray
 - [x] Taint runs started by external events so they cannot act
 - [ ] Approve and carry out an event's proposed change (the act-with-approval rung), and learn rules from approvals
+- [ ] Try the reactive assistant with a real mailbox, IMAP server and model, and check the Inbox in the window (see docs/reactive-assistant-status.md)
+- [ ] Add calendar and file-watcher connectors
+- [ ] Prune finished events and old actions, clean up stopped event-run checkpoints, add a mail settings page, and coalesce a large mailbox backlog
 - [ ] Track entities and commitments, and drive idle work from them
 - [x] Keep the loaded model between requests and share it with the background worker
 - [x] Return structured JSON from stages using llama.cpp schema-constrained output
