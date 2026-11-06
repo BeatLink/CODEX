@@ -236,12 +236,12 @@ Sample a step several times and decide by first-to-ahead-by-K voting; discard co
 
 ## Mascot emotions (built)
 
-Source: `research/done-mascot-emotions.md`. The robot from the CODEX icon sits at the foot of the workbench sidebar, beside the run status.
+Source: `research/done-mascot-emotions.md`. The robot from the CODEX icon sits at the foot of the workbench sidebar, above the run status, at about two thirds of the sidebar's width.
 
-- **CODEX** draws only the icon's hexagon with the robot head filled black, and lays a canvas over the head (`src/renderer/index.html`). The black head keeps RoboEyes' white face visible on both themes.
-- **RoboEyes** (github.com/x-tech-laboratories/RoboEyes, an npm git dependency pinned to a commit) draws the eyes and mouth on that canvas exactly as it ships: its own moods, colours and settings. The canvas is RoboEyes' 112 by 80 screen shrunk into the head's 28 by 20 units, so it stays sharp.
+- **CODEX** draws only the robot: head border, ears and antenna in the theme colour (`--primary`) around a black screen, with a canvas over the screen (`src/renderer/index.html`). The black screen keeps RoboEyes' white face visible on both themes.
+- **RoboEyes** (github.com/x-tech-laboratories/RoboEyes, an npm git dependency pinned to a commit) draws the eyes and mouth on that canvas exactly as it ships: its own moods, colours and settings. The canvas is RoboEyes' 120 by 80 screen, drawn at twice that and shrunk into the head's 24 by 16 unit screen, so it stays sharp.
 
-**Moods** are RoboEyes' own, chosen by state, most urgent first (`src/renderer/mascot.ts`): `worried` (daemon unavailable), `asleep` (suspended), `thinking` (run in progress), `default` otherwise. When a run ends, `happy` (completed) or `sad` (failed) shows for 3 seconds through RoboEyes' `setMood(mood, { for })`, unless the daemon is unavailable.
+**Moods** are RoboEyes' own, chosen by state, most urgent first (`src/renderer/mascot.ts`): `asleep` (daemon unavailable or suspended), `thinking` (run in progress), `default` otherwise. When a run ends, `happy` (completed) or `sad` (failed) shows for 3 seconds through RoboEyes' `setMood(mood, { for })`, unless the daemon is unavailable.
 
 **Loading:** the renderer has no bundler, so an import map in `index.html` points `@x-tech-laboratories/roboeyes` at `node_modules` beside `dist`; the content security policy allows the map by its hash. RoboEyes follows `prefers-reduced-motion` itself. The tray icon stays a still image.
 

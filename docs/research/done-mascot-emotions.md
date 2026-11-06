@@ -52,8 +52,8 @@ Some of these would need decisions first:
 
 ## RoboEyes
 
-CODEX now draws only the icon's hexagon with a black robot head, and [RoboEyes](https://github.com/x-tech-laboratories/RoboEyes) draws the eyes and mouth over the head exactly as it ships. The emotions above became RoboEyes' own moods chosen by state, in [src/renderer/mascot.ts](../../src/renderer/mascot.ts): `worried`, `asleep`, `thinking` and `default`, with `happy` or `sad` briefly when a run ends. The antenna pulse, z's, head bob and the other emotions are not carried over.
+CODEX now draws only the robot, in the theme colour around a black screen, and [RoboEyes](https://github.com/x-tech-laboratories/RoboEyes) draws the eyes and mouth over the head exactly as it ships. The emotions above became RoboEyes' own moods chosen by state, in [src/renderer/mascot.ts](../../src/renderer/mascot.ts): `asleep`, `thinking` and `default`, with `happy` or `sad` briefly when a run ends. The antenna pulse, z's, head bob and the other emotions are not carried over.
 
 ## Checked
 
-Viewed in Electron with a stand-in daemon, in the light and dark themes; the white face reads on the black head in both.
+Viewed in Electron with a stand-in daemon, in the light and dark themes; the white face reads on the black screen in both.

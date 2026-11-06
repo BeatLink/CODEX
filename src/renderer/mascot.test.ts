@@ -10,7 +10,7 @@ function connected(changes: Partial<WorkbenchState> = {}): WorkbenchState {
 
 describe('the mascot mood', () => {
     it('uses only moods RoboEyes has', () => {
-        const moods: MascotMood[] = ['default', 'thinking', 'happy', 'sad', 'asleep', 'worried'];
+        const moods: MascotMood[] = ['default', 'thinking', 'happy', 'sad', 'asleep'];
 
         for (const mood of moods) expect(defaultConfig.moods).toHaveProperty(mood);
     });
@@ -21,7 +21,7 @@ describe('the mascot mood', () => {
         expect(lastingMood(connected())).toBe('default');
         expect(lastingMood(running)).toBe('thinking');
         expect(lastingMood({ ...running, suspended: true })).toBe('asleep');
-        expect(lastingMood({ ...running, connection: 'unavailable' })).toBe('worried');
+        expect(lastingMood({ ...running, connection: 'unavailable' })).toBe('asleep');
     });
 
     it('is happy after a completed run and sad after a failed one', () => {
@@ -33,7 +33,7 @@ describe('the mascot mood', () => {
         expect(momentAfter(connected(), beginRun(connected(), 1))).toBeNull();
     });
 
-    it('stays worried when a run fails because the daemon went away', () => {
+    it('goes straight to sleep when a run fails because the daemon went away', () => {
         const running = beginRun(connected(), 1);
         const lost = { ...failRun(running, 'Gone').state, connection: 'unavailable' as const };
 

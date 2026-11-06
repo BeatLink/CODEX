@@ -459,15 +459,18 @@ main {
     align-self: center;
     width: 67%;
     height: auto;
-    aspect-ratio: 1;
 }
 
-/* The face is drawn at twice its 112 by 80 screen size and shrunk into the head's 28 by 20 cut-out, so it stays sharp. */
+.mascot-body {
+    fill: var(--primary);
+}
+
+/* The face is drawn at twice its 120 by 80 screen size and shrunk into the head's 24 by 16 screen, so it stays sharp. */
 .mascot-face {
     display: block;
-    width: 224px;
+    width: 240px;
     height: 160px;
-    transform: scale(0.125);
+    transform: scale(0.1);
     transform-origin: 0 0;
 }
 
