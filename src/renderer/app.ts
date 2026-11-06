@@ -1,10 +1,22 @@
 // The CODEX window: wires the pages to the daemon through the preload API and draws the workbench state.
 import { actionCards, inboxTabText, NO_ACTIONS_TEXT } from './inboxView.js';
 import { factsMarkdown, graphMarkdown, NO_FACTS_TEXT, queueLines, sourcesMarkdown, topicRows } from './knowledgeView.js';
+import { RoboEyes } from '@x-tech-laboratories/roboeyes';
 import { markdownToHtml } from './markdown.js';
+import {
+    MASCOT_FRAME_RATE,
+    MASCOT_SCREEN,
+    mascotConfig,
+    momentAfter,
+    shownMood,
+    startMoment,
+    type MascotMood,
+    type Moment,
+} from './mascot.js';
 import {
     applyStatus,
     approvalPlan,
+    backgroundState,
     beginRun,
     BACKGROUND_WAITING_TEXT,
     cancelRequested,
@@ -19,7 +31,6 @@ import {
     showUnfinishedRuns,
     stopRun,
     STEPS_WAITING_TEXT,
-    SUSPENDED_TEXT,
     TASK_DETAIL_WAITING_TEXT,
     unfinishedRunText,
     type Clarification,
@@ -85,6 +96,9 @@ const view = {
     taskList: element('task-list'),
     taskEmpty: element('task-empty'),
     runStatus: element('run-status'),
+    mascot: element<HTMLElement>('mascot'),
+    mascotTitle: element('mascot-title'),
+    mascotFace: element<HTMLCanvasElement>('mascot-face'),
     prompt: element<HTMLTextAreaElement>('prompt'),
     suggestions: element('command-suggestions'),
     mode: element<HTMLSelectElement>('mode'),
@@ -132,6 +146,9 @@ const view = {
 let noticeTimer: number | null = null;
 
 function notifyUser(message: string, error = false): void {
+    if (error) {
+        showMoment('sad');
+    }
     view.noticeText.textContent = message;
     view.notice.dataset.error = String(error);
     view.notice.hidden = false;
@@ -159,11 +176,16 @@ async function callDaemon<T>(method: string, params: Record<string, unknown> = {
 // ============================================================================
 
 function dispatch(reduction: Reduction | WorkbenchState): void {
+    const previous = state;
     if ('effects' in reduction) {
         state = reduction.state;
         reduction.effects.forEach(runEffect);
     } else {
         state = reduction;
+    }
+    const moment = momentAfter(previous, state);
+    if (moment !== null) {
+        showMoment(moment);
     }
     scheduleRender();
 }
@@ -319,13 +341,6 @@ function renderWorkbench(): void {
     keepFollowing(view.outputFinal, () => setMarkdown(view.outputFinal, state.finalText));
 }
 
-function backgroundState(message: string): string {
-    if (message === 'Paused' || message === SUSPENDED_TEXT) return 'paused';
-    if (message.startsWith('Worker error')) return 'error';
-    if (message.startsWith('Idle') || message === 'Foreground prompt active') return 'idle';
-    return 'working';
-}
-
 function renderBackground(): void {
     const enabled = Boolean(state.settings?.background_research_enabled);
     view.backgroundStatus.textContent = state.backgroundStatus;
@@ -349,7 +364,48 @@ function renderConnection(): void {
         state.connection === 'connected' ? 'Connected' : state.connection === 'connecting' ? 'Connecting' : 'Daemon unavailable';
 }
 
+// ============================================================================
+// Mascot
+// ============================================================================
+
+const mascotFace = new RoboEyes(view.mascotFace, { config: mascotConfig() });
+let moment: Moment | null = null;
+let momentTimer: number | null = null;
+
+function startMascot(): void {
+    mascotFace.setDisplayColors('transparent', getComputedStyle(view.mascot).getPropertyValue('--lit').trim());
+    mascotFace.begin(MASCOT_SCREEN.width, MASCOT_SCREEN.height, MASCOT_FRAME_RATE);
+    renderMascot();
+    mascotFace.start();
+}
+
+// Shows a short emotion over the lasting one, then goes back to it.
+function showMoment(mood: MascotMood): void {
+    moment = startMoment(state, mood, Date.now());
+    if (moment === null) {
+        return;
+    }
+    if (momentTimer !== null) {
+        window.clearTimeout(momentTimer);
+    }
+    momentTimer = window.setTimeout(() => {
+        momentTimer = null;
+        renderMascot();
+    }, moment.until - Date.now());
+    renderMascot();
+}
+
+function renderMascot(): void {
+    const mood = shownMood(state, moment, Date.now());
+    if (mood !== mascotFace.mood) {
+        mascotFace.setMood(mood);
+    }
+    view.mascot.dataset.state = mood;
+    view.mascotTitle.textContent = `CODEX, ${mood}`;
+}
+
 function render(): void {
+    renderMascot();
     renderConnection();
     renderWorkbench();
     renderBackground();
@@ -1042,6 +1098,7 @@ async function start(): Promise<void> {
         dispatch(reduceEvent(state, event, data));
     });
     void showLaunchAtLogin();
+    startMascot();
     render();
     view.prompt.focus();
     try {

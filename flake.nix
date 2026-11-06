@@ -32,8 +32,10 @@
         version = packageJson.version;
         src = self;
         inherit nodejs;
-        npmDepsHash = "sha256-n1IHenHErqroT1tuqzkioSymigrMLpxgC98hSeOVQv8=";
+        npmDepsHash = "sha256-VFz8aLt4Bzjqi2AtoaLm+QNFfhaN+kvfvZCg0Nk9wAw=";
         npmFlags = [ "--ignore-scripts" ];
+        # npm unpacks the RoboEyes git dependency through the cache, so the cache must be writable.
+        makeCacheWritable = true;
         env = {
           ELECTRON_SKIP_BINARY_DOWNLOAD = "1";
           NODE_LLAMA_CPP_SKIP_DOWNLOAD = "true";

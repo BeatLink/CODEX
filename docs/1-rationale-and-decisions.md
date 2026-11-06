@@ -144,9 +144,9 @@ Source: `research/done-research-task-decomposition-harnesses.md` (gathered 2026-
 
 Source: `research/done-mascot-emotions.md`.
 
-- **Plain CSS keyed by `data-state`, nothing inline:** the renderer's content security policy allows only stylesheets from the app itself. Reduced-motion keeps each pose and stops movement.
-- **Moving to RoboEyes** (canvas-drawn face, github.com/x-tech-laboratories/RoboEyes) away from the CSS animations; the CSS version is the interim.
-- **Not decisions yet:** which emotion maps to which UI state (suggestions only), the priority order, and moments-vs-states (see doc 2).
+- **Split between CODEX and RoboEyes:** CODEX keeps the hexagon and robot head (SVG plus CSS keyed by `data-state`, so the antenna pulse, z's and head bob stay); RoboEyes (canvas-drawn, github.com/x-tech-laboratories/RoboEyes) controls only the eyes and mouth. The CSS-only mascot this replaces is gone.
+- **RoboEyes as an npm git dependency pinned to a commit,** loaded through an import map whose hash the content security policy allows. It isn't on npm; Nix builds it with `makeCacheWritable`.
+- **Emotions follow the run state by priority (`worried` first), with `happy`, `sad`, `excited` and resume's `waking` as short moments** over the lasting mood. Placement: the foot of the workbench sidebar, beside the run status.
 
 ## Text-to-speech for the talking face
 

@@ -202,6 +202,14 @@ export function setBackgroundStatus(state: WorkbenchState, message: string): Wor
     return { ...state, backgroundStatus: message, backgroundOutput: searching ? '' : state.backgroundOutput };
 }
 
+// Sorts a background status message into idle, working, paused or error, for the status dot and the mascot.
+export function backgroundState(message: string): 'idle' | 'working' | 'paused' | 'error' {
+    if (message === 'Paused' || message === SUSPENDED_TEXT) return 'paused';
+    if (message.startsWith('Worker error')) return 'error';
+    if (message.startsWith('Idle') || message === 'Foreground prompt active') return 'idle';
+    return 'working';
+}
+
 export function appendBackgroundToken(state: WorkbenchState, token: string): WorkbenchState {
     return { ...state, backgroundOutput: state.backgroundOutput + token };
 }

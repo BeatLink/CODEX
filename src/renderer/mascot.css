@@ -1,0 +1,90 @@
+/* The CODEX mascot's body and head; RoboEyes draws the eyes and mouth on the canvas in the head's screen. */
+/* data-state on the svg is the mood the face shows, and the head moves with it; reduced motion keeps each pose and stops the movement. */
+
+/* ============================================================================ */
+/* Parts */
+/* ============================================================================ */
+
+.mascot {
+    display: block;
+    color: #0088ff;
+    --screen: #0b1322;
+    --lit: #8fd6ff;
+    --pose-ease: 0.35s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.mascot .body { fill: currentColor; stroke: currentColor; }
+.mascot .screen { fill: var(--screen); }
+.mascot .zzz { fill: none; stroke: var(--screen); opacity: 0; }
+
+.mascot .antenna-light {
+    fill: var(--lit);
+    filter: drop-shadow(0 0 0.9px var(--lit));
+    transition: opacity var(--pose-ease);
+}
+
+/* The face's canvas is drawn at its 112 by 80 screen size and shrunk into the head's 28 by 20 screen, so it stays sharp. */
+.mascot .face {
+    display: block;
+    width: 112px;
+    height: 80px;
+    transform: scale(0.25);
+    transform-origin: 0 0;
+    border-radius: 21% / 30%;
+    filter: drop-shadow(0 0 3.6px var(--lit));
+}
+
+.mascot .head,
+.mascot .zzz {
+    transform-box: view-box;
+    transform-origin: 0 0;
+}
+
+.mascot .head {
+    transform-origin: 32px 47px;
+    animation: bob 3.8s ease-in-out infinite;
+    transition: rotate var(--pose-ease);
+}
+
+@keyframes bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-0.5px); }
+}
+
+/* ============================================================================ */
+/* Moods that move the head */
+/* ============================================================================ */
+
+.mascot[data-state="thinking"] .antenna-light { animation: light-pulse 1.2s ease-in-out infinite alternate; }
+
+@keyframes light-pulse {
+    from { opacity: 0.35; }
+    to { opacity: 1; }
+}
+
+.mascot[data-state="curious"] .head { rotate: -4deg; }
+
+.mascot[data-state="asleep"] .head { animation-duration: 6s; }
+.mascot[data-state="asleep"] .antenna-light { opacity: 0.35; }
+.mascot[data-state="asleep"] .zzz { animation: asleep-float 2.8s ease-out infinite; }
+.mascot[data-state="asleep"] .zzz-small .zzz { animation-delay: -1.4s; }
+
+@keyframes asleep-float {
+    0% { opacity: 0; transform: translate(0, 0) scale(0.6); }
+    25% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { opacity: 0; transform: translate(1.5px, -3px) scale(1); }
+}
+
+/* ============================================================================ */
+/* Reduced motion: keep every pose, stop the movement */
+/* ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    .mascot * {
+        animation: none !important;
+        transition: none !important;
+    }
+
+    .mascot[data-state="asleep"] .zzz { opacity: 1; }
+}

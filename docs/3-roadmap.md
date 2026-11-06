@@ -113,10 +113,10 @@ Source: `research/done-research-task-decomposition-harnesses.md`.
 
 Source: `research/done-mascot-emotions.md`.
 
-1. Decide priority order and moments-vs-states (see doc 2).
-2. Load `roboeyes.json` in the renderer; choose face size/proportions to match the icon.
-3. Wire emotions to `runState.ts` state; pick placement (top bar, empty workbench, answer area).
-4. Verify in Electron (so far viewed only in Firefox; Electron's Chromium also supports the CSS `d` property that morphs mouths and eyes).
+Built: see doc 2, "Mascot emotions". Still open:
+
+1. Try other placements (top bar, an empty workbench, the answer area) once the sidebar one has been lived with.
+2. Tune moment lengths and the priority order from use.
 
 ## Speech output
 

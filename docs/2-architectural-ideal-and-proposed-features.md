@@ -234,46 +234,31 @@ Default to the 4B model in a fixed harness-owned pipeline. Proposed: escalate pl
 
 Sample a step several times and decide by first-to-ahead-by-K voting; discard confused answers (too long, badly formatted) before they vote and resample. Candidate for control-flow calls (decisions, checks) where replies are schema-constrained and cheap. Not built. Evidence is from one perfectly verifiable domain; test on Codex's own evals before adopting.
 
-## Mascot emotions (UI feature; nothing in the UI uses it yet)
+## Mascot emotions (built)
 
-Source: `research/done-mascot-emotions.md`. The Codex icon's robot shows an emotion by animating eyes, mouth and antenna.
+Source: `research/done-mascot-emotions.md`. The robot from the CODEX icon sits at the foot of the workbench sidebar, beside the run status, and shows an emotion. The work is split:
 
-**Existing assets:** `resources/mascot/mascot.css` (all animations, selected by `data-state` on the mascot `svg`); `resources/mascot/preview.html` (all emotions side by side + markup to copy; `replay` button; `?t=<ms>` freezes animations at that time); `resources/mascot/roboeyes.json` (the same 11 emotions as RoboEyes moods; nothing loads it yet).
+- **CODEX** draws the rounded hexagon and the head: dark screen, ears, antenna and antenna light, floating z's. The head's movements are CSS keyed by `data-state` on the `svg`: a slow bob in every mood, a head tilt for `curious`, the antenna light pulsing for `thinking`, and a dim antenna, slower bob and z's for `asleep`. Files: `src/renderer/mascot.css` and the markup in `src/renderer/index.html`.
+- **RoboEyes** (github.com/x-tech-laboratories/RoboEyes, an npm git dependency pinned to a commit) draws only the eyes and mouth, on a canvas laid over the head's screen through a `foreignObject`, so the face moves with the head. The canvas is 112 by 80 pixels, shrunk into the head's 28 by 20 units so it stays sharp. `src/renderer/mascot.ts` holds the face's settings and the 11 moods as RoboEyes face states. RoboEyes moods with the same names are replaced, not merged into.
 
-**11 emotions:** `calm` (slow blink, smirk), `thinking` (eyes glance up/sideways, flat mouth, antenna pulses), `curious` (slightly wide, glancing up), `happy` (`^ ^` eyes, faint smile), `sad` (drooping, tilted, faint frown), `asleep` (closed lines, floating z's), `worried` (tilted, darting, wiggly mouth), `excited` (big, bouncing), `focused` (narrowed, scanning), `startled` (eyes pop wider once), `waking` (opens slowly, ends as `calm`). Only one head movement (slow vertical bob, same in all). `startled` and `waking` play their opening once then hold, so they suit a brief moment before moving on.
+**11 emotions:** `calm` (smirk, slow blink), `thinking` (glancing up from side to side, flat mouth), `curious` (slightly wide, looking up), `happy` (happy eyelids, soft smile), `sad` (tilted eyelids, faint frown, looking down), `asleep` (closed eyes, short mouth), `worried` (tilted eyelids, wry mouth, darting), `excited` (wide, bouncing), `focused` (narrowed, scanning), `startled` (eyes pop wider once), `waking` (eyes flutter open).
 
-**Suggested mapping** (state from `src/renderer/runState.ts`):
+**Lasting moods**, most urgent first (`lastingMood`):
 
-| Emotion | Use | State |
-| --- | --- | --- |
-| `calm` | connected, nothing running | `connection: 'connected'` and not `running` |
-| `thinking` | run in progress | `running` |
-| `curious` | question or approval wanted | `clarifications` not empty |
-| `happy` | run finished OK | run ends `Complete` |
-| `sad` | run failed / error notification | `notify` effect with `error` |
-| `asleep` | daemon suspended, GPU freed | `suspended` |
-| `worried` | daemon unreachable | `connection: 'unavailable'` |
-| `excited` | final answer arrives / task starts | `phase: 'final'` or new run |
-| `focused` | background research working | `backgroundStatus` not `Idle` |
-| `startled` | user cancels a run | `cancelling` |
-| `waking` | resume from suspend / connecting at launch | `suspended` turns false, or `connection: 'connecting'` |
+| Emotion | State |
+| --- | --- |
+| `worried` | `connection: 'unavailable'` |
+| `waking` | `connection: 'connecting'` (launch) |
+| `asleep` | `suspended` |
+| `startled` | `cancelling` |
+| `curious` | `clarifications` not empty |
+| `thinking` | `running` |
+| `focused` | background research working (`backgroundState` is `working`) |
+| `calm` | otherwise |
 
-**To decide first:** priority when several states hold (suggested order: `worried`, `asleep`, `startled`, `curious`, `thinking`, `focused`, `calm`); `happy`/`sad`/`excited` are moments (a few seconds, then fall back to `calm`), not lasting states; placement (the tray icon is a still image so only one exported pose; animations suit the window's top bar, an empty workbench, or where an answer will appear).
+**Moments** show for a few seconds over the lasting mood, then it comes back: `excited` (2 s) when a run starts, `happy` (3 s) when a run ends `Complete`, `waking` (2 s) when the daemon resumes, and `sad` (3 s) on any error notice. Nothing interrupts `worried`.
 
-**RoboEyes migration notes:**
-- RoboEyes already has moods named `thinking`, `curious`, `happy`, `sad`, `asleep`, `worried`, `startled`, `waking`, and `configure()` merges into a mood rather than replacing, so null those names first, then apply the file:
-  ```js
-  import moods from '../../resources/mascot/roboeyes.json' with { type: 'json' };
-  face.configure({ moods: Object.fromEntries(Object.keys(moods.moods).map((name) => [name, null])) });
-  face.configure(moods);
-  face.setMood('calm');
-  ```
-- Lost in the move: antenna pulse, floating z's, worried-mouth wiggle, head bob.
-- Tilted eyes (sad, worried) become tilted eyelids; `happy` arches are RoboEyes' happy eyelids.
-- `startled`/`waking` use mood intros; setting the mood again while in use doesn't replay the intro.
-- Moments: `face.setMood('happy', { for: 3000 })` returns to the underlying mood afterwards.
-- RoboEyes honours `prefers-reduced-motion` itself.
-- The file sets `mouth.moodWidth` so each mouth state keeps its own length. Face size and proportions (`begin()`, `eyes`, `mouth`) still need choosing to match the icon.
+**Loading:** the renderer has no bundler, so an import map in `index.html` points `@x-tech-laboratories/roboeyes` at `node_modules` beside `dist`; the content security policy allows the map by its hash. RoboEyes follows `prefers-reduced-motion` itself, and `mascot.css` stops the head's movement under the same setting. The tray icon stays a still image.
 
 ## Speech output (proposed)
 

@@ -1,10 +1,10 @@
 # Mascot emotions
 
-The CODEX icon's robot can show an emotion by animating its eyes, mouth and antenna. Nothing in the UI uses them yet; this page lists what exists and where each emotion could be used.
+The CODEX icon's robot can show an emotion by animating its eyes, mouth and antenna. This page is the research behind the mascot; what was built is in doc 2, "Mascot emotions".
 
 ## What exists
 
-[resources/mascot/mascot.css](../resources/mascot/mascot.css) holds every animation, chosen by the `data-state` attribute on the mascot's `svg`. [resources/mascot/preview.html](../resources/mascot/preview.html) shows all of them side by side and holds the markup to copy into the UI. Open it in a browser; a `replay` button restarts one emotion, and `?t=<milliseconds>` in the address freezes every animation at that time.
+The first version was a CSS-only mascot (`resources/mascot/mascot.css` and `preview.html`, since removed; see git history), with every animation chosen by the `data-state` attribute on the mascot's `svg`.
 
 The renderer's content security policy allows only stylesheets from the app itself, so the animations are plain CSS keyed by `data-state`, with nothing inline. A reduced-motion setting keeps each pose and stops the movement.
 
@@ -52,27 +52,15 @@ Some of these would need decisions first:
 
 ## RoboEyes
 
-CODEX is moving from these CSS animations to [RoboEyes](https://github.com/x-tech-laboratories/RoboEyes), which draws the face on a canvas. [resources/mascot/roboeyes.json](../resources/mascot/roboeyes.json) holds the same 11 emotions as RoboEyes moods, with the eye states, mouth states and looks they need. Nothing loads it yet.
+CODEX now draws the mascot with [RoboEyes](https://github.com/x-tech-laboratories/RoboEyes) for the eyes and mouth, on a canvas over the head's screen, while CODEX keeps the hexagon, head, antenna and z's as SVG and CSS. The moods are in [src/renderer/mascot.ts](../../src/renderer/mascot.ts) and the head in [src/renderer/mascot.css](../../src/renderer/mascot.css).
 
-RoboEyes has its own moods called `thinking`, `curious`, `happy`, `sad`, `asleep`, `worried`, `startled` and `waking`, and `configure()` merges into a mood rather than replacing it. So empty those names first, then lay the file over them:
+How each emotion carried over:
 
-```js
-import moods from '../../resources/mascot/roboeyes.json' with { type: 'json' };
-
-face.configure({ moods: Object.fromEntries(Object.keys(moods.moods).map((name) => [name, null])) });
-face.configure(moods);
-face.setMood('calm');
-```
-
-How each emotion carries over:
-
-- The antenna pulse and the floating z's have no RoboEyes equivalent, so `thinking` and `asleep` go without them, and so does the worried mouth's wiggle. The head's slow bob is gone too.
-- Tilted eyes (sad, worried) become tilted eyelids, and the `^ ^` arches of `happy` are RoboEyes' happy eyelids.
-- `startled` pops its eyes with a mood intro, and `waking` flutters them open with one. Setting the mood again while it is in use doesn't replay the intro.
-- The moments (`happy`, `sad`, `excited`) can use `face.setMood('happy', { for: 3000 })`, which goes back to the mood underneath afterwards.
+- The antenna pulse, the floating z's and the head's bob stay, because CODEX still draws the head. The worried mouth's wiggle is gone.
+- Tilted eyes (sad, worried) became tilted eyelids, and the `^ ^` arches of `happy` are RoboEyes' happy eyelids.
+- `startled` pops its eyes with a mood intro, and `waking` flutters them open with one.
 - RoboEyes follows `prefers-reduced-motion` on its own, keeping each pose and stopping the movement, as the CSS does.
-- The file sets `mouth.moodWidth`, so each mouth state's own length is used. The face's size and proportions (`begin()`, `eyes` and `mouth`) still need choosing to match the icon.
 
 ## Checked
 
-Every emotion was viewed in Firefox. It has not been viewed in Electron, whose Chromium also supports the CSS `d` property that morphs the mouths and eyes.
+Viewed in Electron with a stand-in daemon: calm, excited, thinking, happy, asleep and worried each show as expected.

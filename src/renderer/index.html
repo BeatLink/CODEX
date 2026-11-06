@@ -4,10 +4,13 @@
 <head>
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+        content="default-src 'self'; script-src 'self' 'sha256-HOsxm47pkcV8/SnUcpuEeLjPkDNiaHKPkFBdrem2+ug='; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="color-scheme" content="dark light" />
     <title>CODEX</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="mascot.css" />
+    <!-- RoboEyes loads from node_modules beside dist; the policy above allows this map by its hash. -->
+    <script type="importmap">{ "imports": { "@x-tech-laboratories/roboeyes": "../../node_modules/@x-tech-laboratories/roboeyes/dist/roboeyes.js" } }</script>
     <script type="module" src="app.js"></script>
 </head>
 
@@ -45,7 +48,30 @@
                 </div>
                 <ol id="task-list" class="task-list" role="listbox" aria-label="Tasks"></ol>
                 <p id="task-empty" class="muted small-text">Tasks appear here once a request is planned.</p>
-                <p id="run-status" class="run-status">Connecting to the daemon...</p>
+                <div class="sidebar-foot">
+                    <svg id="mascot" class="mascot" data-state="waking" viewBox="0 0 64 64" role="img" aria-labelledby="mascot-title">
+                        <title id="mascot-title">CODEX</title>
+                        <path class="body" stroke-width="6" stroke-linejoin="round" d="M60 32 46 56.25 18 56.25 4 32 18 7.75 46 7.75Z" />
+                        <g transform="translate(32 37) scale(1.15) translate(-32 -37)">
+                            <g class="head">
+                                <rect class="screen" x="14" y="33" width="4.5" height="8" rx="2" />
+                                <rect class="screen" x="45.5" y="33" width="4.5" height="8" rx="2" />
+                                <rect class="screen" x="31" y="21" width="2" height="7" />
+                                <circle class="screen" cx="32" cy="19.5" r="3" />
+                                <circle class="antenna-light" cx="32" cy="19.5" r="1.5" />
+                                <rect class="screen" x="18" y="27" width="28" height="20" rx="6" />
+                                <foreignObject x="18" y="27" width="28" height="20">
+                                    <canvas id="mascot-face" class="face" xmlns="http://www.w3.org/1999/xhtml"></canvas>
+                                </foreignObject>
+                            </g>
+                        </g>
+                        <g stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
+                            <g transform="translate(47 22)"><path class="zzz" d="M0 0H3.6L0 4.6H3.6" /></g>
+                            <g class="zzz-small" transform="translate(50.5 18) scale(0.7)"><path class="zzz" d="M0 0H3.6L0 4.6H3.6" /></g>
+                        </g>
+                    </svg>
+                    <p id="run-status" class="run-status">Connecting to the daemon...</p>
+                </div>
             </aside>
 
             <div class="work">
