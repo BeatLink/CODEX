@@ -448,7 +448,7 @@ main {
 
 .sidebar-foot {
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 10px;
     margin: auto 0 0;
     padding-top: 12px;
@@ -456,16 +456,18 @@ main {
 
 .sidebar-foot .mascot {
     flex: none;
-    width: 80px;
-    height: 80px;
+    align-self: center;
+    width: 67%;
+    height: auto;
+    aspect-ratio: 1;
 }
 
-/* The face is drawn at its 112 by 80 screen size and shrunk into the head's 28 by 20 cut-out, so it stays sharp. */
+/* The face is drawn at twice its 112 by 80 screen size and shrunk into the head's 28 by 20 cut-out, so it stays sharp. */
 .mascot-face {
     display: block;
-    width: 112px;
-    height: 80px;
-    transform: scale(0.25);
+    width: 224px;
+    height: 160px;
+    transform: scale(0.125);
     transform-origin: 0 0;
 }
 
