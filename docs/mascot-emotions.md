@@ -50,6 +50,29 @@ Some of these would need decisions first:
 - **Moments versus states.** `happy`, `sad` and `excited` fit a few seconds after an event better than a lasting state, so the UI would fall back to `calm` after a delay.
 - **Other places.** The tray icon is a still image, so only a single pose could be exported for it. The animations suit the window's top bar, an empty workbench, or the place where an answer will appear.
 
+## RoboEyes
+
+CODEX is moving from these CSS animations to [RoboEyes](https://github.com/x-tech-laboratories/RoboEyes), which draws the face on a canvas. [resources/mascot/roboeyes.json](../resources/mascot/roboeyes.json) holds the same 11 emotions as RoboEyes moods, with the eye states, mouth states and looks they need. Nothing loads it yet.
+
+RoboEyes has its own moods called `thinking`, `curious`, `happy`, `sad`, `asleep`, `worried`, `startled` and `waking`, and `configure()` merges into a mood rather than replacing it. So empty those names first, then lay the file over them:
+
+```js
+import moods from '../../resources/mascot/roboeyes.json' with { type: 'json' };
+
+face.configure({ moods: Object.fromEntries(Object.keys(moods.moods).map((name) => [name, null])) });
+face.configure(moods);
+face.setMood('calm');
+```
+
+How each emotion carries over:
+
+- The antenna pulse and the floating z's have no RoboEyes equivalent, so `thinking` and `asleep` go without them, and so does the worried mouth's wiggle. The head's slow bob is gone too.
+- Tilted eyes (sad, worried) become tilted eyelids, and the `^ ^` arches of `happy` are RoboEyes' happy eyelids.
+- `startled` pops its eyes with a mood intro, and `waking` flutters them open with one. Setting the mood again while it is in use doesn't replay the intro.
+- The moments (`happy`, `sad`, `excited`) can use `face.setMood('happy', { for: 3000 })`, which goes back to the mood underneath afterwards.
+- RoboEyes follows `prefers-reduced-motion` on its own, keeping each pose and stopping the movement, as the CSS does.
+- The file sets `mouth.moodWidth`, so each mouth state's own length is used. The face's size and proportions (`begin()`, `eyes` and `mouth`) still need choosing to match the icon.
+
 ## Checked
 
 Every emotion was viewed in Firefox. It has not been viewed in Electron, whose Chromium also supports the CSS `d` property that morphs the mouths and eyes.

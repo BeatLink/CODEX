@@ -1,0 +1,69 @@
+{
+    "mouth": {
+        "moodWidth": true
+    },
+    "eyeStates": {
+        "focused": {
+            "top": { "height": 0.33, "angle": 0, "curve": 0 },
+            "bottom": { "height": 0.33, "angle": 0, "curve": 0 },
+            "closed": false
+        }
+    },
+    "mouthStates": {
+        "faintFrown": { "left": -2, "right": -2, "width": 20 },
+        "shortFlat": { "left": 0, "right": 0, "width": 11 }
+    },
+    "looks": {
+        "glanceUp": {
+            "x": 0.5,
+            "y": 0.2,
+            "path": [
+                { "x": 0.3, "y": 0.2, "holdMs": 1500 },
+                { "x": 0.7, "y": 0.15, "holdMs": 1500 },
+                { "x": 0.5, "y": 0.1, "holdMs": 1000 }
+            ]
+        },
+        "upward": { "x": 0.5, "y": 0.35 },
+        "downward": { "x": 0.5, "y": 0.6 },
+        "darting": {
+            "x": 0.5,
+            "y": 0.5,
+            "path": [
+                { "x": 0.35, "y": 0.5, "holdMs": 400 },
+                { "x": 0.65, "y": 0.55, "holdMs": 520 },
+                { "x": 0.5, "y": 0.35, "holdMs": 390 }
+            ]
+        },
+        "bouncing": { "x": 0.5, "y": 0.5, "nod": { "amplitude": 2, "speed": 0.5 } },
+        "scan": {
+            "x": 0.5,
+            "y": 0.5,
+            "path": [
+                { "x": 0.35, "y": 0.5, "holdMs": 1700 },
+                { "x": 0.65, "y": 0.5, "holdMs": 1700 }
+            ]
+        }
+    },
+    "moods": {
+        "calm": { "mouth": "smirk", "look": "center", "blink": { "interval": 4, "variation": 1.2 } },
+        "thinking": { "mouth": "flat", "look": "glanceUp", "blink": { "interval": 4, "variation": 1.2 } },
+        "curious": { "mouth": "flat", "look": "upward", "scale": 1.08, "blink": { "interval": 5.5, "variation": 1 } },
+        "happy": { "eyes": "happy", "mouth": "softSmile", "look": "center", "autoblink": false },
+        "sad": { "eyes": "sad", "mouth": "faintFrown", "look": "downward", "blink": { "interval": 6.5, "variation": 1 } },
+        "asleep": { "eyes": "closed", "mouth": "shortFlat", "look": "center", "autoblink": false },
+        "worried": { "eyes": "sad", "mouth": "wry", "look": "darting", "scale": 1.05, "blink": { "interval": 2.5, "variation": 1 } },
+        "excited": { "mouth": "flat", "look": "bouncing", "scale": 1.12, "blink": { "interval": 4, "variation": 2 } },
+        "focused": { "eyes": "focused", "mouth": "flat", "look": "scan", "blink": { "interval": 7, "variation": 2 } },
+        "startled": { "mouth": "flat", "look": "center", "scale": 1.12, "autoblink": false, "intro": [{ "scale": 1.25, "ms": 100 }] },
+        "waking": {
+            "mouth": "smirk",
+            "look": "center",
+            "blink": { "interval": 4, "variation": 1.2 },
+            "intro": [
+                { "eyes": "closed", "ms": 200 },
+                { "eyes": "sleepy", "ms": 400 },
+                { "eyes": "closed", "ms": 300 }
+            ]
+        }
+    }
+}
