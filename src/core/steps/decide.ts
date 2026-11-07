@@ -3,6 +3,10 @@ import { MAX_AGENT_DEPTH, topLevelAgents } from '../agents.js';
 import { CLARIFICATION_NOTE, CONNECTED_TOOLS_NOTE, DECISION_MAX_TOKENS, DECISION_PROMPT, DELEGATE_NOTE, Decision, MIN_SUBTASKS, TaskNode, connectedToolsList, decisionSchema, defaultDecision, parseDecision, type TaskTreeRun } from '../taskTree.js';
 
 export function approachesFor(run: TaskTreeRun, node: TaskNode): string[] {
+    if (run.specialist && run.canAct && node.parent === null) {
+        // A small model handed one part kept splitting it instead of calling a tool, so a specialist only acts.
+        return ['act'];
+    }
     let approaches: string[];
     if (run.mode === 'execute' && run.canAct && node.parent === null) {
         // An execute request is there to change things, so its top task acts or splits.
@@ -29,6 +33,10 @@ export function agentChoices(run: TaskTreeRun): string[] {
 
 export async function decide(run: TaskTreeRun, node: TaskNode): Promise<Decision> {
     const approaches = run.approachesFor(node);
+    if (run.specialist && approaches.length === 1 && approaches[0] === 'act') {
+        // With one way open there is nothing to decide, so the call is skipped.
+        return new Decision('act');
+    }
     const ask = node.parent === null && run.clarification === null && !run.delegated;
     const agentNames = run.agentChoices();
     if (agentNames.length > 0) {

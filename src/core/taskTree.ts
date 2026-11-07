@@ -53,6 +53,8 @@ export const SEARCH_LABELS = ['Local knowledge result', 'Automatic web search re
 export const TREE_LABEL = 'Task tree';
 export const SNAPSHOT_RESULT_CHARS = 2_000;
 // Each earlier result handed to an agent is cut to this, since the agent's window is as small as the parent's.
+// An agent sees the user's own words beside its brief, so a vague brief can be read against them.
+export const USER_REQUEST_LABEL = "The user's own request (context: other tasks cover the rest of it)";
 export const MAX_HANDED_RESULT_CHARS = 1_500;
 // Facts recalled for one task, its own and the request's together.
 export const MAX_FACTS_PER_TASK = 8;
@@ -751,6 +753,8 @@ export type TaskTreeRunOptions = TaskTreeCallbacks & {
     agents?: Map<string, AgentDefinition> | null;
     agent?: AgentDefinition | null;
     agentDepth?: number;
+    // The request the user typed, handed down to every agent's run under the brief it was given.
+    userRequest?: string | null;
     // External means the request was written by someone else, such as an email's sender, so the run may not change anything.
     trust?: Trust;
 };
@@ -801,6 +805,7 @@ export class TaskTreeRun {
     readonly allMcpServers: McpServerSettings[];
     readonly agents: Map<string, AgentDefinition>;
     readonly delegated: boolean;
+    readonly userRequest: string | null;
     readonly agent: AgentDefinition | null;
     readonly agentDepth: number;
     readonly maxPendingResearchJobs: number;
@@ -842,6 +847,7 @@ export class TaskTreeRun {
     ) {
         this.agents = options.agents ?? new Map();
         this.delegated = options.delegated ?? false;
+        this.userRequest = options.userRequest ?? null;
         this.agent = options.agent ?? null;
         this.agentDepth = options.agentDepth ?? 0;
         this.trust = options.trust ?? 'user';
@@ -986,6 +992,9 @@ export class TaskTreeRun {
             ['Original user request', this.userPrompt],
             ['Current task', `Task ${node.id}: ${node.prompt}\nDeliverable: ${node.deliverable}`],
         ];
+        if (this.userRequest !== null) {
+            sections.splice(1, 0, [USER_REQUEST_LABEL, this.userRequest]);
+        }
         // The model's own sense of the date is its training cutoff, so recent dates would look like the future.
         sections.push(["Today's date", this.today]);
         if (correction) {
@@ -1080,6 +1089,9 @@ export class TaskTreeRun {
         if (this.instructions) {
             // The user's instructions follow the request and are pinned with it.
             fitted = [sections[0], [INSTRUCTIONS_LABEL, this.instructions], ...sections.slice(1)];
+            pinnedCount += 1;
+        }
+        if (this.userRequest !== null) {
             pinnedCount += 1;
         }
         return renderSections(await condenseSections(fitted, budget, this.countTokens, summarize, pinnedCount));
@@ -1224,6 +1236,11 @@ export class TaskTreeRun {
         return approachesFor(this, node);
     }
 
+    // An agent with tools and no sub-agents does its part with those tools; planning stays with the run that handed it over.
+    get specialist(): boolean {
+        return this.agent !== null && this.agent.agents.length === 0 && this.agent.mcpServers.length > 0;
+    }
+
     agentChoices(): string[] {
         return agentChoices(this);
     }
@@ -1306,6 +1323,7 @@ export class TaskTreeRun {
             instructions: [this.instructions, agent.instructions].filter(Boolean).join('\n\n'),
             confirmActions: this.confirmActions,
             delegated: true,
+            userRequest: this.userRequest ?? this.userPrompt,
             agents: this.agents,
             agent,
             agentDepth: this.agentDepth + 1,

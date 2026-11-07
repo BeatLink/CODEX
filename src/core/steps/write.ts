@@ -13,7 +13,7 @@ export async function workDirectly(run: TaskTreeRun, node: TaskNode, decision: D
         written = await run.call(node, 'Writing', systemPrompt, await run.sections(node, evidence));
     } catch (error) {
         // A task too big to write in one reply can still be split into smaller ones.
-        if (!run.isTaskFailure(error) || node.fromSplit || run.tree.roomFor(node) < MIN_SUBTASKS) {
+        if (!run.isTaskFailure(error) || node.fromSplit || run.specialist || run.tree.roomFor(node) < MIN_SUBTASKS) {
             throw error;
         }
         problem = `Writing the whole task in one reply failed (${errorMessage(error)}).`;
@@ -21,7 +21,8 @@ export async function workDirectly(run: TaskTreeRun, node: TaskNode, decision: D
     if (written !== null) {
         [result, problem] = await run.checkAndRevise(node, systemPrompt, written, evidence, []);
     }
-    if (problem && !node.fromSplit && run.tree.roomFor(node) >= MIN_SUBTASKS) {
+    // A specialist's failed part goes back to the run that handed it over, which re-plans around it.
+    if (problem && !node.fromSplit && !run.specialist && run.tree.roomFor(node) >= MIN_SUBTASKS) {
         // A task one step could not finish is split into smaller ones and tried again.
         const subtasks = await run.planSubtasks(node, SPLIT_PROMPT, MIN_SUBTASKS, [
             ['Failed attempt', result],

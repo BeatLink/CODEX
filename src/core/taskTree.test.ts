@@ -27,6 +27,7 @@ import {
     WRITE_PROMPT,
     TaskNode,
     TaskTree,
+    USER_REQUEST_LABEL,
     executeTaskTree,
     parseCheck,
     parseDecision,
@@ -1090,30 +1091,52 @@ function mcpServer(name: string): McpServerSettings {
 }
 
 describe('agents', () => {
-    it('hands a task to an agent that works it as its own tree', async () => {
+    it('hands a task to an agent with tools, which acts on it without deciding again', async () => {
         const root = mkdtempSync(join(workDirectory, 'agents-'));
         writeAgents(root, { mail: '---\ndescription: Reads and sends email.\nmcp_servers: mail\n---\nShow every draft first.' });
+        let toolInput = '';
+        mocks.runToolStage.mockImplementation(async (_llm, _system, input: string) => {
+            toolInput = input;
+            return 'send_email returned ok.';
+        });
 
         const { result, model, trees } = await runTree(
-            { 'decide 1': [decision('delegate', { agent: 'mail' }), decision('answer')], 'write 1': 'Sent the note.' },
-            { prompt: 'Email Sam that I am late', filesystemRoot: root, allowFileWrites: false, mcpServers: [mcpServer('mail')] },
+            { 'decide 1': decision('delegate', { agent: 'mail' }), 'write 1': 'Sent the note.' },
+            { prompt: 'Email Sam that I am late', filesystemRoot: root, allowFileWrites: false, mcpServers: [mcpServer('mail')], confirmActions: false },
         );
 
         expect(result).toBe('Sent the note.');
-        expect(model.steps()).toEqual(['route 1', 'decide 1', 'decide 1', 'write 1', 'check 1']);
-        const [top, nested] = model.calls.filter((call) => call.step === 'decide');
+        expect(model.steps()).toEqual(['route 1', 'decide 1', 'write 1', 'check 1']);
+        const top = model.call('decide', '1');
         expect(top.system).toContain('mail: Reads and sends email.');
         expect(top.json_schema!.properties.agent.enum).toEqual(['mail', '']);
         expect(top.json_schema!.properties.approach.enum).toContain('delegate');
         expect(top.json_schema!.properties.approach.enum).not.toContain('act');
-        expect(nested.json_schema!.properties).not.toHaveProperty('agent');
-        expect(nested.json_schema!.properties.approach.enum).toContain('act');
-        expect(nested.json_schema!.properties).not.toHaveProperty('clarification');
-        expect(nested.input).toContain('Show every draft first.');
-        expect(nested.input).toContain('Email Sam that I am late');
+        expect(toolInput).toContain('Show every draft first.');
+        expect(toolInput).toContain(`${USER_REQUEST_LABEL}:\nEmail Sam that I am late`);
+        expect(model.call('write', '1').input).toContain(`${USER_REQUEST_LABEL}:\nEmail Sam that I am late`);
         expect(trees.at(-1)![0].approach).toBe('delegate');
         expect(trees.at(-1)![0].status).toBe('done');
         expect(trees.at(-1)![0].note).toBe('Delegated to the mail agent');
+    });
+
+    it("hands an agent's failed part back instead of splitting it", async () => {
+        const root = mkdtempSync(join(workDirectory, 'agents-'));
+        writeAgents(root, { contacts: '---\ndescription: Looks people up.\nmcp_servers: contacts\n---\n' });
+        mocks.runToolStage.mockResolvedValue('find_contact found nobody.');
+
+        const { model, trees } = await runTree(
+            {
+                'decide 1': decision('delegate', { agent: 'contacts' }),
+                'write 1': 'No number found.',
+                'check 1': [check('missing', 'No number.'), check('missing', 'Still no number.')],
+                'revise 1': 'Still no number found.',
+            },
+            { prompt: "What is Marcus's phone number?", filesystemRoot: root, allowFileWrites: false, mcpServers: [mcpServer('contacts')], confirmActions: false },
+        );
+
+        expect(model.steps()).toEqual(['route 1', 'decide 1', 'write 1', 'check 1', 'revise 1', 'check 1']);
+        expect(trees.at(-1)![0].status).toBe('unverified');
     });
 
     it('names the connected servers and their tools when deciding', async () => {
@@ -1208,6 +1231,8 @@ describe('agents', () => {
         expect(result).toBe('From the mail agent.');
         expect(model.steps()).toEqual(['route 1', 'decide 1', 'write 1', 'check 1']);
         expect(model.call('route', '1').json_schema!.properties.needs.items.properties.agent.enum).toEqual(['mail']);
+        // An agent without tools of its own still decides how to do its part, with the user's words beside it.
+        expect(model.call('decide', '1').input).toContain(USER_REQUEST_LABEL);
     });
 
     it('splits a task by agent when routing names several, each part after the ones before it', () => {
