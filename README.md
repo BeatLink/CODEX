@@ -57,11 +57,43 @@ back; the daemon also sends `{"event", "data"}` lines at any time. Methods are
 `set_background_enabled`, `run`, `cancel`, `answer_clarification`,
 `queue_topic`, `research_now`, `queue_status`, `knowledge`, `unfinished_runs`,
 `resume_run`, `discard_run`, `suspend`, `resume`, and `shutdown`.
-Events are `run.started`, `run.progress`, `run.token`,
-`run.tree` (every task's state, sent whenever one changes), `run.clarification`,
+Events are `run.started`, `run.progress`, `run.input` (the full system prompt
+and input of each step), `run.token`, `run.tree` (every task's state, with
+its step records, sent whenever one changes), `run.clarification`,
 `run.finished`, `run.failed`, `run.cancelled`, `background.status`,
 `background.token`, `queue.changed`, `knowledge.changed`, `runs.changed` (the
-list of unfinished task tree runs changed), and `settings.changed`.
+list of unfinished task tree runs changed), `settings.changed`, and
+`suspended.changed`.
+
+### Watching a run
+
+The daemon sends every event to every client, so a second connection can log
+a run started from the window or the CLI: each step's full prompt, the tokens
+it streamed, the task tree and any failure. `~/.local/state/codex/daemon.log`
+and the `codex-daemon` journal hold only startup lines, and the knowledge
+store's `task_runs` table keeps finished trees but no prompts or tokens.
+
+1. Connect to `$XDG_RUNTIME_DIR/codex/daemon.sock` and send one request first,
+   such as `{"id":"watch","method":"status","params":{}}`: a connection is
+   registered for events on its first request, so a silent one hears nothing.
+2. Read newline-delimited JSON. Lines with an `event` key are events; the line
+   with your `id` answers your request. Keep `run.started` (`run_id`,
+   `prompt`), `run.progress` (`label`), `run.input` (`label`, `system`,
+   `input`), `run.token` (`label`, `token`; join the tokens by label),
+   `run.tree`, `run.finished` (`result`) and `run.failed` (`message`); skip
+   `queue.changed`, which arrives every 10 seconds.
+3. Write two files: the raw lines with a timestamp, for searching, and a
+   readable one that prints `----- <label> -----` whenever the label changes,
+   followed by the step's system prompt, its input and its joined output. Follow
+   the readable one with `tail -f`.
+
+Stop the listener when done: while any client is connected, the daemon's
+`--exit-when-unused` timer never starts. Kill it by its exact process ID, since
+`pkill -f` on the script's name also matches the shell that started it. A
+daemon restart (for example by a service that restarts it when `src/` changes)
+closes the connection; reconnect afterwards. `suspend` and
+`resume` are sent the same way, but suspending cancels the window's running
+request, so ask whoever is using the window first.
 
 ## How a request is handled
 
@@ -667,6 +699,9 @@ requests; the interfaces show "Suspended", and models load on the next request
 after a resume. Both commands do nothing, and succeed, when no daemon is
 running, so a launcher can call them without checking. The daemon status
 carries `suspended`, and the `suspended.changed` event reports each change.
+A suspended daemon still holds about 112 MiB of CUDA context, so on a 4 GB
+card another program loading the 4B model with a 6,144-token context can fail
+in cuBLAS while it is suspended; 4,096 tokens fits.
 
 ## Configuration
 
