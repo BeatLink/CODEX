@@ -7,7 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 import type { ActionRecord } from './checks.js';
 import { CONDENSED_MARKER } from './contextBudget.js';
-import { CONDENSE_PROMPT } from './evidence.js';
+import { CONDENSE_PROMPT, CONNECTED_EVIDENCE_RULE } from './evidence.js';
 import { SKILLS_LABEL } from './instructions.js';
 import { KnowledgeStore } from './knowledge.js';
 import type { ChatCompletion, ChatCompletionRequest, ChatModel } from './model.js';
@@ -248,6 +248,21 @@ describe('direct tasks', () => {
 
         expect(searches).toEqual(['Who maintains Zorblex?']);
         expect(model.call('write', '1').system).toContain('Every search failed or found nothing');
+    });
+
+    it('counts what a connected tool returned as evidence', async () => {
+        const model = new ScriptedModel({ 'decide 1': decision('act'), 'write 1': 'Marcus is on 555-900318.' });
+        mocks.runToolStage.mockImplementation(async (_llm, _system, _input, toolbox: { usedTools: Set<string> }) => {
+            toolbox.usedTools.add('web_search');
+            toolbox.usedTools.add('mcp__contacts__find_contact');
+            return 'find_contact returned 555-900318.';
+        });
+
+        await executeTaskTree("What is Marcus's phone number?", runOptions(model, { mcpServers: [mcpServer('contacts')], confirmActions: false, maxTaskDepth: 0 }));
+
+        const system = model.call('write', '1').system;
+        expect(system).toContain(CONNECTED_EVIDENCE_RULE);
+        expect(system).not.toContain('Every search failed');
     });
 
     it('never acts in answer and draft modes, and a prefix picks the mode', async () => {

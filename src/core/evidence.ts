@@ -31,7 +31,9 @@ export const MAX_SEARCH_QUERIES = 3;
 export const VERIFIED_EVIDENCE_RULE =
     ' Base every factual claim only on evidence gathered in this run: web' +
     ' search results and fetched pages, local files and source code read' +
-    ' with tools, or the results of tests and commands that were run. Never' +
+    ' with tools, results from the user\'s connected tools (such as their' +
+    ' mail, calendar, contacts or notes), or the results of tests and' +
+    ' commands that were run. Never' +
     ' state facts from memory or training data, however well known they seem;' +
     ' when no gathered evidence supports a claim, say plainly that it could' +
     ' not be verified instead of stating it. Reasoning over the request and' +
@@ -45,6 +47,11 @@ export const RESEARCHED_EVIDENCE_RULE =
     ' search failed or returned no useful evidence, say that the claims' +
     ' could not be verified; do not imply that a page was read unless a' +
     ' web_fetch summary of it appears in the evidence.';
+// A connected tool's reply is the user's own data, so it is evidence with no URL to cite.
+export const CONNECTED_EVIDENCE_RULE =
+    " Results from the user's connected tools are evidence too: state what" +
+    ' they returned as found in the user\'s own data, with no URL, even' +
+    ' when a web search found nothing.';
 export const NO_EVIDENCE_RULE =
     ' Every search failed or found nothing, so there is no evidence.' +
     ' Do not describe, define, or give details of any product, device,' +

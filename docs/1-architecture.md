@@ -134,6 +134,7 @@ Listed as done in the old `TODO.md`; not yet checked against the code.
 | Never give the model the whole job; work requests as a tree of narrow tasks | A small model does badly at whole jobs and cannot tell when it does not know something. |
 | Control-flow replies are forced to JSON by a grammar; choice enums list only what is currently allowed | Constrained choices keep a small model on track; malformed output degrades instead of crashing (every parser has a fallback). |
 | Facts come from evidence the harness gathered, not model memory; research is forced when `facts_to_check` is non-empty | The model can't judge its own ignorance. |
+| What a connected (MCP) tool returned counts as evidence: once one was called, writing steps get `CONNECTED_EVIDENCE_RULE` and never the "every search failed" rule | Otherwise a task that found the user's contact or email through MCP and then searched the web empty-handed said it had no evidence (agents eval, `priya-last-email`). |
 | Deterministic checks back the model's verdicts (unseen URLs, unsupported versions/dates, acting tasks must match recorded writes/tests) | Don't trust the model to police itself. |
 | Failure stays local: subtask failure → parent re-plans once; a split task is never split again; subtasks duplicating other tasks are dropped | Prevents runaway splitting and whole-run failure. |
 | Trim from the end of the input; memory goes first; request and current task are pinned; condense (summarize) before trimming | Most important context survives a 6K window. |

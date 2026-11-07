@@ -7,6 +7,7 @@ import { expandCommand, isMemoryCommand, runMemoryCommand } from './commands.js'
 import { condenseSections, inputTokenBudget, isCallFailure, renderSections, tokenCounter, type Section, type TokenCounter } from './contextBudget.js';
 import { getEmbedder } from './embeddings.js';
 import {
+    CONNECTED_EVIDENCE_RULE,
     MAX_SEARCH_QUERIES,
     MAX_SEARCH_QUERY_CHARS,
     MEMORY_LABEL,
@@ -1054,11 +1055,15 @@ export class TaskTreeRun {
     // Tell a writing step how to treat facts, given whether this task or an earlier one searched.
     sourceCheck(searched: boolean): string {
         const usedTools = this.toolbox.usedTools;
+        const connected = [...usedTools].some((name) => name.startsWith('mcp__'));
+        const connectedRule = connected ? CONNECTED_EVIDENCE_RULE : '';
         if (!searched && !usedTools.has('web_search') && !usedTools.has('web_fetch')) {
-            return VERIFIED_EVIDENCE_RULE;
+            return VERIFIED_EVIDENCE_RULE + connectedRule;
         }
-        const evidenceFound = this.foundUrls.size > 0 || this.recalledFacts || this.localKnowledgeUsed || usedTools.has('web_fetch');
-        return VERIFIED_EVIDENCE_RULE + RESEARCHED_EVIDENCE_RULE + (evidenceFound ? '' : NO_EVIDENCE_RULE);
+        // A connected tool's reply is evidence, so a web search that found nothing beside it is no reason to refuse.
+        const evidenceFound =
+            this.foundUrls.size > 0 || this.recalledFacts || this.localKnowledgeUsed || usedTools.has('web_fetch') || connected;
+        return VERIFIED_EVIDENCE_RULE + RESEARCHED_EVIDENCE_RULE + connectedRule + (evidenceFound ? '' : NO_EVIDENCE_RULE);
     }
 
     // Return the remembered context for a task: what the request recalled plus facts matching the task itself.
