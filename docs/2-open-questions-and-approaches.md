@@ -44,7 +44,7 @@ Approach chosen in code, first match wins: agent → `delegate`; user data or ch
 - **Rewording alone is not the change:** "Does this task need a tool?" in place of "Select a tool" probably changes little. The gain comes from the separate fields and the rules moving into code.
 - **Same idea for tool choice:** the `act` gather prompt could first ask what the task must find out or change and which listed tool does it, so there is a short plan before any tool is called.
 - **Costs:** more output tokens per decision (booleans are cheap, lists are not). Answers can contradict each other (e.g. `changes_things` true while the parts only read), which the fixed order resolves.
-- **First rule built (2026-11-06):** a named offered agent wins over the chosen approach, so `agent: "comms"` with `approach: "research"` delegates (doc 1, "Delegation flow"). That alone took the agents eval from 3/24 to 11/24 tasks, which supports moving the other rules into code too. The rest is not built: keep `DECISION_PROMPT` behind a setting so the agents eval can compare the two; see doc 3, "Task-decomposition ideas to evaluate".
+- **First rule built (2026-11-06):** a named offered agent wins over the chosen approach, so `agent: "comms"` with `approach: "research"` delegates (doc 1, "Delegation flow"). That alone took the agents eval from 3/24 to 11/24 tasks, which supports moving the other rules into code too. The rest is not built: keep `DECISION_PROMPT` behind a setting so the agents eval can compare the two. **How to test:** run both versions on the same eval tasks over several rounds; eight tasks give noisy pass rates, so one round settles nothing. See doc 3, "Task-decomposition ideas to evaluate".
 
 ### Splitting by need, not by size
 
@@ -70,6 +70,7 @@ loop (≤ max_tool_calls):
 - **Why:** the same principle as `decide`: an enum of what is allowed now. Argument filling sees one schema instead of every tool's, and the grammar makes the arguments valid by construction. `done` becomes an explicit choice, so the model can't drift into answering mid-loop. Route and fill errors can be scored separately.
 - **Deterministic routing first:** the planner's `search_queries` already go straight to search; tools stay filtered by approach and trust before the router sees them; with one allowed tool the route call is skipped. With many MCP tools, choose the server first and then the tool, which is what agents do (doc 1, "Agent hierarchy"), so routing and the hierarchy are the same idea at two levels and MCP tools probably need only one of them.
 - **Costs:** about twice the model calls per tool step, mostly prompt processing on a 6,144-token window.
+- **How to test:** add a routed variant of the tool loop (route → fill → execute per step) beside the current one, run both on `evals/agents_tasks.json` with the fake MCP servers, and compare tool-choice accuracy, argument validity, task success and model calls. Score route and fill errors separately.
 - **Not built.** See doc 3, "Task-decomposition ideas to evaluate".
 
 ### Bounded dynamism: how much the model may decide
@@ -95,6 +96,14 @@ The two ends of open question 1: a designed harness where every cognitive step i
 - **Pruning:** stays a fixed rule (pin request and current task, condense, then trim; built, doc 1), not a model judgement.
 
 The more of a step the harness can check, the more of it the model may decide. **Test:** doc 3, Core structure ideas, item 2.
+
+### Alternative plans (tree of thought, lite)
+
+At `decide`, sample 2–3 candidate plans and let `check` or a vote pick one, instead of following the single plan with one re-plan on failure. Affordable now that calls take ~4 s. **How to test:** pass rate against the extra calls. Not built.
+
+### Corrective sub-plan on step failure
+
+On a failed step, generate a corrective sub-plan (as brainos-orchestrate does, see "Prior art") instead of the current "re-plan the rest once". **How to test:** compare the two on the same tasks. Not built.
 
 ## Where does reasoning happen?
 
@@ -125,6 +134,14 @@ From a design conversation with an LLM assistant (unchecked claims). Problem: da
 Rules act only on facts at or above a confidence threshold; below it they propose or ask instead. Rule modules are split by domain and run for their domain's events; cross-domain rules form a separate small module. All modules read one shared world model.
 
 **Engine.** A small forward-chaining evaluator in TypeScript, or Datalog-style recursive queries in SQLite, so the stack stays Node + SQLite (Drools needs a JVM, CLIPS/experta are C/Python).
+
+### Refinement loop within a run
+
+Replace the task tree's check → revise once → check (`checkAndRevise` in `core/taskTree.ts`) with up to N rounds (start at 3) that stop as soon as the checks pass, each round revising only the requirements that failed. The old Python pipeline had this (commit `60c0bcd`); the TypeScript rewrite kept a single revise. **How to test:** the pass-rate gain against the extra model calls, and whether later rounds fix or only churn. Not built.
+
+### Capped retries and excerpts
+
+The practitioner report ("Prior art") caps retries at three and passes forward only a capped excerpt of each step's output. **How to test:** check the current limits against these. Not built as stated.
 
 ## How is memory shaped?
 
@@ -167,7 +184,7 @@ First pack: mail, since triage heuristics and drafting exist. Then calendar and 
 
 ### Scratchpad contract
 
-Each node writes working notes in a grammar-enforced block (`<scratchpad>…</scratchpad>` beside `<output>`, or a `scratchpad` field in the JSON schema). The harness stores the scratchpad with the task and injects it into later nodes that depend on it, as memory scoped to the run. Today only dependency results are passed forward; a per-agent scratchpad folder is proposed below ("Agent hierarchy: not built yet").
+Each node writes working notes in a grammar-enforced block (`<scratchpad>…</scratchpad>` beside `<output>`, or a `scratchpad` field in the JSON schema). The harness stores the scratchpad with the task and injects it into later nodes that depend on it, as memory scoped to the run. Today only dependency results are passed forward; a per-agent scratchpad folder is proposed below ("Agent hierarchy: not built yet"). **How to test:** add the field to task outputs, inject it into dependent tasks, and compare pass rate against dependency results alone.
 
 From the model-choice conversation ("Alternative models"): the harness extracts only that block, and the grammar enforces it at token level so a stray markdown block cannot break the parser.
 
@@ -179,7 +196,7 @@ Default to the 4B model in a fixed harness-owned pipeline. Proposed: escalate pl
 
 ### Voting and red-flagging (from MAKER)
 
-Sample a step several times and decide by first-to-ahead-by-K voting; discard confused answers (too long, badly formatted) before they vote and resample. Candidate for control-flow calls (decisions, checks) where replies are schema-constrained and cheap. Not built. Evidence is from one perfectly verifiable domain; test on Codex's own evals before adopting.
+Sample a step several times and decide by first-to-ahead-by-K voting; discard confused answers (too long, badly formatted) before they vote and resample. Candidate for control-flow calls (decisions, checks; **how to test:** whether it raises eval pass rate enough to justify the extra calls, at ~4 s each on the dev machine's GPU) where replies are schema-constrained and cheap. Not built. Evidence is from one perfectly verifiable domain; test on Codex's own evals before adopting.
 
 ### Specialist models
 
@@ -217,7 +234,7 @@ A skill is a markdown guide the harness injects into a fresh context when a requ
 
 ### Eval-gated prompt variants
 
-Prompts (`DECISION_PROMPT` and the other step prompts) are refined like code, not by the model mid-run: generate a few variants of one prompt (by hand or by the model, offline), run each on the same eval tasks over repeated rounds, and promote a variant only if it beats the current prompt without breaking a task that passed. Keep the promoted prompt in the repo with its score, so a regression can be traced and rolled back. **Why:** a runtime rewrite is unchecked text every later step obeys ("Bounded dynamism"); an eval gate is the same non-LLM check that guards skills and rules. Same shape as the replay gate in "Self-improving domains", applied to the harness's own prompts instead of a domain's rules.
+Prompts (`DECISION_PROMPT` and the other step prompts) are refined like code, not by the model mid-run: generate a few variants of one prompt (by hand or by the model, offline), run each on the same eval tasks over repeated rounds, and promote a variant only if it beats the current prompt without breaking a task that passed. Keep the promoted prompt in the repo with its score, so a regression can be traced and rolled back. **Why:** a runtime rewrite is unchecked text every later step obeys ("Bounded dynamism"); an eval gate is the same non-LLM check that guards skills and rules. Same shape as the replay gate in "Self-improving domains", applied to the harness's own prompts instead of a domain's rules. **How to test:** start with `DECISION_PROMPT`; run 2–3 variants against the current one on `evals/agents_tasks.json` and `evals/tasks.json` over three rounds each.
 
 ## How autonomous?
 

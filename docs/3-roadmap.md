@@ -118,16 +118,16 @@ Today: mail arrives → automatic mail dropped without the model → rest summar
 
 ## Task-decomposition ideas to evaluate
 
-- **Voting + red-flag filters** on control-flow calls (decide, check): measure whether they improve eval pass rate enough to justify the extra calls (calls are ~4 s each on the dev machine's GPU, so cost still matters).
-- **Question-driven decisions** (doc 2): replace the six-way `approach` choice in `decide` with narrow yes/no and list questions, and choose the approach in code from the answers. Run both versions on the same eval tasks over several rounds; eight tasks give noisy pass rates, so one round settles nothing.
-- **Step-wise tool routing** (doc 2): add a routed variant of the tool loop (route → fill → execute per step) beside the current one, run both on `evals/agents_tasks.json` with the fake MCP servers, and compare tool-choice accuracy, argument validity, task success and model calls. Score route and fill errors separately.
-- **Alternative plans (tree of thought, lite):** at `decide`, sample 2–3 candidate plans and let `check` or a vote pick one, instead of following the single plan with one re-plan on failure. Affordable now that calls take ~4 s; measure pass rate against the extra calls.
-- **Corrective sub-plan on step failure** (brainos-style) vs the current "re-plan the rest once": compare.
-- **Capped retries** (practitioner: 3) and capped excerpts of step output passed forward: check against the current limits.
-- **Refinement loop within a run:** replace the task tree's check → revise once → check (`checkAndRevise` in `core/taskTree.ts`) with up to N rounds (start at 3) that stop as soon as the checks pass, each round revising only the requirements that failed. The old Python pipeline had this (commit `60c0bcd`); the TypeScript rewrite kept a single revise. Measure the pass-rate gain against the extra model calls, and whether later rounds fix or only churn.
-- **Refinement across runs:** a failed run's trace becomes a stored, verifier-gated lesson so the next similar request goes better. Designed in doc 2 under "Verified self-authored skills" and "Procedural memory and retry feedback"; built under Core structure ideas, item 4.
-- **Eval-gated prompt variants** (doc 2): start with `DECISION_PROMPT`; run 2–3 variants against the current one on `evals/agents_tasks.json` and `evals/tasks.json` over three rounds each, and promote only a variant that wins without breaking a task that passed. Record the promoted prompt's score beside it.
-- **Scratchpad contract** between steps (doc 2): add a grammar-enforced scratchpad field to task outputs, inject it into dependent tasks, and compare pass rate against dependency results alone. Per-agent scratchpad folder: see Agent hierarchy.
+- **Voting + red-flag filters** on control-flow calls: doc 2, "Voting and red-flagging".
+- **Question-driven decisions:** doc 2, "Question-driven decisions".
+- **Step-wise tool routing:** doc 2, "Step-wise tool routing".
+- **Alternative plans (tree of thought, lite):** doc 2, "Alternative plans".
+- **Corrective sub-plan on step failure:** doc 2, "Corrective sub-plan on step failure".
+- **Capped retries and excerpts:** doc 2, "Capped retries and excerpts".
+- **Refinement loop within a run:** doc 2, "Refinement loop within a run".
+- **Refinement across runs:** doc 2, "Verified self-authored skills" and "Procedural memory and retry feedback".
+- **Eval-gated prompt variants:** doc 2, "Eval-gated prompt variants".
+- **Scratchpad contract:** doc 2, "Scratchpad contract".
 
 ## Mascot
 
