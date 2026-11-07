@@ -216,4 +216,19 @@ describe('text tool calls', () => {
         expect(textToolCalls(null, TOOL_DEFINITIONS)).toEqual([]);
         expect(textToolCalls('<tool_call>{"name": "read_file", "arguments": []}', TOOL_DEFINITIONS)[0].function.arguments).toBe('{}');
     });
+
+    it("reads Spark's arg_key form, with or without arguments", () => {
+        const content =
+            '<tool_call>read_file<arg_key>path</arg_key><arg_value>mail.md</arg_value></tool_call>' +
+            '<tool_call>unknown_tool\n<arg_key>count</arg_key>\n<arg_value>7</arg_value>\n</tool_call>' +
+            '<tool_call>list_inbox</tool_call>';
+
+        const calls = textToolCalls(content, TOOL_DEFINITIONS);
+
+        expect(calls.map((call) => [call.function.name, call.function.arguments])).toEqual([
+            ['read_file', '{"path":"mail.md"}'],
+            ['unknown_tool', '{"count":7}'],
+            ['list_inbox', '{}'],
+        ]);
+    });
 });

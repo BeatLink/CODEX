@@ -58,6 +58,9 @@ function pythonJson(value: unknown): string {
 const TEXT_TOOL_CALL = /<tool_call>\s*([\s\S]*?)\s*(?:<\/tool_call>|$)/g;
 const XML_FUNCTION = /<function=([^>\s]+)>([\s\S]*?)(?:<\/function>|$)/;
 const XML_PARAMETER = /<parameter=([^>\s]+)>\n?([\s\S]*?)\n?<\/parameter>/g;
+// Spark models name the tool first and give each argument as an <arg_key>/<arg_value> pair.
+const ARG_KEY_FUNCTION = /^([^\s<{]+)\s*(<arg_key>[\s\S]*)?$/;
+const ARG_KEY_PARAMETER = /<arg_key>\s*([\s\S]*?)\s*<\/arg_key>\s*<arg_value>([\s\S]*?)<\/arg_value>/g;
 
 // Keep a string parameter as written, and read any other type as JSON when it parses.
 function parameterValue(value: string, parameterType: unknown): unknown {
@@ -84,7 +87,7 @@ function isEmpty(value: unknown): boolean {
 
 type Properties = Record<string, { type?: unknown } | undefined>;
 
-// Read the tool calls a reply wrote as text, in Qwen's XML form or as JSON, in the shape of real tool calls.
+// Read the tool calls a reply wrote as text, in Qwen's XML form, Spark's arg_key form or as JSON, in the shape of real tool calls.
 export function textToolCalls(content: unknown, toolDefinitions: ToolDefinition[]): ToolCall[] {
     if (typeof content !== 'string') {
         return [];
@@ -97,10 +100,18 @@ export function textToolCalls(content: unknown, toolDefinitions: ToolDefinition[
         let name: string;
         let argumentsGiven: unknown;
         const xmlFunction = XML_FUNCTION.exec(block);
+        const argKeyFunction = xmlFunction ? null : ARG_KEY_FUNCTION.exec(block);
         if (xmlFunction) {
             name = xmlFunction[1];
             const parameters: Record<string, unknown> = {};
             for (const [, key, value] of xmlFunction[2].matchAll(XML_PARAMETER)) {
+                parameters[key] = parameterValue(value, properties.get(name)?.[key]?.type);
+            }
+            argumentsGiven = parameters;
+        } else if (argKeyFunction) {
+            name = argKeyFunction[1];
+            const parameters: Record<string, unknown> = {};
+            for (const [, key, value] of (argKeyFunction[2] ?? '').matchAll(ARG_KEY_PARAMETER)) {
                 parameters[key] = parameterValue(value, properties.get(name)?.[key]?.type);
             }
             argumentsGiven = parameters;
