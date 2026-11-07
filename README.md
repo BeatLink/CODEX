@@ -198,6 +198,8 @@ offers Resume and Discard for the newest unfinished run, and
 
 A task can hand its work to a named specialist agent, which works it as its own task tree with its own instructions and tools. Agents are Markdown files in `~/.config/codex/agents/` and the folder's `.codex/agents/`: the file name is the agent's name, and the YAML front matter gives a `description` (what the parent reads to choose it), `mcp_servers` (servers only this agent may use), and `agents` (the agents it can hand work to). The body is added to the standing instructions for the agent's calls. Agents nest three deep at most. See [docs/1-architecture.md](docs/1-architecture.md#agent-hierarchy).
 
+A starter set ships in `share/agents/`: `mail`, `calendar`, `contacts`, `notes`, `todos` and `weather`, each owning the MCP server of the same name, and `comms`, which hands work to `mail` and `contacts`. The first run of the daemon or the CLI copies it into `~/.config/codex/agents/` when that folder does not exist yet; delete or edit the copies as you like, and an existing folder is never touched again. An agent whose servers are not all connected is never offered: a starter agent stays dormant until a configured, enabled MCP server carries its name, so name your mail server `mail` (or change `mcp_servers` in the agent file) and the hierarchy is on without further setup. With no agents at all, a task sees every connected server's tools at once, which is what the eval's `tree` runner measures.
+
 ## Standing instructions
 
 Rules you write yourself go into every model call, after the request, and are
@@ -881,7 +883,7 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 | `src/core/contextBudget.ts`                        | Fitting each call's input into the context window                                                           |
 | `src/core/knowledge.ts`                            | SQLite knowledge store, memory stores, queue, and graph                                                     |
 | `src/core/environment.ts`                          | Probing the machine for the locations and software memory stores                                            |
-| `src/core/agents.ts`                               | Reading agent definitions and the MCP servers each one may use                                              |
+| `src/core/agents.ts`, `share/agents/`              | Reading agent definitions and the MCP servers each one may use; the starter agents copied on first run       |
 | `src/core/recallBenchmark.ts`                      | Scoring recall against questions with known relevant facts                                                  |
 | `src/core/embeddings.ts`                           | The embedding model used to find facts and topics by meaning                                                |
 | `src/core/background.ts`                           | One background research job                                                                                 |

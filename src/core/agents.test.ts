@@ -1,10 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AgentDefinition, claimedServers, loadAgents, parseAgent, serversBehind, serversFor, topLevelAgents } from './agents.js';
+import { AgentDefinition, claimedServers, installStarterAgents, loadAgents, parseAgent, serversBehind, serversFor, topLevelAgents, usableAgents } from './agents.js';
 
 let root: string;
 
@@ -119,5 +119,51 @@ describe('agent scope', () => {
         expect(claimedServers(agents)).toEqual(new Set(['mail', 'notes']));
         expect(serversFor(null, agents, servers).map((given) => given.name)).toEqual(['web']);
         expect(serversFor(agents.get('mail')!, agents, servers).map((given) => given.name)).toEqual(['mail']);
+    });
+});
+
+// ============================================================================
+// Shipping and filtering agents
+// ============================================================================
+
+describe('installStarterAgents', () => {
+    it('copies the starter agents only when the global folder does not exist yet', () => {
+        const source = join(root, 'share', 'agents');
+        mkdirSync(source, { recursive: true });
+        writeFileSync(join(source, 'mail.md'), '---\ndescription: Mail.\nmcp_servers: [mail]\n---\n');
+        writeFileSync(join(source, 'notes.txt'), 'not an agent');
+        const target = join(root, 'config', 'codex', 'agents');
+
+        expect(installStarterAgents(target, source)).toBe(true);
+        expect(readdirSync(target)).toEqual(['mail.md']);
+
+        rmSync(join(target, 'mail.md'));
+        expect(installStarterAgents(target, source)).toBe(false);
+        expect(readdirSync(target)).toEqual([]);
+    });
+
+    it('does nothing when there are no starter agents to copy', () => {
+        const target = join(root, 'config', 'codex', 'agents');
+        expect(installStarterAgents(target, join(root, 'missing'))).toBe(false);
+        expect(existsSync(target)).toBe(false);
+    });
+});
+
+describe('usableAgents', () => {
+    it('drops agents whose servers are all unconfigured and prunes them from their parents', () => {
+        const agents = new Map<string, AgentDefinition>([
+            ['comms', parseAgent('comms', '---\ndescription: Mail and people.\nagents: [mail, contacts]\n---\n')!],
+            ['mail', parseAgent('mail', '---\ndescription: Mail.\nmcp_servers: [mail]\n---\n')!],
+            ['contacts', parseAgent('contacts', '---\ndescription: Contacts.\nmcp_servers: [contacts]\n---\n')!],
+            ['weather', parseAgent('weather', '---\ndescription: Weather.\nmcp_servers: [weather]\n---\n')!],
+            ['writer', parseAgent('writer', '---\ndescription: Writes prose.\n---\n')!],
+        ]);
+
+        const usable = usableAgents(agents, ['mail']);
+
+        expect([...usable.keys()].sort()).toEqual(['comms', 'mail', 'writer']);
+        expect(usable.get('comms')!.agents).toEqual(['mail']);
+        expect(agents.get('comms')!.agents).toEqual(['mail', 'contacts']);
+        expect(usableAgents(agents, []).has('comms')).toBe(false);
     });
 });

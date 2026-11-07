@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { pathToFileURL } from 'node:url';
 
+import { installStarterAgents } from '../core/agents.js';
 import { KnowledgeStore } from '../core/knowledge.js';
 import { ModelCache } from '../core/model.js';
 import { defaultSettingsPath, expandUser, loadSettings, MODE_CHOICES, validateSettings, type Settings } from '../core/settings.js';
@@ -21,6 +22,7 @@ export const PATH_SETTINGS = ['model_path', 'filesystem_root', 'knowledge_db_pat
 // Everything the command touches outside itself, so tests can stand in for the terminal, the daemon and the model.
 export type CliEnvironment = {
     loadSettings: (settingsPath: string) => Settings;
+    installStarterAgents?: () => void;
     executeTaskTree: (userPrompt: string, options: ExecuteTaskTreeOptions) => Promise<string>;
     connectToDaemon: (options: { onEvent: EventHandler; start: boolean }) => Promise<DaemonClient>;
     stdinIsTTY: boolean;
@@ -53,6 +55,7 @@ async function askOnTerminal(question: string): Promise<string> {
 export function processEnvironment(): CliEnvironment {
     return {
         loadSettings,
+        installStarterAgents,
         executeTaskTree,
         connectToDaemon: (options) => connectToDaemon(options),
         stdinIsTTY: Boolean(process.stdin.isTTY),
@@ -167,6 +170,7 @@ export async function main(argv: string[] = process.argv.slice(2), io: CliEnviro
         io.printError(`Error loading settings: ${errorText(error)}`);
         return 1;
     }
+    io.installStarterAgents?.();
 
     const overrides: Record<string, unknown> = {};
     if (io.variables.MODEL_PATH) {

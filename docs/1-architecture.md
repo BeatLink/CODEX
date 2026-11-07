@@ -219,6 +219,10 @@ A task can hand its work to a named specialist agent, which works it as its own 
 
 Markdown file with YAML front matter (parsed with the `yaml` package, PyYAML safe_load semantics). Lives in `~/.config/codex/agents/` and the working folder's `.codex/agents/`; a folder file replaces a global one of the same name. The file name is the agent's `name`.
 
+**Starter set, on by default (2026-11-07).** `share/agents/` ships seven agents, one per common personal-assistant domain (`mail`, `calendar`, `contacts`, `notes`, `todos`, `weather`, each owning the MCP server of its own name, and `comms` over `mail` and `contacts`). `installStarterAgents` (`core/agents.ts`), called when the daemon or the CLI starts, copies them into `~/.config/codex/agents/` only when that folder does not exist; a folder the user has made, even an empty one, is left alone, so deleting a starter agent sticks. The same files are what the agents eval copies into its workspace, so the eval measures the shipped set. **Why:** the hierarchy beat the flat tree on Spark (24/24 against 19/24, doc 3, "Model results"), and a fresh install that had to write agent files by hand would run the losing configuration.
+
+**Usable agents only.** `usableAgents` (`core/agents.ts`) filters the loaded agents at the start of every run: an agent is kept if it, or an agent behind it, owns a connected and enabled MCP server, or if it names no server at all (an instructions-only agent); the rest are dropped and removed from their parents' `agents` lists. So a starter agent is dormant until a server of its name is configured, and `comms` is offered as soon as either `mail` or `contacts` is. **Why:** the parent chooses from descriptions alone, so an agent with no tools behind it would be chosen and then fail. The eval's tasks connect every fake server, so the filter leaves its runs unchanged.
+
 | Field | Meaning |
 | --- | --- |
 | `description` | One line the parent reads when choosing; its only knowledge of the agent |
@@ -259,9 +263,9 @@ Built (prototype):
 
 Agents eval assets (on `main`):
 - `evals/fake_mcp_server.mjs` + `evals/fake_catalogue.json`: six canned MCP servers (mail, calendar, notes, contacts, weather, todos), 32 tools, no real accounts needed.
-- `evals/agents/`: seven agent files; `comms` has `mail` and `contacts` as sub-agents (tests nesting).
+- `share/agents/`: the shipped starter agents (above), seven files; `comms` has `mail` and `contacts` as sub-agents (tests nesting).
 - `evals/agents_tasks.json`: eight tasks: six need one specialist, one needs two hops (find a contact, then search their mail), one needs two unrelated specialists. Per-task `servers` field.
-- An `agents` runner beside the flat `tree` runner; they differ only in whether agent files are present.
+- An `agents` runner beside the flat `tree` runner; they differ only in whether agent files are present. The flat tree is not a second design but the hierarchy with zero agents, which is what a run sees when no agent's server is connected.
 
 Proposed extensions (per-agent memory, resume inside an agent, showing the nested tree): doc 2, "Agent hierarchy: not built yet".
 

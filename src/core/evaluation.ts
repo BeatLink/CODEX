@@ -10,6 +10,7 @@ import { getEmbedder, type TextEmbedder } from './embeddings.js';
 import { KnowledgeStore, type SearchResult } from './knowledge.js';
 import { LocalModel, runStage, type ChatCompletion, type ChatCompletionRequest, type ChatModel } from './model.js';
 import { defaultSettingsPath, expandUser, loadSettings, validateSettings, type McpServerSettings, type Settings } from './settings.js';
+import { STARTER_AGENTS_DIRECTORY } from './agents.js';
 import { executeTaskTree } from './taskTree.js';
 import { PYTHON_COMMAND } from './tools.js';
 
@@ -18,11 +19,11 @@ export const DEFAULT_TASKS_PATH = join(EVALS_DIRECTORY, 'tasks.json');
 export const RECALL_TASKS_PATH = join(EVALS_DIRECTORY, 'recall_tasks.json');
 export const DEFAULT_SEED_PATH = join(EVALS_DIRECTORY, 'seed.json');
 export const AGENTS_TASKS_PATH = join(EVALS_DIRECTORY, 'agents_tasks.json');
-export const AGENT_FILES_DIRECTORY = join(EVALS_DIRECTORY, 'agents');
+export const AGENT_FILES_DIRECTORY = STARTER_AGENTS_DIRECTORY;
 export const FAKE_SERVER_PATH = join(EVALS_DIRECTORY, 'fake_mcp_server.mjs');
 const FAKE_CATALOGUE_PATH = join(EVALS_DIRECTORY, 'fake_catalogue.json');
 export const FAKE_SERVERS = ['mail', 'calendar', 'notes', 'contacts', 'weather', 'todos'] as const;
-// 'tree' sees every server's tools at once; 'agents' is the same tree with the agents in evals/agents/ to hand tasks to.
+// 'tree' sees every server's tools at once; 'agents' is the same tree with the shipped starter agents (share/agents/) to hand tasks to.
 export const RUNNER_CHOICES = ['bare', 'tree', 'agents'] as const;
 // Runners that recall from the knowledge store, and so get a seeded run beside the empty one.
 export const STORE_RUNNERS: readonly string[] = ['tree'];

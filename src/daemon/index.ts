@@ -4,6 +4,7 @@ import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 import { HelpRequested, parseArguments, usageText, UsageError, type ParserSpec } from '../cli/arguments.js';
+import { installStarterAgents } from '../core/agents.js';
 import { defaultSettingsPath, loadSettings } from '../core/settings.js';
 import { defaultSocketPath } from '../shared/protocol.js';
 import { HarnessDaemon } from './daemon.js';
@@ -50,6 +51,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     let harness: HarnessDaemon;
     try {
         const settings = loadSettings(settingsPath);
+        installStarterAgents();
         if (process.env.MODEL_PATH) {
             settings.model_path = process.env.MODEL_PATH;
         }

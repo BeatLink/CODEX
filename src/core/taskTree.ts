@@ -1,7 +1,7 @@
 // Run a request as a tree of tasks, where each task is answered, worked with tools, or split into subtasks.
 import { resolve } from 'node:path';
 
-import { loadAgents, serversBehind, serversFor, type AgentDefinition } from './agents.js';
+import { loadAgents, serversBehind, serversFor, usableAgents, type AgentDefinition } from './agents.js';
 import { type ActionRecord } from './checks.js';
 import { expandCommand, isMemoryCommand, runMemoryCommand } from './commands.js';
 import { condenseSections, inputTokenBudget, isCallFailure, renderSections, tokenCounter, type Section, type TokenCounter } from './contextBudget.js';
@@ -866,13 +866,14 @@ export class TaskTreeRun {
         readonly foundUrls: Set<string>,
         options: TaskTreeRunOptions = {},
     ) {
-        this.agents = options.agents ?? new Map();
         this.delegated = options.delegated ?? false;
         this.userRequest = options.userRequest ?? null;
         this.agent = options.agent ?? null;
         this.agentDepth = options.agentDepth ?? 0;
         this.trust = options.trust ?? 'user';
         this.allMcpServers = options.mcpServers ?? [];
+        // An agent whose servers are not connected is never offered, so a starter set does no harm until it is set up.
+        this.agents = usableAgents(options.agents ?? new Map(), this.allMcpServers.filter((server) => server.enabled ?? true).map((server) => server.name));
         this.instructions = options.instructions ?? '';
         this.confirmActions = options.confirmActions ?? true;
         this.contextSize = options.contextSize ?? CONTEXT_SIZE;

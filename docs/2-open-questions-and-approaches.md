@@ -470,6 +470,7 @@ Each request is a standalone run today; a follow-up such as "and the one before 
 - **Resume inside an agent:** checkpoints save the delegating task, not the nested run, so a resume restarts the delegation.
 - **Show the nested tree** in the interfaces.
 - **Per-agent skills and tool allow lists** beyond MCP servers.
+- **Starter descriptions against real servers:** the shipped agents (doc 1, "Agent definition") were written for the eval's fake catalogue; real mail, calendar and notes servers expose other tool names and more of them, and a description that routed 24/24 there may misroute. **How to test:** connect one real server under a starter name, run the eval's prompts and a few of the user's own, and count misroutes and runs that reach a tool; rewrite the description, not the harness, when one fails.
 
 ### Mascot: more moods
 

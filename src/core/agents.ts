@@ -1,6 +1,7 @@
 // Agents: named specialists a task can hand its work to, each with its own instructions, tools, and sub-agents.
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { YAMLError, YAMLParseError, parseDocument, type CollectionTag, type ScalarTag } from 'yaml';
 
@@ -42,6 +43,22 @@ const LINE_BREAK = /\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]/;
 export function agentDirectories(filesystemRoot: string): string[] {
     const root = resolve(expandUser(filesystemRoot));
     return [join(configDirectory(), 'agents'), join(root, '.codex', 'agents')];
+}
+
+// The starter agents shipped with the program, one per common personal-assistant domain.
+export const STARTER_AGENTS_DIRECTORY = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'share', 'agents');
+
+// Copy the starter agents into the global agents folder when there is no such folder yet, so the
+// hierarchy is on from the first run; a folder the user has made, even an empty one, is left alone.
+export function installStarterAgents(target = join(configDirectory(), 'agents'), source = STARTER_AGENTS_DIRECTORY): boolean {
+    if (existsSync(target) || agentFiles(source).length === 0) {
+        return false;
+    }
+    mkdirSync(target, { recursive: true });
+    for (const path of agentFiles(source)) {
+        copyFileSync(path, join(target, basename(path)));
+    }
+    return true;
 }
 
 // ============================================================================
@@ -242,6 +259,25 @@ export function loadAgents(filesystemRoot: string): Map<string, AgentDefinition>
 export function topLevelAgents(agents: Map<string, AgentDefinition>): string[] {
     const listed = new Set([...agents.values()].flatMap((agent) => agent.agents));
     return [...agents.keys()].filter((name) => !listed.has(name));
+}
+
+// Keep the agents that can reach a connected server, or that name no server at all; an agent whose
+// servers are all unconfigured is dropped, so a starter agent waits until its server exists, and the
+// sub-agent lists only name agents kept. Why: the parent reads only the description, so a choice
+// with no tools behind it would be taken and then fail.
+export function usableAgents(agents: Map<string, AgentDefinition>, connectedServers: Iterable<string>): Map<string, AgentDefinition> {
+    const connected = new Set(connectedServers);
+    const kept = new Map<string, AgentDefinition>();
+    for (const agent of agents.values()) {
+        const behind = serversBehind(agent.name, agents);
+        if (behind.length === 0 || behind.some((name) => connected.has(name))) {
+            kept.set(agent.name, agent);
+        }
+    }
+    for (const [name, agent] of kept) {
+        kept.set(name, new AgentDefinition(agent.name, agent.description, agent.instructions, agent.mcpServers, agent.agents.filter((child) => kept.has(child))));
+    }
+    return kept;
 }
 
 // Return the MCP servers some agent owns, which no other run may use.
