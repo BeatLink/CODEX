@@ -1,0 +1,81 @@
+{
+  "model_path": "models/Qwen3.5-35B-A3B-UD-IQ3_S.gguf",
+  "tasks_path": "evals/results/2026-11-model-trials/moe-tuning/tune_task.json",
+  "prompts_dir": "evals/results/2026-11-model-trials/blueprints/prompts",
+  "seed": null,
+  "seed_store": null,
+  "repeat": 2,
+  "summary": {
+    "bare": {
+      "tasks": 2,
+      "tasks_passed": 2,
+      "pass_rate": 1.0,
+      "round_passes": [
+        1,
+        1
+      ],
+      "distinct_tasks": 1,
+      "tasks_passed_every_round": 1,
+      "pass_every_round_rate": 1.0,
+      "tool_calls": 0,
+      "valid_tool_calls": 0,
+      "failed_tool_calls": 0,
+      "tool_choice_runs": 0,
+      "tool_choice_hits": 0,
+      "tool_choice_accuracy": null,
+      "checks_passed": 4,
+      "checks_total": 4,
+      "errors": 0,
+      "seconds": 86.22,
+      "model_calls": 2,
+      "completion_tokens": 1070
+    }
+  },
+  "task_passes": {
+    "blueprint-free-slot": {
+      "bare": {
+        "passed": 2,
+        "runs": 2,
+        "every_round": true
+      }
+    }
+  },
+  "results": [
+    {
+      "task_id": "blueprint-free-slot",
+      "runner": "bare",
+      "answer": "{\n  \"name\": \"find_shared_free_slot\",\n  \"request_shape\": \"Find a free one-hour slot next week that works for both Dana Reyes and Sam Okafor, and propose it to them.\",\n  \"inputs\": [],\n  \"steps\": [\n    {\n      \"id\": \"get_dana_calendar\",\n      \"kind\": \"list\",\n      \"source\": \"calendar\",\n      \"filter\": \"owner: Dana Reyes, date_range: next_week\"\n    },\n    {\n      \"id\": \"get_sam_calendar\",\n      \"kind\": \"list\",\n      \"source\": \"calendar\",\n      \"filter\": \"owner: Sam Okafor, date_range: next_week\"\n    },\n    {\n      \"id\": \"get_contacts\",\n      \"kind\": \"list\",\n      \"source\": \"contacts\",\n      \"filter\": \"name: Dana Reyes OR Sam Okafor\"\n    },\n    {\n      \"id\": \"batch_days\",\n      \"kind\": \"batch\",\n      \"size\": 1,\n      \"inputs\": [\"get_dana_calendar\", \"get_sam_calendar\"]\n    },\n    {\n      \"id\": \"loop_days\",\n      \"kind\": \"loop_over_items\",\n      \"over\": \"batch_days\",\n      \"steps\": [\n        {\n          \"id\": \"find_free_slot\",\n          \"kind\": \"lookup_via_agent\",\n          \"agent\": \"calendar\",\n          \"find\": \"free one-hour slot for Dana Reyes and Sam Okafor on this day\"\n        }\n      ]\n    },\n    {\n      \"id\": \"select_slot\",\n      \"kind\": \"write\",\n      \"instruction\": \"Select the first valid free slot found. If none, state 'No common slot found'.\",\n      \"max_words\": 20\n    },\n    {\n      \"id\": \"draft_proposal\",\n      \"kind\": \"write\",\n      \"instruction\": \"Draft a polite email proposing the selected time slot to Dana Reyes and Sam Okafor.\",\n      \"max_words\": 50\n    },\n    {\n      \"id\": \"check_coverage\",\n      \"kind\": \"check_coverage\",\n      \"rule\": \"The output must contain a specific time slot and both names if a slot was found, otherwise state no slot found.\"\n    }\n  ],\n  \"output\": \"draft_proposal\"\n}",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 43.03,
+      "model_calls": 1,
+      "completion_tokens": 535,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": null,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "blueprint-free-slot",
+      "runner": "bare",
+      "answer": "{\n  \"name\": \"find_shared_free_slot\",\n  \"request_shape\": \"Find a free one-hour slot next week that works for both Dana Reyes and Sam Okafor, and propose it to them.\",\n  \"inputs\": [],\n  \"steps\": [\n    {\n      \"id\": \"get_dana_calendar\",\n      \"kind\": \"list\",\n      \"source\": \"calendar\",\n      \"filter\": \"owner: Dana Reyes, date_range: next_week\"\n    },\n    {\n      \"id\": \"get_sam_calendar\",\n      \"kind\": \"list\",\n      \"source\": \"calendar\",\n      \"filter\": \"owner: Sam Okafor, date_range: next_week\"\n    },\n    {\n      \"id\": \"get_contacts\",\n      \"kind\": \"list\",\n      \"source\": \"contacts\",\n      \"filter\": \"name: Dana Reyes OR Sam Okafor\"\n    },\n    {\n      \"id\": \"batch_days\",\n      \"kind\": \"batch\",\n      \"size\": 1,\n      \"inputs\": [\"get_dana_calendar\", \"get_sam_calendar\"]\n    },\n    {\n      \"id\": \"loop_days\",\n      \"kind\": \"loop_over_items\",\n      \"over\": \"batch_days\",\n      \"steps\": [\n        {\n          \"id\": \"find_free_slot\",\n          \"kind\": \"lookup_via_agent\",\n          \"agent\": \"calendar\",\n          \"find\": \"free one-hour slot for Dana Reyes and Sam Okafor on this day\"\n        }\n      ]\n    },\n    {\n      \"id\": \"select_slot\",\n      \"kind\": \"write\",\n      \"instruction\": \"Select the first available free slot found. If none, state 'No slots found'.\",\n      \"max_words\": 20\n    },\n    {\n      \"id\": \"draft_proposal\",\n      \"kind\": \"write\",\n      \"instruction\": \"Draft a polite message proposing the selected time slot to Dana Reyes and Sam Okafor.\",\n      \"max_words\": 50\n    },\n    {\n      \"id\": \"check_coverage\",\n      \"kind\": \"check_coverage\",\n      \"rule\": \"The output must contain exactly one proposed time slot if one was found, or a clear statement that no slots were found.\"\n    }\n  ],\n  \"output\": \"draft_proposal\"\n}",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 43.19,
+      "model_calls": 1,
+      "completion_tokens": 535,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": null,
+      "attempt": 2,
+      "passed": true
+    }
+  ]
+}

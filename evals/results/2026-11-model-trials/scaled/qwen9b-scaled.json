@@ -1,0 +1,5792 @@
+{
+  "model_path": "models/Qwen_Qwen3.5-9B-Q4_K_M.gguf",
+  "tasks_path": "evals/scaled_tasks.json",
+  "prompts_dir": null,
+  "seed": null,
+  "seed_store": null,
+  "repeat": 3,
+  "summary": {
+    "tree": {
+      "tasks": 66,
+      "tasks_passed": 0,
+      "pass_rate": 0.0,
+      "round_passes": [
+        0,
+        0,
+        0
+      ],
+      "distinct_tasks": 22,
+      "tasks_passed_every_round": 0,
+      "pass_every_round_rate": 0.0,
+      "tool_calls": 58,
+      "valid_tool_calls": 58,
+      "failed_tool_calls": 0,
+      "tool_choice_runs": 66,
+      "tool_choice_hits": 3,
+      "tool_choice_accuracy": 0.045,
+      "checks_passed": 7,
+      "checks_total": 159,
+      "errors": 24,
+      "seconds": 4225.87,
+      "model_calls": 477,
+      "completion_tokens": 23099
+    },
+    "agents": {
+      "tasks": 66,
+      "tasks_passed": 21,
+      "pass_rate": 0.318,
+      "round_passes": [
+        7,
+        7,
+        7
+      ],
+      "distinct_tasks": 22,
+      "tasks_passed_every_round": 6,
+      "pass_every_round_rate": 0.273,
+      "tool_calls": 85,
+      "valid_tool_calls": 85,
+      "failed_tool_calls": 1,
+      "tool_choice_runs": 66,
+      "tool_choice_hits": 22,
+      "tool_choice_accuracy": 0.333,
+      "checks_passed": 63,
+      "checks_total": 159,
+      "errors": 0,
+      "seconds": 5784.38,
+      "model_calls": 697,
+      "completion_tokens": 32456
+    }
+  },
+  "task_passes": {
+    "lights-on": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 3,
+        "runs": 3,
+        "every_round": true
+      }
+    },
+    "indoor-temperature": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 3,
+        "runs": 3,
+        "every_round": true
+      }
+    },
+    "steps-today": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 3,
+        "runs": 3,
+        "every_round": true
+      }
+    },
+    "where-car": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 3,
+        "runs": 3,
+        "every_round": true
+      }
+    },
+    "library-due": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 3,
+        "runs": 3,
+        "every_round": true
+      }
+    },
+    "next-doctor": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 2,
+        "runs": 3,
+        "every_round": false
+      }
+    },
+    "account-balance": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 3,
+        "runs": 3,
+        "every_round": true
+      }
+    },
+    "invoice-and-balance": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      }
+    },
+    "flight-and-drive": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      }
+    },
+    "orzo-missing-items": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      }
+    },
+    "lights-and-heating-schedule": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      }
+    },
+    "song-and-album": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      }
+    },
+    "breach-and-payment": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      }
+    },
+    "parcel-and-marcus": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      }
+    },
+    "porto-trip-brief": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      }
+    },
+    "before-priya-meeting": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      }
+    },
+    "orzo-for-four": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      }
+    },
+    "gp-trip": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      }
+    },
+    "morning-check": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      }
+    },
+    "library-hold-pickup": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      }
+    },
+    "coming-home": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 1,
+        "runs": 3,
+        "every_round": false
+      }
+    },
+    "heat-pump-grant": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      }
+    }
+  },
+  "results": [
+    {
+      "task_id": "lights-on",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 40.13,
+      "model_calls": 4,
+      "completion_tokens": 126,
+      "tool_calls": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [],
+      "tool_sequence": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": null,
+          "depth": 0
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "lights-on",
+      "runner": "agents",
+      "answer": "Living room and bedroom lights are on; kitchen and porch are off.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 51.26,
+      "model_calls": 8,
+      "completion_tokens": 219,
+      "tool_calls": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "home",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "lights",
+          "parent": "home",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "lights",
+          "depth": 2
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "indoor-temperature",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 37.75,
+      "model_calls": 3,
+      "completion_tokens": 105,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "indoor-temperature",
+      "runner": "agents",
+      "answer": "The house is currently 19.5\u00b0C, the heating is on, and the target temperature is set to 21\u00b0C.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 55.34,
+      "model_calls": 8,
+      "completion_tokens": 250,
+      "tool_calls": [
+        {
+          "name": "mcp__thermostat__get_temperature",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "home",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "thermostat",
+          "parent": "home",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__thermostat__get_temperature",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "thermostat",
+          "depth": 2
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "steps-today",
+      "runner": "tree",
+      "answer": "I cannot determine how many steps you have walked today because I do not have access to your fitness tracking device, health app, or step counter. You need to check your phone's health app, fitness tracker, or smartwatch to see your step count for today.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "regex 6[,.]?412"
+      ],
+      "seconds": 53.8,
+      "model_calls": 7,
+      "completion_tokens": 334,
+      "tool_calls": [],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "steps-today",
+      "runner": "agents",
+      "answer": "You walked 6,412 steps today.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 36.13,
+      "model_calls": 6,
+      "completion_tokens": 131,
+      "tool_calls": [
+        {
+          "name": "mcp__fitness__get_steps",
+          "arguments": "{\"date\":\"2026-11-07\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "fitness",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__fitness__get_steps",
+          "arguments": "{\"date\":\"2026-11-07\"}",
+          "valid": true,
+          "error": false,
+          "agent": "fitness",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "where-car",
+      "runner": "tree",
+      "answer": "I could not verify your parking location. Searching your mailbox yielded no emails containing information about where you parked the car; the only relevant email found was regarding a budget variance.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains 'Chiado'",
+        "contains '-2'"
+      ],
+      "seconds": 87.94,
+      "model_calls": 12,
+      "completion_tokens": 519,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"parking\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"parking\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "where-car",
+      "runner": "agents",
+      "answer": "You parked the car in the Chiado car park, level -2, since 08:12.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 38.05,
+      "model_calls": 6,
+      "completion_tokens": 173,
+      "tool_calls": [
+        {
+          "name": "mcp__car__find_car",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "car",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__car__find_car",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "car",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "library-due",
+      "runner": "tree",
+      "answer": "I could not find any notes about library books or borrowing information. The notes I found are about a garage code and boiler service, not library books. Please check your library account directly or provide additional context about where your library information might be stored.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains 'Under the Lindens'",
+        "contains '10 November'"
+      ],
+      "seconds": 58.95,
+      "model_calls": 8,
+      "completion_tokens": 251,
+      "tool_calls": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"library books\"}"
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Garage\"}"
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Boiler service\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "notes",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"library books\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Garage\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Boiler service\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "library-due",
+      "runner": "agents",
+      "answer": "You have two books on loan: \"Under the Lindens\" due 10 November and \"Small Engines, Big Ideas\" due 24 November. The first one is due back on 10 November.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 41.14,
+      "model_calls": 6,
+      "completion_tokens": 202,
+      "tool_calls": [
+        {
+          "name": "mcp__library__list_loans",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "library",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__library__list_loans",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "library",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "next-doctor",
+      "runner": "tree",
+      "answer": "Your next doctor's appointment is Friday at 09:00 with a dentist.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains '08:40'",
+        "contains 'Brandvold'"
+      ],
+      "seconds": 36.72,
+      "model_calls": 6,
+      "completion_tokens": 159,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "calendar",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "calendar",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "next-doctor",
+      "runner": "agents",
+      "answer": "Your next doctor's appointment is a GP check-up with Dr Ilse Brandvold on Tuesday, 18 November at 08:40 at Clinica Alameda.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 39.64,
+      "model_calls": 6,
+      "completion_tokens": 179,
+      "tool_calls": [
+        {
+          "name": "mcp__health__list_appointments",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "health",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__health__list_appointments",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "health",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "account-balance",
+      "runner": "tree",
+      "answer": "I cannot determine how much money is in your current account because the available tools only allow access to your email, calendar, contacts, and notes; there is no tool to check bank account balances. You must log into your banking app, website, or contact your bank directly to find this information.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "regex 2[,.]?914[.,]37"
+      ],
+      "seconds": 55.26,
+      "model_calls": 7,
+      "completion_tokens": 342,
+      "tool_calls": [],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "account-balance",
+      "runner": "agents",
+      "answer": "Your current account holds 2,914.37 euros.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 37.72,
+      "model_calls": 6,
+      "completion_tokens": 168,
+      "tool_calls": [
+        {
+          "name": "mcp__bank__get_balance",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "bank",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__bank__get_balance",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "bank",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "invoice-and-balance",
+      "runner": "tree",
+      "answer": "Invoice 4471 is due by 30 November 2026 for 1,280 euros. The amount currently in your account to pay it could not be verified, as no tool was used to check your account balance.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "regex 2[,.]?914[.,]37"
+      ],
+      "seconds": 97.69,
+      "model_calls": 13,
+      "completion_tokens": 530,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"invoice 4471\"}"
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"invoice 4471\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "invoice-and-balance",
+      "runner": "agents",
+      "answer": "Invoice 4471 is due by 30 November 2026 for 1,280 euros. The current account balance could not be verified because no tool was available to retrieve banking data.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "regex 2[,.]?914[.,]37"
+      ],
+      "seconds": 105.17,
+      "model_calls": 13,
+      "completion_tokens": 586,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"invoice 4471\"}"
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"invoice 4471\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "flight-and-drive",
+      "runner": "tree",
+      "answer": "I found an email in your mailbox, but it is about \"Re: Q3 budget variance\" from priya.raman@example.org, not your flight to Porto. I could not verify a flight departure time in your mailbox. Additionally, I could not determine the current drive duration to the airport as no location data or traffic tools were available to calculate this.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains '18:45'",
+        "regex \\b27\\b"
+      ],
+      "seconds": 89.72,
+      "model_calls": 12,
+      "completion_tokens": 562,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Porto flight\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Porto flight\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "flight-and-drive",
+      "runner": "agents",
+      "answer": "Your flight TP1947 to Porto leaves at 18:45 from Terminal 1 on Friday 21 November. The drive time to the airport cannot be determined from available information.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "regex \\b27\\b"
+      ],
+      "seconds": 48.48,
+      "model_calls": 7,
+      "completion_tokens": 211,
+      "tool_calls": [
+        {
+          "name": "mcp__travel__list_trips",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__travel__get_flight",
+          "arguments": "{\"flight\":\"TP1947\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "travel",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__travel__list_trips",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "travel",
+          "depth": 1
+        },
+        {
+          "name": "mcp__travel__get_flight",
+          "arguments": "{\"flight\":\"TP1947\"}",
+          "valid": true,
+          "error": false,
+          "agent": "travel",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "orzo-missing-items",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [],
+      "seconds": 38.78,
+      "model_calls": 3,
+      "completion_tokens": 118,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "orzo-missing-items",
+      "runner": "agents",
+      "answer": "I cannot identify the missing ingredients because the lemon orzo recipe file and the shopping list file were not found in the workspace. Please provide the file paths for both documents so I can perform the comparison.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains 'peas'",
+        "contains 'parmesan'",
+        "contains 'shallot'"
+      ],
+      "seconds": 368.86,
+      "model_calls": 48,
+      "completion_tokens": 2230,
+      "tool_calls": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        },
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        },
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        },
+        {
+          "name": "mcp__files__search",
+          "arguments": "{\"query\":\"lemon orzo recipe\"}"
+        },
+        {
+          "name": "mcp__files__search",
+          "arguments": "{\"query\":\"shopping list\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "meals",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "shopping",
+          "parent": "meals",
+          "depth": 2
+        },
+        {
+          "agent": "files",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}",
+          "valid": true,
+          "error": false,
+          "agent": "meals",
+          "depth": 1
+        },
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}",
+          "valid": true,
+          "error": false,
+          "agent": "meals",
+          "depth": 1
+        },
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}",
+          "valid": true,
+          "error": false,
+          "agent": "shopping",
+          "depth": 2
+        },
+        {
+          "name": "mcp__files__search",
+          "arguments": "{\"query\":\"lemon orzo recipe\"}",
+          "valid": true,
+          "error": false,
+          "agent": "files",
+          "depth": 1
+        },
+        {
+          "name": "mcp__files__search",
+          "arguments": "{\"query\":\"shopping list\"}",
+          "valid": true,
+          "error": false,
+          "agent": "files",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "lights-and-heating-schedule",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 38.35,
+      "model_calls": 3,
+      "completion_tokens": 134,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "lights-and-heating-schedule",
+      "runner": "agents",
+      "answer": "Living room and bedroom lights are on; kitchen and porch are off. I cannot determine when the heating will come back on this evening as that information is not available.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains '17:00'"
+      ],
+      "seconds": 54.49,
+      "model_calls": 8,
+      "completion_tokens": 260,
+      "tool_calls": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "home",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "lights",
+          "parent": "home",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "lights",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "song-and-album",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 37.54,
+      "model_calls": 3,
+      "completion_tokens": 128,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "song-and-album",
+      "runner": "agents",
+      "answer": "The speaker is playing \"Harbour Glass\" by Odile Ferrand from the album \"Salt Hours.\" I could not verify the number of photos in your Porto 2025 album as I don't have access to your photo library.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "regex \\b212\\b"
+      ],
+      "seconds": 57.81,
+      "model_calls": 8,
+      "completion_tokens": 288,
+      "tool_calls": [
+        {
+          "name": "mcp__music__now_playing",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "media",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "music",
+          "parent": "media",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__music__now_playing",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "music",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "breach-and-payment",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 39.33,
+      "model_calls": 3,
+      "completion_tokens": 130,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "breach-and-payment",
+      "runner": "agents",
+      "answer": "Gridwatch Energy was in a data breach. I could not verify how much you last paid that company.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "regex 96[.,]40"
+      ],
+      "seconds": 117.52,
+      "model_calls": 17,
+      "completion_tokens": 634,
+      "tool_calls": [
+        {
+          "name": "mcp__vault__check_breaches",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__bank__search",
+          "arguments": "{\"query\":\"Gridwatch Energy\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "vault",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "bank",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__vault__check_breaches",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "vault",
+          "depth": 1
+        },
+        {
+          "name": "mcp__bank__search",
+          "arguments": "{\"query\":\"Gridwatch Energy\"}",
+          "valid": true,
+          "error": false,
+          "agent": "bank",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "parcel-and-marcus",
+      "runner": "tree",
+      "answer": "I could not find any emails in your mailbox regarding the arrival date of your Ferrowick Tools parcel or Marcus Oyelaran's phone number. Please check other locations for these details or provide them directly.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains 'Saturday'",
+        "contains '10:00'",
+        "contains '900318'"
+      ],
+      "seconds": 99.93,
+      "model_calls": 11,
+      "completion_tokens": 455,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Ferrowick Tools\"}"
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Marcus Oyelaran\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Ferrowick Tools\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Marcus Oyelaran\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "parcel-and-marcus",
+      "runner": "agents",
+      "answer": "I could not find any emails regarding your Ferrowick Tools parcel or Marcus Oyelaran's phone number in your mailbox. Please check other locations for this information.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains 'Saturday'",
+        "contains '10:00'",
+        "contains '900318'"
+      ],
+      "seconds": 86.3,
+      "model_calls": 10,
+      "completion_tokens": 314,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Ferrowick Tools\"}"
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Marcus Oyelaran\"}"
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Ferrowick Tools\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Marcus Oyelaran\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "porto-trip-brief",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [],
+      "seconds": 28.41,
+      "model_calls": 3,
+      "completion_tokens": 120,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "porto-trip-brief",
+      "runner": "agents",
+      "answer": "I could not verify the flight departure time, the guesthouse address in your itinerary file, or the specific tram page you bookmarked. The available search results only show general information about Porto transport and generic itinerary examples, but do not contain your personal trip details. Please check your flight confirmation email, your local itinerary file, and your browser bookmarks directly.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains '18:45'",
+        "contains 'Rua das Flores'",
+        "contains 'tram.example.pt'"
+      ],
+      "seconds": 39.74,
+      "model_calls": 4,
+      "completion_tokens": 217,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "before-priya-meeting",
+      "runner": "tree",
+      "answer": "The drive time to work and the car's charge level could not be verified from available tools. Priya Raman's phone number is +44 7700 900142.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 3,
+      "failed_checks": [
+        "regex \\b27\\b",
+        "regex \\b64\\b"
+      ],
+      "seconds": 75.43,
+      "model_calls": 8,
+      "completion_tokens": 408,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}",
+          "valid": true,
+          "error": false,
+          "agent": "contacts",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "before-priya-meeting",
+      "runner": "agents",
+      "answer": "I could not verify the drive time to work, the current charge level of the car, or Priya Raman's phone number from the available evidence.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "regex \\b27\\b",
+        "regex \\b64\\b",
+        "contains '900142'"
+      ],
+      "seconds": 58.47,
+      "model_calls": 7,
+      "completion_tokens": 299,
+      "tool_calls": [],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "orzo-for-four",
+      "runner": "tree",
+      "answer": "I could not find a lemon orzo recipe in your notes to calculate amounts for four, and I do not have access to your shopping list or a timer function. Please share the original recipe, specify where your shopping list is stored, and let me know how you would like to handle the timer.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains '300'",
+        "contains '240'",
+        "contains '60'"
+      ],
+      "seconds": 137.71,
+      "model_calls": 9,
+      "completion_tokens": 1021,
+      "tool_calls": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"lemon orzo\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "notes",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"lemon orzo\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "orzo-for-four",
+      "runner": "agents",
+      "answer": "Here are the amounts for four servings of lemon orzo:\n- 1 tbsp unsalted butter or extra-virgin olive oil\n- 1\u00bd cups orzo pasta\n- 3 cups vegetable broth\n- 2 garlic cloves, grated\n- \u00bd tsp sea salt\n- Freshly ground black pepper\n- \u00bd cup frozen peas\n- 2 tbsp fresh lemon juice\n- Zest of 1 lemon\n- \u00bd cup grated Parmesan cheese\n- \u00bc cup chopped fresh parsley, basil, and/or dill\n\nI have added \"peas\" to your shopping list (`shopping-list.txt`) and started a 25-minute timer.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains '300'",
+        "contains '240'",
+        "contains '60'"
+      ],
+      "seconds": 395.21,
+      "model_calls": 35,
+      "completion_tokens": 2322,
+      "tool_calls": [
+        {
+          "name": "web_fetch",
+          "arguments": "{\"url\":\"https://www.loveandlemons.com/lemon-orzo/\",\"focus\":\"ingredient list with quantities\"}"
+        },
+        {
+          "name": "mcp__files__search",
+          "arguments": "{\"query\":\"shopping list\"}"
+        },
+        {
+          "name": "mcp__timers__set_timer",
+          "arguments": "{\"minutes\":\"25\",\"label\":\"cooking lemon orzo\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "files",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "timers",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "web_fetch",
+          "arguments": "{\"url\":\"https://www.loveandlemons.com/lemon-orzo/\",\"focus\":\"ingredient list with quantities\"}",
+          "valid": true,
+          "error": false,
+          "agent": null,
+          "depth": 0
+        },
+        {
+          "name": "mcp__files__search",
+          "arguments": "{\"query\":\"shopping list\"}",
+          "valid": true,
+          "error": false,
+          "agent": "files",
+          "depth": 1
+        },
+        {
+          "name": "mcp__timers__set_timer",
+          "arguments": "{\"minutes\":\"25\",\"label\":\"cooking lemon orzo\"}",
+          "valid": true,
+          "error": false,
+          "agent": "timers",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "gp-trip",
+      "runner": "tree",
+      "answer": "I could not verify your next GP appointment location, travel time by public transport, or your calendar for Thursday. The search of your mailbox found only an email regarding a budget variance, and no calendar data for Thursday was retrieved.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains 'Alameda'",
+        "regex \\b38\\b",
+        "contains '14:30'"
+      ],
+      "seconds": 95.94,
+      "model_calls": 12,
+      "completion_tokens": 539,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"GP appointment\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"GP appointment\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "gp-trip",
+      "runner": "agents",
+      "answer": "Your next GP appointment is with Dr Ilse Brandvold on Tuesday 18 November at 08:40 at Clinica Alameda, located at Avenida Almirante Reis 140, Lisbon. Public transport travel time could not be verified. Your calendar for Thursday 9 November has no entries listed.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 3,
+      "failed_checks": [
+        "regex \\b38\\b",
+        "contains '14:30'"
+      ],
+      "seconds": 150.01,
+      "model_calls": 17,
+      "completion_tokens": 877,
+      "tool_calls": [
+        {
+          "name": "mcp__health__list_appointments",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__maps__search",
+          "arguments": "{\"query\":\"Clinica Alameda\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "health",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "maps",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__health__list_appointments",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "health",
+          "depth": 1
+        },
+        {
+          "name": "mcp__maps__search",
+          "arguments": "{\"query\":\"Clinica Alameda\"}",
+          "valid": true,
+          "error": false,
+          "agent": "maps",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "morning-check",
+      "runner": "tree",
+      "answer": "I could not verify your weekday alarm time, sleep duration last night, or Lisbon's forecast because no local files or connected tools (such as calendar, notes, or weather services) provided this information.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains '06:45'",
+        "regex 6\\s?h(ours?)?\\s?(and\\s)?48",
+        "contains 'rain'"
+      ],
+      "seconds": 67.64,
+      "model_calls": 9,
+      "completion_tokens": 390,
+      "tool_calls": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "weather",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}",
+          "valid": true,
+          "error": false,
+          "agent": "weather",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "morning-check",
+      "runner": "agents",
+      "answer": "I cannot provide your weekday alarm time, last night's sleep duration, or the Lisbon forecast because I do not have access to your local device settings, calendar, or weather data, and no external search results contain this specific personal or location-specific information.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains '06:45'",
+        "regex 6\\s?h(ours?)?\\s?(and\\s)?48",
+        "contains 'rain'"
+      ],
+      "seconds": 57.81,
+      "model_calls": 6,
+      "completion_tokens": 331,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "library-hold-pickup",
+      "runner": "tree",
+      "answer": "I could not verify the status of your library hold, the author of the book, or the drive time to pick it up because no notes containing this information were found in your notes and no local files were available in the workspace. Consequently, I could not add the pickup to your to-dos. Please check your library account directly or provide more details about the book.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains 'Salt Road'",
+        "contains 'Vass'",
+        "regex \\b27\\b"
+      ],
+      "seconds": 57.16,
+      "model_calls": 7,
+      "completion_tokens": 272,
+      "tool_calls": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"library book hold\"}"
+        },
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "notes",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"library book hold\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        },
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "library-hold-pickup",
+      "runner": "agents",
+      "answer": "The book \"The Salt Road\" is ready for pickup until November 12. The author could not be verified from the hold details, and the drive time could not be calculated as no location data was available. I could not add the pickup to your to-dos as no file system access was provided; your current to-dos remain: renew passport (due 12 Nov), book boiler service (due 20 Nov), and buy a birthday card (due 28 Nov).",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains 'Vass'",
+        "regex \\b27\\b"
+      ],
+      "seconds": 159.41,
+      "model_calls": 17,
+      "completion_tokens": 991,
+      "tool_calls": [
+        {
+          "name": "mcp__library__list_holds",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "library",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "todos",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__library__list_holds",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "library",
+          "depth": 1
+        },
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "todos",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "coming-home",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 4,
+      "failed_checks": [],
+      "seconds": 28.19,
+      "model_calls": 3,
+      "completion_tokens": 134,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "coming-home",
+      "runner": "agents",
+      "answer": "I cannot verify the house temperature, active lights, speaker playback, or today's parcel deliveries, as no connected tools (smart home, calendar, or mail) were accessed to gather this evidence.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 4,
+      "failed_checks": [
+        "contains '19.5'",
+        "contains 'living room'",
+        "contains 'Harbour Glass'",
+        "contains 'bookshop'"
+      ],
+      "seconds": 34.23,
+      "model_calls": 4,
+      "completion_tokens": 163,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "heat-pump-grant",
+      "runner": "tree",
+      "answer": "I searched your mailbox for emails regarding heat pump grants, your last energy bill, and heating targets, but found no messages containing this information. The only email retrieved was a budget variance report from Priya Raman. Consequently, I could not verify the grant amounts, your specific bill history, or current heating targets from your records.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "regex 3[,.]?500",
+        "regex 96[.,]40",
+        "regex \\b21\\b"
+      ],
+      "seconds": 116.66,
+      "model_calls": 12,
+      "completion_tokens": 650,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"heat pump grant\"}"
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"energy bill\"}"
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"heating target\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"heat pump grant\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"energy bill\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"heating target\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "heat-pump-grant",
+      "runner": "agents",
+      "answer": "News reports that heat pump grants reopen in December (Civic Ledger, 6 Nov), but specific claim amounts were not found in the available headlines. I could not verify your last energy bill or current heating target as I do not have access to your personal account data.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "regex 3[,.]?500",
+        "regex 96[.,]40",
+        "regex \\b21\\b"
+      ],
+      "seconds": 84.99,
+      "model_calls": 9,
+      "completion_tokens": 504,
+      "tool_calls": [
+        {
+          "name": "mcp__news__search",
+          "arguments": "{\"query\":\"heat pump grants how much can I claim\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "news",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__news__search",
+          "arguments": "{\"query\":\"heat pump grants how much can I claim\"}",
+          "valid": true,
+          "error": false,
+          "agent": "news",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "lights-on",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 41.68,
+      "model_calls": 4,
+      "completion_tokens": 125,
+      "tool_calls": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [],
+      "tool_sequence": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": null,
+          "depth": 0
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "lights-on",
+      "runner": "agents",
+      "answer": "Living room and bedroom lights are on; kitchen and porch are off.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 53.66,
+      "model_calls": 8,
+      "completion_tokens": 218,
+      "tool_calls": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "home",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "lights",
+          "parent": "home",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "lights",
+          "depth": 2
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "indoor-temperature",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 39.17,
+      "model_calls": 3,
+      "completion_tokens": 106,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "indoor-temperature",
+      "runner": "agents",
+      "answer": "The house is currently 19.5\u00b0C, and the heating is set to 21\u00b0C and is on.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 55.31,
+      "model_calls": 8,
+      "completion_tokens": 238,
+      "tool_calls": [
+        {
+          "name": "mcp__thermostat__get_temperature",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "home",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "thermostat",
+          "parent": "home",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__thermostat__get_temperature",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "thermostat",
+          "depth": 2
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "steps-today",
+      "runner": "tree",
+      "answer": "I cannot determine how many steps you have walked today because access to your fitness tracking data is not available through the tools I have. You need to check your fitness tracker app or device directly for this information.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "regex 6[,.]?412"
+      ],
+      "seconds": 53.04,
+      "model_calls": 7,
+      "completion_tokens": 313,
+      "tool_calls": [],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "steps-today",
+      "runner": "agents",
+      "answer": "You walked 6,412 steps today.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 36.33,
+      "model_calls": 6,
+      "completion_tokens": 131,
+      "tool_calls": [
+        {
+          "name": "mcp__fitness__get_steps",
+          "arguments": "{\"date\":\"2026-11-07\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "fitness",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__fitness__get_steps",
+          "arguments": "{\"date\":\"2026-11-07\"}",
+          "valid": true,
+          "error": false,
+          "agent": "fitness",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "where-car",
+      "runner": "tree",
+      "answer": "I could not verify where you parked the car. Your mailbox contains no information about your vehicle's location, and I do not have access to other data sources like GPS logs or parking receipts to determine this.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains 'Chiado'",
+        "contains '-2'"
+      ],
+      "seconds": 98.57,
+      "model_calls": 12,
+      "completion_tokens": 645,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"park\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"park\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "where-car",
+      "runner": "agents",
+      "answer": "You parked the car in the Chiado car park, level -2, since 08:12.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 39.45,
+      "model_calls": 6,
+      "completion_tokens": 175,
+      "tool_calls": [
+        {
+          "name": "mcp__car__find_car",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "car",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__car__find_car",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "car",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "library-due",
+      "runner": "tree",
+      "answer": "I could not find any notes about library books or due dates in your notes. The search only found notes titled \"Garage\" and \"Boiler service,\" which contain information about a garage door code and boiler service, not library books. Therefore, it could not be verified which library books you have out or when the first one is due back.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains 'Under the Lindens'",
+        "contains '10 November'"
+      ],
+      "seconds": 61.15,
+      "model_calls": 8,
+      "completion_tokens": 258,
+      "tool_calls": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"library books\"}"
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Garage\"}"
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Boiler service\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "notes",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"library books\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Garage\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Boiler service\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "library-due",
+      "runner": "agents",
+      "answer": "You have two books on loan: \"Under the Lindens\" due 10 November and \"Small Engines, Big Ideas\" due 24 November. The first one is due back on 10 November.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 41.77,
+      "model_calls": 6,
+      "completion_tokens": 202,
+      "tool_calls": [
+        {
+          "name": "mcp__library__list_loans",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "library",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__library__list_loans",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "library",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "next-doctor",
+      "runner": "tree",
+      "answer": "Your next doctor's appointment is Friday at 09:00 with a dentist.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains '08:40'",
+        "contains 'Brandvold'"
+      ],
+      "seconds": 37.8,
+      "model_calls": 6,
+      "completion_tokens": 159,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "calendar",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "calendar",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "next-doctor",
+      "runner": "agents",
+      "answer": "I could not find any notes about doctor appointments in your notes. Please check your calendar or contact your healthcare provider directly for appointment details.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains '08:40'",
+        "contains 'Brandvold'"
+      ],
+      "seconds": 39.89,
+      "model_calls": 6,
+      "completion_tokens": 174,
+      "tool_calls": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"doctor appointment\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "notes",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"doctor appointment\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "account-balance",
+      "runner": "tree",
+      "answer": "I cannot determine how much money is in your current account because the available tools only allow access to your email, calendar, contacts, and notes; there is no tool to check bank account balances or financial information. You would need to log into your banking app, website, or contact your bank directly to find this information.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "regex 2[,.]?914[.,]37"
+      ],
+      "seconds": 53.46,
+      "model_calls": 7,
+      "completion_tokens": 331,
+      "tool_calls": [],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "account-balance",
+      "runner": "agents",
+      "answer": "Your current account holds 2,914.37 euros.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 37.09,
+      "model_calls": 6,
+      "completion_tokens": 168,
+      "tool_calls": [
+        {
+          "name": "mcp__bank__get_balance",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "bank",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__bank__get_balance",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "bank",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "invoice-and-balance",
+      "runner": "tree",
+      "answer": "Invoice 4471 is due by 30 November 2026 for 1,280 euros. I could not verify the current balance in your account to determine if you have sufficient funds to pay it.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "regex 2[,.]?914[.,]37"
+      ],
+      "seconds": 92.21,
+      "model_calls": 13,
+      "completion_tokens": 516,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"invoice 4471\"}"
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"invoice 4471\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "invoice-and-balance",
+      "runner": "agents",
+      "answer": "Invoice 4471 is due by 30 November 2026 for 1,280 euros. I could not verify the amount currently in your account to pay it, as no tool results provided your account balance.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "regex 2[,.]?914[.,]37"
+      ],
+      "seconds": 97.76,
+      "model_calls": 13,
+      "completion_tokens": 525,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"invoice 4471\"}"
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"invoice 4471\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "flight-and-drive",
+      "runner": "tree",
+      "answer": "I cannot find a flight to Porto in your calendar for today (2026-11-07); the only upcoming events are a budget review on Thursday and a dentist appointment on Friday. Additionally, I cannot determine the current drive time to the airport because the specific airport location is unknown. Please provide the flight details or the name of the airport you are traveling to.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains '18:45'",
+        "regex \\b27\\b"
+      ],
+      "seconds": 45.12,
+      "model_calls": 6,
+      "completion_tokens": 274,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "calendar",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "calendar",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "flight-and-drive",
+      "runner": "agents",
+      "answer": "Your flight TP1947 to Porto leaves at 18:45 from Terminal 1 on Friday 21 November. The drive time to the airport cannot be determined from available information.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "regex \\b27\\b"
+      ],
+      "seconds": 47.25,
+      "model_calls": 7,
+      "completion_tokens": 211,
+      "tool_calls": [
+        {
+          "name": "mcp__travel__list_trips",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__travel__get_flight",
+          "arguments": "{\"flight\":\"TP1947\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "travel",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__travel__list_trips",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "travel",
+          "depth": 1
+        },
+        {
+          "name": "mcp__travel__get_flight",
+          "arguments": "{\"flight\":\"TP1947\"}",
+          "valid": true,
+          "error": false,
+          "agent": "travel",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "orzo-missing-items",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [],
+      "seconds": 38.67,
+      "model_calls": 3,
+      "completion_tokens": 124,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "orzo-missing-items",
+      "runner": "agents",
+      "answer": "I cannot identify the missing ingredients because I do not have access to your specific lemon orzo recipe or your current shopping list. The web search results provided only generic recipes from public websites, not your personal data. Please provide the text of your recipe and shopping list, or specify the file locations, so I can perform the comparison.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains 'peas'",
+        "contains 'parmesan'",
+        "contains 'shallot'"
+      ],
+      "seconds": 71.69,
+      "model_calls": 8,
+      "completion_tokens": 445,
+      "tool_calls": [],
+      "agents": [
+        {
+          "agent": "meals",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "lights-and-heating-schedule",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 38.63,
+      "model_calls": 3,
+      "completion_tokens": 140,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "lights-and-heating-schedule",
+      "runner": "agents",
+      "answer": "Living room and bedroom lights are on; kitchen and porch are off. I cannot determine when the heating will come back on this evening as that information is not available.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains '17:00'"
+      ],
+      "seconds": 53.21,
+      "model_calls": 8,
+      "completion_tokens": 262,
+      "tool_calls": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "home",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "lights",
+          "parent": "home",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "lights",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "song-and-album",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 36.04,
+      "model_calls": 3,
+      "completion_tokens": 123,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "song-and-album",
+      "runner": "agents",
+      "answer": "The song currently playing on the speaker is \"Harbour Glass\" by Odile Ferrand from the album \"Salt Hours\". I could not verify the number of photos in your Porto 2025 album as I do not have access to your photo library.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "regex \\b212\\b"
+      ],
+      "seconds": 55.65,
+      "model_calls": 8,
+      "completion_tokens": 292,
+      "tool_calls": [
+        {
+          "name": "mcp__music__now_playing",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "media",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "music",
+          "parent": "media",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__music__now_playing",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "music",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "breach-and-payment",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 36.6,
+      "model_calls": 3,
+      "completion_tokens": 124,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "breach-and-payment",
+      "runner": "agents",
+      "answer": "Gridwatch Energy was in a data breach; change that password. I could not verify how much you last paid that company.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "regex 96[.,]40"
+      ],
+      "seconds": 63.99,
+      "model_calls": 9,
+      "completion_tokens": 381,
+      "tool_calls": [
+        {
+          "name": "mcp__vault__check_breaches",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "vault",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__vault__check_breaches",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "vault",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "parcel-and-marcus",
+      "runner": "tree",
+      "answer": "I could not find any emails in your mailbox regarding the arrival date of your Ferrowick Tools parcel or Marcus Oyelaran's phone number. Please check other locations for these details or provide them directly.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains 'Saturday'",
+        "contains '10:00'",
+        "contains '900318'"
+      ],
+      "seconds": 94.97,
+      "model_calls": 13,
+      "completion_tokens": 527,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Ferrowick Tools\"}"
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Marcus Oyelaran\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Ferrowick Tools\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Marcus Oyelaran\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "parcel-and-marcus",
+      "runner": "agents",
+      "answer": "Your Ferrowick Tools parcel (PX-48821-LT) arrives Saturday. I could not find Marcus Oyelaran's phone number in your contacts.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains '10:00'",
+        "contains '900318'"
+      ],
+      "seconds": 46.17,
+      "model_calls": 6,
+      "completion_tokens": 242,
+      "tool_calls": [
+        {
+          "name": "mcp__packages__list_deliveries",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "packages",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__packages__list_deliveries",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "packages",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "porto-trip-brief",
+      "runner": "tree",
+      "answer": "I could not verify the flight departure time, the guesthouse address, or the bookmarked tram page URL because the workspace directory is empty (`list_directory: []`), meaning no itinerary or bookmark files were found to search. Please check your local files or provide these details directly.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains '18:45'",
+        "contains 'Rua das Flores'",
+        "contains 'tram.example.pt'"
+      ],
+      "seconds": 194.88,
+      "model_calls": 29,
+      "completion_tokens": 1213,
+      "tool_calls": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        },
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        },
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}",
+          "valid": true,
+          "error": false,
+          "agent": "comms",
+          "depth": 1
+        },
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}",
+          "valid": true,
+          "error": false,
+          "agent": "comms",
+          "depth": 1
+        },
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}",
+          "valid": true,
+          "error": false,
+          "agent": "comms",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "porto-trip-brief",
+      "runner": "agents",
+      "answer": "The flight departure time is not listed in your itinerary file; it only states \"Day 1, land in Porto.\" The guesthouse address is Casa Ribeira, Rua das Flores 88. No tram page bookmark was found in your files.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains '18:45'",
+        "contains 'tram.example.pt'"
+      ],
+      "seconds": 81.62,
+      "model_calls": 9,
+      "completion_tokens": 429,
+      "tool_calls": [
+        {
+          "name": "mcp__files__search",
+          "arguments": "{\"query\":\"Porto itinerary\"}"
+        },
+        {
+          "name": "mcp__files__search",
+          "arguments": "{\"query\":\"Porto flight\"}"
+        },
+        {
+          "name": "mcp__files__search",
+          "arguments": "{\"query\":\"Porto tram bookmark\"}"
+        },
+        {
+          "name": "mcp__files__read_file",
+          "arguments": "{\"path\":\"/Documents/Travel/porto-itinerary.odt\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "files",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__files__search",
+          "arguments": "{\"query\":\"Porto itinerary\"}",
+          "valid": true,
+          "error": false,
+          "agent": "files",
+          "depth": 1
+        },
+        {
+          "name": "mcp__files__search",
+          "arguments": "{\"query\":\"Porto flight\"}",
+          "valid": true,
+          "error": false,
+          "agent": "files",
+          "depth": 1
+        },
+        {
+          "name": "mcp__files__search",
+          "arguments": "{\"query\":\"Porto tram bookmark\"}",
+          "valid": true,
+          "error": false,
+          "agent": "files",
+          "depth": 1
+        },
+        {
+          "name": "mcp__files__read_file",
+          "arguments": "{\"path\":\"/Documents/Travel/porto-itinerary.odt\"}",
+          "valid": true,
+          "error": false,
+          "agent": "files",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "before-priya-meeting",
+      "runner": "tree",
+      "answer": "Priya Raman's phone number is +44 7700 900142. I could not verify the drive time to work or the current car charge level as I do not have access to that data.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 3,
+      "failed_checks": [
+        "regex \\b27\\b",
+        "regex \\b64\\b"
+      ],
+      "seconds": 67.44,
+      "model_calls": 8,
+      "completion_tokens": 416,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}",
+          "valid": true,
+          "error": false,
+          "agent": "contacts",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "before-priya-meeting",
+      "runner": "agents",
+      "answer": "The drive time to work and the car's charge level could not be verified from available tools. Priya Raman's phone number is +44 7700 900142.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 3,
+      "failed_checks": [
+        "regex \\b27\\b",
+        "regex \\b64\\b"
+      ],
+      "seconds": 84.76,
+      "model_calls": 10,
+      "completion_tokens": 528,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}",
+          "valid": true,
+          "error": false,
+          "agent": "contacts",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "orzo-for-four",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [],
+      "seconds": 22.85,
+      "model_calls": 3,
+      "completion_tokens": 103,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "orzo-for-four",
+      "runner": "agents",
+      "answer": "Based on the evidence gathered, the specific ingredient quantities for the lemon orzo recipe could not be verified because the web search tool failed (HTTP 402) and returned contradictory data. The peas could not be added to a shopping list because no local file named \"shopping list\" or similar was found, and no new file was created. The 25-minute timer could not be started because the system does not have access to the device's clock or timer application.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains '300'",
+        "contains '240'",
+        "contains '60'"
+      ],
+      "seconds": 409.77,
+      "model_calls": 38,
+      "completion_tokens": 2885,
+      "tool_calls": [
+        {
+          "name": "web_fetch",
+          "arguments": "{\"url\":\"https://www.allrecipes.com/lemon-orzo-recipe-8634992\",\"focus\":\"ingredient quantities and serving size\"}"
+        },
+        {
+          "name": "web_fetch",
+          "arguments": "{\"url\":\"https://www.spendwithpennies.com/lemon-orzo/\",\"focus\":\"ingredient quantities and serving size\"}"
+        },
+        {
+          "name": "mcp__files__search",
+          "arguments": "{\"query\":\"shopping list\"}"
+        },
+        {
+          "name": "mcp__timers__set_timer",
+          "arguments": "{\"minutes\":\"25\",\"label\":\"cooking lemon orzo\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "files",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "timers",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "web_fetch",
+          "arguments": "{\"url\":\"https://www.allrecipes.com/lemon-orzo-recipe-8634992\",\"focus\":\"ingredient quantities and serving size\"}",
+          "valid": true,
+          "error": true,
+          "agent": null,
+          "depth": 0
+        },
+        {
+          "name": "web_fetch",
+          "arguments": "{\"url\":\"https://www.spendwithpennies.com/lemon-orzo/\",\"focus\":\"ingredient quantities and serving size\"}",
+          "valid": true,
+          "error": false,
+          "agent": null,
+          "depth": 0
+        },
+        {
+          "name": "mcp__files__search",
+          "arguments": "{\"query\":\"shopping list\"}",
+          "valid": true,
+          "error": false,
+          "agent": "files",
+          "depth": 1
+        },
+        {
+          "name": "mcp__timers__set_timer",
+          "arguments": "{\"minutes\":\"25\",\"label\":\"cooking lemon orzo\"}",
+          "valid": true,
+          "error": false,
+          "agent": "timers",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "gp-trip",
+      "runner": "tree",
+      "answer": "I cannot provide your next GP appointment details, travel time, or your calendar for Thursday because the available tools do not have access to your calendar system, medical appointment lists, or public transport data. The only information I could retrieve was an email regarding a \"Q3 budget variance,\" which does not contain the requested information.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains 'Alameda'",
+        "regex \\b38\\b",
+        "contains '14:30'"
+      ],
+      "seconds": 80.8,
+      "model_calls": 10,
+      "completion_tokens": 527,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"GP appointment\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"GP appointment\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "gp-trip",
+      "runner": "agents",
+      "answer": "I could not verify the location of your next GP appointment, the travel time by public transport, or the specific events in your calendar for Thursday, as no personal data (such as your calendar, contacts, or appointment records) was accessed in this session. To find this information, please check your personal calendar app or your GP practice's online booking system (e.g., MyChart or the NHS App).",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains 'Alameda'",
+        "regex \\b38\\b",
+        "contains '14:30'"
+      ],
+      "seconds": 38.69,
+      "model_calls": 4,
+      "completion_tokens": 238,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "morning-check",
+      "runner": "tree",
+      "answer": "I cannot provide the time for your weekday alarm, your sleep duration from last night, or the weather forecast for Lisbon tomorrow because no relevant data was found in the workspace and I do not have access to your personal calendar, sleep tracking, or live weather services.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains '06:45'",
+        "regex 6\\s?h(ours?)?\\s?(and\\s)?48",
+        "contains 'rain'"
+      ],
+      "seconds": 69.52,
+      "model_calls": 9,
+      "completion_tokens": 488,
+      "tool_calls": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "weather",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}",
+          "valid": true,
+          "error": false,
+          "agent": "weather",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "morning-check",
+      "runner": "agents",
+      "answer": "Your weekday alarm is set for 06:45. I could not verify how long you slept last night or the forecast for Lisbon tomorrow.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 3,
+      "failed_checks": [
+        "regex 6\\s?h(ours?)?\\s?(and\\s)?48",
+        "contains 'rain'"
+      ],
+      "seconds": 65.06,
+      "model_calls": 9,
+      "completion_tokens": 383,
+      "tool_calls": [
+        {
+          "name": "mcp__timers__list_alarms",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "timers",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__timers__list_alarms",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "timers",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "library-hold-pickup",
+      "runner": "tree",
+      "answer": "I could not verify the status of your library book, the author's name, or the drive time to the pickup location. Searches of your notes and email yielded no records containing this specific information. Consequently, I cannot confirm if the book is ready or add a specific pickup task to your to-dos. Please check your library account directly for these details and provide them if you wish for me to proceed.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains 'Salt Road'",
+        "contains 'Vass'",
+        "regex \\b27\\b"
+      ],
+      "seconds": 159.42,
+      "model_calls": 19,
+      "completion_tokens": 929,
+      "tool_calls": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"library book hold\"}"
+        },
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"library\"}"
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"library hold\"}"
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "notes",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"library book hold\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        },
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"library\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"library hold\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "library-hold-pickup",
+      "runner": "agents",
+      "answer": "The book \"The Salt Road\" is ready for pickup until November 12, 2026. The author could not be verified because the library tool output did not include that metadata. The pickup could not be added to your to-dos because no calendar or to-do tool was available.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains 'Vass'",
+        "regex \\b27\\b"
+      ],
+      "seconds": 169.03,
+      "model_calls": 19,
+      "completion_tokens": 1181,
+      "tool_calls": [
+        {
+          "name": "mcp__library__list_holds",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "library",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "todos",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__library__list_holds",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "library",
+          "depth": 1
+        },
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "todos",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "coming-home",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 4,
+      "failed_checks": [],
+      "seconds": 24.96,
+      "model_calls": 3,
+      "completion_tokens": 135,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "coming-home",
+      "runner": "agents",
+      "answer": "The house is 19.5\u00b0C. The living room and bedroom lights are on. \"Harbour Glass\" by Odile Ferrand is playing on the speaker. Yes, a bookshop parcel is scheduled to arrive today.",
+      "error": "",
+      "checks_passed": 4,
+      "checks_total": 4,
+      "failed_checks": [],
+      "seconds": 319.82,
+      "model_calls": 42,
+      "completion_tokens": 1715,
+      "tool_calls": [
+        {
+          "name": "mcp__thermostat__get_temperature",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__music__now_playing",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__packages__list_deliveries",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "home",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "thermostat",
+          "parent": "home",
+          "depth": 2
+        },
+        {
+          "agent": "lights",
+          "parent": "home",
+          "depth": 2
+        },
+        {
+          "agent": "media",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "music",
+          "parent": "media",
+          "depth": 2
+        },
+        {
+          "agent": "packages",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__thermostat__get_temperature",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "thermostat",
+          "depth": 2
+        },
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "lights",
+          "depth": 2
+        },
+        {
+          "name": "mcp__music__now_playing",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "music",
+          "depth": 2
+        },
+        {
+          "name": "mcp__packages__list_deliveries",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "packages",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "heat-pump-grant",
+      "runner": "tree",
+      "answer": "I cannot access your personal energy bills or heating targets as these are private data not available through my tools. Regarding heat pump grants, specific claim amounts and current news vary by location and program; you must check your local government's energy department website or contact your utility provider for accurate details on eligibility and funding limits.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "regex 3[,.]?500",
+        "regex 96[.,]40",
+        "regex \\b21\\b"
+      ],
+      "seconds": 86.06,
+      "model_calls": 9,
+      "completion_tokens": 581,
+      "tool_calls": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "weather",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}",
+          "valid": true,
+          "error": false,
+          "agent": "weather",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "heat-pump-grant",
+      "runner": "agents",
+      "answer": "Heat pump grants are reported to reopen in December according to a November 6 article in the Civic Ledger; specific claim amounts could not be verified from available sources. Your last energy bill and current heating target could not be verified as I do not have access to your personal account data.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "regex 3[,.]?500",
+        "regex 96[.,]40",
+        "regex \\b21\\b"
+      ],
+      "seconds": 48.08,
+      "model_calls": 6,
+      "completion_tokens": 247,
+      "tool_calls": [
+        {
+          "name": "mcp__news__search",
+          "arguments": "{\"query\":\"heat pump grants how much can I claim\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "news",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__news__search",
+          "arguments": "{\"query\":\"heat pump grants how much can I claim\"}",
+          "valid": true,
+          "error": false,
+          "agent": "news",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "lights-on",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 40.09,
+      "model_calls": 4,
+      "completion_tokens": 138,
+      "tool_calls": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [],
+      "tool_sequence": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": null,
+          "depth": 0
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "lights-on",
+      "runner": "agents",
+      "answer": "Living room and bedroom lights are on; kitchen and porch are off.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 50.34,
+      "model_calls": 8,
+      "completion_tokens": 214,
+      "tool_calls": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "home",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "lights",
+          "parent": "home",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "lights",
+          "depth": 2
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "indoor-temperature",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 37.16,
+      "model_calls": 3,
+      "completion_tokens": 105,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "indoor-temperature",
+      "runner": "agents",
+      "answer": "The house is currently 19.5\u00b0C, and the heating is set to 21\u00b0C and is on.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 53.06,
+      "model_calls": 8,
+      "completion_tokens": 243,
+      "tool_calls": [
+        {
+          "name": "mcp__thermostat__get_temperature",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "home",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "thermostat",
+          "parent": "home",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__thermostat__get_temperature",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "thermostat",
+          "depth": 2
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "steps-today",
+      "runner": "tree",
+      "answer": "I cannot determine how many steps you have walked today because I do not have access to your fitness tracking data, health records, or any step-counting service. To find your step count, you must check your fitness tracker app (such as Fitbit, Garmin, Apple Health, or Google Fit) or your smartphone's health/fitness app.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "regex 6[,.]?412"
+      ],
+      "seconds": 62.85,
+      "model_calls": 7,
+      "completion_tokens": 438,
+      "tool_calls": [],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "steps-today",
+      "runner": "agents",
+      "answer": "You walked 6,412 steps today.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 36.38,
+      "model_calls": 6,
+      "completion_tokens": 131,
+      "tool_calls": [
+        {
+          "name": "mcp__fitness__get_steps",
+          "arguments": "{\"date\":\"2026-11-07\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "fitness",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__fitness__get_steps",
+          "arguments": "{\"date\":\"2026-11-07\"}",
+          "valid": true,
+          "error": false,
+          "agent": "fitness",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "where-car",
+      "runner": "tree",
+      "answer": "I could not find information about where you parked your car in your mailbox or local files. There are no emails containing information about your car's parking location. To help you find where you parked, you might want to check your phone's GPS history or navigation app, look at any parking receipts or tickets in your car, ask someone who was with you when you parked, or check if you have a parking app that tracks your location.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains 'Chiado'",
+        "contains '-2'"
+      ],
+      "seconds": 64.78,
+      "model_calls": 7,
+      "completion_tokens": 440,
+      "tool_calls": [],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "where-car",
+      "runner": "agents",
+      "answer": "You parked the car in the Chiado car park, level -2, since 08:12.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 41.4,
+      "model_calls": 6,
+      "completion_tokens": 185,
+      "tool_calls": [
+        {
+          "name": "mcp__car__find_car",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "car",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__car__find_car",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "car",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "library-due",
+      "runner": "tree",
+      "answer": "I could not find any notes about library books or due dates in your notes. Please check if this information is stored elsewhere or if you have a different note title.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains 'Under the Lindens'",
+        "contains '10 November'"
+      ],
+      "seconds": 57.92,
+      "model_calls": 8,
+      "completion_tokens": 202,
+      "tool_calls": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"library books\"}"
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Garage\"}"
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Boiler service\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "notes",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"library books\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Garage\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Boiler service\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "library-due",
+      "runner": "agents",
+      "answer": "You have two books on loan: \"Under the Lindens\" due 10 November and \"Small Engines, Big Ideas\" due 24 November. The first one is due back on 10 November.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 43.05,
+      "model_calls": 6,
+      "completion_tokens": 196,
+      "tool_calls": [
+        {
+          "name": "mcp__library__list_loans",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "library",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__library__list_loans",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "library",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "next-doctor",
+      "runner": "tree",
+      "answer": "Your next doctor's appointment is Friday at 09:00 with a dentist.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains '08:40'",
+        "contains 'Brandvold'"
+      ],
+      "seconds": 38.42,
+      "model_calls": 6,
+      "completion_tokens": 158,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "calendar",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "calendar",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "next-doctor",
+      "runner": "agents",
+      "answer": "Your next doctor's appointment is a GP check-up with Dr Ilse Brandvold on Tuesday, 18 November at 08:40 at Clinica Alameda.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 40.92,
+      "model_calls": 6,
+      "completion_tokens": 179,
+      "tool_calls": [
+        {
+          "name": "mcp__health__list_appointments",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "health",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__health__list_appointments",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "health",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "account-balance",
+      "runner": "tree",
+      "answer": "I cannot determine how much money is in your current account because I do not have access to your banking information or external financial services. To find this information, you must log into your bank's website or mobile app, check your bank statement, or contact your bank directly.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "regex 2[,.]?914[.,]37"
+      ],
+      "seconds": 59.22,
+      "model_calls": 7,
+      "completion_tokens": 380,
+      "tool_calls": [],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "account-balance",
+      "runner": "agents",
+      "answer": "Your current account holds 2,914.37 euros.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 38.53,
+      "model_calls": 6,
+      "completion_tokens": 162,
+      "tool_calls": [
+        {
+          "name": "mcp__bank__get_balance",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "bank",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__bank__get_balance",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "bank",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "invoice-and-balance",
+      "runner": "tree",
+      "answer": "Invoice 4471 is due by 30 November for 1,280 euros. However, I could not verify the amount currently in your account to pay it, as no tool was used to check your account balance.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "regex 2[,.]?914[.,]37"
+      ],
+      "seconds": 101.36,
+      "model_calls": 13,
+      "completion_tokens": 553,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"invoice 4471\"}"
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"invoice 4471\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "invoice-and-balance",
+      "runner": "agents",
+      "answer": "Invoice 4471 is due by 30 November for 1,280 euros. Your current account balance could not be verified in this run, as no tool was used to check your account funds.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "regex 2[,.]?914[.,]37"
+      ],
+      "seconds": 110.04,
+      "model_calls": 13,
+      "completion_tokens": 580,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"invoice 4471\"}"
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"invoice 4471\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "flight-and-drive",
+      "runner": "tree",
+      "answer": "I cannot verify your flight departure time or current drive duration to the airport, as I do not have access to your flight confirmations or real-time traffic data. Please check your flight confirmation email or travel app for the departure time, and use a navigation app for the current drive time.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains '18:45'",
+        "regex \\b27\\b"
+      ],
+      "seconds": 41.39,
+      "model_calls": 5,
+      "completion_tokens": 257,
+      "tool_calls": [],
+      "agents": [
+        {
+          "agent": "calendar",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "flight-and-drive",
+      "runner": "agents",
+      "answer": "Your flight to Porto (TP1947) leaves on 21 November. I cannot determine the current drive time to the airport without knowing your location.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains '18:45'",
+        "regex \\b27\\b"
+      ],
+      "seconds": 43.79,
+      "model_calls": 6,
+      "completion_tokens": 195,
+      "tool_calls": [
+        {
+          "name": "mcp__travel__list_trips",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "travel",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__travel__list_trips",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "travel",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "orzo-missing-items",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [],
+      "seconds": 41.92,
+      "model_calls": 3,
+      "completion_tokens": 123,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "orzo-missing-items",
+      "runner": "agents",
+      "answer": "I cannot identify the missing ingredients because your specific lemon orzo recipe and current shopping list were not provided or accessible in this session. The web search results only contain general recipes from public websites, not your personal data. Please provide the text of your recipe and shopping list, or enable access to your local files, so I can perform the comparison.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains 'peas'",
+        "contains 'parmesan'",
+        "contains 'shallot'"
+      ],
+      "seconds": 76.95,
+      "model_calls": 8,
+      "completion_tokens": 452,
+      "tool_calls": [],
+      "agents": [
+        {
+          "agent": "meals",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "lights-and-heating-schedule",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 42.25,
+      "model_calls": 3,
+      "completion_tokens": 140,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "lights-and-heating-schedule",
+      "runner": "agents",
+      "answer": "Living room and bedroom lights are on; kitchen and porch are off. I cannot determine when the heating will come back on this evening as that information is not available.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains '17:00'"
+      ],
+      "seconds": 55.84,
+      "model_calls": 8,
+      "completion_tokens": 262,
+      "tool_calls": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "home",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "lights",
+          "parent": "home",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "lights",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "song-and-album",
+      "runner": "tree",
+      "answer": "I cannot determine what song is playing on the speaker or how many photos are in your Porto 2025 album because I do not have access to your speaker system or photo albums through the available tools.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains 'Harbour Glass'",
+        "regex \\b212\\b"
+      ],
+      "seconds": 53.38,
+      "model_calls": 7,
+      "completion_tokens": 301,
+      "tool_calls": [],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "song-and-album",
+      "runner": "agents",
+      "answer": "The speaker is playing \"Harbour Glass\" by Odile Ferrand from the album \"Salt Hours\". I could not verify the number of photos in your Porto 2025 album as the photo library access was not available during this run.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "regex \\b212\\b"
+      ],
+      "seconds": 80.36,
+      "model_calls": 10,
+      "completion_tokens": 466,
+      "tool_calls": [
+        {
+          "name": "mcp__music__now_playing",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "media",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "music",
+          "parent": "media",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__music__now_playing",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "music",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "breach-and-payment",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 38.01,
+      "model_calls": 3,
+      "completion_tokens": 124,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "breach-and-payment",
+      "runner": "agents",
+      "answer": "Gridwatch Energy was in a data breach. I cannot determine how much you paid that company from the password manager data.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "regex 96[.,]40"
+      ],
+      "seconds": 84.8,
+      "model_calls": 9,
+      "completion_tokens": 554,
+      "tool_calls": [
+        {
+          "name": "mcp__vault__check_breaches",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "vault",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__vault__check_breaches",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "vault",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "parcel-and-marcus",
+      "runner": "tree",
+      "answer": "I could not find information about your Ferrowick Tools parcel delivery date or Marcus Oyelaran's phone number in your mailbox; the only email found was regarding a Q3 budget variance invoice. Please check other communication channels or contact Ferrowick Tools directly for the delivery date, and ask Marcus Oyelaran for his phone number.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains 'Saturday'",
+        "contains '10:00'",
+        "contains '900318'"
+      ],
+      "seconds": 85.32,
+      "model_calls": 10,
+      "completion_tokens": 388,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Ferrowick Tools\"}"
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Marcus Oyelaran\"}"
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Ferrowick Tools\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Marcus Oyelaran\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "parcel-and-marcus",
+      "runner": "agents",
+      "answer": "Your Ferrowick Tools parcel (PX-48821-LT) is scheduled to arrive on Saturday, November 14, 2026. I could not find Marcus Oyelaran's phone number in your contacts or notes.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains '10:00'",
+        "contains '900318'"
+      ],
+      "seconds": 48.98,
+      "model_calls": 6,
+      "completion_tokens": 244,
+      "tool_calls": [
+        {
+          "name": "mcp__packages__list_deliveries",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "packages",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__packages__list_deliveries",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "packages",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "porto-trip-brief",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [],
+      "seconds": 26.77,
+      "model_calls": 3,
+      "completion_tokens": 122,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "porto-trip-brief",
+      "runner": "agents",
+      "answer": "I could not verify the flight departure time, the guesthouse address in your itinerary file, or the specific tram page you bookmarked. The available search results do not contain your personal itinerary details or bookmarks, and no local files were accessed to retrieve this information.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains '18:45'",
+        "contains 'Rua das Flores'",
+        "contains 'tram.example.pt'"
+      ],
+      "seconds": 35.36,
+      "model_calls": 4,
+      "completion_tokens": 191,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "before-priya-meeting",
+      "runner": "tree",
+      "answer": "I could not verify the drive time to work or the current car charge level from available tools. Priya Raman's phone number is +44 7700 900142.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 3,
+      "failed_checks": [
+        "regex \\b27\\b",
+        "regex \\b64\\b"
+      ],
+      "seconds": 71.99,
+      "model_calls": 8,
+      "completion_tokens": 400,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}",
+          "valid": true,
+          "error": false,
+          "agent": "contacts",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "before-priya-meeting",
+      "runner": "agents",
+      "answer": "The drive time to work and the car's charge level could not be verified from available data. Priya Raman's phone number is +44 7700 900142.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 3,
+      "failed_checks": [
+        "regex \\b27\\b",
+        "regex \\b64\\b"
+      ],
+      "seconds": 69.18,
+      "model_calls": 8,
+      "completion_tokens": 368,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}",
+          "valid": true,
+          "error": false,
+          "agent": "contacts",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "orzo-for-four",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [],
+      "seconds": 24.8,
+      "model_calls": 3,
+      "completion_tokens": 111,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "orzo-for-four",
+      "runner": "agents",
+      "answer": "The specific ingredient quantities for the 'Lemon Orzo' recipe could not be verified from the available search evidence, as the snippets did not contain the actual ingredient list or amounts. Peas could not be added to the shopping list because no local shopping list file was found; only an itinerary and a lease document were located. A 25-minute timer has been started.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains '300'",
+        "contains '240'",
+        "contains '60'"
+      ],
+      "seconds": 371.84,
+      "model_calls": 35,
+      "completion_tokens": 2351,
+      "tool_calls": [
+        {
+          "name": "web_fetch",
+          "arguments": "{\"url\":\"https://www.foodnetwork.com/recipes/aida-mollenkamp/lemon-orzo-recipe-1912395\",\"focus\":\"ingredient list with quantities\"}"
+        },
+        {
+          "name": "mcp__files__search",
+          "arguments": "{\"query\":\"shopping list\"}"
+        },
+        {
+          "name": "mcp__timers__set_timer",
+          "arguments": "{\"minutes\":\"25\",\"label\":\"cooking lemon orzo\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "files",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "timers",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "web_fetch",
+          "arguments": "{\"url\":\"https://www.foodnetwork.com/recipes/aida-mollenkamp/lemon-orzo-recipe-1912395\",\"focus\":\"ingredient list with quantities\"}",
+          "valid": true,
+          "error": false,
+          "agent": null,
+          "depth": 0
+        },
+        {
+          "name": "mcp__files__search",
+          "arguments": "{\"query\":\"shopping list\"}",
+          "valid": true,
+          "error": false,
+          "agent": "files",
+          "depth": 1
+        },
+        {
+          "name": "mcp__timers__set_timer",
+          "arguments": "{\"minutes\":\"25\",\"label\":\"cooking lemon orzo\"}",
+          "valid": true,
+          "error": false,
+          "agent": "timers",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "gp-trip",
+      "runner": "tree",
+      "answer": "I could not find your next GP appointment, travel time, or Thursday's calendar details. My search of your mailbox found only an email regarding a \"Q3 budget variance,\" and I do not have access to your calendar or public transport data through the available tools. Please check your calendar application and GP confirmation emails directly for this information.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains 'Alameda'",
+        "regex \\b38\\b",
+        "contains '14:30'"
+      ],
+      "seconds": 71.28,
+      "model_calls": 8,
+      "completion_tokens": 408,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"GP appointment\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"GP appointment\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "gp-trip",
+      "runner": "agents",
+      "answer": "I could not verify the location of your next GP appointment, the travel time by public transport, or the specific events in your calendar for Thursday, as no evidence was gathered from your local files, connected services, or a successful web search of your personal data. The available search results only describe general services like NHS booking and transit planning, not your specific schedule. Please check your calendar app, GP surgery portal, or local transit planner directly for this information.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains 'Alameda'",
+        "regex \\b38\\b",
+        "contains '14:30'"
+      ],
+      "seconds": 41.44,
+      "model_calls": 4,
+      "completion_tokens": 242,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "morning-check",
+      "runner": "tree",
+      "answer": "I cannot access your alarm settings or sleep data. The forecast for Lisbon tomorrow is light rain with a high of 14\u00b0C.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains '06:45'",
+        "regex 6\\s?h(ours?)?\\s?(and\\s)?48"
+      ],
+      "seconds": 155.2,
+      "model_calls": 10,
+      "completion_tokens": 1261,
+      "tool_calls": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        },
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "weather",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}",
+          "valid": true,
+          "error": false,
+          "agent": "weather",
+          "depth": 1
+        },
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}",
+          "valid": true,
+          "error": false,
+          "agent": "weather",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "morning-check",
+      "runner": "agents",
+      "answer": "I could not verify your weekday alarm time, your sleep duration last night, or the weather forecast for Lisbon tomorrow. The available search results only describe generic online tools for calculating these values and do not contain your personal data or real-time weather information.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains '06:45'",
+        "regex 6\\s?h(ours?)?\\s?(and\\s)?48",
+        "contains 'rain'"
+      ],
+      "seconds": 52.52,
+      "model_calls": 6,
+      "completion_tokens": 306,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "library-hold-pickup",
+      "runner": "tree",
+      "answer": "I searched your notes and found entries for \"Garage\" and \"Boiler service,\" but no information regarding a library book hold, the author, or pickup logistics. Consequently, I cannot answer your questions or add the pickup to your to-dos.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains 'Salt Road'",
+        "contains 'Vass'",
+        "regex \\b27\\b"
+      ],
+      "seconds": 122.53,
+      "model_calls": 10,
+      "completion_tokens": 882,
+      "tool_calls": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"library book hold\"}"
+        },
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"library\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "notes",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"library book hold\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        },
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"library\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "library-hold-pickup",
+      "runner": "agents",
+      "answer": "The book \"The Salt Road\" is ready for pickup until 12 November. The author is Elif Shafak. The library system did not provide the drive time, so it could not be determined. I could not add the pickup to your to-dos because no file system was provided.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 3,
+      "failed_checks": [
+        "contains 'Vass'",
+        "regex \\b27\\b"
+      ],
+      "seconds": 185.66,
+      "model_calls": 19,
+      "completion_tokens": 1250,
+      "tool_calls": [
+        {
+          "name": "mcp__library__list_holds",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "library",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "todos",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__library__list_holds",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "library",
+          "depth": 1
+        },
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "todos",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "coming-home",
+      "runner": "tree",
+      "answer": "",
+      "error": "Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long",
+      "checks_passed": 0,
+      "checks_total": 4,
+      "failed_checks": [],
+      "seconds": 27.09,
+      "model_calls": 3,
+      "completion_tokens": 135,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "coming-home",
+      "runner": "agents",
+      "answer": "The house lights are on in the living room (70%) and bedroom (20%); the kitchen and porch are off. I could not verify the house temperature, the music playing on the speaker, or any parcel deliveries for today.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 4,
+      "failed_checks": [
+        "contains '19.5'",
+        "contains 'Harbour Glass'",
+        "contains 'bookshop'"
+      ],
+      "seconds": 66.62,
+      "model_calls": 8,
+      "completion_tokens": 346,
+      "tool_calls": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "home",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "lights",
+          "parent": "home",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__lights__list_lights",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "lights",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "heat-pump-grant",
+      "runner": "tree",
+      "answer": "I cannot provide news on heat pump grants, your last energy bill amount, or your current heating target because I do not have access to government news sources, your personal billing records, or your home's heating system settings. To find this information, you must check official government websites for grant programs, review your energy provider's account portal, and check your home's heating controls or contact your service provider.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "regex 3[,.]?500",
+        "regex 96[.,]40",
+        "regex \\b21\\b"
+      ],
+      "seconds": 70.07,
+      "model_calls": 7,
+      "completion_tokens": 449,
+      "tool_calls": [],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "heat-pump-grant",
+      "runner": "agents",
+      "answer": "News reports that heat pump grants are reopening in December (Civic Ledger, 6 Nov). Specific claim amounts were not found in the available search results. I could not verify your last energy bill or current heating target as I do not have access to your personal account data.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 3,
+      "failed_checks": [
+        "regex 3[,.]?500",
+        "regex 96[.,]40",
+        "regex \\b21\\b"
+      ],
+      "seconds": 83.49,
+      "model_calls": 9,
+      "completion_tokens": 520,
+      "tool_calls": [
+        {
+          "name": "mcp__news__search",
+          "arguments": "{\"query\":\"heat pump grants claim amount\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "news",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__news__search",
+          "arguments": "{\"query\":\"heat pump grants claim amount\"}",
+          "valid": true,
+          "error": false,
+          "agent": "news",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    }
+  ]
+}

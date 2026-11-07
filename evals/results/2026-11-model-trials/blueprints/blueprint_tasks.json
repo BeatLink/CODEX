@@ -1,0 +1,38 @@
+[
+  {
+    "id": "blueprint-folder-categories",
+    "mode": "answer",
+    "prompt": "Write the blueprint for this request shape: \"Go through the folder ~/Documents/Archive and all its subfolders and sort every file into one of these categories: invoices, contracts, personal letters, manuals, other. Give me a report listing each file under its category, and make sure no file is missed.\"",
+    "checks": [
+      {"type": "regex", "pattern": "^\\s*\\{[\\s\\S]*\\}\\s*$"},
+      {"type": "contains", "value": "check_coverage"}
+    ]
+  },
+  {
+    "id": "blueprint-morning-inbox",
+    "mode": "answer",
+    "prompt": "Write the blueprint for this request shape: \"Process my morning inbox: triage each new message since yesterday evening, draft a reply for every message that needs one, and send me a notification listing the rest.\"",
+    "checks": [
+      {"type": "regex", "pattern": "^\\s*\\{[\\s\\S]*\\}\\s*$"},
+      {"type": "contains", "value": "check_coverage"}
+    ]
+  },
+  {
+    "id": "blueprint-free-slot",
+    "mode": "answer",
+    "prompt": "Write the blueprint for this request shape: \"Find a free one-hour slot next week that works for both Dana Reyes and Sam Okafor, and propose it to them.\"",
+    "checks": [
+      {"type": "regex", "pattern": "^\\s*\\{[\\s\\S]*\\}\\s*$"},
+      {"type": "contains", "value": "calendar"}
+    ]
+  },
+  {
+    "id": "blueprint-weekly-review",
+    "mode": "answer",
+    "prompt": "Write the blueprint for this request shape: \"Weekly review: list my to-dos due this week, my meetings this week, and the mail I have not answered yet, as one report.\"",
+    "checks": [
+      {"type": "regex", "pattern": "^\\s*\\{[\\s\\S]*\\}\\s*$"},
+      {"type": "contains", "value": "check_coverage"}
+    ]
+  }
+]

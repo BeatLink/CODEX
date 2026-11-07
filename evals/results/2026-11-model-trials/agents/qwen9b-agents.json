@@ -1,0 +1,2183 @@
+{
+  "model_path": "models/Qwen_Qwen3.5-9B-Q4_K_M.gguf",
+  "tasks_path": "evals/agents_tasks.json",
+  "prompts_dir": null,
+  "seed": null,
+  "seed_store": null,
+  "repeat": 3,
+  "summary": {
+    "tree": {
+      "tasks": 24,
+      "tasks_passed": 19,
+      "pass_rate": 0.792,
+      "round_passes": [
+        6,
+        6,
+        7
+      ],
+      "distinct_tasks": 8,
+      "tasks_passed_every_round": 6,
+      "pass_every_round_rate": 0.75,
+      "tool_calls": 27,
+      "valid_tool_calls": 27,
+      "failed_tool_calls": 0,
+      "tool_choice_runs": 24,
+      "tool_choice_hits": 18,
+      "tool_choice_accuracy": 0.75,
+      "checks_passed": 37,
+      "checks_total": 42,
+      "errors": 0,
+      "seconds": 1175.07,
+      "model_calls": 167,
+      "completion_tokens": 5019
+    },
+    "agents": {
+      "tasks": 24,
+      "tasks_passed": 19,
+      "pass_rate": 0.792,
+      "round_passes": [
+        6,
+        6,
+        7
+      ],
+      "distinct_tasks": 8,
+      "tasks_passed_every_round": 6,
+      "pass_every_round_rate": 0.75,
+      "tool_calls": 28,
+      "valid_tool_calls": 28,
+      "failed_tool_calls": 0,
+      "tool_choice_runs": 24,
+      "tool_choice_hits": 19,
+      "tool_choice_accuracy": 0.792,
+      "checks_passed": 37,
+      "checks_total": 42,
+      "errors": 0,
+      "seconds": 1245.39,
+      "model_calls": 176,
+      "completion_tokens": 5467
+    }
+  },
+  "task_passes": {
+    "inbox-newest": {
+      "tree": {
+        "passed": 3,
+        "runs": 3,
+        "every_round": true
+      },
+      "agents": {
+        "passed": 3,
+        "runs": 3,
+        "every_round": true
+      }
+    },
+    "next-meeting": {
+      "tree": {
+        "passed": 3,
+        "runs": 3,
+        "every_round": true
+      },
+      "agents": {
+        "passed": 3,
+        "runs": 3,
+        "every_round": true
+      }
+    },
+    "garage-code": {
+      "tree": {
+        "passed": 3,
+        "runs": 3,
+        "every_round": true
+      },
+      "agents": {
+        "passed": 3,
+        "runs": 3,
+        "every_round": true
+      }
+    },
+    "marcus-phone": {
+      "tree": {
+        "passed": 3,
+        "runs": 3,
+        "every_round": true
+      },
+      "agents": {
+        "passed": 3,
+        "runs": 3,
+        "every_round": true
+      }
+    },
+    "lisbon-forecast": {
+      "tree": {
+        "passed": 3,
+        "runs": 3,
+        "every_round": true
+      },
+      "agents": {
+        "passed": 3,
+        "runs": 3,
+        "every_round": true
+      }
+    },
+    "first-todo": {
+      "tree": {
+        "passed": 3,
+        "runs": 3,
+        "every_round": true
+      },
+      "agents": {
+        "passed": 3,
+        "runs": 3,
+        "every_round": true
+      }
+    },
+    "priya-last-email": {
+      "tree": {
+        "passed": 1,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      }
+    },
+    "free-slot-and-weather": {
+      "tree": {
+        "passed": 0,
+        "runs": 3,
+        "every_round": false
+      },
+      "agents": {
+        "passed": 1,
+        "runs": 3,
+        "every_round": false
+      }
+    }
+  },
+  "results": [
+    {
+      "task_id": "inbox-newest",
+      "runner": "tree",
+      "answer": "The newest email in your inbox is \"Invoice 4471\" from Dana Whitfield.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 60.64,
+      "model_calls": 8,
+      "completion_tokens": 235,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "inbox-newest",
+      "runner": "agents",
+      "answer": "The newest email in your inbox is \"Invoice 4471\" from Dana Whitfield.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 60.09,
+      "model_calls": 8,
+      "completion_tokens": 252,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "next-meeting",
+      "runner": "tree",
+      "answer": "Your next meeting is Thursday at 14:30 for a budget review with Priya Raman.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 41.11,
+      "model_calls": 6,
+      "completion_tokens": 162,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "calendar",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "calendar",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "next-meeting",
+      "runner": "agents",
+      "answer": "Your next meeting is Thursday at 14:30 for a budget review with Priya Raman.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 40.94,
+      "model_calls": 6,
+      "completion_tokens": 174,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "calendar",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "calendar",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "garage-code",
+      "runner": "tree",
+      "answer": "The side door code for the garage is 7391-delta.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 51.27,
+      "model_calls": 7,
+      "completion_tokens": 169,
+      "tool_calls": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"garage side door code\"}"
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Garage\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "notes",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"garage side door code\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Garage\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "garage-code",
+      "runner": "agents",
+      "answer": "The side door code for the garage is 7391-delta.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 50.89,
+      "model_calls": 7,
+      "completion_tokens": 172,
+      "tool_calls": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"garage side door code\"}"
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Garage\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "notes",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"garage side door code\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Garage\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "marcus-phone",
+      "runner": "tree",
+      "answer": "Marcus Oyelaran's phone number is +44 7700 900318.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 66.35,
+      "model_calls": 8,
+      "completion_tokens": 282,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Marcus Oyelaran\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Marcus Oyelaran\"}",
+          "valid": true,
+          "error": false,
+          "agent": "contacts",
+          "depth": 2
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "marcus-phone",
+      "runner": "agents",
+      "answer": "Marcus Oyelaran's phone number is +44 7700 900318.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 58.71,
+      "model_calls": 8,
+      "completion_tokens": 267,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Marcus Oyelaran\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Marcus Oyelaran\"}",
+          "valid": true,
+          "error": false,
+          "agent": "contacts",
+          "depth": 2
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "lisbon-forecast",
+      "runner": "tree",
+      "answer": "Lisbon tomorrow will have light rain with a high of 14\u00b0C.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 38.15,
+      "model_calls": 6,
+      "completion_tokens": 142,
+      "tool_calls": [
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "weather",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}",
+          "valid": true,
+          "error": false,
+          "agent": "weather",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "lisbon-forecast",
+      "runner": "agents",
+      "answer": "Tomorrow in Lisbon, light rain is expected with a high of 14\u00b0C.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 37.51,
+      "model_calls": 6,
+      "completion_tokens": 144,
+      "tool_calls": [
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "weather",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}",
+          "valid": true,
+          "error": false,
+          "agent": "weather",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "first-todo",
+      "runner": "tree",
+      "answer": "You have 3 open to-do items. The one due first is \"renew passport\" on 12 Nov.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 39.71,
+      "model_calls": 6,
+      "completion_tokens": 163,
+      "tool_calls": [
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "todos",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "todos",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "first-todo",
+      "runner": "agents",
+      "answer": "You have 3 open to-do items. The one due first is \"renew passport\" on 12 Nov.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 38.17,
+      "model_calls": 6,
+      "completion_tokens": 163,
+      "tool_calls": [
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "todos",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "todos",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "priya-last-email",
+      "runner": "tree",
+      "answer": "Priya Raman's email address is priya.raman@example.org. I could not verify her latest email to you.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains 'budget variance'"
+      ],
+      "seconds": 62.34,
+      "model_calls": 8,
+      "completion_tokens": 268,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}",
+          "valid": true,
+          "error": false,
+          "agent": "contacts",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "priya-last-email",
+      "runner": "agents",
+      "answer": "Priya Raman's email address is priya.raman@example.org. I could not verify her latest email to you as I don't have access to read your mail.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains 'budget variance'"
+      ],
+      "seconds": 63.07,
+      "model_calls": 8,
+      "completion_tokens": 300,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}",
+          "valid": true,
+          "error": false,
+          "agent": "contacts",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "free-slot-and-weather",
+      "runner": "tree",
+      "answer": "You are free for a meeting this Wednesday from 10:00 to 12:00. I could not retrieve the weather forecast for Lisbon tomorrow.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains '14'"
+      ],
+      "seconds": 62.91,
+      "model_calls": 8,
+      "completion_tokens": 325,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__find_free_time",
+          "arguments": "{\"minutes\":\"60\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "calendar",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__calendar__find_free_time",
+          "arguments": "{\"minutes\":\"60\"}",
+          "valid": true,
+          "error": false,
+          "agent": "calendar",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "free-slot-and-weather",
+      "runner": "agents",
+      "answer": "You are free for a meeting this Wednesday from 10:00 to 12:00. I could not verify the weather forecast for Lisbon tomorrow.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains '14'"
+      ],
+      "seconds": 60.8,
+      "model_calls": 8,
+      "completion_tokens": 313,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__find_free_time",
+          "arguments": "{\"minutes\":\"60\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "calendar",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__calendar__find_free_time",
+          "arguments": "{\"minutes\":\"60\"}",
+          "valid": true,
+          "error": false,
+          "agent": "calendar",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "inbox-newest",
+      "runner": "tree",
+      "answer": "The newest email in your inbox is \"Invoice 4471\" from Dana Whitfield.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 57.11,
+      "model_calls": 8,
+      "completion_tokens": 251,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "inbox-newest",
+      "runner": "agents",
+      "answer": "The newest email in your inbox is \"Invoice 4471\" from Dana Whitfield.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 54.64,
+      "model_calls": 8,
+      "completion_tokens": 235,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "next-meeting",
+      "runner": "tree",
+      "answer": "Your next meeting is Thursday at 14:30 for a budget review with Priya Raman.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 39.73,
+      "model_calls": 6,
+      "completion_tokens": 178,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "calendar",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "calendar",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "next-meeting",
+      "runner": "agents",
+      "answer": "Your next meeting is Thursday at 14:30 with Priya Raman for a budget review.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 39.8,
+      "model_calls": 6,
+      "completion_tokens": 170,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "calendar",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "calendar",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "garage-code",
+      "runner": "tree",
+      "answer": "The side door code for the garage is 7391-delta.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 46.19,
+      "model_calls": 7,
+      "completion_tokens": 159,
+      "tool_calls": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"side door code garage\"}"
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Garage\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "notes",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"side door code garage\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Garage\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "garage-code",
+      "runner": "agents",
+      "answer": "The side door code for the garage is 7391-delta.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 46.85,
+      "model_calls": 7,
+      "completion_tokens": 169,
+      "tool_calls": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"garage side door code\"}"
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Garage\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "notes",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"garage side door code\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Garage\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "marcus-phone",
+      "runner": "tree",
+      "answer": "Marcus Oyelaran's phone number is +44 7700 900318.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 57.08,
+      "model_calls": 8,
+      "completion_tokens": 266,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Marcus Oyelaran\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Marcus Oyelaran\"}",
+          "valid": true,
+          "error": false,
+          "agent": "contacts",
+          "depth": 2
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "marcus-phone",
+      "runner": "agents",
+      "answer": "Marcus Oyelaran's phone number is +44 7700 900318.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 59.19,
+      "model_calls": 8,
+      "completion_tokens": 273,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Marcus Oyelaran\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Marcus Oyelaran\"}",
+          "valid": true,
+          "error": false,
+          "agent": "contacts",
+          "depth": 2
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "lisbon-forecast",
+      "runner": "tree",
+      "answer": "Tomorrow in Lisbon will be cloudy with light rain and a high temperature of 14 degrees Celsius.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 36.58,
+      "model_calls": 6,
+      "completion_tokens": 147,
+      "tool_calls": [
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "weather",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}",
+          "valid": true,
+          "error": false,
+          "agent": "weather",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "lisbon-forecast",
+      "runner": "agents",
+      "answer": "Lisbon tomorrow will have light rain with a high of 14\u00b0C.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 34.77,
+      "model_calls": 6,
+      "completion_tokens": 140,
+      "tool_calls": [
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "weather",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}",
+          "valid": true,
+          "error": false,
+          "agent": "weather",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "first-todo",
+      "runner": "tree",
+      "answer": "You have 3 open to-do items. The one due first is \"renew passport\" on 12 Nov.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 36.3,
+      "model_calls": 6,
+      "completion_tokens": 161,
+      "tool_calls": [
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "todos",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "todos",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "first-todo",
+      "runner": "agents",
+      "answer": "You have 3 open to-do items. The one due first is \"renew passport\" on 12 Nov.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 36.5,
+      "model_calls": 6,
+      "completion_tokens": 163,
+      "tool_calls": [
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "todos",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "todos",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "priya-last-email",
+      "runner": "tree",
+      "answer": "Priya Raman's email address is priya.raman@example.org. I could not verify her latest email to you because I do not have access to your email inbox.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains 'budget variance'"
+      ],
+      "seconds": 61.56,
+      "model_calls": 8,
+      "completion_tokens": 297,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}",
+          "valid": true,
+          "error": false,
+          "agent": "contacts",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "priya-last-email",
+      "runner": "agents",
+      "answer": "Priya Raman's email address is priya.raman@example.org. I could not verify her latest email to you because I do not have access to your email inbox.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains 'budget variance'"
+      ],
+      "seconds": 60.72,
+      "model_calls": 8,
+      "completion_tokens": 292,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}",
+          "valid": true,
+          "error": false,
+          "agent": "contacts",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "free-slot-and-weather",
+      "runner": "tree",
+      "answer": "You are free for a meeting this Wednesday from 10:00 to 12:00. I could not verify the weather forecast for Lisbon tomorrow.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains '14'"
+      ],
+      "seconds": 40.4,
+      "model_calls": 6,
+      "completion_tokens": 183,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__find_free_time",
+          "arguments": "{\"minutes\":\"60\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "calendar",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__calendar__find_free_time",
+          "arguments": "{\"minutes\":\"60\"}",
+          "valid": true,
+          "error": false,
+          "agent": "calendar",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "free-slot-and-weather",
+      "runner": "agents",
+      "answer": "You are free for a meeting this Wednesday from 10:00 to 12:00. I could not verify the weather forecast for Lisbon tomorrow as no weather tools were available to run.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains '14'"
+      ],
+      "seconds": 41.79,
+      "model_calls": 6,
+      "completion_tokens": 194,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__find_free_time",
+          "arguments": "{\"minutes\":\"60\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "calendar",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__calendar__find_free_time",
+          "arguments": "{\"minutes\":\"60\"}",
+          "valid": true,
+          "error": false,
+          "agent": "calendar",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "inbox-newest",
+      "runner": "tree",
+      "answer": "The newest email in your inbox is \"Invoice 4471\" from Dana Whitfield.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 55.18,
+      "model_calls": 8,
+      "completion_tokens": 253,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "inbox-newest",
+      "runner": "agents",
+      "answer": "The newest email in your inbox is \"Invoice 4471\" from Dana Whitfield.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 54.06,
+      "model_calls": 8,
+      "completion_tokens": 252,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "next-meeting",
+      "runner": "tree",
+      "answer": "Your next meeting is Thursday at 14:30 with Priya Raman for a budget review.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 37.12,
+      "model_calls": 6,
+      "completion_tokens": 166,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "calendar",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "calendar",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "next-meeting",
+      "runner": "agents",
+      "answer": "Your next meeting is Thursday at 14:30 for a budget review with Priya Raman.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 38.07,
+      "model_calls": 6,
+      "completion_tokens": 174,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "calendar",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "calendar",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "garage-code",
+      "runner": "tree",
+      "answer": "The side door code for the garage is 7391-delta.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 45.25,
+      "model_calls": 7,
+      "completion_tokens": 166,
+      "tool_calls": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"garage side door code\"}"
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Garage\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "notes",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"garage side door code\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Garage\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "garage-code",
+      "runner": "agents",
+      "answer": "The side door code for the garage is 7391-delta.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 45.59,
+      "model_calls": 7,
+      "completion_tokens": 157,
+      "tool_calls": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"garage side door code\"}"
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Garage\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "notes",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"garage side door code\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Garage\"}",
+          "valid": true,
+          "error": false,
+          "agent": "notes",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "marcus-phone",
+      "runner": "tree",
+      "answer": "Marcus Oyelaran's phone number is +44 7700 900318.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 56.78,
+      "model_calls": 8,
+      "completion_tokens": 269,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Marcus Oyelaran\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Marcus Oyelaran\"}",
+          "valid": true,
+          "error": false,
+          "agent": "contacts",
+          "depth": 2
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "marcus-phone",
+      "runner": "agents",
+      "answer": "Marcus Oyelaran's phone number is +44 7700 900318.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 59.22,
+      "model_calls": 8,
+      "completion_tokens": 280,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Marcus Oyelaran\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Marcus Oyelaran\"}",
+          "valid": true,
+          "error": false,
+          "agent": "contacts",
+          "depth": 2
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "lisbon-forecast",
+      "runner": "tree",
+      "answer": "Tomorrow in Lisbon, there will be light rain with a high temperature of 14\u00b0C.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 35.1,
+      "model_calls": 6,
+      "completion_tokens": 143,
+      "tool_calls": [
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "weather",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}",
+          "valid": true,
+          "error": false,
+          "agent": "weather",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "lisbon-forecast",
+      "runner": "agents",
+      "answer": "Lisbon tomorrow will have light rain with a high of 14\u00b0C.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 36.6,
+      "model_calls": 6,
+      "completion_tokens": 148,
+      "tool_calls": [
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "weather",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}",
+          "valid": true,
+          "error": false,
+          "agent": "weather",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "first-todo",
+      "runner": "tree",
+      "answer": "You have 3 open to-do items. The one due first is \"renew passport\" on 12 Nov.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 36.73,
+      "model_calls": 6,
+      "completion_tokens": 163,
+      "tool_calls": [
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "todos",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "todos",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "first-todo",
+      "runner": "agents",
+      "answer": "You have 3 open to-do items. The one due first is \"renew passport\" on 12 Nov.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 36.48,
+      "model_calls": 6,
+      "completion_tokens": 163,
+      "tool_calls": [
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "todos",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}",
+          "valid": true,
+          "error": false,
+          "agent": "todos",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "priya-last-email",
+      "runner": "tree",
+      "answer": "Priya Raman's email address is priya.raman@example.org. Her latest email to you was about the Q3 budget variance.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 59.66,
+      "model_calls": 8,
+      "completion_tokens": 288,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Priya Raman\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "mail",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Priya Raman\"}",
+          "valid": true,
+          "error": false,
+          "agent": "mail",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "priya-last-email",
+      "runner": "agents",
+      "answer": "Priya Raman's email address is priya.raman@example.org. I could not verify her latest email to you because I do not have access to your email inbox.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains 'budget variance'"
+      ],
+      "seconds": 80.25,
+      "model_calls": 8,
+      "completion_tokens": 288,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "comms",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "contacts",
+          "parent": "comms",
+          "depth": 2
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}",
+          "valid": true,
+          "error": false,
+          "agent": "contacts",
+          "depth": 2
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "free-slot-and-weather",
+      "runner": "tree",
+      "answer": "You are free for a meeting this Wednesday from 10:00 to 12:00. I could not verify the weather forecast for Lisbon tomorrow.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains '14'"
+      ],
+      "seconds": 51.82,
+      "model_calls": 6,
+      "completion_tokens": 183,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__find_free_time",
+          "arguments": "{\"minutes\":\"}\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "calendar",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__calendar__find_free_time",
+          "arguments": "{\"minutes\":\"}\"}",
+          "valid": true,
+          "error": false,
+          "agent": "calendar",
+          "depth": 1
+        }
+      ],
+      "tool_choice": false,
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "free-slot-and-weather",
+      "runner": "agents",
+      "answer": "You are free for a meeting this Wednesday from 10:00 to 12:00. Lisbon tomorrow (2026-11-08) will have light rain with a high of 14 degrees.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 110.68,
+      "model_calls": 15,
+      "completion_tokens": 584,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__find_free_time",
+          "arguments": "{\"minutes\":\"}\"}"
+        },
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}"
+        }
+      ],
+      "agents": [
+        {
+          "agent": "calendar",
+          "parent": null,
+          "depth": 1
+        },
+        {
+          "agent": "weather",
+          "parent": null,
+          "depth": 1
+        }
+      ],
+      "tool_sequence": [
+        {
+          "name": "mcp__calendar__find_free_time",
+          "arguments": "{\"minutes\":\"}\"}",
+          "valid": true,
+          "error": false,
+          "agent": "calendar",
+          "depth": 1
+        },
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}",
+          "valid": true,
+          "error": false,
+          "agent": "weather",
+          "depth": 1
+        }
+      ],
+      "tool_choice": true,
+      "attempt": 3,
+      "passed": true
+    }
+  ]
+}

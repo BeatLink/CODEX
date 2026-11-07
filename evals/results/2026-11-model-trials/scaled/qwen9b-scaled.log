@@ -1,0 +1,175 @@
+== lock taken 05:59:51; free -m:
+Mem:           27911       10454        7560          79       10307       17456
+Loading model from models/Qwen_Qwen3.5-9B-Q4_K_M.gguf...
+[lights-on / tree #1] 0/2 in 40.13s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[lights-on / agents #1] 2/2 in 51.26s: pass
+[indoor-temperature / tree #1] 0/2 in 37.75s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[indoor-temperature / agents #1] 2/2 in 55.34s: pass
+[steps-today / tree #1] 0/1 in 53.8s: fail (regex 6[,.]?412)
+[steps-today / agents #1] 1/1 in 36.13s: pass
+[where-car / tree #1] 0/2 in 87.94s: fail (contains 'Chiado'; contains '-2')
+[where-car / agents #1] 2/2 in 38.05s: pass
+[library-due / tree #1] 0/2 in 58.95s: fail (contains 'Under the Lindens'; contains '10 November')
+[library-due / agents #1] 2/2 in 41.14s: pass
+[next-doctor / tree #1] 0/2 in 36.72s: fail (contains '08:40'; contains 'Brandvold')
+[next-doctor / agents #1] 2/2 in 39.64s: pass
+[account-balance / tree #1] 0/1 in 55.26s: fail (regex 2[,.]?914[.,]37)
+[account-balance / agents #1] 1/1 in 37.72s: pass
+[invoice-and-balance / tree #1] 1/2 in 97.69s: fail (regex 2[,.]?914[.,]37)
+[invoice-and-balance / agents #1] 1/2 in 105.17s: fail (regex 2[,.]?914[.,]37)
+[flight-and-drive / tree #1] 0/2 in 89.72s: fail (contains '18:45'; regex \b27\b)
+[flight-and-drive / agents #1] 1/2 in 48.48s: fail (regex \b27\b)
+[orzo-missing-items / tree #1] 0/3 in 38.78s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[orzo-missing-items / agents #1] 0/3 in 368.86s: fail (contains 'peas'; contains 'parmesan'; contains 'shallot')
+[lights-and-heating-schedule / tree #1] 0/2 in 38.35s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[lights-and-heating-schedule / agents #1] 1/2 in 54.49s: fail (contains '17:00')
+[song-and-album / tree #1] 0/2 in 37.54s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[song-and-album / agents #1] 1/2 in 57.81s: fail (regex \b212\b)
+[breach-and-payment / tree #1] 0/2 in 39.33s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[breach-and-payment / agents #1] 1/2 in 117.52s: fail (regex 96[.,]40)
+[parcel-and-marcus / tree #1] 0/3 in 99.93s: fail (contains 'Saturday'; contains '10:00'; contains '900318')
+[parcel-and-marcus / agents #1] 0/3 in 86.3s: fail (contains 'Saturday'; contains '10:00'; contains '900318')
+[porto-trip-brief / tree #1] 0/3 in 28.41s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[porto-trip-brief / agents #1] 0/3 in 39.74s: fail (contains '18:45'; contains 'Rua das Flores'; contains 'tram.example.pt')
+[before-priya-meeting / tree #1] 1/3 in 75.43s: fail (regex \b27\b; regex \b64\b)
+[before-priya-meeting / agents #1] 0/3 in 58.47s: fail (regex \b27\b; regex \b64\b; contains '900142')
+[orzo-for-four / tree #1] 0/3 in 137.71s: fail (contains '300'; contains '240'; contains '60')
+[orzo-for-four / agents #1] 0/3 in 395.21s: fail (contains '300'; contains '240'; contains '60')
+[gp-trip / tree #1] 0/3 in 95.94s: fail (contains 'Alameda'; regex \b38\b; contains '14:30')
+[gp-trip / agents #1] 1/3 in 150.01s: fail (regex \b38\b; contains '14:30')
+[morning-check / tree #1] 0/3 in 67.64s: fail (contains '06:45'; regex 6\s?h(ours?)?\s?(and\s)?48; contains 'rain')
+[morning-check / agents #1] 0/3 in 57.81s: fail (contains '06:45'; regex 6\s?h(ours?)?\s?(and\s)?48; contains 'rain')
+[library-hold-pickup / tree #1] 0/3 in 57.16s: fail (contains 'Salt Road'; contains 'Vass'; regex \b27\b)
+[library-hold-pickup / agents #1] 1/3 in 159.41s: fail (contains 'Vass'; regex \b27\b)
+[coming-home / tree #1] 0/4 in 28.19s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[coming-home / agents #1] 0/4 in 34.23s: fail (contains '19.5'; contains 'living room'; contains 'Harbour Glass'; contains 'bookshop')
+[heat-pump-grant / tree #1] 0/3 in 116.66s: fail (regex 3[,.]?500; regex 96[.,]40; regex \b21\b)
+[heat-pump-grant / agents #1] 0/3 in 84.99s: fail (regex 3[,.]?500; regex 96[.,]40; regex \b21\b)
+[lights-on / tree #2] 0/2 in 41.68s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[lights-on / agents #2] 2/2 in 53.66s: pass
+[indoor-temperature / tree #2] 0/2 in 39.17s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[indoor-temperature / agents #2] 2/2 in 55.31s: pass
+[steps-today / tree #2] 0/1 in 53.04s: fail (regex 6[,.]?412)
+[steps-today / agents #2] 1/1 in 36.33s: pass
+[where-car / tree #2] 0/2 in 98.57s: fail (contains 'Chiado'; contains '-2')
+[where-car / agents #2] 2/2 in 39.45s: pass
+[library-due / tree #2] 0/2 in 61.15s: fail (contains 'Under the Lindens'; contains '10 November')
+[library-due / agents #2] 2/2 in 41.77s: pass
+[next-doctor / tree #2] 0/2 in 37.8s: fail (contains '08:40'; contains 'Brandvold')
+[next-doctor / agents #2] 0/2 in 39.89s: fail (contains '08:40'; contains 'Brandvold')
+[account-balance / tree #2] 0/1 in 53.46s: fail (regex 2[,.]?914[.,]37)
+[account-balance / agents #2] 1/1 in 37.09s: pass
+[invoice-and-balance / tree #2] 1/2 in 92.21s: fail (regex 2[,.]?914[.,]37)
+[invoice-and-balance / agents #2] 1/2 in 97.76s: fail (regex 2[,.]?914[.,]37)
+[flight-and-drive / tree #2] 0/2 in 45.12s: fail (contains '18:45'; regex \b27\b)
+[flight-and-drive / agents #2] 1/2 in 47.25s: fail (regex \b27\b)
+[orzo-missing-items / tree #2] 0/3 in 38.67s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[orzo-missing-items / agents #2] 0/3 in 71.69s: fail (contains 'peas'; contains 'parmesan'; contains 'shallot')
+[lights-and-heating-schedule / tree #2] 0/2 in 38.63s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[lights-and-heating-schedule / agents #2] 1/2 in 53.21s: fail (contains '17:00')
+[song-and-album / tree #2] 0/2 in 36.04s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[song-and-album / agents #2] 1/2 in 55.65s: fail (regex \b212\b)
+[breach-and-payment / tree #2] 0/2 in 36.6s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[breach-and-payment / agents #2] 1/2 in 63.99s: fail (regex 96[.,]40)
+[parcel-and-marcus / tree #2] 0/3 in 94.97s: fail (contains 'Saturday'; contains '10:00'; contains '900318')
+[parcel-and-marcus / agents #2] 1/3 in 46.17s: fail (contains '10:00'; contains '900318')
+[porto-trip-brief / tree #2] 0/3 in 194.88s: fail (contains '18:45'; contains 'Rua das Flores'; contains 'tram.example.pt')
+[porto-trip-brief / agents #2] 1/3 in 81.62s: fail (contains '18:45'; contains 'tram.example.pt')
+[before-priya-meeting / tree #2] 1/3 in 67.44s: fail (regex \b27\b; regex \b64\b)
+[before-priya-meeting / agents #2] 1/3 in 84.76s: fail (regex \b27\b; regex \b64\b)
+[orzo-for-four / tree #2] 0/3 in 22.85s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[orzo-for-four / agents #2] 0/3 in 409.77s: fail (contains '300'; contains '240'; contains '60')
+[gp-trip / tree #2] 0/3 in 80.8s: fail (contains 'Alameda'; regex \b38\b; contains '14:30')
+[gp-trip / agents #2] 0/3 in 38.69s: fail (contains 'Alameda'; regex \b38\b; contains '14:30')
+[morning-check / tree #2] 0/3 in 69.52s: fail (contains '06:45'; regex 6\s?h(ours?)?\s?(and\s)?48; contains 'rain')
+[morning-check / agents #2] 1/3 in 65.06s: fail (regex 6\s?h(ours?)?\s?(and\s)?48; contains 'rain')
+[library-hold-pickup / tree #2] 0/3 in 159.42s: fail (contains 'Salt Road'; contains 'Vass'; regex \b27\b)
+[library-hold-pickup / agents #2] 1/3 in 169.03s: fail (contains 'Vass'; regex \b27\b)
+[coming-home / tree #2] 0/4 in 24.96s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[coming-home / agents #2] 4/4 in 319.82s: pass
+[heat-pump-grant / tree #2] 0/3 in 86.06s: fail (regex 3[,.]?500; regex 96[.,]40; regex \b21\b)
+[heat-pump-grant / agents #2] 0/3 in 48.08s: fail (regex 3[,.]?500; regex 96[.,]40; regex \b21\b)
+[lights-on / tree #3] 0/2 in 40.09s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[lights-on / agents #3] 2/2 in 50.34s: pass
+[indoor-temperature / tree #3] 0/2 in 37.16s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[indoor-temperature / agents #3] 2/2 in 53.06s: pass
+[steps-today / tree #3] 0/1 in 62.85s: fail (regex 6[,.]?412)
+[steps-today / agents #3] 1/1 in 36.38s: pass
+[where-car / tree #3] 0/2 in 64.78s: fail (contains 'Chiado'; contains '-2')
+[where-car / agents #3] 2/2 in 41.4s: pass
+[library-due / tree #3] 0/2 in 57.92s: fail (contains 'Under the Lindens'; contains '10 November')
+[library-due / agents #3] 2/2 in 43.05s: pass
+[next-doctor / tree #3] 0/2 in 38.42s: fail (contains '08:40'; contains 'Brandvold')
+[next-doctor / agents #3] 2/2 in 40.92s: pass
+[account-balance / tree #3] 0/1 in 59.22s: fail (regex 2[,.]?914[.,]37)
+[account-balance / agents #3] 1/1 in 38.53s: pass
+[invoice-and-balance / tree #3] 1/2 in 101.36s: fail (regex 2[,.]?914[.,]37)
+[invoice-and-balance / agents #3] 1/2 in 110.04s: fail (regex 2[,.]?914[.,]37)
+[flight-and-drive / tree #3] 0/2 in 41.39s: fail (contains '18:45'; regex \b27\b)
+[flight-and-drive / agents #3] 0/2 in 43.79s: fail (contains '18:45'; regex \b27\b)
+[orzo-missing-items / tree #3] 0/3 in 41.92s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[orzo-missing-items / agents #3] 0/3 in 76.95s: fail (contains 'peas'; contains 'parmesan'; contains 'shallot')
+[lights-and-heating-schedule / tree #3] 0/2 in 42.25s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[lights-and-heating-schedule / agents #3] 1/2 in 55.84s: fail (contains '17:00')
+[song-and-album / tree #3] 0/2 in 53.38s: fail (contains 'Harbour Glass'; regex \b212\b)
+[song-and-album / agents #3] 1/2 in 80.36s: fail (regex \b212\b)
+[breach-and-payment / tree #3] 0/2 in 38.01s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[breach-and-payment / agents #3] 1/2 in 84.8s: fail (regex 96[.,]40)
+[parcel-and-marcus / tree #3] 0/3 in 85.32s: fail (contains 'Saturday'; contains '10:00'; contains '900318')
+[parcel-and-marcus / agents #3] 1/3 in 48.98s: fail (contains '10:00'; contains '900318')
+[porto-trip-brief / tree #3] 0/3 in 26.77s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[porto-trip-brief / agents #3] 0/3 in 35.36s: fail (contains '18:45'; contains 'Rua das Flores'; contains 'tram.example.pt')
+[before-priya-meeting / tree #3] 1/3 in 71.99s: fail (regex \b27\b; regex \b64\b)
+[before-priya-meeting / agents #3] 1/3 in 69.18s: fail (regex \b27\b; regex \b64\b)
+[orzo-for-four / tree #3] 0/3 in 24.8s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[orzo-for-four / agents #3] 0/3 in 371.84s: fail (contains '300'; contains '240'; contains '60')
+[gp-trip / tree #3] 0/3 in 71.28s: fail (contains 'Alameda'; regex \b38\b; contains '14:30')
+[gp-trip / agents #3] 0/3 in 41.44s: fail (contains 'Alameda'; regex \b38\b; contains '14:30')
+[morning-check / tree #3] 1/3 in 155.2s: fail (contains '06:45'; regex 6\s?h(ours?)?\s?(and\s)?48)
+[morning-check / agents #3] 0/3 in 52.52s: fail (contains '06:45'; regex 6\s?h(ours?)?\s?(and\s)?48; contains 'rain')
+[library-hold-pickup / tree #3] 0/3 in 122.53s: fail (contains 'Salt Road'; contains 'Vass'; regex \b27\b)
+[library-hold-pickup / agents #3] 1/3 in 185.66s: fail (contains 'Vass'; regex \b27\b)
+[coming-home / tree #3] 0/4 in 27.09s: error: Error: The default context shift strategy did not return a history that fits the context size. This may happen due to the system prompt being too long
+[coming-home / agents #3] 1/4 in 66.62s: fail (contains '19.5'; contains 'Harbour Glass'; contains 'bookshop')
+[heat-pump-grant / tree #3] 0/3 in 70.07s: fail (regex 3[,.]?500; regex 96[.,]40; regex \b21\b)
+[heat-pump-grant / agents #3] 0/3 in 83.49s: fail (regex 3[,.]?500; regex 96[.,]40; regex \b21\b)
+
+runner             tasks    checks errors   seconds  calls   tokens   rate      pass^k  per round
+-------------------------------------------------------------------------------------------------
+tree              0/66      7/159      24    4225.9    477    23099     0%     0/22 0%  0 0 0
+agents           21/66     63/159       0    5784.4    697    32456    32%    6/22 27%  7 7 7
+
+tree           58 tool calls, 58 valid, 0 failed; tool choice 3/66 5%
+agents         85 tool calls, 85 valid, 1 failed; tool choice 22/66 33%
+
+task                            tree   agents
+---------------------------------------------
+lights-on                       0/3      3/3*
+indoor-temperature              0/3      3/3*
+steps-today                     0/3      3/3*
+where-car                       0/3      3/3*
+library-due                     0/3      3/3*
+next-doctor                     0/3      2/3 
+account-balance                 0/3      3/3*
+invoice-and-balance             0/3      0/3 
+flight-and-drive                0/3      0/3 
+orzo-missing-items              0/3      0/3 
+lights-and-heating-schedule     0/3      0/3 
+song-and-album                  0/3      0/3 
+breach-and-payment              0/3      0/3 
+parcel-and-marcus               0/3      0/3 
+porto-trip-brief                0/3      0/3 
+before-priya-meeting            0/3      0/3 
+orzo-for-four                   0/3      0/3 
+gp-trip                         0/3      0/3 
+morning-check                   0/3      0/3 
+library-hold-pickup             0/3      0/3 
+coming-home                     0/3      1/3 
+heat-pump-grant                 0/3      0/3 
+* passed every round
+
+Tasks that passed in only some rounds:
+  next-doctor: agents 2/3
+  coming-home: agents 1/3
+
+Wrote evals/results/2026-11-model-trials/scaled/qwen9b-scaled.json

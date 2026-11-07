@@ -1,0 +1,21 @@
+== lock taken 09:44:23; free -m:
+Mem:           27911        9061        1044          32       17918       18850
+Loading model from models/Qwen_Qwen3-14B-Q4_K_M.gguf...
+[blueprint-folder-categories / bare] 1/2 in 51.28s: fail (contains 'check_coverage')
+[blueprint-morning-inbox / bare] 1/2 in 64.57s: fail (contains 'check_coverage')
+[blueprint-free-slot / bare] 2/2 in 68.49s: pass
+[blueprint-weekly-review / bare] 1/2 in 77.52s: fail (regex ^\s*\{[\s\S]*\}\s*$)
+
+runner             tasks    checks errors   seconds  calls   tokens
+-------------------------------------------------------------------
+bare              1/4       5/8         0     261.9      4     1396
+
+task                            bare
+------------------------------------
+blueprint-folder-categories     0/1 
+blueprint-morning-inbox         0/1 
+blueprint-free-slot             1/1*
+blueprint-weekly-review         0/1 
+* passed every round
+
+Wrote evals/results/2026-11-model-trials/blueprints/qwen14b.json

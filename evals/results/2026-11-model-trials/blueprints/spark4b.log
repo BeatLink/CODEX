@@ -1,0 +1,21 @@
+== lock taken 09:43:09; free -m:
+Mem:           27911        9129        1393          32       17764       18782
+Loading model from models/Spark-X2.6-4B-Q4_K_M.gguf...
+[blueprint-folder-categories / bare] 2/2 in 10.12s: pass
+[blueprint-morning-inbox / bare] 2/2 in 12.24s: pass
+[blueprint-free-slot / bare] 1/2 in 8.72s: fail (contains 'calendar')
+[blueprint-weekly-review / bare] 2/2 in 8.33s: pass
+
+runner             tasks    checks errors   seconds  calls   tokens
+-------------------------------------------------------------------
+bare              3/4       7/8         0      39.4      4     1801
+
+task                            bare
+------------------------------------
+blueprint-folder-categories     1/1*
+blueprint-morning-inbox         1/1*
+blueprint-free-slot             0/1 
+blueprint-weekly-review         1/1*
+* passed every round
+
+Wrote evals/results/2026-11-model-trials/blueprints/spark4b.json

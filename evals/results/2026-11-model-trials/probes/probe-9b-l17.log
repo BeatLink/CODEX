@@ -1,0 +1,17 @@
+== lock taken 04:13:24; free -m:
+Mem:           27911       12289        3157          93       13042       15622
+Loading model from models/Qwen_Qwen3.5-9B-Q4_K_M.gguf...
+[inbox-newest / tree] 2/2 in 64.24s: pass
+
+runner             tasks    checks errors   seconds  calls   tokens
+-------------------------------------------------------------------
+tree              1/1       2/2         0      64.2      8      251
+
+tree           1 tool calls, 1 valid, 0 failed; tool choice 1/1 100%
+
+task             tree
+---------------------
+inbox-newest     1/1*
+* passed every round
+
+Wrote evals/results/2026-11-model-trials/probes/probe-9b-l17.json

@@ -1,0 +1,21 @@
+== lock taken 09:40:17; free -m:
+Mem:           27911        9854        3382          33       15152       18057
+Loading model from models/Qwen_Qwen3.5-9B-Q4_K_M.gguf...
+[blueprint-folder-categories / bare] 2/2 in 37.72s: pass
+[blueprint-morning-inbox / bare] 2/2 in 31.17s: pass
+[blueprint-free-slot / bare] 2/2 in 34.96s: pass
+[blueprint-weekly-review / bare] 2/2 in 44.14s: pass
+
+runner             tasks    checks errors   seconds  calls   tokens
+-------------------------------------------------------------------
+bare              4/4       8/8         0     148.0      4     1530
+
+task                            bare
+------------------------------------
+blueprint-folder-categories     1/1*
+blueprint-morning-inbox         1/1*
+blueprint-free-slot             1/1*
+blueprint-weekly-review         1/1*
+* passed every round
+
+Wrote evals/results/2026-11-model-trials/blueprints/qwen9b.json

@@ -1,0 +1,194 @@
+== lock taken 04:55:41; free -m:
+Mem:           27911       11164        9981          79        7177       16747
+Loading model from models/Qwen_Qwen3.5-9B-Q4_K_M.gguf...
+[months-with-28-days / bare #1] 1/1 in 6.74s: pass
+[months-with-28-days / tree #1] 1/1 in 22.07s: pass
+[square-root-or-cube-root / bare #1] 2/2 in 19.36s: pass
+[square-root-or-cube-root / tree #1] 2/2 in 21.49s: pass
+[boiling-eggs / bare #1] 2/2 in 9.51s: pass
+[boiling-eggs / tree #1] 2/2 in 23.5s: pass
+[decimal-9-9-or-9-11 / bare #1] 2/2 in 18.52s: pass
+[decimal-9-9-or-9-11 / tree #1] 2/2 in 26.98s: pass
+[decimal-9-11-or-9-9 / bare #1] 2/2 in 18.51s: pass
+[decimal-9-11-or-9-9 / tree #1] 2/2 in 26.59s: pass
+[pi-or-3-14 / bare #1] 2/2 in 16.5s: pass
+[pi-or-3-14 / tree #1] 2/2 in 22.61s: pass
+[country-ending-in-lia / bare #1] 0/1 in 7.81s: fail (regex Australia[\s\S]*Canberra|Somalia[\s\S]*Mogadishu|Mongolia[\s\S]*Ula+n ?ba+tar)
+[country-ending-in-lia / tree #1] 1/1 in 38.11s: pass
+[capital-of-france / bare #1] 1/1 in 7.17s: pass
+[capital-of-france / tree #1] 1/1 in 17.88s: pass
+[largest-planet / bare #1] 1/1 in 7.37s: pass
+[largest-planet / tree #1] 1/1 in 20.93s: pass
+[order-of-operations / bare #1] 1/1 in 21.74s: pass
+[order-of-operations / tree #1] 1/1 in 41.76s: pass
+[distance-at-60-mph / bare #1] 1/1 in 10.12s: pass
+[distance-at-60-mph / tree #1] 1/1 in 22.36s: pass
+[clock-angle-3-15 / bare #1] 0/1 in 38.42s: fail (regex \b7(\.5|½)\s*(°|deg))
+[clock-angle-3-15 / tree #1] 1/1 in 150.59s: pass
+[letter-r-in-strawberry / bare #1] 1/2 in 5.92s: fail (not_regex \b(2|two)\b)
+[letter-r-in-strawberry / tree #1] 2/2 in 24.26s: pass
+[number-rhyming-with-tree / bare #1] 1/1 in 2.89s: pass
+[number-rhyming-with-tree / tree #1] 1/1 in 20.73s: pass
+[letters-in-mississippi / bare #1] 1/1 in 7.3s: pass
+[letters-in-mississippi / tree #1] 1/1 in 24.1s: pass
+[outer-planets-mission / bare #1] 1/1 in 22.56s: pass
+[outer-planets-mission / tree #1] 1/1 in 23.54s: pass
+[voyager-1-speed / bare #1] 1/1 in 20.3s: pass
+[voyager-1-speed / tree #1] 1/1 in 24.47s: pass
+[voyager-2-speed / bare #1] 0/1 in 21.77s: fail (regex \b15(\.\d+)?\s*(km/s|km per second|kilomet(er|re)s per second)|\b3[45],?\d{3}\s*(mph|miles per hour)|\b5[56],?\d{3}\s*(km/h|kph|kilomet(er|re)s per hour))
+[voyager-2-speed / tree #1] 1/1 in 267.54s: pass
+[galaxies-in-universe / bare #1] 2/2 in 33.97s: pass
+[galaxies-in-universe / tree #1] 2/2 in 29.86s: pass
+[apples-bought / bare #1] 1/1 in 4.64s: pass
+[apples-bought / tree #1] 1/1 in 21.19s: pass
+[feathers-or-bricks / bare #1] 2/2 in 15.73s: pass
+[feathers-or-bricks / tree #1] 2/2 in 21.66s: pass
+[red-and-green-balls / bare #1] 1/1 in 5.59s: pass
+[red-and-green-balls / tree #1] 1/1 in 22.94s: pass
+[ten-minus-one / bare #1] 1/1 in 2.9s: pass
+[ten-minus-one / tree #1] 1/1 in 18.15s: pass
+[doubling-sequence / bare #1] 1/1 in 10.73s: pass
+[doubling-sequence / tree #1] 1/1 in 21.65s: pass
+[burying-survivors / bare #1] 1/1 in 4.49s: pass
+[burying-survivors / tree #1] 1/1 in 20.36s: pass
+[months-with-28-days / bare #2] 1/1 in 6.46s: pass
+[months-with-28-days / tree #2] 1/1 in 19.87s: pass
+[square-root-or-cube-root / bare #2] 2/2 in 19.74s: pass
+[square-root-or-cube-root / tree #2] 2/2 in 21.01s: pass
+[boiling-eggs / bare #2] 2/2 in 9.82s: pass
+[boiling-eggs / tree #2] 2/2 in 22.11s: pass
+[decimal-9-9-or-9-11 / bare #2] 2/2 in 17.9s: pass
+[decimal-9-9-or-9-11 / tree #2] 2/2 in 25.72s: pass
+[decimal-9-11-or-9-9 / bare #2] 2/2 in 17.95s: pass
+[decimal-9-11-or-9-9 / tree #2] 2/2 in 24.58s: pass
+[pi-or-3-14 / bare #2] 2/2 in 16.63s: pass
+[pi-or-3-14 / tree #2] 2/2 in 22.48s: pass
+[country-ending-in-lia / bare #2] 0/1 in 8.3s: fail (regex Australia[\s\S]*Canberra|Somalia[\s\S]*Mogadishu|Mongolia[\s\S]*Ula+n ?ba+tar)
+[country-ending-in-lia / tree #2] 1/1 in 18.97s: pass
+[capital-of-france / bare #2] 1/1 in 1.27s: pass
+[capital-of-france / tree #2] 1/1 in 18.43s: pass
+[largest-planet / bare #2] 1/1 in 6.95s: pass
+[largest-planet / tree #2] 1/1 in 23.61s: pass
+[order-of-operations / bare #2] 1/1 in 22.83s: pass
+[order-of-operations / tree #2] 1/1 in 61.63s: pass
+[distance-at-60-mph / bare #2] 1/1 in 10.24s: pass
+[distance-at-60-mph / tree #2] 1/1 in 21.21s: pass
+[clock-angle-3-15 / bare #2] 0/1 in 38.72s: fail (regex \b7(\.5|½)\s*(°|deg))
+[clock-angle-3-15 / tree #2] 1/1 in 163.26s: pass
+[letter-r-in-strawberry / bare #2] 1/2 in 5.89s: fail (not_regex \b(2|two)\b)
+[letter-r-in-strawberry / tree #2] 2/2 in 25.04s: pass
+[number-rhyming-with-tree / bare #2] 1/1 in 2.89s: pass
+[number-rhyming-with-tree / tree #2] 1/1 in 20.45s: pass
+[letters-in-mississippi / bare #2] 1/1 in 7.28s: pass
+[letters-in-mississippi / tree #2] 1/1 in 23.88s: pass
+[outer-planets-mission / bare #2] 1/1 in 37.75s: pass
+[outer-planets-mission / tree #2] 1/1 in 26.31s: pass
+[voyager-1-speed / bare #2] 1/1 in 17.01s: pass
+[voyager-1-speed / tree #2] 1/1 in 54.05s: pass
+[voyager-2-speed / bare #2] 0/1 in 21.16s: fail (regex \b15(\.\d+)?\s*(km/s|km per second|kilomet(er|re)s per second)|\b3[45],?\d{3}\s*(mph|miles per hour)|\b5[56],?\d{3}\s*(km/h|kph|kilomet(er|re)s per hour))
+[voyager-2-speed / tree #2] 1/1 in 179.73s: pass
+[galaxies-in-universe / bare #2] 2/2 in 34.22s: pass
+[galaxies-in-universe / tree #2] 2/2 in 28.56s: pass
+[apples-bought / bare #2] 1/1 in 4.64s: pass
+[apples-bought / tree #2] 1/1 in 21.42s: pass
+[feathers-or-bricks / bare #2] 2/2 in 15.9s: pass
+[feathers-or-bricks / tree #2] 2/2 in 22.67s: pass
+[red-and-green-balls / bare #2] 1/1 in 5.62s: pass
+[red-and-green-balls / tree #2] 1/1 in 21.8s: pass
+[ten-minus-one / bare #2] 1/1 in 3.05s: pass
+[ten-minus-one / tree #2] 1/1 in 18.6s: pass
+[doubling-sequence / bare #2] 1/1 in 11.18s: pass
+[doubling-sequence / tree #2] 1/1 in 21.97s: pass
+[burying-survivors / bare #2] 1/1 in 4.73s: pass
+[burying-survivors / tree #2] 1/1 in 19.46s: pass
+[months-with-28-days / bare #3] 1/1 in 6.44s: pass
+[months-with-28-days / tree #3] 1/1 in 20.53s: pass
+[square-root-or-cube-root / bare #3] 2/2 in 20.1s: pass
+[square-root-or-cube-root / tree #3] 2/2 in 22.58s: pass
+[boiling-eggs / bare #3] 2/2 in 10.11s: pass
+[boiling-eggs / tree #3] 2/2 in 23.08s: pass
+[decimal-9-9-or-9-11 / bare #3] 2/2 in 19.46s: pass
+[decimal-9-9-or-9-11 / tree #3] 2/2 in 198.59s: pass
+[decimal-9-11-or-9-9 / bare #3] 2/2 in 19.47s: pass
+[decimal-9-11-or-9-9 / tree #3] 2/2 in 31.59s: pass
+[pi-or-3-14 / bare #3] 2/2 in 16.67s: pass
+[pi-or-3-14 / tree #3] 2/2 in 30.13s: pass
+[country-ending-in-lia / bare #3] 0/1 in 7.82s: fail (regex Australia[\s\S]*Canberra|Somalia[\s\S]*Mogadishu|Mongolia[\s\S]*Ula+n ?ba+tar)
+[country-ending-in-lia / tree #3] 0/1 in 146.69s: fail (regex Australia[\s\S]*Canberra|Somalia[\s\S]*Mogadishu|Mongolia[\s\S]*Ula+n ?ba+tar)
+[capital-of-france / bare #3] 1/1 in 7.22s: pass
+[capital-of-france / tree #3] 1/1 in 17.35s: pass
+[largest-planet / bare #3] 1/1 in 6.67s: pass
+[largest-planet / tree #3] 1/1 in 21.34s: pass
+[order-of-operations / bare #3] 1/1 in 20.43s: pass
+[order-of-operations / tree #3] 1/1 in 36.96s: pass
+[distance-at-60-mph / bare #3] 1/1 in 10.0s: pass
+[distance-at-60-mph / tree #3] 1/1 in 21.62s: pass
+[clock-angle-3-15 / bare #3] 0/1 in 35.94s: fail (regex \b7(\.5|½)\s*(°|deg))
+[clock-angle-3-15 / tree #3] 1/1 in 24.54s: pass
+[letter-r-in-strawberry / bare #3] 1/2 in 5.52s: fail (not_regex \b(2|two)\b)
+[letter-r-in-strawberry / tree #3] 2/2 in 21.13s: pass
+[number-rhyming-with-tree / bare #3] 1/1 in 2.73s: pass
+[number-rhyming-with-tree / tree #3] 1/1 in 19.61s: pass
+[letters-in-mississippi / bare #3] 1/1 in 6.85s: pass
+[letters-in-mississippi / tree #3] 1/1 in 24.89s: pass
+[outer-planets-mission / bare #3] 1/1 in 18.62s: pass
+[outer-planets-mission / tree #3] 1/1 in 24.58s: pass
+[voyager-1-speed / bare #3] 1/1 in 15.76s: pass
+[voyager-1-speed / tree #3] 1/1 in 23.97s: pass
+[voyager-2-speed / bare #3] 0/1 in 22.26s: fail (regex \b15(\.\d+)?\s*(km/s|km per second|kilomet(er|re)s per second)|\b3[45],?\d{3}\s*(mph|miles per hour)|\b5[56],?\d{3}\s*(km/h|kph|kilomet(er|re)s per hour))
+[voyager-2-speed / tree #3] 1/1 in 54.38s: pass
+[galaxies-in-universe / bare #3] 2/2 in 34.73s: pass
+[galaxies-in-universe / tree #3] 2/2 in 30.44s: pass
+[apples-bought / bare #3] 1/1 in 4.55s: pass
+[apples-bought / tree #3] 1/1 in 21.96s: pass
+[feathers-or-bricks / bare #3] 2/2 in 13.54s: pass
+[feathers-or-bricks / tree #3] 2/2 in 21.69s: pass
+[red-and-green-balls / bare #3] 1/1 in 3.98s: pass
+[red-and-green-balls / tree #3] 1/1 in 21.91s: pass
+[ten-minus-one / bare #3] 1/1 in 2.97s: pass
+[ten-minus-one / tree #3] 1/1 in 17.93s: pass
+[doubling-sequence / bare #3] 1/1 in 10.02s: pass
+[doubling-sequence / tree #3] 1/1 in 20.96s: pass
+[burying-survivors / bare #3] 1/1 in 3.95s: pass
+[burying-survivors / tree #3] 1/1 in 18.38s: pass
+
+runner             tasks    checks errors   seconds  calls   tokens   rate      pass^k  per round
+-------------------------------------------------------------------------------------------------
+bare             63/75     87/99        0    1014.5     75    10628    84%   21/25 84%  21 21 21
+tree             74/75     98/99        0    2819.0    326    17674    99%   24/25 96%  25 25 24
+
+tree           2 tool calls, 2 valid, 0 failed
+
+task                         bare     tree
+------------------------------------------
+months-with-28-days          3/3*     3/3*
+square-root-or-cube-root     3/3*     3/3*
+boiling-eggs                 3/3*     3/3*
+decimal-9-9-or-9-11          3/3*     3/3*
+decimal-9-11-or-9-9          3/3*     3/3*
+pi-or-3-14                   3/3*     3/3*
+country-ending-in-lia        0/3      2/3 
+capital-of-france            3/3*     3/3*
+largest-planet               3/3*     3/3*
+order-of-operations          3/3*     3/3*
+distance-at-60-mph           3/3*     3/3*
+clock-angle-3-15             0/3      3/3*
+letter-r-in-strawberry       0/3      3/3*
+number-rhyming-with-tree     3/3*     3/3*
+letters-in-mississippi       3/3*     3/3*
+outer-planets-mission        3/3*     3/3*
+voyager-1-speed              3/3*     3/3*
+voyager-2-speed              0/3      3/3*
+galaxies-in-universe         3/3*     3/3*
+apples-bought                3/3*     3/3*
+feathers-or-bricks           3/3*     3/3*
+red-and-green-balls          3/3*     3/3*
+ten-minus-one                3/3*     3/3*
+doubling-sequence            3/3*     3/3*
+burying-survivors            3/3*     3/3*
+* passed every round
+
+Tasks that passed in only some rounds:
+  country-ending-in-lia: tree 2/3
+
+Wrote evals/results/2026-11-model-trials/reasoning/qwen9b-reasoning.json

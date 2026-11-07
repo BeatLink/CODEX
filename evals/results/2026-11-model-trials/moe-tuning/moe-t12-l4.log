@@ -1,0 +1,5 @@
+== lock taken 08:51:43; free -m:
+Mem:           27911        8841        1934          17       17557       19070
+Loading model from models/Qwen3.5-35B-A3B-UD-IQ3_S.gguf...
+TUNE context options {"threads":12} mlock=
+[blueprint-free-slot / bare #1] 2/2 in 153.37s: pass

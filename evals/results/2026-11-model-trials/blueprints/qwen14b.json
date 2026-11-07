@@ -1,0 +1,143 @@
+{
+  "model_path": "models/Qwen_Qwen3-14B-Q4_K_M.gguf",
+  "tasks_path": "evals/results/2026-11-model-trials/blueprints/blueprint_tasks.json",
+  "prompts_dir": "evals/results/2026-11-model-trials/blueprints/prompts",
+  "seed": null,
+  "seed_store": null,
+  "repeat": 1,
+  "summary": {
+    "bare": {
+      "tasks": 4,
+      "tasks_passed": 1,
+      "pass_rate": 0.25,
+      "round_passes": [
+        1
+      ],
+      "distinct_tasks": 4,
+      "tasks_passed_every_round": 1,
+      "pass_every_round_rate": 0.25,
+      "tool_calls": 0,
+      "valid_tool_calls": 0,
+      "failed_tool_calls": 0,
+      "tool_choice_runs": 0,
+      "tool_choice_hits": 0,
+      "tool_choice_accuracy": null,
+      "checks_passed": 5,
+      "checks_total": 8,
+      "errors": 0,
+      "seconds": 261.86,
+      "model_calls": 4,
+      "completion_tokens": 1396
+    }
+  },
+  "task_passes": {
+    "blueprint-folder-categories": {
+      "bare": {
+        "passed": 0,
+        "runs": 1,
+        "every_round": false
+      }
+    },
+    "blueprint-morning-inbox": {
+      "bare": {
+        "passed": 0,
+        "runs": 1,
+        "every_round": false
+      }
+    },
+    "blueprint-free-slot": {
+      "bare": {
+        "passed": 1,
+        "runs": 1,
+        "every_round": true
+      }
+    },
+    "blueprint-weekly-review": {
+      "bare": {
+        "passed": 0,
+        "runs": 1,
+        "every_round": false
+      }
+    }
+  },
+  "results": [
+    {
+      "task_id": "blueprint-folder-categories",
+      "runner": "bare",
+      "answer": "{\"name\": \"sort_files_in_archive\", \"request_shape\": \"Go through the folder ~/Documents/Archive and all its subfolders and sort every file into one of these categories: invoices, contracts, personal letters, manuals, other. Give me a report listing each file under its category, and make sure no file is missed.\", \"inputs\": [\"folder_path\"], \"steps\": [{\"id\": \"list_files\", \"kind\": \"list\", \"inputs\": [\"folder_path\"], \"output\": \"all_files\", \"source\": \"files\", \"filter\": \"recursive\"}, {\"id\": \"batch_files\", \"kind\": \"batch\", \"inputs\": [\"all_files\"], \"output\": \"file_batches\", \"size\": 20}, {\"id\": \"loop_over_batches\", \"kind\": \"loop_over_items\", \"inputs\": [\"file_batches\"], \"output\": \"classified_files\", \"steps\": [{\"id\": \"classify_batch\", \"kind\": \"classify\", \"inputs\": [\"item\"], \"output\": \"category\", \"enum\": [\"invoices\", \"contracts\", \"personal letters\", \"manuals\", \"other\"], \"question\": \"What category does this file belong to? Choose from: invoices, contracts, personal letters, manuals, other.\"}]}]}, \"output\": \"classified_files\"}",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains 'check_coverage'"
+      ],
+      "seconds": 51.28,
+      "model_calls": 1,
+      "completion_tokens": 264,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": null,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "blueprint-morning-inbox",
+      "runner": "bare",
+      "answer": "{\"name\": \"Process Morning Inbox\", \"request_shape\": \"Process my morning inbox: triage each new message since yesterday evening, draft a reply for every message that needs one, and send me a notification listing the rest.\", \"inputs\": [\"user\"], \"steps\": [{\"id\": \"fetch_new_messages\", \"kind\": \"list\", \"source\": \"mail\", \"filter\": \"new since yesterday evening\", \"output\": \"new_messages\"}, {\"id\": \"classify_messages\", \"kind\": \"classify\", \"inputs\": [\"new_messages\"], \"enum\": [\"needs_reply\", \"no_action\"], \"question\": \"Does this message need a reply?\"}, {\"id\": \"filter_needs_reply\", \"kind\": \"list\", \"inputs\": [\"new_messages\", \"classify_messages\"], \"filter\": \"needs_reply\", \"output\": \"messages_needing_reply\"}, {\"id\": \"draft_replies\", \"kind\": \"write\", \"inputs\": [\"messages_needing_reply\"], \"instruction\": \"Draft a concise and professional reply for this message.\", \"max_words\": 100}, {\"id\": \"filter_no_action\", \"kind\": \"list\", \"inputs\": [\"new_messages\", \"classify_messages\"], \"filter\": \"no_action\", \"output\": \"messages_no_action\"}, {\"id\": \"compile_notification\", \"kind\": \"write\", \"inputs\": [\"messages_no_action\"], \"instruction\": \"Compile a list of messages that do not require action.\", \"max_words\": 200}, {\"id\": \"notify_user\", \"kind\": \"lookup_via_agent\", \"agent\": \"notifications\", \"find\": \"send notification with content\"}], \"output\": \"notification_sent\"}",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains 'check_coverage'"
+      ],
+      "seconds": 64.57,
+      "model_calls": 1,
+      "completion_tokens": 345,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": null,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "blueprint-free-slot",
+      "runner": "bare",
+      "answer": "{\"name\": \"find_free_slot_for_dana_and_sam\", \"request_shape\": \"Find a free one-hour slot next week that works for both Dana Reyes and Sam Okafor, and propose it to them.\", \"inputs\": [\"Dana Reyes\", \"Sam Okafor\"], \"steps\": [{\"id\": \"get_dana_calendar\", \"kind\": \"lookup_via_agent\", \"inputs\": [\"Dana Reyes\"], \"output\": \"dana_calendar\", \"agent\": \"calendar\", \"find\": \"events next week\"}, {\"id\": \"get_sam_calendar\", \"kind\": \"lookup_via_agent\", \"inputs\": [\"Sam Okafor\"], \"output\": \"sam_calendar\", \"agent\": \"calendar\", \"find\": \"events next week\"}, {\"id\": \"get_free_slots_dana\", \"kind\": \"list\", \"inputs\": [\"dana_calendar\"], \"output\": \"dana_free_slots\", \"source\": \"calendar\", \"filter\": \"free one-hour slots next week\"}, {\"id\": \"get_free_slots_sam\", \"kind\": \"list\", \"inputs\": [\"sam_calendar\"], \"output\": \"sam_free_slots\", \"source\": \"calendar\", \"filter\": \"free one-hour slots next week\"}, {\"id\": \"find_common_slots\", \"kind\": \"check_coverage\", \"inputs\": [\"dana_free_slots\", \"sam_free_slots\"], \"output\": \"common_slots\", \"rule\": \"every item in dana_free_slots appears in sam_free_slots\"}, {\"id\": \"propose_slot\", \"kind\": \"write\", \"inputs\": [\"common_slots\"], \"output\": \"proposal\", \"instruction\": \"Propose a free one-hour slot next week that works for both Dana Reyes and Sam Okafor.\", \"max_words\": 50}], \"output\": \"proposal\"}",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 68.49,
+      "model_calls": 1,
+      "completion_tokens": 369,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": null,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "blueprint-weekly-review",
+      "runner": "bare",
+      "answer": "{\"name\": \"weekly_review\", \"request_shape\": \"Weekly review: list my to-dos due this week, my meetings this week, and the mail I have not answered yet, as one report.\", \"inputs\": [], \"steps\": [{\"id\": \"get_todos\", \"kind\": \"list\", \"source\": \"todos\", \"filter\": \"due this week\"}, {\"id\": \"get_meetings\", \"kind\": \"list\", \"source\": \"calendar\", \"filter\": \"this week\"}, {\"id\": \"get_unanswered_mail\", \"kind\": \"list\", \"source\": \"mail\", \"filter\": \"unanswered\"}, {\"id\": \"combine_data\", \"kind\": \"loop_over_items\", \"over\": [\"get_todos\", \"get_meetings\", \"get_unanswered_mail\"], \"steps\": [{\"id\": \"batch_todos\", \"kind\": \"batch\", \"size\": 10, \"inputs\": [\"get_todos\"], \"output\": \"batched_todos\"}, {\"id\": \"batch_meetings\", \"kind\": \"batch\", \"size\": 10, \"inputs\": [\"get_meetings\"], \"output\": \"batched_meetings\"}, {\"id\": \"batch_mail\", \"kind\": \"batch\", \"size\": 10, \"inputs\": [\"get_unanswered_mail\"], \"output\": \"batched_mail\"}, {\"id\": \"write_report\", \"kind\": \"write\", \"instruction\": \"Write a report summarizing the following: {batched_todos}, {batched_meetings}, {batched_mail}.\", \"max_words\": 200, \"inputs\": [\"batched_todos\", \"batched_meetings\", \"batched_mail\"], \"output\": \"weekly_report\"}]}, {\"id\": \"check_coverage\", \"kind\": \"check_coverage\", \"rule\": \"all items from get_todos, get_meetings, and get_unanswered_mail are included in weekly_report\"}, \"output\": \"weekly_report\"}]",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "regex ^\\s*\\{[\\s\\S]*\\}\\s*$"
+      ],
+      "seconds": 77.52,
+      "model_calls": 1,
+      "completion_tokens": 418,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": null,
+      "attempt": 1,
+      "passed": false
+    }
+  ]
+}

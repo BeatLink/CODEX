@@ -1,0 +1,17 @@
+[
+  {
+    "id": "blueprint-free-slot",
+    "mode": "answer",
+    "prompt": "Write the blueprint for this request shape: \"Find a free one-hour slot next week that works for both Dana Reyes and Sam Okafor, and propose it to them.\"",
+    "checks": [
+      {
+        "type": "regex",
+        "pattern": "^\\s*\\{[\\s\\S]*\\}\\s*$"
+      },
+      {
+        "type": "contains",
+        "value": "calendar"
+      }
+    ]
+  }
+]

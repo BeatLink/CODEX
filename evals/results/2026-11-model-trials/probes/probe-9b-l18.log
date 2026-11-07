@@ -1,0 +1,8 @@
+== lock taken 04:13:07; free -m:
+Mem:           27911       12214        3236          93       13038       15697
+Loading model from models/Qwen_Qwen3.5-9B-Q4_K_M.gguf...
+[node-llama-cpp] ggml_backend_cuda_buffer_type_alloc_buffer: allocating 533.00 MiB on device 0: cudaMalloc failed: out of memory
+[node-llama-cpp] ggml_gallocr_reserve_n_impl: failed to allocate CUDA0 buffer of size 558895104
+[node-llama-cpp] graph_reserve: failed to allocate compute buffers
+[node-llama-cpp] llama_init_from_model: failed to initialize the context: failed to allocate compute pp buffers
+Error: Failed to create context

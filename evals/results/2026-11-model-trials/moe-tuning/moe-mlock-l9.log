@@ -1,0 +1,19 @@
+== lock taken 09:34:22; free -m:
+Mem:           27911        9594        3488          33       15266       18317
+Loading model from models/Qwen3.5-35B-A3B-UD-IQ3_S.gguf...
+TUNE context options {} mlock=1
+[blueprint-free-slot / bare #1] 2/2 in 43.03s: pass
+[blueprint-free-slot / bare #2] 2/2 in 43.19s: pass
+
+runner             tasks    checks errors   seconds  calls   tokens   rate      pass^k  per round
+-------------------------------------------------------------------------------------------------
+bare              2/2       4/4         0      86.2      2     1070   100%    1/1 100%  1 1
+
+task                    bare
+----------------------------
+blueprint-free-slot     2/2*
+* passed every round
+
+Every task passed in all rounds or in none.
+
+Wrote evals/results/2026-11-model-trials/moe-tuning/moe-mlock-l9.json

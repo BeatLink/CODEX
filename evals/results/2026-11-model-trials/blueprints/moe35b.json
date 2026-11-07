@@ -1,0 +1,137 @@
+{
+  "model_path": "models/Qwen3.5-35B-A3B-UD-IQ3_S.gguf",
+  "tasks_path": "evals/results/2026-11-model-trials/blueprints/blueprint_tasks.json",
+  "prompts_dir": "evals/results/2026-11-model-trials/blueprints/prompts",
+  "seed": null,
+  "seed_store": null,
+  "repeat": 1,
+  "summary": {
+    "bare": {
+      "tasks": 4,
+      "tasks_passed": 4,
+      "pass_rate": 1.0,
+      "round_passes": [
+        4
+      ],
+      "distinct_tasks": 4,
+      "tasks_passed_every_round": 4,
+      "pass_every_round_rate": 1.0,
+      "tool_calls": 0,
+      "valid_tool_calls": 0,
+      "failed_tool_calls": 0,
+      "tool_choice_runs": 0,
+      "tool_choice_hits": 0,
+      "tool_choice_accuracy": null,
+      "checks_passed": 8,
+      "checks_total": 8,
+      "errors": 0,
+      "seconds": 172.16,
+      "model_calls": 4,
+      "completion_tokens": 2205
+    }
+  },
+  "task_passes": {
+    "blueprint-folder-categories": {
+      "bare": {
+        "passed": 1,
+        "runs": 1,
+        "every_round": true
+      }
+    },
+    "blueprint-morning-inbox": {
+      "bare": {
+        "passed": 1,
+        "runs": 1,
+        "every_round": true
+      }
+    },
+    "blueprint-free-slot": {
+      "bare": {
+        "passed": 1,
+        "runs": 1,
+        "every_round": true
+      }
+    },
+    "blueprint-weekly-review": {
+      "bare": {
+        "passed": 1,
+        "runs": 1,
+        "every_round": true
+      }
+    }
+  },
+  "results": [
+    {
+      "task_id": "blueprint-folder-categories",
+      "runner": "bare",
+      "answer": "{\n  \"name\": \"archive_file_sorter\",\n  \"request_shape\": \"Go through the folder ~/Documents/Archive and all its subfolders and sort every file into one of these categories: invoices, contracts, personal letters, manuals, other. Give me a report listing each file under its category, and make sure no file is missed.\",\n  \"inputs\": [],\n  \"steps\": [\n    {\n      \"id\": \"s1\",\n      \"kind\": \"list\",\n      \"source\": \"files\",\n      \"filter\": \"path=~/Documents/Archive recursive=true\"\n    },\n    {\n      \"id\": \"s2\",\n      \"kind\": \"batch\",\n      \"size\": 50\n    },\n    {\n      \"id\": \"s3\",\n      \"kind\": \"loop_over_items\",\n      \"over\": \"s2\",\n      \"steps\": [\n        {\n          \"id\": \"s4\",\n          \"kind\": \"classify\",\n          \"enum\": [\"invoices\", \"contracts\", \"personal letters\", \"manuals\", \"other\"],\n          \"question\": \"Classify this file into exactly one of the following categories based on its content and name: invoices, contracts, personal letters, manuals, other.\"\n        }\n      ]\n    },\n    {\n      \"id\": \"s5\",\n      \"kind\": \"write\",\n      \"instruction\": \"Generate a report listing each file under its assigned category. Format as: Category: [Name], File: [Path].\",\n      \"max_words\": 2000\n    },\n    {\n      \"id\": \"s6\",\n      \"kind\": \"check_coverage\",\n      \"rule\": \"Every file from input s1 must appear exactly once in the output of s5 grouped by category.\"\n    }\n  ],\n  \"output\": \"s5\"\n}",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 30.34,
+      "model_calls": 1,
+      "completion_tokens": 413,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": null,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "blueprint-morning-inbox",
+      "runner": "bare",
+      "answer": "{\n  \"name\": \"process_morning_inbox\",\n  \"request_shape\": \"Process my morning inbox: triage each new message since yesterday evening, draft a reply for every message that needs one, and send me a notification listing the rest.\",\n  \"inputs\": [],\n  \"steps\": [\n    {\n      \"id\": \"fetch_messages\",\n      \"kind\": \"list\",\n      \"source\": \"mail\",\n      \"filter\": \"since yesterday evening\"\n    },\n    {\n      \"id\": \"classify_messages\",\n      \"kind\": \"loop_over_items\",\n      \"over\": \"fetch_messages\",\n      \"steps\": [\n        {\n          \"id\": \"classify_action\",\n          \"kind\": \"classify\",\n          \"enum\": [\"reply_needed\", \"notification_only\"],\n          \"question\": \"Does this email require a drafted reply?\"\n        }\n      ],\n      \"output\": \"classified_messages\"\n    },\n    {\n      \"id\": \"draft_replies\",\n      \"kind\": \"loop_over_items\",\n      \"over\": \"classified_messages\",\n      \"steps\": [\n        {\n          \"id\": \"filter_reply_needed\",\n          \"kind\": \"loop_over_items\",\n          \"over\": \"classify_action\",\n          \"steps\": [\n            {\n              \"id\": \"check_reply_needed\",\n              \"kind\": \"check_coverage\",\n              \"rule\": \"item.value == 'reply_needed'\"\n            }\n          ],\n          \"output\": \"reply_items\"\n        },\n        {\n          \"id\": \"write_reply\",\n          \"kind\": \"write\",\n          \"instruction\": \"Draft a polite reply for the email content provided.\",\n          \"max_words\": 100\n        }\n      ],\n      \"output\": \"drafted_replies\"\n    },\n    {\n      \"id\": \"filter_notifications\",\n      \"kind\": \"loop_over_items\",\n      \"over\": \"classified_messages\",\n      \"steps\": [\n        {\n          \"id\": \"check_notification_only\",\n          \"kind\": \"check_coverage\",\n          \"rule\": \"item.value == 'notification_only'\"\n        }\n      ],\n      \"output\": \"notification_items\"\n    },\n    {\n      \"id\": \"generate_notification\",\n      \"kind\": \"write\",\n      \"instruction\": \"Create a notification listing the subjects of emails that do not require a reply.\",\n      \"max_words\": 50\n    },\n    {\n      \"id\": \"verify_coverage\",\n      \"kind\": \"check_coverage\",\n      \"rule\": \"every input item from fetch_messages appears exactly once in either drafted_replies or notification_items\"\n    }\n  ],\n  \"output\": \"notification\"\n}",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 43.27,
+      "model_calls": 1,
+      "completion_tokens": 607,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": null,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "blueprint-free-slot",
+      "runner": "bare",
+      "answer": "{\n  \"name\": \"find_shared_free_slot\",\n  \"request_shape\": \"Find a free one-hour slot next week that works for both Dana Reyes and Sam Okafor, and propose it to them.\",\n  \"inputs\": [],\n  \"steps\": [\n    {\n      \"id\": \"get_dana_calendar\",\n      \"kind\": \"list\",\n      \"source\": \"calendar\",\n      \"filter\": \"owner=Dana Reyes AND date >= next_monday AND date <= next_sunday\"\n    },\n    {\n      \"id\": \"get_sam_calendar\",\n      \"kind\": \"list\",\n      \"source\": \"calendar\",\n      \"filter\": \"owner=Sam Okafor AND date >= next_monday AND date <= next_sunday\"\n    },\n    {\n      \"id\": \"generate_candidate_slots\",\n      \"kind\": \"list\",\n      \"source\": \"calendar\",\n      \"filter\": \"owner=system AND date >= next_monday AND date <= next_sunday AND duration=1h\"\n    },\n    {\n      \"id\": \"batch_slots\",\n      \"kind\": \"batch\",\n      \"over\": \"generate_candidate_slots\",\n      \"size\": 1\n    },\n    {\n      \"id\": \"check_dana_free\",\n      \"kind\": \"loop_over_items\",\n      \"over\": \"batch_slots\",\n      \"steps\": [\n        {\n          \"id\": \"check_dana_conflict\",\n          \"kind\": \"check_coverage\",\n          \"rule\": \"slot_start not in get_dana_calendar AND slot_end not in get_dana_calendar\"\n        }\n      ],\n      \"output\": \"dana_free_slots\"\n    },\n    {\n      \"id\": \"check_sam_free\",\n      \"kind\": \"loop_over_items\",\n      \"over\": \"dana_free_slots\",\n      \"steps\": [\n        {\n          \"id\": \"check_sam_conflict\",\n          \"kind\": \"check_coverage\",\n          \"rule\": \"slot_start not in get_sam_calendar AND slot_end not in get_sam_calendar\"\n        }\n      ],\n      \"output\": \"shared_free_slots\"\n    },\n    {\n      \"id\": \"select_slot\",\n      \"kind\": \"check_coverage\",\n      \"rule\": \"select first item from shared_free_slots\"\n    },\n    {\n      \"id\": \"draft_proposal\",\n      \"kind\": \"write\",\n      \"instruction\": \"Draft a polite message proposing the selected time slot to Dana Reyes and Sam Okafor.\",\n      \"max_words\": 50\n    },\n    {\n      \"id\": \"send_to_dana\",\n      \"kind\": \"lookup_via_agent\",\n      \"agent\": \"mail\",\n      \"find\": \"send to Dana Reyes with subject 'Meeting Proposal'\"\n    },\n    {\n      \"id\": \"send_to_sam\",\n      \"kind\": \"lookup_via_agent\",\n      \"agent\": \"mail\",\n      \"find\": \"send to Sam Okafor with subject 'Meeting Proposal'\"\n    },\n    {\n      \"id\": \"verify_delivery\",\n      \"kind\": \"check_coverage\",\n      \"rule\": \"send_to_dana and send_to_sam both completed\"\n    }\n  ],\n  \"output\": \"verify_delivery\"\n}",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 60.32,
+      "model_calls": 1,
+      "completion_tokens": 738,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": null,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "blueprint-weekly-review",
+      "runner": "bare",
+      "answer": "{\n  \"name\": \"weekly_review_report\",\n  \"request_shape\": \"Weekly review: list my to-dos due this week, my meetings this week, and the mail I have not answered yet, as one report.\",\n  \"inputs\": [],\n  \"steps\": [\n    {\n      \"id\": \"fetch_todos\",\n      \"kind\": \"list\",\n      \"source\": \"todos\",\n      \"filter\": \"due_this_week\"\n    },\n    {\n      \"id\": \"fetch_meetings\",\n      \"kind\": \"list\",\n      \"source\": \"calendar\",\n      \"filter\": \"this_week\"\n    },\n    {\n      \"id\": \"fetch_mail\",\n      \"kind\": \"list\",\n      \"source\": \"mail\",\n      \"filter\": \"unread_or_unanswered\"\n    },\n    {\n      \"id\": \"classify_todos\",\n      \"kind\": \"classify\",\n      \"over\": \"fetch_todos\",\n      \"question\": \"What is the priority of this task?\",\n      \"enum\": [\"high\", \"medium\", \"low\"]\n    },\n    {\n      \"id\": \"classify_mail\",\n      \"kind\": \"classify\",\n      \"over\": \"fetch_mail\",\n      \"question\": \"What is the urgency of this email?\",\n      \"enum\": [\"urgent\", \"normal\", \"low\"]\n    },\n    {\n      \"id\": \"draft_report\",\n      \"kind\": \"write\",\n      \"instruction\": \"Generate a weekly review report listing the provided to-dos with their priority, meetings, and unanswered emails with their urgency. Use clear headings for each section.\",\n      \"max_words\": 500\n    },\n    {\n      \"id\": \"check_coverage\",\n      \"kind\": \"check_coverage\",\n      \"rule\": \"Every item from fetch_todos, fetch_meetings, and fetch_mail must appear in the draft_report output exactly once.\"\n    }\n  ],\n  \"output\": \"draft_report\"\n}",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 38.23,
+      "model_calls": 1,
+      "completion_tokens": 447,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": null,
+      "attempt": 1,
+      "passed": true
+    }
+  ]
+}

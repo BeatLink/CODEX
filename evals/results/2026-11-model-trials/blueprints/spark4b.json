@@ -1,0 +1,139 @@
+{
+  "model_path": "models/Spark-X2.6-4B-Q4_K_M.gguf",
+  "tasks_path": "evals/results/2026-11-model-trials/blueprints/blueprint_tasks.json",
+  "prompts_dir": "evals/results/2026-11-model-trials/blueprints/prompts",
+  "seed": null,
+  "seed_store": null,
+  "repeat": 1,
+  "summary": {
+    "bare": {
+      "tasks": 4,
+      "tasks_passed": 3,
+      "pass_rate": 0.75,
+      "round_passes": [
+        3
+      ],
+      "distinct_tasks": 4,
+      "tasks_passed_every_round": 3,
+      "pass_every_round_rate": 0.75,
+      "tool_calls": 0,
+      "valid_tool_calls": 0,
+      "failed_tool_calls": 0,
+      "tool_choice_runs": 0,
+      "tool_choice_hits": 0,
+      "tool_choice_accuracy": null,
+      "checks_passed": 7,
+      "checks_total": 8,
+      "errors": 0,
+      "seconds": 39.41,
+      "model_calls": 4,
+      "completion_tokens": 1801
+    }
+  },
+  "task_passes": {
+    "blueprint-folder-categories": {
+      "bare": {
+        "passed": 1,
+        "runs": 1,
+        "every_round": true
+      }
+    },
+    "blueprint-morning-inbox": {
+      "bare": {
+        "passed": 1,
+        "runs": 1,
+        "every_round": true
+      }
+    },
+    "blueprint-free-slot": {
+      "bare": {
+        "passed": 0,
+        "runs": 1,
+        "every_round": false
+      }
+    },
+    "blueprint-weekly-review": {
+      "bare": {
+        "passed": 1,
+        "runs": 1,
+        "every_round": true
+      }
+    }
+  },
+  "results": [
+    {
+      "task_id": "blueprint-folder-categories",
+      "runner": "bare",
+      "answer": "{\"name\": \"archive_file_categorization_report\", \"request_shape\": \"sort_files_in_folder_tree_into_categories_with_coverage_report\", \"inputs\": [\"archive_folder\"], \"steps\": [{\"id\": \"list_files\", \"kind\": \"list\", \"inputs\": [\"archive_folder\"], \"output\": \"archive_files\", \"source\": \"files\", \"filter\": \"recursive=true\"}, {\"id\": \"batch_files\", \"kind\": \"batch\", \"inputs\": [\"archive_files\"], \"output\": \"file_chunks\", \"size\": 10}, {\"id\": \"loop_categorize\", \"kind\": \"loop_over_items\", \"inputs\": [\"file_chunks\", \"classify_file_category\"], \"output\": \"categorized_files\", \"over\": \"file_chunks\", \"steps\": [{\"id\": \"classify_file_category\", \"kind\": \"classify\", \"inputs\": [], \"output\": \"file_category\", \"enum\": [\"invoices\", \"contracts\", \"personal letters\", \"manuals\", \"other\"], \"question\": \"Which category does this file belong to: invoices, contracts, personal letters, manuals, or other?\"}]}, {\"id\": \"group_by_category\", \"kind\": \"list\", \"inputs\": [\"categorized_files\"], \"output\": \"category_groups\", \"filter\": \"group_by=category\"}, {\"id\": \"check_coverage\", \"kind\": \"check_coverage\", \"inputs\": [\"archive_files\", \"categorized_files\"], \"output\": \"coverage_check\", \"rule\": \"every input item appears in the output exactly once\"}, {\"id\": \"write_report\", \"kind\": \"write\", \"inputs\": [\"category_groups\", \"coverage_check\"], \"output\": \"categorization_report\", \"instruction\": \"Produce a report listing each file under its assigned category, and confirm that every file from the archive folder tree was categorized exactly once with no files missed.\", \"max_words\": 300}]}, \"output\": \"categorization_report\"}",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 10.12,
+      "model_calls": 1,
+      "completion_tokens": 428,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": null,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "blueprint-morning-inbox",
+      "runner": "bare",
+      "answer": "{\"name\": \"triage_morning_inbox\", \"request_shape\": \"Process my morning inbox: triage each new message since yesterday evening, draft a reply for every message that needs one, and send me a notification listing the rest.\", \"inputs\": [\"inbox\"], \"steps\": [{\"id\": \"fetch_inbox\", \"kind\": \"list\", \"inputs\": [], \"output\": \"inbox\", \"source\": \"mail\", \"filter\": \"new since yesterday evening\"}, {\"id\": \"batch_messages\", \"kind\": \"batch\", \"inputs\": [\"inbox\"], \"output\": \"message_chunks\", \"size\": 10}, {\"id\": \"loop_triage\", \"kind\": \"loop_over_items\", \"inputs\": [\"message_chunks\", \"inbox\"], \"output\": \"triage_results\", \"steps\": [{\"id\": \"classify_triage\", \"kind\": \"classify\", \"inputs\": [\"inbox\"], \"output\": \"triage\", \"enum\": [\"needs_reply\", \"no_reply\"], \"question\": \"Does this message since yesterday evening require a reply?\"}, {\"id\": \"check_triage_coverage\", \"kind\": \"check_coverage\", \"inputs\": [\"inbox\", \"triage\"], \"output\": \"triage_coverage\", \"rule\": \"every inbox item must appear exactly once in triage with a valid enum value\"}]}, {\"id\": \"loop_draft_replies\", \"kind\": \"loop_over_items\", \"inputs\": [\"triage_results\", \"inbox\"], \"output\": \"draft_replies\", \"steps\": [{\"id\": \"write_reply\", \"kind\": \"write\", \"inputs\": [\"inbox\"], \"output\": \"reply_draft\", \"instruction\": \"Draft a concise reply for this message that needs one.\", \"max_words\": 120}]}, {\"id\": \"loop_notify_rest\", \"kind\": \"loop_over_items\", \"inputs\": [\"triage_results\", \"inbox\"], \"output\": \"notification\", \"steps\": [{\"id\": \"write_notification\", \"kind\": \"write\", \"inputs\": [\"inbox\"], \"output\": \"notification\", \"instruction\": \"List the messages that do not need a reply, formatted as a notification for the user.\", \"max_words\": 150}]}, {\"id\": \"check_notification_coverage\", \"kind\": \"check_coverage\", \"inputs\": [\"inbox\", \"triage_results\", \"notification\"], \"output\": \"notification_coverage\", \"rule\": \"every inbox item that does not need a reply must appear exactly once in the notification\"}]], \"output\": \"triage_results, draft_replies, notification\"}",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 12.24,
+      "model_calls": 1,
+      "completion_tokens": 581,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": null,
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "blueprint-free-slot",
+      "runner": "bare",
+      "answer": "{\"name\": \"find_free_slot_proposal\", \"request_shape\": \"find_free_one_hour_slot_next_week_for_two_people_and_propose_it\", \"inputs\": [\"dana_reyes_schedule\", \"sam_okafor_schedule\"], \"steps\": [{\"id\": \"schedules\", \"kind\": \"list\", \"inputs\": [], \"output\": \"schedules\", \"source\": \"schedules\", \"filter\": \"next_week\"}, {\"id\": \"dana_items\", \"kind\": \"list\", \"inputs\": [\"schedules\"], \"output\": \"dana_items\", \"source\": \"schedules\", \"filter\": \"owner: Dana Reyes\"}, {\"id\": \"sam_items\", \"kind\": \"list\", \"inputs\": [\"schedules\"], \"output\": \"sam_items\", \"source\": \"schedules\", \"filter\": \"owner: Sam Okafor\"}, {\"id\": \"free_slots\", \"kind\": \"list\", \"inputs\": [\"dana_items\", \"sam_items\"], \"output\": \"free_slots\", \"source\": \"free_slots\", \"filter\": \"owner: Dana Reyes and owner: Sam Okafor and duration: 1 hour and free: true and date: next_week\"}, {\"id\": \"propose_slot\", \"kind\": \"write\", \"inputs\": [\"free_slots\", \"dana_reyes\", \"sam_okafor\"], \"output\": \"proposal\", \"instruction\": \"Propose the free one-hour slot next week that works for both Dana Reyes and Sam Okafor, including the date and time of the proposed slot.\", \"max_words\": 120}, {\"id\": \"check_coverage\", \"kind\": \"check_coverage\", \"inputs\": [\"free_slots\", \"proposal\"], \"output\": \"coverage_check\", \"rule\": \"every free slot in free_slots appears in proposal exactly once\"}], \"output\": \"proposal\"}",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains 'calendar'"
+      ],
+      "seconds": 8.72,
+      "model_calls": 1,
+      "completion_tokens": 406,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": null,
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "blueprint-weekly-review",
+      "runner": "bare",
+      "answer": "{\"name\": \"weekly_review_report\", \"request_shape\": \"Weekly review: list to-dos due this week, meetings this week, and unanswered mail as one report\", \"inputs\": [\"todos\", \"meetings\", \"mail\"], \"steps\": [{\"id\": \"todos_this_week\", \"kind\": \"list\", \"inputs\": [\"todos\"], \"output\": \"todos_this_week\", \"source\": \"todos\", \"filter\": \"due_this_week\"}, {\"id\": \"meetings_this_week\", \"kind\": \"list\", \"inputs\": [\"meetings\"], \"output\": \"meetings_this_week\", \"source\": \"meetings\", \"filter\": \"this_week\"}, {\"id\": \"unanswered_mail\", \"kind\": \"list\", \"inputs\": [\"mail\"], \"output\": \"unanswered_mail\", \"source\": \"mail\", \"filter\": \"unanswered\"}, {\"id\": \"report\", \"kind\": \"write\", \"inputs\": [\"todos_this_week\", \"meetings_this_week\", \"unanswered_mail\"], \"output\": \"weekly_review_report\", \"instruction\": \"Produce one consolidated weekly review report containing the to-dos due this week, the meetings this week, and the mail that has not been answered yet, in a clear structured format.\", \"max_words\": 400}, {\"id\": \"check_coverage\", \"kind\": \"check_coverage\", \"inputs\": [\"weekly_review_report\"], \"output\": \"coverage_check\", \"rule\": \"every item in todos_this_week, meetings_this_week, and unanswered_mail appears in weekly_review_report exactly once\"}], \"output\": \"weekly_review_report\"}",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 8.33,
+      "model_calls": 1,
+      "completion_tokens": 386,
+      "tool_calls": [],
+      "agents": [],
+      "tool_sequence": [],
+      "tool_choice": null,
+      "attempt": 1,
+      "passed": true
+    }
+  ]
+}
