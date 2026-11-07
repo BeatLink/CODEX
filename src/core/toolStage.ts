@@ -1,4 +1,7 @@
 // A model call that may use tools: the model asks for tools, gets their results, and answers within the call budget.
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
+import type { JsonSchemaType } from '@modelcontextprotocol/sdk/validation';
+
 import { inputCharBudget, untrustedBlock } from './contextBudget.js';
 import { MCPToolbox } from './mcpTools.js';
 import { REPETITION_MESSAGE, type ChatCompletionRequest, type ChatMessage, type ChatModel, type ToolCall, type ToolDefinition } from './model.js';
@@ -12,6 +15,7 @@ export const MAX_TOOL_HISTORY_CHARS = 8_000;
 // Connected tools are the MCP servers' tools, named with this prefix.
 export const CONNECTED_TOOL_PREFIX = 'mcp__';
 export const REPEATED_CALL_NOTE = 'Same call as before; this result is already above. Answer from it now.';
+const LIMIT_REACHED_ERROR = 'Tool error: the configured tool-call limit was reached.';
 export const ANSWER_NOW_CALL_NOTE = 'The model tried to call a tool after being told to answer; the call was not run.';
 
 // The part of a toolbox the stage uses, so the built-in toolbox or a stand-in can serve.
@@ -19,6 +23,9 @@ export type ToolboxLike = {
     toolDefinitions: ToolDefinition[];
     call(name: string, argumentsGiven: unknown): Promise<string> | string;
 };
+
+// One tool call as the loop saw it: whether it named an offered tool with arguments its schema accepts, and whether it failed.
+export type ToolCallRecord = { name: string; arguments: string; valid: boolean; error: boolean };
 
 export type PageSummarizer = (pageJson: string, focus: string, requestContext: string) => Promise<string> | string;
 
@@ -30,6 +37,8 @@ export type ToolStageOptions = {
     blockedTools?: Set<string> | null;
     contextSize?: number | null;
     signal?: AbortSignal;
+    // Hears every tool call the model makes in this stage, in order, once its result is known.
+    onToolCall?: ((call: ToolCallRecord) => void) | null;
 };
 
 // Measure a value as Python's json.dumps writes it, with spaced separators and escaped non-ASCII, so budgets match.
@@ -139,6 +148,35 @@ export function textToolCalls(content: unknown, toolDefinitions: ToolDefinition[
 }
 
 // ============================================================================
+// Checking a call's arguments
+// ============================================================================
+
+const SCHEMA_VALIDATOR = new AjvJsonSchemaValidator();
+
+// Say whether a call names one of the offered tools and gives arguments its JSON schema accepts.
+export function callIsValid(name: string, rawArguments: string, toolDefinitions: ToolDefinition[]): boolean {
+    const definition = toolDefinitions.find((offered) => offered.function.name === name);
+    if (definition === undefined) {
+        return false;
+    }
+    let argumentsGiven: unknown;
+    try {
+        argumentsGiven = JSON.parse(rawArguments);
+    } catch {
+        return false;
+    }
+    if (typeof argumentsGiven !== 'object' || argumentsGiven === null || Array.isArray(argumentsGiven)) {
+        return false;
+    }
+    try {
+        return SCHEMA_VALIDATOR.getValidator((definition.function.parameters ?? {}) as JsonSchemaType)(argumentsGiven).valid;
+    } catch {
+        // A schema the validator cannot read says nothing against the call.
+        return true;
+    }
+}
+
+// ============================================================================
 // The stage
 // ============================================================================
 
@@ -180,7 +218,7 @@ async function toolLoop(
     maxToolCalls: number,
     options: ToolStageOptions,
 ): Promise<string> {
-    const { allowedTools, blockedTools, pageSummarizer, onToken } = options;
+    const { allowedTools, blockedTools, pageSummarizer, onToken, onToolCall } = options;
     const toolDefinitions = [...toolbox.toolDefinitions, ...mcpToolbox.toolDefinitions].filter((definition) =>
         isPermitted(definition.function.name, allowedTools, blockedTools),
     );
@@ -198,6 +236,12 @@ async function toolLoop(
     let roundsWithoutNewTool = 0;
     let answerNow = false;
     const messageCharBudget = options.contextSize != null ? inputCharBudget(options.contextSize, maxTokens, pythonJson(toolDefinitions)) : null;
+
+    const recordCall = (toolCall: ToolCall, result: string) => {
+        const name = toolCall.function?.name ?? '';
+        const rawArguments = toolCall.function?.arguments ?? '{}';
+        onToolCall?.({ name, arguments: rawArguments, valid: callIsValid(name, rawArguments, toolDefinitions), error: isToolError(result) });
+    };
 
     while (true) {
         const request: ChatCompletionRequest = {
@@ -253,6 +297,9 @@ async function toolLoop(
             return content.trim();
         }
         if (toolCallCount >= maxToolCalls) {
+            for (const toolCall of toolCalls) {
+                recordCall(toolCall, LIMIT_REACHED_ERROR);
+            }
             const findings = typeof assistantMessage.content === 'string' ? assistantMessage.content.trim() : '';
             return [
                 findings,
@@ -278,7 +325,7 @@ async function toolLoop(
             const key = callKey(name, toolCall.function?.arguments ?? '{}');
             const earlier = earlierResults.get(key);
             if (toolCallCount >= maxToolCalls) {
-                result = 'Tool error: the configured tool-call limit was reached.';
+                result = LIMIT_REACHED_ERROR;
                 allRepeats = false;
             } else if (!isPermitted(name, allowedTools, blockedTools)) {
                 result = `Tool error: tool '${name}' is not allowed in this stage.`;
@@ -297,6 +344,9 @@ async function toolLoop(
                 earlierResults.set(key, result);
                 connectedAnswered = connectedAnswered || (name.startsWith(CONNECTED_TOOL_PREFIX) && !isToolError(result));
             }
+
+            // A repeat failed when the call it repeats failed.
+            recordCall(toolCall, earlier !== undefined && result.startsWith(REPEATED_CALL_NOTE) ? earlier : result);
 
             let remainingOutput = MAX_TOOL_HISTORY_CHARS - toolOutputChars;
             if (messageCharBudget !== null) {

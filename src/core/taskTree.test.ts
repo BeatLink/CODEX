@@ -34,9 +34,12 @@ import {
     parseDecision,
     parseRouting,
     parseSubtasks,
+    type AgentToolCall,
+    type Delegation,
     type ExecuteTaskTreeOptions,
     type TaskSnapshot,
 } from './taskTree.js';
+import type { ToolStageOptions } from './toolStage.js';
 
 const mocks = vi.hoisted(() => ({ searchWithMemory: vi.fn(), runToolStage: vi.fn() }));
 
@@ -1366,6 +1369,52 @@ describe('agents', () => {
         const combine = model.call('combine', '1').input;
         expect(combine).toContain('Priya is priya@example.com.');
         expect(combine).toContain('Her latest email was about the budget.');
+    });
+
+    it('reports each hand-over and tags each tool call with the agent whose run made it', async () => {
+        const root = mkdtempSync(join(workDirectory, 'agents-'));
+        writeAgents(root, {
+            comms: '---\ndescription: Email and people.\nagents: [contacts, mail]\n---\n',
+            contacts: '---\ndescription: Looks people up.\nmcp_servers: contacts\n---\n',
+            mail: '---\ndescription: Reads email.\nmcp_servers: mail\n---\n',
+        });
+        mocks.runToolStage.mockImplementation(async (_llm, _system, _input, _toolbox, _tokens, _temperature, _calls, options: ToolStageOptions) => {
+            options.onToolCall?.({ name: 'mcp__contacts__find', arguments: '{}', valid: true, error: false });
+            return 'tool output';
+        });
+        const delegations: Delegation[] = [];
+        const toolCalls: AgentToolCall[] = [];
+
+        await runTree(
+            {
+                'route 1': [
+                    JSON.stringify({ needs: [{ agent: 'comms', part: "Find Priya's latest email." }] }),
+                    JSON.stringify({ needs: [{ agent: 'contacts', part: "Find Priya's address." }] }),
+                    JSON.stringify({ needs: [{ agent: 'mail', part: 'Find the latest email from priya@example.com.' }] }),
+                ],
+                'write 1': ['Priya is priya@example.com.', 'Her latest email was about the budget.'],
+                'combine 1': 'Priya last wrote about the budget.',
+            },
+            {
+                prompt: "Find Priya's address, then tell me what her latest email was about.",
+                filesystemRoot: root,
+                allowFileWrites: false,
+                mcpServers: [mcpServer('contacts'), mcpServer('mail')],
+                confirmActions: false,
+                delegationCallback: (delegation) => delegations.push(delegation),
+                toolCallCallback: (call) => toolCalls.push(call),
+            },
+        );
+
+        expect(delegations).toEqual([
+            { agent: 'comms', parent: null, depth: 1 },
+            { agent: 'contacts', parent: 'comms', depth: 2 },
+            { agent: 'mail', parent: 'comms', depth: 2 },
+        ]);
+        expect(toolCalls.map((call) => [call.agent, call.depth])).toEqual([
+            ['contacts', 2],
+            ['mail', 2],
+        ]);
     });
 
     it('routes a task once more at most', async () => {

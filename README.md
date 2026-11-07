@@ -598,7 +598,31 @@ constraints.
 One run per task cannot tell a real change from chance, since the same task
 can pass one run and fail the next. `--repeat N` goes through the whole set N
 times and adds each runner's pass rate and its passes per round to the table,
-then lists the tasks a runner passed in only some rounds.
+then lists the tasks a runner passed in only some rounds. Beside the pooled
+rate it prints pass^k: the tasks a runner passed in every round, which a lucky
+round cannot inflate. Every run, repeated or not, ends with a table of passes
+per task and runner, a star marking the tasks passed in every round.
+
+`--compare OLD` pairs this run with an earlier `--output` file, task by task
+and runner by runner: passes on each side and the change, biggest change first and tasks
+in only one file last,
+then each runner's pooled and pass^k totals on both sides and how many tasks got
+better or worse. `--compare OLD --against NEW` pairs two saved files without
+running anything or loading the model. Any result file works, including ones
+saved before these fields existed.
+
+`--output` writes every run with its answer, checks, seconds, model calls,
+tokens and native `tool_calls`, and beside them `agents` (each hand-over to an
+agent in order, with the agent that handed it over and its depth),
+`tool_sequence` (every tool call in order, with the agent whose run made it,
+whether it named an offered tool with arguments its schema accepts, `valid`,
+and whether it failed, `error`) and `tool_choice`. A task may list
+`expect_servers`, the servers a right answer needs; `tool_choice` is then
+whether the run made a valid call on each of them, and is null for a task that
+lists none. The summary adds per runner `distinct_tasks`,
+`tasks_passed_every_round` and `pass_every_round_rate` (pass^k), the counts of
+tool calls, valid calls and failed calls, and `tool_choice_accuracy`; each
+`task_passes` entry gains `every_round`.
 
 `--stream` prints each run's start, every task-tree step and every tool call
 as it happens, prefixed with the task, runner and round and the seconds since
@@ -647,6 +671,8 @@ codex eval --tasks evals/execute_tasks.json
 codex eval --tasks evals/reasoning_tasks.json --runners bare,tree --repeat 3
 codex eval --runners tree --repeat 3 --output report.json
 codex eval --tasks evals/agents_tasks.json --runners tree,agents --stream
+codex eval --tasks evals/agents_tasks.json --runners tree,agents --repeat 3 --compare old.json
+codex eval --compare old.json --against new.json
 codex eval --runners tree --seed-store ~/.local/share/codex/knowledge.sqlite3
 codex eval --seed --runners tree
 ```

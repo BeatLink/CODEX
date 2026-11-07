@@ -15,15 +15,22 @@ import {
     EvalTask,
     FAKE_SERVERS,
     RECALL_TASKS_PATH,
+    RunResult,
     buildSeedStore,
     checkPasses,
+    compareResults,
     compilePattern,
     fakeServers,
+    formatComparison,
     formatSummary,
+    formatTaskPasses,
+    formatToolUse,
     formatUnsteadyTasks,
+    loadResultRecords,
     loadTasks,
     main,
     parseEvalArguments,
+    passEveryRound,
     runEval,
     runTask,
     summarize,
@@ -357,6 +364,171 @@ describe('runTask', () => {
 });
 
 // ============================================================================
+// Per-step recording and pass^k
+// ============================================================================
+
+const SPARK_FULL_PATH = join(EVALS_DIRECTORY, 'results', '2026-11-model-trials', 'agents', 'spark-full.json');
+
+function passRecord(task_id: string, runner: string, passed: boolean) {
+    return { task_id, runner, passed };
+}
+
+describe('per-step recording', () => {
+    it('records the agents handed to, the tools called in order, and whether the expected server was reached', async () => {
+        fakeTree.mockImplementation(async (_prompt, options = {}) => {
+            options.delegationCallback!({ agent: 'comms', parent: null, depth: 1 });
+            options.toolCallCallback!({ name: 'mcp__contacts__find_contact', arguments: '{"name":"Priya"}', valid: true, error: false, agent: 'comms', depth: 1 });
+            options.delegationCallback!({ agent: 'mail', parent: 'comms', depth: 2 });
+            options.toolCallCallback!({ name: 'mcp__mail__search', arguments: '{}', valid: false, error: true, agent: 'mail', depth: 2 });
+            return '4';
+        });
+        const task = new EvalTask({ ...TASK, servers: ['mail', 'contacts'], expect_servers: ['contacts', 'mail'] });
+
+        const result = await runTask(task, 'agents', new ReplyingModel(''), SETTINGS);
+        const saved = result.toJson();
+
+        expect(saved.agents).toEqual([
+            { agent: 'comms', parent: null, depth: 1 },
+            { agent: 'mail', parent: 'comms', depth: 2 },
+        ]);
+        expect((saved.tool_sequence as Array<{ name: string; agent: string }>).map((call) => `${call.agent}:${call.name}`)).toEqual([
+            'comms:mcp__contacts__find_contact',
+            'mail:mcp__mail__search',
+        ]);
+        // The mail call had invalid arguments, so the mail server was not reached.
+        expect(saved.tool_choice).toBe(false);
+        expect(saved.tool_calls).toEqual([]);
+    });
+
+    it('leaves tool choice unscored for a task that expects no server, and refuses an expected server it is not given', () => {
+        fakeTree.mockResolvedValue('4');
+
+        expect(loadTasks(writeTasks([{ ...TASK, servers: 'all', expect_servers: ['weather'] }]))[0].expect_servers).toEqual(['weather']);
+        expect(() => loadTasks(writeTasks([{ ...TASK, servers: ['mail'], expect_servers: ['weather'] }]))).toThrow('expect_servers');
+        expect(new EvalTask(TASK).expect_servers).toEqual([]);
+    });
+
+    it('totals pass^k, valid and failed calls, and tool choice per runner', () => {
+        const call = (valid: boolean, error: boolean) => ({ name: 'mcp__mail__list_inbox', arguments: '{}', valid, error, agent: null, depth: 0 });
+        const run = (task_id: string, attempt: number, passed: boolean, tool_choice: boolean | null, calls = [call(true, false)]) =>
+            new RunResult({ task_id, runner: 'agents', attempt, checks_total: 1, checks_passed: Number(passed), tool_choice, tool_sequence: calls });
+        const results = [
+            run('steady', 1, true, true),
+            run('shaky', 1, true, true),
+            run('loose', 1, false, null, []),
+            run('steady', 2, true, true),
+            run('shaky', 2, false, false, [call(false, true)]),
+            run('loose', 2, false, null, []),
+        ];
+
+        const totals = summarize(results, ['agents']).agents;
+
+        expect([totals.tasks, totals.tasks_passed, totals.pass_rate]).toEqual([6, 3, 0.5]);
+        expect([totals.distinct_tasks, totals.tasks_passed_every_round, totals.pass_every_round_rate]).toEqual([3, 1, 0.333]);
+        expect([totals.tool_calls, totals.valid_tool_calls, totals.failed_tool_calls]).toEqual([4, 3, 1]);
+        expect([totals.tool_choice_runs, totals.tool_choice_hits, totals.tool_choice_accuracy]).toEqual([4, 3, 0.75]);
+        expect(formatSummary({ agents: totals })).toMatch(/pass\^k[\s\S]*1\/3 33%/);
+        expect(formatToolUse({ agents: totals })).toContain('4 tool calls, 3 valid, 1 failed; tool choice 3/4 75%');
+        const table = formatTaskPasses(taskPassCounts(results), ['agents']);
+        expect(table).toContain('steady');
+        expect(table).toMatch(/steady\s+2\/2\*/);
+        expect(table).toMatch(/shaky\s+1\/2 /);
+        expect(summarize([], ['agents']).agents.tool_choice_accuracy).toBeNull();
+    });
+});
+
+describe('comparing result files', () => {
+    it('pairs each task across two files, changed first and one-sided last', () => {
+        const before = [
+            passRecord('same', 'agents', true),
+            passRecord('better', 'agents', false),
+            passRecord('worse', 'agents', true),
+            passRecord('same', 'agents', true),
+            passRecord('better', 'agents', false),
+            passRecord('worse', 'agents', true),
+            passRecord('gone', 'agents', true),
+        ];
+        const after = [
+            passRecord('same', 'agents', true),
+            passRecord('better', 'agents', true),
+            passRecord('worse', 'agents', false),
+            passRecord('same', 'agents', true),
+            passRecord('better', 'agents', true),
+            passRecord('worse', 'agents', true),
+        ];
+
+        const comparison = compareResults(before, after);
+
+        expect(comparison.rows.map((row) => [row.task_id, row.old, row.new, row.change])).toEqual([
+            ['better', [0, 2], [2, 2], 1],
+            ['worse', [2, 2], [1, 2], -0.5],
+            ['same', [2, 2], [2, 2], 0],
+            ['gone', [1, 1], null, null],
+        ]);
+        expect(comparison.totals).toEqual([
+            {
+                runner: 'agents',
+                old: { passed: 5, runs: 7, every_round: 3, tasks: 4 },
+                new: { passed: 5, runs: 6, every_round: 2, tasks: 3 },
+                better: 1,
+                worse: 1,
+                same: 1,
+            },
+        ]);
+        const text = formatComparison(comparison, 'old.json', 'new.json');
+        expect(text).toMatch(/better\s+agents\s+0\/2\s+2\/2\s+\+1\.00/);
+        expect(text).toContain('agents: old pooled 5/7 71%, pass^k 3/4; new pooled 5/6 83%, pass^k 2/3; tasks better 1, worse 1, same 1');
+    });
+
+    it('reads a result file saved before the per-step fields existed', () => {
+        const records = loadResultRecords(SPARK_FULL_PATH);
+        const comparison = compareResults(records, records);
+
+        expect(records).toHaveLength(48);
+        expect(passEveryRound(records, 'agents')).toEqual({ tasks: 8, passed: 5, rate: 0.625 });
+        expect(comparison.totals.map((totals) => [totals.runner, totals.old!.passed, totals.same])).toEqual([
+            ['tree', 19, 8],
+            ['agents', 17, 8],
+        ]);
+        expect(() => loadResultRecords(writeTasks([TASK]))).toThrow('not an eval result file');
+    });
+
+    it('compares two files from the command line without loading the model', async () => {
+        const newer = join(directory, 'newer.json');
+        writeFileSync(newer, JSON.stringify({ results: [passRecord('garage-code', 'agents', true)] }), 'utf-8');
+        const printed: string[] = [];
+        vi.mocked(console.log).mockImplementation((line?: unknown) => void printed.push(String(line)));
+
+        const exitCode = await main(['--compare', SPARK_FULL_PATH, '--against', newer]);
+        const alone = await main(['--against', newer]);
+
+        expect(exitCode).toBe(0);
+        expect(alone).toBe(2);
+        expect(loadModel).not.toHaveBeenCalled();
+        expect(printed.join('\n')).toMatch(/garage-code\s+agents\s+0\/3\s+1\/1\s+\+1\.00/);
+    });
+
+    it('pairs a new run with an earlier file and prints the pass counts per task', async () => {
+        loadModel.mockResolvedValue(new ReplyingModel('4') as unknown as LocalModel);
+        const older = join(directory, 'older.json');
+        writeFileSync(older, JSON.stringify({ results: [passRecord('sum', 'bare', false)] }), 'utf-8');
+        const printed: string[] = [];
+        vi.mocked(console.log).mockImplementation((line?: unknown) => void printed.push(String(line)));
+
+        const exitCode = await main(['--settings', writeSettings(), '--tasks', writeTasks([TASK]), '--runners', 'bare', '--compare', older]);
+        const missing = await main(['--settings', writeSettings(), '--tasks', writeTasks([TASK]), '--compare', join(directory, 'none.json')]);
+        const text = printed.join('\n');
+
+        expect(exitCode).toBe(0);
+        expect(missing).toBe(1);
+        expect(loadModel).toHaveBeenCalledTimes(1);
+        expect(text).toMatch(/sum\s+1\/1\*/);
+        expect(text).toContain(`Paired per task, old: ${older}, new: this run`);
+        expect(text).toMatch(/sum\s+bare\s+0\/1\s+1\/1\s+\+1\.00/);
+    });
+});
+
+// ============================================================================
 // Tasks with files
 // ============================================================================
 
@@ -483,7 +655,7 @@ describe('main', () => {
         expect(badRepeat).toBe(2);
         expect(loadModel).toHaveBeenCalledTimes(1);
         expect(report.repeat).toBe(2);
-        expect(report.task_passes).toEqual({ sum: { bare: { passed: 2, runs: 2 } } });
+        expect(report.task_passes).toEqual({ sum: { bare: { passed: 2, runs: 2, every_round: true } } });
         expect(report.summary.bare.round_passes).toEqual([1, 1]);
     });
 
@@ -526,6 +698,7 @@ describe('the agents eval', () => {
             const agents = loadAgents(workspace);
 
             expect(tasks.every((task) => task.servers.length === FAKE_SERVERS.length)).toBe(true);
+            expect(tasks.every((task) => task.expect_servers.length > 0)).toBe(true);
             expect(new Set(agents.keys())).toEqual(new Set(['comms', 'mail', 'contacts', 'calendar', 'notes', 'weather', 'todos']));
             expect(topLevelAgents(agents).sort()).toEqual(['calendar', 'comms', 'notes', 'todos', 'weather']);
         } finally {

@@ -11,7 +11,8 @@ import { KnowledgeStore, type SearchResult } from './knowledge.js';
 import { LocalModel, runStage, type ChatCompletion, type ChatCompletionRequest, type ChatModel } from './model.js';
 import { defaultSettingsPath, expandUser, loadSettings, validateSettings, type McpServerSettings, type Settings } from './settings.js';
 import { STARTER_AGENTS_DIRECTORY } from './agents.js';
-import { executeTaskTree } from './taskTree.js';
+import { executeTaskTree, type AgentToolCall, type Delegation } from './taskTree.js';
+import { CONNECTED_TOOL_PREFIX } from './toolStage.js';
 import { PYTHON_COMMAND } from './tools.js';
 
 export const EVALS_DIRECTORY = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'evals');
@@ -172,14 +173,25 @@ export class EvalTask {
     files: Record<string, string>;
     // The canned MCP servers the task is given, from FAKE_SERVERS.
     servers: string[];
+    // The servers whose tools a right answer needs, which scores tool choice; empty leaves it unscored.
+    expect_servers: string[];
 
-    constructor(fields: { id: string; prompt: string; checks: Check[]; mode?: string; files?: Record<string, string>; servers?: string[] }) {
+    constructor(fields: {
+        id: string;
+        prompt: string;
+        checks: Check[];
+        mode?: string;
+        files?: Record<string, string>;
+        servers?: string[];
+        expect_servers?: string[];
+    }) {
         this.id = fields.id;
         this.prompt = fields.prompt;
         this.checks = fields.checks;
         this.mode = fields.mode ?? 'auto';
         this.files = fields.files ?? {};
         this.servers = fields.servers ?? [];
+        this.expect_servers = fields.expect_servers ?? [];
     }
 }
 
@@ -199,6 +211,7 @@ export function loadTasks(tasksPath: string): EvalTask[] {
             mode: (entry.mode ?? 'auto') as string,
             files: (entry.files ?? {}) as Record<string, string>,
             servers: entry.servers === 'all' ? [...FAKE_SERVERS] : ((entry.servers ?? []) as string[]),
+            expect_servers: (entry.expect_servers ?? []) as string[],
         });
         if (!task.id || seenIds.has(task.id)) {
             throw new Error(`Each task needs a unique id; got ${pythonRepr(task.id)}.`);
@@ -208,6 +221,9 @@ export function loadTasks(tasksPath: string): EvalTask[] {
         }
         if (!Array.isArray(task.servers) || !task.servers.every((name) => (FAKE_SERVERS as readonly string[]).includes(name))) {
             throw new Error(`Task ${task.id}: 'servers' must be "all" or names from: ${FAKE_SERVERS.join(', ')}.`);
+        }
+        if (!Array.isArray(task.expect_servers) || !task.expect_servers.every((name) => task.servers.includes(name))) {
+            throw new Error(`Task ${task.id}: 'expect_servers' must name servers the task is given.`);
         }
         if (!(EVAL_MODES as readonly string[]).includes(task.mode)) {
             throw new Error(`Task ${task.id} has mode ${typeof task.mode === 'string' ? pythonRepr(task.mode) : String(task.mode)}; use one of: ${EVAL_MODES.join(', ')}.`);
@@ -480,6 +496,11 @@ export class RunResult {
     model_calls = 0;
     completion_tokens = 0;
     tool_calls: RecordedToolCall[] = [];
+    // Each hand-over to an agent, and each tool call the tool stage ran or refused with the agent that made it, in order.
+    agents: Delegation[] = [];
+    tool_sequence: AgentToolCall[] = [];
+    // Whether the run reached a valid call on every server the task expects, or null when the task expects none.
+    tool_choice: boolean | null = null;
     // Which round of a repeated eval this run belongs to, counting from 1.
     attempt = 1;
 
@@ -507,6 +528,9 @@ export class RunResult {
             model_calls: this.model_calls,
             completion_tokens: this.completion_tokens,
             tool_calls: this.tool_calls,
+            agents: this.agents,
+            tool_sequence: this.tool_sequence,
+            tool_choice: this.tool_choice,
             attempt: this.attempt,
             passed: this.passed,
         };
@@ -554,7 +578,14 @@ export async function runTask(
             if (seedStore !== null) {
                 await copyStore(seedStore, join(scratchDirectory, 'knowledge.sqlite3'));
             }
-            result.answer = await answerWith(runner, task, countingModel, settings, scratchDirectory, say === null ? undefined : (step) => say(`step ${step}`));
+            result.answer = await answerWith(runner, task, countingModel, settings, scratchDirectory, {
+                onStep: say === null ? undefined : (step) => say(`step ${step}`),
+                onDelegation: (delegation) => {
+                    result.agents.push(delegation);
+                    say?.(`agent ${delegation.agent} (depth ${delegation.depth}, from ${delegation.parent ?? 'the top'})`);
+                },
+                onToolCall: (call) => result.tool_sequence.push(call),
+            });
         } catch (error) {
             result.error = error instanceof Error ? `${error.name}: ${error.message}` : `Error: ${String(error)}`;
         }
@@ -562,6 +593,7 @@ export async function runTask(
         result.model_calls = countingModel.calls;
         result.completion_tokens = countingModel.completionTokens;
         result.tool_calls = countingModel.toolCalls;
+        result.tool_choice = toolChoice(task, result.tool_sequence);
         if (!result.error) {
             for (const check of task.checks) {
                 if (await checkPasses(result.answer, check, task, workspace)) {
@@ -575,6 +607,14 @@ export async function runTask(
         rmSync(scratchDirectory, { recursive: true, force: true });
     }
     return result;
+}
+
+// Say whether the calls reached a valid call on every server the task expects, or null when it expects none.
+export function toolChoice(task: EvalTask, calls: AgentToolCall[]): boolean | null {
+    if (task.expect_servers.length === 0) {
+        return null;
+    }
+    return task.expect_servers.every((server) => calls.some((call) => call.valid && call.name.startsWith(`${CONNECTED_TOOL_PREFIX}${server}__`)));
 }
 
 // Write each file under the workspace, refusing a path that would land outside it.
@@ -652,7 +692,7 @@ async function answerWith(
     llm: ChatModel,
     settings: Settings,
     scratchDirectory: string,
-    onStep: (label: string) => void = () => undefined,
+    hooks: { onStep?: (label: string) => void; onDelegation?: (delegation: Delegation) => void; onToolCall?: (call: AgentToolCall) => void } = {},
 ): Promise<string> {
     const workspace = join(scratchDirectory, 'workspace');
     const hasFiles = Object.keys(task.files).length > 0;
@@ -684,7 +724,9 @@ async function answerWith(
         embeddingModelPath: settings.embedding_model_path,
         llm,
         mode: task.mode,
-        progressCallback: onStep,
+        progressCallback: hooks.onStep ?? (() => undefined),
+        delegationCallback: hooks.onDelegation,
+        toolCallCallback: hooks.onToolCall,
         maxTaskDepth: settings.max_task_depth,
         maxTaskNodes: settings.max_task_nodes,
     });
@@ -736,6 +778,18 @@ export type RunnerSummary = {
     tasks_passed: number;
     pass_rate: number;
     round_passes: number[];
+    // pass^k: the distinct tasks, and those passed in every round they ran.
+    distinct_tasks: number;
+    tasks_passed_every_round: number;
+    pass_every_round_rate: number;
+    // Tool calls the tool stage saw, those naming an offered tool with valid arguments, and those that failed.
+    tool_calls: number;
+    valid_tool_calls: number;
+    failed_tool_calls: number;
+    // Runs of tasks that expect servers, and those that reached a valid call on each; the rate is null with none.
+    tool_choice_runs: number;
+    tool_choice_hits: number;
+    tool_choice_accuracy: number | null;
     checks_passed: number;
     checks_total: number;
     errors: number;
@@ -755,11 +809,24 @@ export function summarize(results: RunResult[], runners: string[]): Record<strin
         const own = results.filter((result) => result.runner === runner);
         const rounds = [...new Set(own.map((result) => result.attempt))].sort((first, second) => first - second);
         const passed = own.filter((result) => result.passed).length;
+        const everyRound = passEveryRound(own, runner);
+        const calls = own.flatMap((result) => result.tool_sequence);
+        const scored = own.filter((result) => result.tool_choice !== null);
+        const hits = scored.filter((result) => result.tool_choice).length;
         summary[runner] = {
             tasks: own.length,
             tasks_passed: passed,
             pass_rate: own.length ? roundTo(passed / own.length, 3) : 0.0,
             round_passes: rounds.map((attempt) => own.filter((result) => result.passed && result.attempt === attempt).length),
+            distinct_tasks: everyRound.tasks,
+            tasks_passed_every_round: everyRound.passed,
+            pass_every_round_rate: everyRound.rate,
+            tool_calls: calls.length,
+            valid_tool_calls: calls.filter((call) => call.valid).length,
+            failed_tool_calls: calls.filter((call) => call.error).length,
+            tool_choice_runs: scored.length,
+            tool_choice_hits: hits,
+            tool_choice_accuracy: scored.length ? roundTo(hits / scored.length, 3) : null,
             checks_passed: sum(own.map((result) => result.checks_passed)),
             checks_total: sum(own.map((result) => result.checks_total)),
             errors: own.filter((result) => result.error).length,
@@ -779,11 +846,15 @@ function left(value: string | number, width: number): string {
     return String(value).padEnd(width);
 }
 
+function percent(rate: number): string {
+    return `${(rate * 100).toFixed(0)}%`;
+}
+
 export function formatSummary(summary: Record<string, RunnerSummary>): string {
     const repeated = Object.values(summary).some((totals) => totals.round_passes.length > 1);
     let header = `${left('runner', 14)} ${right('tasks', 9)} ${right('checks', 9)} ${right('errors', 6)} ${right('seconds', 9)} ${right('calls', 6)} ${right('tokens', 8)}`;
     if (repeated) {
-        header += ` ${right('rate', 6)}  per round`;
+        header += ` ${right('rate', 6)} ${right('pass^k', 11)}  per round`;
     }
     const lines = [header, '-'.repeat(header.length)];
     for (const [runner, totals] of Object.entries(summary)) {
@@ -792,15 +863,35 @@ export function formatSummary(summary: Record<string, RunnerSummary>): string {
             `${right(totals.checks_passed, 4)}/${left(totals.checks_total, 4)} ${right(totals.errors, 6)} ` +
             `${right(totals.seconds.toFixed(1), 9)} ${right(totals.model_calls, 6)} ${right(totals.completion_tokens, 8)}`;
         if (repeated) {
-            line += ` ${right(`${(totals.pass_rate * 100).toFixed(0)}%`, 6)}  ${totals.round_passes.join(' ')}`;
+            const everyRound = `${totals.tasks_passed_every_round}/${totals.distinct_tasks} ${percent(totals.pass_every_round_rate)}`;
+            line += ` ${right(percent(totals.pass_rate), 6)} ${right(everyRound, 11)}  ${totals.round_passes.join(' ')}`;
         }
         lines.push(line);
     }
     return lines.join('\n');
 }
 
+// Say per runner how many tool calls were valid and failed, and how often the expected servers were reached.
+export function formatToolUse(summary: Record<string, RunnerSummary>): string {
+    const lines: string[] = [];
+    for (const [runner, totals] of Object.entries(summary)) {
+        if (totals.tool_calls === 0 && totals.tool_choice_runs === 0) {
+            continue;
+        }
+        let line = `${left(runner, 14)} ${totals.tool_calls} tool calls, ${totals.valid_tool_calls} valid, ${totals.failed_tool_calls} failed`;
+        if (totals.tool_choice_accuracy !== null) {
+            line += `; tool choice ${totals.tool_choice_hits}/${totals.tool_choice_runs} ${percent(totals.tool_choice_accuracy)}`;
+        }
+        lines.push(line);
+    }
+    return lines.join('\n');
+}
+
+// The fields of one run that pass counts need, which every saved result file has.
+export type PassRecord = { task_id: string; runner: string; passed: boolean };
+
 // Count, for each task and runner, the rounds it passed and the rounds it ran.
-export function taskPassCounts(results: RunResult[]): Record<string, Record<string, [number, number]>> {
+export function taskPassCounts(results: PassRecord[]): Record<string, Record<string, [number, number]>> {
     const counts: Record<string, Record<string, [number, number]>> = {};
     for (const result of results) {
         const byRunner = (counts[result.task_id] ??= {});
@@ -809,6 +900,30 @@ export function taskPassCounts(results: RunResult[]): Record<string, Record<stri
         passedAndRun[1] += 1;
     }
     return counts;
+}
+
+// Count a runner's distinct tasks and those it passed in every round it ran them (pass^k).
+export function passEveryRound(results: PassRecord[], runner: string): { tasks: number; passed: number; rate: number } {
+    const counts = Object.values(taskPassCounts(results.filter((result) => result.runner === runner))).map((byRunner) => byRunner[runner]);
+    const passed = counts.filter(([passedRounds, run]) => passedRounds === run).length;
+    return { tasks: counts.length, passed, rate: counts.length ? roundTo(passed / counts.length, 3) : 0.0 };
+}
+
+// Show each task's passed and run rounds per runner, with a star where it passed every round.
+export function formatTaskPasses(counts: Record<string, Record<string, [number, number]>>, runners: string[]): string {
+    const width = Math.max(4, ...Object.keys(counts).map((taskId) => taskId.length));
+    const header = `${left('task', width)} ${runners.map((runner) => right(runner, Math.max(8, runner.length))).join(' ')}`;
+    const lines = [header, '-'.repeat(header.length)];
+    for (const [taskId, byRunner] of Object.entries(counts)) {
+        const cells = runners.map((runner) => {
+            const passedAndRun = byRunner[runner];
+            const cell = passedAndRun === undefined ? '-' : `${passedAndRun[0]}/${passedAndRun[1]}${passedAndRun[0] === passedAndRun[1] ? '*' : ' '}`;
+            return right(cell, Math.max(8, runner.length));
+        });
+        lines.push(`${left(taskId, width)} ${cells.join(' ')}`);
+    }
+    lines.push('* passed every round');
+    return lines.join('\n');
 }
 
 // List the tasks a runner passed in some rounds but not all, which a single run would misreport.
@@ -847,14 +962,102 @@ export function formatResult(result: RunResult, showAttempt = false): string {
 }
 
 // ============================================================================
+// Comparing two result files
+// ============================================================================
+
+// One task on one runner in both result files, as passed and run rounds, or null where a file lacks it.
+export type PairedRow = { task_id: string; runner: string; old: [number, number] | null; new: [number, number] | null; change: number | null };
+
+// One runner's totals in both files, and how many tasks both ran got better or worse.
+export type PairedTotals = {
+    runner: string;
+    old: { passed: number; runs: number; every_round: number; tasks: number } | null;
+    new: { passed: number; runs: number; every_round: number; tasks: number } | null;
+    better: number;
+    worse: number;
+    same: number;
+};
+
+// Read a saved --output file's runs, which every version of the file records with their task, runner and pass.
+export function loadResultRecords(path: string): PassRecord[] {
+    const data: unknown = JSON.parse(readFileSync(path, 'utf-8'));
+    const results = isObject(data) ? data.results : undefined;
+    if (!Array.isArray(results) || !results.every((result) => isObject(result) && typeof result.task_id === 'string' && typeof result.runner === 'string')) {
+        throw new Error(`${path} is not an eval result file: it needs a 'results' list of runs with task_id and runner.`);
+    }
+    return results.map((result) => ({ task_id: result.task_id as string, runner: result.runner as string, passed: result.passed === true }));
+}
+
+function rate([passed, run]: [number, number]): number {
+    return run ? passed / run : 0;
+}
+
+// Pair each task and runner across the two files, the biggest change first and those in only one file last.
+export function compareResults(oldRecords: PassRecord[], newRecords: PassRecord[]): { rows: PairedRow[]; totals: PairedTotals[] } {
+    const oldCounts = taskPassCounts(oldRecords);
+    const newCounts = taskPassCounts(newRecords);
+    const rows: PairedRow[] = [];
+    for (const taskId of new Set([...Object.keys(oldCounts), ...Object.keys(newCounts)])) {
+        for (const runner of new Set([...Object.keys(oldCounts[taskId] ?? {}), ...Object.keys(newCounts[taskId] ?? {})])) {
+            const before = oldCounts[taskId]?.[runner] ?? null;
+            const after = newCounts[taskId]?.[runner] ?? null;
+            rows.push({ task_id: taskId, runner, old: before, new: after, change: before && after ? roundTo(rate(after) - rate(before), 3) : null });
+        }
+    }
+    const weight = (row: PairedRow) => (row.change === null ? -1 : Math.abs(row.change));
+    const ordered = rows.map((row, index) => ({ row, index })).sort((first, second) => weight(second.row) - weight(first.row) || first.index - second.index);
+    const runners = [...new Set(rows.map((row) => row.runner))];
+    const totalsOf = (records: PassRecord[], runner: string) => {
+        const own = records.filter((record) => record.runner === runner);
+        if (own.length === 0) {
+            return null;
+        }
+        const everyRound = passEveryRound(own, runner);
+        return { passed: own.filter((record) => record.passed).length, runs: own.length, every_round: everyRound.passed, tasks: everyRound.tasks };
+    };
+    const totals = runners.map((runner) => {
+        const changes = rows.filter((row) => row.runner === runner && row.change !== null).map((row) => row.change!);
+        return {
+            runner,
+            old: totalsOf(oldRecords, runner),
+            new: totalsOf(newRecords, runner),
+            better: changes.filter((change) => change > 0).length,
+            worse: changes.filter((change) => change < 0).length,
+            same: changes.filter((change) => change === 0).length,
+        };
+    });
+    return { rows: ordered.map(({ row }) => row), totals };
+}
+
+export function formatComparison(comparison: { rows: PairedRow[]; totals: PairedTotals[] }, oldName: string, newName: string): string {
+    const width = Math.max(4, ...comparison.rows.map((row) => row.task_id.length));
+    const runnerWidth = Math.max(6, ...comparison.rows.map((row) => row.runner.length));
+    const cell = (counts: [number, number] | null) => (counts === null ? '-' : `${counts[0]}/${counts[1]}`);
+    const header = `${left('task', width)} ${left('runner', runnerWidth)} ${right('old', 6)} ${right('new', 6)} ${right('change', 7)}`;
+    const lines = [`Paired per task, old: ${oldName}, new: ${newName}`, header, '-'.repeat(header.length)];
+    for (const row of comparison.rows) {
+        const change = row.change === null ? 'only one' : row.change === 0 ? '0' : `${row.change > 0 ? '+' : ''}${row.change.toFixed(2)}`;
+        lines.push(`${left(row.task_id, width)} ${left(row.runner, runnerWidth)} ${right(cell(row.old), 6)} ${right(cell(row.new), 6)} ${right(change, 7)}`);
+    }
+    lines.push('');
+    for (const totals of comparison.totals) {
+        const side = (counts: PairedTotals['old']) =>
+            counts === null ? 'none' : `pooled ${counts.passed}/${counts.runs} ${percent(counts.passed / counts.runs)}, pass^k ${counts.every_round}/${counts.tasks}`;
+        lines.push(`${totals.runner}: old ${side(totals.old)}; new ${side(totals.new)}; tasks better ${totals.better}, worse ${totals.worse}, same ${totals.same}`);
+    }
+    return lines.join('\n');
+}
+
+// ============================================================================
 // Command line
 // ============================================================================
 
 const PROGRAM = 'codex eval';
 const USAGE =
     `usage: ${PROGRAM} [-h] [--tasks TASKS] [--settings SETTINGS] [--runners RUNNERS] [--only ONLY] [--output OUTPUT]\n` +
-    '                  [--seed-store SEED_STORE] [--seed [SEED]] [--repeat REPEAT] [--model-path MODEL_PATH] [--stream]';
-const VALUE_OPTIONS = ['tasks', 'settings', 'runners', 'only', 'output', 'seed-store', 'repeat', 'model-path'] as const;
+    '                  [--seed-store SEED_STORE] [--seed [SEED]] [--repeat REPEAT] [--model-path MODEL_PATH] [--stream]\n' +
+    '                  [--compare OLD] [--against NEW]';
+const VALUE_OPTIONS = ['tasks', 'settings', 'runners', 'only', 'output', 'seed-store', 'repeat', 'model-path', 'compare', 'against'] as const;
 
 function helpText(): string {
     return [
@@ -878,6 +1081,8 @@ function helpText(): string {
         '  --model-path MODEL_PATH',
         '                        Path to a GGUF model (overrides settings.json).',
         '  --stream              Print each step and tool call of every run as it happens.',
+        '  --compare OLD         After the run, pair each task with its passes in this earlier --output file.',
+        '  --against NEW         With --compare, pair the two result files without running anything or loading the model.',
     ].join('\n');
 }
 
@@ -892,6 +1097,8 @@ export type EvalArguments = {
     repeat: number;
     model_path: string | null;
     stream: boolean;
+    compare: string | null;
+    against: string | null;
 };
 
 class UsageError extends Error {}
@@ -913,6 +1120,8 @@ export function parseEvalArguments(argv: string[]): EvalArguments {
         repeat: 1,
         model_path: null,
         stream: false,
+        compare: null,
+        against: null,
     };
     const unrecognized: string[] = [];
     for (let index = 0; index < argv.length; index += 1) {
@@ -987,6 +1196,20 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     if (args.repeat < 1) {
         return usageFailure('--repeat takes a whole number of at least 1');
     }
+    if (args.against !== null && args.compare === null) {
+        return usageFailure('--against needs --compare to name the older file');
+    }
+    let oldRecords: PassRecord[] | null = null;
+    try {
+        oldRecords = args.compare !== null ? loadResultRecords(args.compare) : null;
+        if (args.against !== null) {
+            console.log(formatComparison(compareResults(oldRecords!, loadResultRecords(args.against)), args.compare!, args.against));
+            return 0;
+        }
+    } catch (error) {
+        console.error(`Error: ${errorText(error)}`);
+        return 1;
+    }
 
     const runners = args.runners.split(',').map((name) => name.trim()).filter(Boolean);
     const unknown = runners.filter((name) => !(RUNNER_CHOICES as readonly string[]).includes(name));
@@ -1052,29 +1275,48 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
                 return 1;
             }
         }
-        return await runAndReport(args, tasks, runners, llm, settings);
+        return await runAndReport(args, tasks, runners, llm, settings, oldRecords);
     } finally {
         rmSync(seedDirectory, { recursive: true, force: true });
         await llm.close?.();
     }
 }
 
-const REPORT_FLOAT_KEYS = new Set(['seconds', 'pass_rate']);
+const REPORT_FLOAT_KEYS = new Set(['seconds', 'pass_rate', 'pass_every_round_rate', 'tool_choice_accuracy']);
 
-async function runAndReport(args: EvalArguments, tasks: EvalTask[], runners: string[], llm: ChatModel, settings: Settings): Promise<number> {
+async function runAndReport(
+    args: EvalArguments,
+    tasks: EvalTask[],
+    runners: string[],
+    llm: ChatModel,
+    settings: Settings,
+    oldRecords: PassRecord[] | null,
+): Promise<number> {
     const results = await runEval(tasks, runners, llm, settings, {
         onResult: (result) => console.log(formatResult(result, args.repeat > 1)),
         onEvent: args.stream ? (line) => console.log(line) : undefined,
         seedStore: args.seed_store,
         repeat: args.repeat,
     });
-    const summary = summarize(results, runnerLabels(runners, args.seed_store));
+    const labels = runnerLabels(runners, args.seed_store);
+    const summary = summarize(results, labels);
     const counts = taskPassCounts(results);
     console.log();
     console.log(formatSummary(summary));
+    const toolUse = formatToolUse(summary);
+    if (toolUse) {
+        console.log();
+        console.log(toolUse);
+    }
+    console.log();
+    console.log(formatTaskPasses(counts, labels));
     if (args.repeat > 1) {
         console.log();
         console.log(formatUnsteadyTasks(counts));
+    }
+    if (oldRecords !== null) {
+        console.log();
+        console.log(formatComparison(compareResults(oldRecords, results), args.compare!, 'this run'));
     }
     if (args.output) {
         const report = {
@@ -1087,7 +1329,7 @@ async function runAndReport(args: EvalArguments, tasks: EvalTask[], runners: str
             task_passes: Object.fromEntries(
                 Object.entries(counts).map(([taskId, byRunner]) => [
                     taskId,
-                    Object.fromEntries(Object.entries(byRunner).map(([runner, [passed, run]]) => [runner, { passed, runs: run }])),
+                    Object.fromEntries(Object.entries(byRunner).map(([runner, [passed, run]]) => [runner, { passed, runs: run, every_round: passed === run }])),
                 ]),
             ),
             results: results.map((result) => result.toJson()),

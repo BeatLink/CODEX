@@ -17,6 +17,7 @@ import { workDirectly } from './steps/write.js';
 import { checkAndRevise, check } from './steps/check.js';
 import { followDelegation, planSubtasks, workSubtasks, runSubtasks } from './steps/subtasks.js';
 import { ValueError, resolvePath, type Toolbox } from './tools.js';
+import type { ToolCallRecord } from './toolStage.js';
 
 // ============================================================================
 // Limits and schemas
@@ -735,6 +736,12 @@ export type TreeCallback = (nodes: TaskSnapshot[]) => void;
 export type ProgressCallback = (label: string) => void;
 export type StageOutputCallback = (label: string, token: string) => void;
 export type StageInputCallback = (label: string, systemPrompt: string, userInput: string) => void;
+// A tool call with the agent whose run made it (null at the top) and how many hand-overs deep that run is.
+export type AgentToolCall = ToolCallRecord & { agent: string | null; depth: number };
+export type ToolCallCallback = (call: AgentToolCall) => void;
+// A hand-over to an agent, with the agent that handed it over (null at the top) and the new run's depth.
+export type Delegation = { agent: string; parent: string | null; depth: number };
+export type DelegationCallback = (delegation: Delegation) => void;
 
 export type TaskTreeCallbacks = {
     // Asks the user a question and returns their answer; becomes the daemon's run.clarification.
@@ -747,6 +754,10 @@ export type TaskTreeCallbacks = {
     stageInputCallback?: StageInputCallback | null;
     // Gets the whole tree after every change; becomes run.tree {nodes}.
     treeCallback?: TreeCallback | null;
+    // Gets each tool call as the tool stage finishes it, in every agent's run.
+    toolCallCallback?: ToolCallCallback | null;
+    // Gets each hand-over to an agent before the agent's run starts.
+    delegationCallback?: DelegationCallback | null;
     // Stops the run at its next step or token; either one makes run() throw RunStopped.
     signal?: AbortSignal | null;
     shouldStop?: (() => boolean) | null;
@@ -836,6 +847,8 @@ export class TaskTreeRun {
     readonly stageOutputCallback: StageOutputCallback | null;
     readonly stageInputCallback: StageInputCallback | null;
     readonly treeCallback: TreeCallback | null;
+    readonly toolCallCallback: ToolCallCallback | null;
+    readonly delegationCallback: DelegationCallback | null;
     readonly signal: AbortSignal | null;
     readonly shouldStop: (() => boolean) | null;
     checkpointId: number | null;
@@ -892,6 +905,8 @@ export class TaskTreeRun {
         this.stageOutputCallback = options.stageOutputCallback ?? null;
         this.stageInputCallback = options.stageInputCallback ?? null;
         this.treeCallback = options.treeCallback ?? null;
+        this.toolCallCallback = options.toolCallCallback ?? null;
+        this.delegationCallback = options.delegationCallback ?? null;
         this.signal = options.signal ?? null;
         this.shouldStop = options.shouldStop ?? null;
         this.checkpointId = options.checkpointId ?? null;
@@ -1343,6 +1358,8 @@ export class TaskTreeRun {
             stageOutputCallback: this.stageOutputCallback,
             stageInputCallback: this.stageInputCallback,
             treeCallback: null,
+            toolCallCallback: this.toolCallCallback,
+            delegationCallback: this.delegationCallback,
             // Stopping the parent stops the agent's run too.
             signal: this.signal,
             shouldStop: this.shouldStop,
@@ -1357,6 +1374,7 @@ export class TaskTreeRun {
             trust: this.trust,
         });
         run.actionsDecision = this.actionsDecision;
+        this.delegationCallback?.({ agent: agentName, parent: this.agent?.name ?? null, depth: run.agentDepth });
         let result: string;
         try {
             result = await run.run();
@@ -1690,6 +1708,8 @@ export async function executeTaskTree(userPrompt: string, options: ExecuteTaskTr
         stageOutputCallback: options.stageOutputCallback,
         stageInputCallback: options.stageInputCallback,
         treeCallback: options.treeCallback,
+        toolCallCallback: options.toolCallCallback,
+        delegationCallback: options.delegationCallback,
         signal: options.signal,
         shouldStop: options.shouldStop,
         mode,

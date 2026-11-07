@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ChatCompletion, ChatCompletionRequest, ChatModel, ToolDefinition } from './model.js';
-import { ANSWER_NOW_CALL_NOTE, REPEATED_CALL_NOTE, pythonJsonLength, runToolStage, textToolCalls } from './toolStage.js';
+import { ANSWER_NOW_CALL_NOTE, REPEATED_CALL_NOTE, callIsValid, pythonJsonLength, runToolStage, textToolCalls, type ToolCallRecord } from './toolStage.js';
 import { TOOL_DEFINITIONS } from './tools.js';
 
 // Records each call and answers it with the given output.
@@ -190,6 +190,45 @@ describe('tool stage', () => {
         expect(toolbox.calls).toHaveLength(1);
         expect(result).toContain('tool-call limit was reached');
         expect(result).toContain('sample tool output');
+    });
+
+    it('records each call in order with whether its arguments were valid and whether it failed', async () => {
+        const toolbox = new FakeToolbox((_name, given) => (given.path ? 'sample tool output' : 'Tool error: no path given.'));
+        const severalCalls: ChatCompletion = {
+            content: '',
+            tool_calls: [
+                { id: 'call-1', type: 'function', function: { name: 'read_file', arguments: '{"path":"notes.txt"}' } },
+                { id: 'call-2', type: 'function', function: { name: 'read_file', arguments: '{"file":"notes.txt"}' } },
+                { id: 'call-3', type: 'function', function: { name: 'write_file', arguments: '{"path":"notes.txt","content":""}' } },
+            ],
+            finish_reason: 'tool_calls',
+        };
+        const model = new FakeModel([severalCalls, toolCallReply('call-4'), toolCallReply('call-5')]);
+        const records: ToolCallRecord[] = [];
+
+        await runToolStage(model, 'Use tools when useful.', 'Read notes.txt.', toolbox, 200, 0.1, 3, {
+            allowedTools: new Set(['read_file']),
+            onToolCall: (call) => records.push(call),
+        });
+
+        expect(records.map(({ name, valid, error }) => [name, valid, error])).toEqual([
+            ['read_file', true, false],
+            ['read_file', false, true],
+            ['write_file', false, true],
+            // A repeat of a call that worked, then a call made past the limit.
+            ['read_file', true, false],
+            ['read_file', true, true],
+        ]);
+        expect(records[1].arguments).toBe('{"file":"notes.txt"}');
+    });
+
+    it('checks arguments against the offered schema only', () => {
+        expect(callIsValid('read_file', '{"path":"a.txt"}', TOOL_DEFINITIONS)).toBe(true);
+        expect(callIsValid('read_file', '{"path":""}', TOOL_DEFINITIONS)).toBe(false);
+        expect(callIsValid('read_file', 'not json', TOOL_DEFINITIONS)).toBe(false);
+        expect(callIsValid('read_file', '["a.txt"]', TOOL_DEFINITIONS)).toBe(false);
+        expect(callIsValid('mcp__calendar__list_events', '{}', TOOL_DEFINITIONS)).toBe(false);
+        expect(callIsValid('mcp__calendar__list_events', '{"day":"monday"}', [LIST_EVENTS])).toBe(true);
     });
 
     it('answers a repeated call from the earlier result and counts it toward the limit', async () => {

@@ -88,6 +88,7 @@ export async function gather(run: TaskTreeRun, node: TaskNode, decision: Decisio
             onToken: run.tokenCallbackFor(label),
             contextSize: run.contextSize,
             signal: run.signal ?? undefined,
+            onToolCall: run.toolCallCallback === null ? null : (call) => run.toolCallCallback!({ ...call, agent: run.agent?.name ?? null, depth: run.agentDepth }),
             ...toolOptions,
         });
     });
