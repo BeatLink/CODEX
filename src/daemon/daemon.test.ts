@@ -333,7 +333,7 @@ describe('HarnessDaemon', () => {
         });
         const idle = async (): Promise<boolean> => false;
         const daemon = await start(
-            { researchOneTopic, indexKnowledge: idle, learnFromEpisodes: idle, consolidateKnowledge: idle },
+            { researchOneTopic, indexKnowledge: idle, learnFromEpisodes: idle, consolidateKnowledge: idle, titleConversations: idle },
             true,
         );
         const client = await daemon.client();
@@ -352,7 +352,7 @@ describe('HarnessDaemon', () => {
     it('handles a posted event in the background and lets the user resolve its action', async () => {
         settings.background_research_enabled = true;
         const idle = async (): Promise<boolean> => false;
-        const daemon = await start({ researchOneTopic: idle, indexKnowledge: idle, learnFromEpisodes: idle, consolidateKnowledge: idle }, true);
+        const daemon = await start({ researchOneTopic: idle, indexKnowledge: idle, learnFromEpisodes: idle, consolidateKnowledge: idle, titleConversations: idle }, true);
         const events = new EventLog();
         const client = await daemon.client(events.handler);
 
@@ -488,7 +488,7 @@ describe('HarnessDaemon', () => {
         store.claimJob();
         const idle = async (): Promise<boolean> => false;
 
-        const daemon = await start({ researchOneTopic: idle, indexKnowledge: idle, learnFromEpisodes: idle, consolidateKnowledge: idle }, true);
+        const daemon = await start({ researchOneTopic: idle, indexKnowledge: idle, learnFromEpisodes: idle, consolidateKnowledge: idle, titleConversations: idle }, true);
 
         const jobs = await (await daemon.client()).call<Array<Record<string, unknown>>>('queue_status');
         expect(jobs.map((job) => job.status)).toEqual(['pending']);

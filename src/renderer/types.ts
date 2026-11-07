@@ -38,6 +38,7 @@ export type StepInput = { system: string; input: string };
 export type UnfinishedRun = {
     id: number;
     prompt: string;
+    title?: string;
     status: string;
     tasks_done: number;
     tasks_total: number;

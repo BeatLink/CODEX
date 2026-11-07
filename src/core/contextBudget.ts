@@ -59,6 +59,7 @@ export const UNTRUSTED_HEADINGS = [
     'Second fact',
     'Its facts',
     'Email',
+    'Request to title',
 ] as const;
 
 export const UNTRUSTED_OPEN = '<untrusted-data>';

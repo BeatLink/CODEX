@@ -189,6 +189,10 @@ export const MIGRATIONS: readonly string[] = [
     );
     CREATE INDEX actions_status ON actions(status, created_at);
     `,
+    `
+    ALTER TABLE task_runs ADD COLUMN title TEXT NOT NULL DEFAULT '';
+    ALTER TABLE episodes ADD COLUMN title TEXT NOT NULL DEFAULT '';
+    `,
 ];
 
 // ============================================================================
@@ -348,6 +352,11 @@ export type Recalled = {
 };
 
 export type TaskRun = Row & { options: Record<string, unknown>; state: Record<string, unknown> | null };
+
+// A conversation is one request: an unfinished task tree run, or a finished one remembered as an episode.
+export type ConversationKind = 'task_run' | 'episode';
+
+export type Conversation = { kind: ConversationKind; id: number; prompt: string };
 
 // ============================================================================
 // Text matching
@@ -1080,7 +1089,7 @@ export class KnowledgeStore {
         const limit = options.limit ?? 50;
         return this.withConnection((connection) =>
             connection.all(
-                'SELECT id, prompt, task_type, checklist, answer, outcome, task_tree, scope, created_at, processed_at ' +
+                'SELECT id, prompt, title, task_type, checklist, answer, outcome, task_tree, scope, created_at, processed_at ' +
                     'FROM episodes WHERE (? = 0 OR processed_at IS NULL) ORDER BY created_at DESC LIMIT ?',
                 unprocessedOnly ? 1 : 0, limit,
             ),
@@ -1131,11 +1140,34 @@ export class KnowledgeStore {
         const placeholders = RESUMABLE_TASK_RUN_STATUSES.map(() => '?').join(', ');
         return this.withConnection((connection) =>
             connection.all(
-                'SELECT id, prompt, status, tasks_done, tasks_total, started_at, updated_at FROM task_runs ' +
+                'SELECT id, prompt, title, status, tasks_done, tasks_total, started_at, updated_at FROM task_runs ' +
                     `WHERE status IN (${placeholders}) ORDER BY updated_at DESC LIMIT ?`,
                 ...RESUMABLE_TASK_RUN_STATUSES, limit,
             ),
         );
+    }
+
+    // Returns the newest conversation without a title, unfinished runs first because the window shows them.
+    nextConversationToTitle(): Conversation | null {
+        const placeholders = RESUMABLE_TASK_RUN_STATUSES.map(() => '?').join(', ');
+        return this.withConnection((connection) => {
+            const run = connection.get(
+                `SELECT id, prompt FROM task_runs WHERE title = '' AND status IN (${placeholders}) ORDER BY updated_at DESC LIMIT 1`,
+                ...RESUMABLE_TASK_RUN_STATUSES,
+            );
+            if (run) {
+                return { kind: 'task_run', id: Number(run.id), prompt: String(run.prompt) };
+            }
+            const episode = connection.get("SELECT id, prompt FROM episodes WHERE title = '' ORDER BY created_at DESC LIMIT 1");
+            return episode ? { kind: 'episode', id: Number(episode.id), prompt: String(episode.prompt) } : null;
+        });
+    }
+
+    setConversationTitle(kind: ConversationKind, conversationId: number, title: string): void {
+        const table = kind === 'task_run' ? 'task_runs' : 'episodes';
+        this.withConnection((connection) => {
+            connection.run(`UPDATE ${table} SET title = ? WHERE id = ?`, title, conversationId);
+        });
     }
 
     markEpisodeProcessed(episodeId: number): void {

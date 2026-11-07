@@ -222,7 +222,7 @@ export function unfinishedRunText(state: WorkbenchState): string | null {
     }
     const run = state.unfinishedRuns[0];
     const prompt = run.prompt.split(/\s+/).filter(Boolean).join(' ');
-    const shown = prompt.slice(0, UNFINISHED_PROMPT_CHARS) + (prompt.length > UNFINISHED_PROMPT_CHARS ? '…' : '');
+    const shown = run.title || prompt.slice(0, UNFINISHED_PROMPT_CHARS) + (prompt.length > UNFINISHED_PROMPT_CHARS ? '…' : '');
     return `Unfinished: ${shown} (${run.tasks_done} of ${run.tasks_total} tasks done)`;
 }
 

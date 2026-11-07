@@ -434,6 +434,15 @@ other, and loads with `background_gpu_layers` (default 0, the CPU) and
 `background_context_size` (0 uses `context_size`). It still stops as soon as a
 request starts, and it is unloaded after five minutes without background work.
 
+### Conversation titles
+
+Each request gets a short title, like a chat title, written by the model in
+idle time: "SQLite FTS5 ranking" for "how does fts5 in sqlite rank its
+results?". Unfinished runs are titled first, then finished requests, newest
+first. A title has one to five words and at most 40 characters and must share
+a word with the request; otherwise, or when the model fails, the request's
+first words become the title. Topics are named by the same rules (see below).
+
 ### Background consolidation
 
 With no research queued and no requests left to learn from, the worker tidies
@@ -657,8 +666,9 @@ On 2026-10-21, with Qwen3-Embedding-0.6B on a busy CPU:
   emphasis, code, and lists styled; web links open in the browser when clicked,
   and **Copy answer** copies it. Typing `/` suggests the commands. Clarification
   questions appear as a dialog. When a task tree run was left unfinished, a bar
-  under the Run button names it and how many of its tasks are done, with Resume
-  and Discard buttons.
+  under the Run button names it by its title (or the start of its request until
+  it has one) and how many of its tasks are done, with Resume and Discard
+  buttons.
 - **Background**: queue topics, start research now, pause or resume the worker,
   and watch its output and queue.
 - **Knowledge**: a graph of every topic with its subtopics, articles and

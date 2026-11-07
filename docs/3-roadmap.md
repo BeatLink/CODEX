@@ -13,6 +13,7 @@ Every open strategic question (doc 2) is settled by eval runs, so this comes bef
 ## In progress
 
 - Name topics like chat titles, and place renamed topics again during consolidation.
+- Conversation titles: built (`core/titles.ts`, doc 1, "Background worker"); only the unfinished-run bar shows them, since there is no list of past conversations yet. Check a sample of titles from real requests against the request text.
 
 ## Agent hierarchy
 

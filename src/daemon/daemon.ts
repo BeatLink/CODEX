@@ -22,6 +22,7 @@ import { ImapConnector } from '../core/imap.js';
 import { MailConnector } from '../core/mail.js';
 import { ModelCache } from '../core/model.js';
 import { runNextJob, type BackgroundStep, type Job } from '../core/scheduler.js';
+import { titleConversations } from '../core/titles.js';
 import { backgroundModelKey, defaultSettingsPath, expandUser, saveSettings, validateSettings, type Settings } from '../core/settings.js';
 import { executeTaskTree, RunStopped, savedRunOptions, type ExecuteTaskTreeOptions } from '../core/taskTree.js';
 import { LineReader } from '../main/daemonBridge.js';
@@ -212,6 +213,7 @@ export type DaemonDependencies = {
     indexKnowledge: BackgroundStep;
     learnFromEpisodes: BackgroundStep;
     consolidateKnowledge: BackgroundStep;
+    titleConversations: BackgroundStep;
     pollConnectors: BackgroundStep;
     handleEvents: BackgroundStep;
     refreshEnvironment: (settings: Settings) => Promise<boolean>;
@@ -229,6 +231,7 @@ const DEFAULT_DEPENDENCIES: DaemonDependencies = {
     indexKnowledge,
     learnFromEpisodes,
     consolidateKnowledge,
+    titleConversations,
     pollConnectors: async (settings, options) => {
         const maildir = await defaultMailConnector.poll(settings, options);
         const imap = await defaultImapConnector.poll(settings, options);
@@ -963,12 +966,13 @@ export class HarnessDaemon {
         }
     }
 
-    // Connectors queue events and events are handled first, then queued research, indexing what it found, learning from past requests, and tidying.
+    // Connectors queue events and events are handled first, then titling conversations, queued research, indexing what it found, learning from past requests, and tidying.
     private backgroundJobs(): Job[] {
-        const { pollConnectors, handleEvents, researchOneTopic, indexKnowledge, learnFromEpisodes, consolidateKnowledge } = this.dependencies;
+        const { pollConnectors, handleEvents, titleConversations, researchOneTopic, indexKnowledge, learnFromEpisodes, consolidateKnowledge } = this.dependencies;
         return [
             { name: 'poll_connectors', jobClass: 'reactive', step: pollConnectors },
             { name: 'handle_events', jobClass: 'reactive', step: handleEvents },
+            { name: 'title', jobClass: 'maintenance', step: titleConversations },
             { name: 'research', jobClass: 'maintenance', step: researchOneTopic },
             { name: 'index', jobClass: 'maintenance', step: indexKnowledge },
             { name: 'learn', jobClass: 'maintenance', step: learnFromEpisodes },

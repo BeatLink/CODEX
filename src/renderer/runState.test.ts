@@ -286,6 +286,12 @@ describe('daemon status and other events', () => {
         expect(text).toBe(`Unfinished: ${prompt.trim().slice(0, 80)}… (1 of 4 tasks done)`);
         expect(unfinishedRunText({ ...state, running: true })).toBeNull();
     });
+
+    it('names an unfinished run by its title once it has one', () => {
+        const state = { ...initialState(), unfinishedRuns: [{ id: 2, prompt: 'word '.repeat(30), title: 'Word list', status: 'stopped', tasks_done: 1, tasks_total: 4 }] };
+
+        expect(unfinishedRunText(state)).toBe('Unfinished: Word list (1 of 4 tasks done)');
+    });
 });
 
 // ============================================================================
