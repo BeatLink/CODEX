@@ -135,9 +135,29 @@ The core loop, in the version built *after* the session in file 3: it implements
 
 **Landed** (this commit): drives computed from the store and action record, with only weights and thresholds stored ("Cognitive loop" and roadmap item "Goals, drives and initiative"); evidence labels set by the harness ("Scratchpad contract"); memories keep their source episode or conversation id ("Conversation archive"); open questions from a session note as goal candidates ("Cognitive loop"); Nexus prior-art table rows.
 
+### 7. The other `public/js` modules: `trace.js`, `memory.js`, `tape.js`, `state.js`, `self.js`, `mind.js`, `parse.js`, `claude.js`, `ui.js`
+
+Mostly the implementation of features already reviewed in files 1–6. One new lesson, in `trace.js`.
+
+**`trace.js`: the record must say which period it covers.** The model asked for the trace ("I've caught myself claiming actions that didn't fire, but I have no way to detect the reverse case, an action that fired while I reported nothing"), so it is written only where an action really runs, never from model output, and read back so the model can check its account in both directions. Its own header records a bug the model found by reading the file: the prompt labelled `tally()` as "totals this session" while it counted entries restored from earlier sessions too, so the record meant to catch overclaiming was itself overclaiming. The fix marks how many held entries predate this session, reports totals for the session alone, and names carried-over counts as such.
+
+| Module and feature | Codex equivalent | Verdict and reason |
+| --- | --- | --- |
+| `trace.js`: written only at real fire sites; checked in both directions (claimed but not done, done but not reported) | `checks.ts` flags a change the report does not mention (line 131) and claimed changes or passing tests no action backs up (`unbackedClaims`) | Already covered for foreground runs, in both directions. |
+| `trace.js`: totals mislabelled across a session boundary | The action record for idle work is proposed in "Cognitive loop" | **Docs (small).** The record shown to the step that chooses idle work states the period it covers and labels carried-over entries, so a count is never read as recent activity. A wrong count there would push drives (now computed from the record) the wrong way. |
+| `memory.js`: one markdown file of typed lines (`KNOWLEDGE`, `FINDING`, `THOUGHT`), parsed by regex; grade and cycle stamped by the harness; monologue buffered, kept out of the prompt but searchable; findings in their own prompt section so they do not scroll out | SQLite store with recall by relevance; harness-set labels and source links added in file 6 | Already covered; Codex's store is sturdier than regex over markdown (file 3 recorded lines lost to formatting). |
+| `tape.js`: verbatim log, cycle-tagged lines, `REPLAY` of a cycle within a character budget | Archive proposals (files 2 and 4) | Already covered. |
+| `state.js`: debounced saves serialised so they cannot land out of order; search by plain term overlap, chosen because "a predictable ranking is easier for NEXUS to reason about than an opaque one" | SQLite in WAL mode; hybrid word and vector recall merged by reciprocal rank fusion | Covered for saves. **Skip** the search argument: Codex's model does not reason about its own ranking, and meaning-based recall finds differently worded facts that term overlap misses. |
+| `self.js`: prompt saved and proposals applied only from click handlers, never from a cycle | Persona file and staged proposals (files 2 and 4) | Already covered. |
+| `mind.js`: wake/sleep timer with a generation counter so an old chain cannot re-arm and double the rate | One scheduler loop in the daemon | Does not apply. |
+| `parse.js`: degrades silently (strips every fence, rescues the outermost braces, returns a fallback), which the model itself flagged as making failures look like legitimate nulls | Grammar-forced JSON with validation | Already covered; Codex's parsers fail visibly. |
+| `claude.js`: one client, a rolling history cap, refusals raised as errors | Local model behind the daemon | Does not apply. |
+| `ui.js`: all model text inserted with `textContent` | `renderer/markdown.ts` escapes before insertion (file 1) | Already covered. |
+
+**Doc 2/3 edits:** the small "Action record" tweak above, waiting for the user's go-ahead.
+
 ## Still to review
 
-1. `mind.js`, `memory.js`, `self.js`, `state.js`, `trace.js`, `tape.js`, `parse.js`, `claude.js`, `ui.js`
-2. HTML and CSS (skim)
+1. HTML and CSS (skim)
 3. `legacy/`: `drives.js`, `personality.js`, `curiosity.js`, `emergent.superseded.js`, `living-mind.scheduler.js`, the original HTML files (skim)
 4. `sandbox/.backups/…/nexus.js`, compared with the current `nexus.js` only
