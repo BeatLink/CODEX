@@ -112,9 +112,32 @@ The backend: a static host plus HTTP endpoints for model calls (CLI or API trans
 
 **Landed:** nothing in docs 1–3; this section only.
 
+### 6. `public/js/nexus.js`
+
+The core loop, in the version built *after* the session in file 3: it implements what the model asked for there. Each cycle builds a system prompt from the bootstrap prompt, a menu of verbs, the newest memory and findings, two unrequested memory lines, up to two source files quoted verbatim and the last four chat turns; asks "What are you doing this cycle, and why?" under a harness-written situation report; answers any `RECALL`/`SEARCH`/`REPLAY` lookups (at most 4, one re-ask); then runs up to 6 `SAY`/`LEARN`/`REMEMBER`/`INSPECT`/`PROPOSE` lines in the order written. Every exchange, sub-calls included, goes to the tape. On sleep, one call writes a fixed-section session note.
+
+**Main finding: Nexus dropped drives.** The file opens "Nothing here models what NEXUS is: no drives, no values, no personality document", and `situation()` is documented as "the substitute for drive levels. Everything here is a fact from the record rather than a synthetic number — there is nothing to narrate around, and the pacing pressure comes from noticing a rut rather than from a threshold." The report gives cycle number, time awake, time since the last session, the last 10 harness-recorded actions, totals, the current streak ("your last 3 actions were all …") and time since it last spoke to the user. Taken with file 1 (a drive that cannot cause a behaviour is a number to narrate around), the lesson for Codex is stronger than "a drive owns a job": the pressure to act should be computed each time from facts in the store and the action record (time since a job last ran, stale topics, open items, unanswered mail, approval rates), not kept as stored levels that the model or user nudges. Codex's own scheduler proposal ("Self-improving domains": priority = urgency × expected value × staleness, from the store) already works this way. What stays user-editable is the weights and thresholds of that computation, and Nexus's bounds (file 1) apply to them. Caveat: Nexus is a cloud model with no task to do, so this is one data point, but it is the author's own revision after watching the loop run.
+
+| Nexus feature | Codex equivalent | Verdict and reason |
+| --- | --- | --- |
+| Situation report of facts from the record instead of drive levels | Doc 2 "Cognitive loop" proposes numeric drive levels stored in the database, each owning a job | **Docs (recommended).** Reframe drives as quantities derived from the store and the action record each time, with only their weights and thresholds stored and bounded. Reason above. |
+| Provenance grade (`read`/`reported`/`inferred`) stamped by the harness from what it actually put in the context that turn, not from what the model claims; stored with every kept line | Doc 2 "Scratchpad contract" proposes evidence labels (file 3) without saying who sets them | **Docs (small).** The harness sets the label from where the text came from; the model never labels its own evidence, since the failure being fixed is that it cannot tell them apart. |
+| Every kept memory line carries the cycle it came from, a pointer back to the tape | `user_memory` rows have store, kind and status but no link to the episode or conversation they were learned from | **Docs.** Memories learned by `learnFromEpisodes` keep the id of their source episode or conversation; the archive lookups proposed in "Conversation archive" (checking a memory against what the user said) need that link. |
+| Session-close note in fixed sections: what I actually did (from the record, not intentions), open questions, what to check next session | `learnFromEpisodes` extracts preferences, projects, corrections and research subjects per episode | **Candidate (docs).** Open questions and things to check could feed the goal list in "Cognitive loop" as user-visible candidates, gated like any goal change. Useful once goals exist; not before. |
+| Involuntary recall: each cycle, one memory line best matched to the moment plus one at random, weighted toward older lines | Harness recall by relevance before every call | **Skip.** Random lines cost a 4B model scarce context for likely irrelevant text. Random sampling of old items has a better home in the memory drift watch, which already samples stored items against their sources. |
+| Source quoted verbatim in the prompt (2 files, 9,000 characters each) instead of a sub-call's summary | Evidence labels (file 3); capped excerpts passed forward | Already covered by the labels: when a claim must be checked, the write stage needs the quoted text, not a summary. |
+| `RECALL` searches memory, tape and chat; `REPLAY` returns a whole past cycle verbatim | Recall over the store; "Conversational continuity" reaches older turns through recall and the archive | Already covered by files 2 and 4. |
+| Lookups answered before the reply is final (at most 4, one re-ask); at most 6 verbs per reply; a guard against recursive self-actions | Tool loop with `max_tool_calls` | Already covered. |
+| Verbs parsed from any line of free text; placeholder queries like `<query>` filtered out after the session's echo bug | `textToolCalls` known limit (file 3) | Already noted; the filter patched only the symptom seen, which supports testing Codex's case rather than assuming it safe. |
+| If the model reasons but never uses `SAY`, its prose becomes the reply | Final-answer stage always produces the reply | Does not apply. |
+| Prompt marks "Everything below is written by the harness, not by beatlink" | Untrusted-text headings separate sources of text | Already covered. |
+| Bootstrap prompt editable while running, change logged and applied from the next call | Persona proposal (file 2) | Already covered. |
+
+**Doc 2/3 edits:** recommended above, waiting for the user's go-ahead.
+
 ## Still to review
 
-1. `public/js/nexus.js` (758 lines, the core), then `mind.js`, `memory.js`, `self.js`, `state.js`, `trace.js`, `tape.js`, `parse.js`, `claude.js`, `ui.js`
+1. `mind.js`, `memory.js`, `self.js`, `state.js`, `trace.js`, `tape.js`, `parse.js`, `claude.js`, `ui.js`
 2. HTML and CSS (skim)
 3. `legacy/`: `drives.js`, `personality.js`, `curiosity.js`, `emergent.superseded.js`, `living-mind.scheduler.js`, the original HTML files (skim)
 4. `sandbox/.backups/…/nexus.js`, compared with the current `nexus.js` only
