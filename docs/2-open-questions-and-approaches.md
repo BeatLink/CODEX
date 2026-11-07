@@ -46,6 +46,15 @@ Approach chosen in code, first match wins: agent → `delegate`; user data or ch
 - **Costs:** more output tokens per decision (booleans are cheap, lists are not). Answers can contradict each other (e.g. `changes_things` true while the parts only read), which the fixed order resolves.
 - **First rule built (2026-11-06):** a named offered agent wins over the chosen approach, so `agent: "comms"` with `approach: "research"` delegates (doc 1, "Delegation flow"). That alone took the agents eval from 3/24 to 11/24 tasks, which supports moving the other rules into code too. The rest is not built: keep `DECISION_PROMPT` behind a setting so the agents eval can compare the two; see doc 3, "Task-decomposition ideas to evaluate".
 
+### Splitting by need, not by size
+
+A 4B model cannot judge in advance whether a task is large, so the harness splits on things it can check.
+
+- **Agent routing as a multiple choice:** one schema-constrained call asks which of the offered agents the task needs, any number of them. Two or more → code makes one subtask per agent (with `depends_on` where one needs another's result) and each subtask delegates; one → delegate directly; none → the usual `decide`. **Why:** picking from a list is what a small model does well; "is this large?" is not. Today several agents are reached only if the model first chooses `decompose`, and it rarely does: `free-slot-and-weather` (calendar + weather) passed 0/3 in agents runs.
+- **Split on failure as the backstop:** a task whose check still fails, or that runs out of tool calls or context, is split instead of answered badly. Partly built: "still failing → split into smaller subtasks" (doc 1); not yet for the tool-call and context limits. **Why:** needs no prediction, at the cost of one wasted attempt.
+- **Long tasks split as far as possible (MAKER-style):** for long chains of checkable steps, never ask about size; split until each step is atomic, then add voting and red flags ("Voting and red-flagging"). Plan lazily: the top level plans phases, and each phase is planned only when work reaches it, from the results so far. `max_task_depth`, `max_task_nodes` and the no-resplit rule become budgets a long task can raise, with checkpoints, instead of fixed caps. **Why:** MAKER's million-step result came from maximal splitting with minimal context per step; fixed caps stop a long project however well each step goes.
+- **Not built.** See doc 3, Agent hierarchy, next step 4.
+
 ## Where does reasoning happen?
 
 ### Fact and rule engine (neuro-symbolic)
