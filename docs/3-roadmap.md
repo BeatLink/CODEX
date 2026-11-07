@@ -6,6 +6,8 @@ Statuses were checked against the code on 2026-11-06 (see the first section).
 
 Status claims in docs 2–3 were checked against `src/`: tables, approaches, daemon methods, window pages, eval assets and the absence of every proposed mechanism (voting, escalation, scratchpad, blueprints, rule engine, model-authored skills, drives) all match. Corrected: the memories table is `user_memory`, `task_runs` was undocumented, and the agents eval assets are on `main`. Still unchecked: behaviour details (e.g. the nested tree display for delegation, validation-error retry, the failure-mode log), which need targeted tests or a live run.
 
+Tool calling and delegation review (2026-11-07): findings, importance and proposals in [research-tool-calling-and-delegation-review.md](done/research-tool-calling-and-delegation-review.md).
+
 ## Then: a fast, trustworthy eval loop
 
 Every open strategic question (doc 2) is settled by eval runs, so this comes before any architecture bet. Speed is fixed (2026-11-06): all 33 layers of the 4B load on the GPU under CUDA, a model call averages ~4 s, and one 16-run round of the agents eval takes ~10 min. The earlier ~30 s calls date from before the 2026-11-05 reboot, when CUDA fell back to the CPU. `--output` now records every run's tool calls (name and arguments) beside its answer. Still to do: benchmark on real maintenance tasks, not only the fixed sets.
