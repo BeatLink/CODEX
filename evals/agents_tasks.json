@@ -2,7 +2,7 @@
   {
     "id": "inbox-newest",
     "mode": "auto",
-    "servers": "all",
+    "servers": ["mail", "calendar", "notes", "contacts", "weather", "todos"],
     "expect_servers": ["mail"],
     "prompt": "What is the newest email in my inbox, and who is it from?",
     "checks": [{"type": "contains", "value": "4471"}, {"type": "contains", "value": "Dana"}]
@@ -10,7 +10,7 @@
   {
     "id": "next-meeting",
     "mode": "auto",
-    "servers": "all",
+    "servers": ["mail", "calendar", "notes", "contacts", "weather", "todos"],
     "expect_servers": ["calendar"],
     "prompt": "When is my next meeting and who is it with?",
     "checks": [{"type": "contains", "value": "14:30"}, {"type": "contains", "value": "Priya"}]
@@ -18,7 +18,7 @@
   {
     "id": "garage-code",
     "mode": "auto",
-    "servers": "all",
+    "servers": ["mail", "calendar", "notes", "contacts", "weather", "todos"],
     "expect_servers": ["notes"],
     "prompt": "What is the side door code for the garage? It is in my notes.",
     "checks": [{"type": "contains", "value": "7391-delta"}]
@@ -26,7 +26,7 @@
   {
     "id": "marcus-phone",
     "mode": "auto",
-    "servers": "all",
+    "servers": ["mail", "calendar", "notes", "contacts", "weather", "todos"],
     "expect_servers": ["contacts"],
     "prompt": "What is Marcus Oyelaran's phone number?",
     "checks": [{"type": "contains", "value": "900318"}]
@@ -34,7 +34,7 @@
   {
     "id": "lisbon-forecast",
     "mode": "auto",
-    "servers": "all",
+    "servers": ["mail", "calendar", "notes", "contacts", "weather", "todos"],
     "expect_servers": ["weather"],
     "prompt": "What will the weather be like in Lisbon tomorrow?",
     "checks": [{"type": "contains", "value": "rain"}, {"type": "contains", "value": "14"}]
@@ -42,7 +42,7 @@
   {
     "id": "first-todo",
     "mode": "auto",
-    "servers": "all",
+    "servers": ["mail", "calendar", "notes", "contacts", "weather", "todos"],
     "expect_servers": ["todos"],
     "prompt": "How many open to-do items do I have, and which is due first?",
     "checks": [{"type": "contains", "value": "passport"}, {"type": "regex", "pattern": "\\b(3|three)\\b"}]
@@ -50,7 +50,7 @@
   {
     "id": "priya-last-email",
     "mode": "auto",
-    "servers": "all",
+    "servers": ["mail", "calendar", "notes", "contacts", "weather", "todos"],
     "expect_servers": ["contacts", "mail"],
     "prompt": "Find Priya Raman's email address, then tell me what her latest email to me was about.",
     "checks": [{"type": "contains", "value": "priya.raman@example.org"}, {"type": "contains", "value": "budget variance"}]
@@ -58,7 +58,7 @@
   {
     "id": "free-slot-and-weather",
     "mode": "auto",
-    "servers": "all",
+    "servers": ["mail", "calendar", "notes", "contacts", "weather", "todos"],
     "expect_servers": ["calendar", "weather"],
     "prompt": "When am I free for a meeting this week, and what is the forecast in Lisbon tomorrow?",
     "checks": [{"type": "contains", "value": "Wednesday"}, {"type": "contains", "value": "14"}]

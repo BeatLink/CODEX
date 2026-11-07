@@ -198,7 +198,7 @@ offers Resume and Discard for the newest unfinished run, and
 
 A task can hand its work to a named specialist agent, which works it as its own task tree with its own instructions and tools. Agents are Markdown files in `~/.config/codex/agents/` and the folder's `.codex/agents/`: the file name is the agent's name, and the YAML front matter gives a `description` (what the parent reads to choose it), `mcp_servers` (servers only this agent may use), and `agents` (the agents it can hand work to). The body is added to the standing instructions for the agent's calls. Agents nest three deep at most. See [docs/1-architecture.md](docs/1-architecture.md#agent-hierarchy).
 
-A starter set ships in `share/agents/`: `mail`, `calendar`, `contacts`, `notes`, `todos` and `weather`, each owning the MCP server of the same name, and `comms`, which hands work to `mail` and `contacts`. The first run of the daemon or the CLI copies it into `~/.config/codex/agents/` when that folder does not exist yet; delete or edit the copies as you like, and an existing folder is never touched again. An agent whose servers are not all connected is never offered: a starter agent stays dormant until a configured, enabled MCP server carries its name, so name your mail server `mail` (or change `mcp_servers` in the agent file) and the hierarchy is on without further setup. With no agents at all, a task sees every connected server's tools at once, which is what the eval's `tree` runner measures.
+A starter set ships in `share/agents/`: 26 agents that each own the MCP server of the same name (`mail`, `calendar`, `contacts`, `notes`, `todos`, `weather`, `files`, `bookmarks`, `music`, `photos`, `lights`, `thermostat`, `shopping`, `recipes`, `fitness`, `bank`, `travel`, `maps`, `news`, `translate`, `timers`, `packages`, `car`, `health`, `library` and `vault`), and four that hand work to two of them: `comms` (`mail`, `contacts`), `home` (`lights`, `thermostat`), `media` (`music`, `photos`) and `meals` (`recipes`, `shopping`). The first run of the daemon or the CLI copies it into `~/.config/codex/agents/` when that folder does not exist yet; delete or edit the copies as you like, and an existing folder is never touched again. An agent whose servers are not all connected is never offered: a starter agent stays dormant until a configured, enabled MCP server carries its name, so name your mail server `mail` (or change `mcp_servers` in the agent file) and the hierarchy is on without further setup. With no agents at all, a task sees every connected server's tools at once, which is what the eval's `tree` runner measures.
 
 ## Standing instructions
 
@@ -650,6 +650,14 @@ angle. Three ask about things that change or are only estimated (Voyager
 speeds, the number of galaxies) and run in `auto` mode so the tree may search.
 It is the set to run when comparing models.
 
+`evals/agents_tasks.json` and `evals/scaled_tasks.json` compare the task tree
+with every connected tool at once (`tree`) against the same tree with the
+starter agents to hand work to (`agents`). Their tools come from canned MCP
+servers (`evals/fake_mcp_server.mjs`, `evals/fake_catalogue.json`) that return
+fixed, made-up replies. The first set connects six servers and 32 tools; the
+scaled set connects 26 servers and 116 tools, nine of them named `search`, and
+most of its 22 tasks need two to four servers.
+
 `--seed-store PATH` measures what recall adds: the task tree runs once more,
 as `tree+store`, starting from a fresh
 copy of that knowledge store, such as the one in `knowledge_db_path`. The copy
@@ -673,6 +681,7 @@ codex eval --runners tree --repeat 3 --output report.json
 codex eval --tasks evals/agents_tasks.json --runners tree,agents --stream
 codex eval --tasks evals/agents_tasks.json --runners tree,agents --repeat 3 --compare old.json
 codex eval --compare old.json --against new.json
+codex eval --tasks evals/scaled_tasks.json --runners tree,agents --repeat 3
 codex eval --runners tree --seed-store ~/.local/share/codex/knowledge.sqlite3
 codex eval --seed --runners tree
 ```

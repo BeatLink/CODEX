@@ -87,6 +87,13 @@ loop (≤ max_tool_calls):
 - **How to test:** add a routed variant of the tool loop (route → fill → execute per step) beside the current one, run both on `evals/agents_tasks.json` with the fake MCP servers, and compare tool-choice accuracy, argument validity, task success and model calls. Score route and fill errors separately.
 - **Not built.** See doc 3, "Task-decomposition ideas to evaluate".
 
+### A flat tool list larger than the context
+
+With the scaled eval's 26 servers connected (doc 1, "Agents eval assets"), the flat tree's tool step is handed 116 MCP tool definitions, about 26,600 characters. By the code's own estimate (`CHARS_PER_TOKEN = 3`, `core/contextBudget.ts`) that is about 8,900 tokens, more than the whole 6,144-token context, and `inputCharBudget` then falls to its 500-character floor for the messages. In the one smoke run (2026-11-07, `breach-and-payment`), `tree` called only mail, contacts and notes tools, the first servers in the list, never `vault` or `bank`, and ended with a raw `<tool_call>` text as its answer; `agents` passed. Open: how node-llama-cpp fits definitions that exceed the context (truncated, shifted or rejected), and so whether the flat runner's loss there measures tool choice at all or only an overflow. Candidates if it is an overflow: offer the flat tree only the servers `decide` names, or the step-wise routing above (server first, then tool), which is the hierarchy's idea without agent files.
+
+- **How to test:** log the prompt's token count on the tree runner's `act` step for one scaled task, and compare with the context size; then the three-round run (doc 3, "Agent hierarchy", step 7).
+- **Not built.**
+
 ### Bounded dynamism: how much the model may decide
 
 The two ends of open question 1: a designed harness where every cognitive step is fixed in code, or a self-organizing system (task decomposition, graph store, rule engine) where the model creates subtasks and agents, refines their prompts and prunes their context. Proposed: neither. The harness owns control flow, and the model gets freedom only where its mistakes can be caught cheaply and deterministically.

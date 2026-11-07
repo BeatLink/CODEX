@@ -37,7 +37,7 @@ import {
     taskPassCounts,
     type Check,
 } from './evaluation.js';
-import { loadAgents, topLevelAgents } from './agents.js';
+import { loadAgents, topLevelAgents, usableAgents } from './agents.js';
 import { KnowledgeStore } from './knowledge.js';
 import { MCPToolbox } from './mcpTools.js';
 import { LocalModel, type ChatCompletion, type ChatCompletionRequest, type ChatModel } from './model.js';
@@ -130,7 +130,7 @@ describe('loadTasks', () => {
 
         const counts = names.map((name) => loadTasks(join(EVALS_DIRECTORY, name)).length);
 
-        expect(names.length).toBe(6);
+        expect(names.length).toBe(7);
         expect(counts.every((count) => count > 0)).toBe(true);
     });
 
@@ -689,21 +689,44 @@ describe('main', () => {
 
 
 describe('the agents eval', () => {
-    it('gives every task all the canned servers and ships an agent for each', async () => {
-        const tasks = loadTasks(AGENTS_TASKS_PATH);
+    const SIX_SERVERS = ['mail', 'calendar', 'notes', 'contacts', 'weather', 'todos'];
+
+    function shippedAgents() {
         const workspace = mkdtempSync(join(tmpdir(), 'agents-eval-test-'));
         try {
             mkdirSync(join(workspace, '.codex'), { recursive: true });
             cpSync(AGENT_FILES_DIRECTORY, join(workspace, '.codex', 'agents'), { recursive: true });
-            const agents = loadAgents(workspace);
-
-            expect(tasks.every((task) => task.servers.length === FAKE_SERVERS.length)).toBe(true);
-            expect(tasks.every((task) => task.expect_servers.length > 0)).toBe(true);
-            expect(new Set(agents.keys())).toEqual(new Set(['comms', 'mail', 'contacts', 'calendar', 'notes', 'weather', 'todos']));
-            expect(topLevelAgents(agents).sort()).toEqual(['calendar', 'comms', 'notes', 'todos', 'weather']);
+            return loadAgents(workspace);
         } finally {
             rmSync(workspace, { recursive: true, force: true });
         }
+    }
+
+    it('gives the eight-task set the original six servers, so it offers the original seven agents', () => {
+        const tasks = loadTasks(AGENTS_TASKS_PATH);
+        const agents = usableAgents(shippedAgents(), SIX_SERVERS);
+
+        expect(tasks.every((task) => task.servers.join() === SIX_SERVERS.join())).toBe(true);
+        expect(tasks.every((task) => task.expect_servers.length > 0)).toBe(true);
+        expect(new Set(agents.keys())).toEqual(new Set(['comms', 'mail', 'contacts', 'calendar', 'notes', 'weather', 'todos']));
+        expect(topLevelAgents(agents).sort()).toEqual(['calendar', 'comms', 'notes', 'todos', 'weather']);
+    });
+
+    it('gives the scaled set every server, each owned by exactly one shipped agent', () => {
+        const tasks = loadTasks(join(EVALS_DIRECTORY, 'scaled_tasks.json'));
+        const catalogue = JSON.parse(readFileSync(join(EVALS_DIRECTORY, 'fake_catalogue.json'), 'utf-8')) as Record<string, unknown[]>;
+        const agents = shippedAgents();
+        const owners = [...agents.values()].flatMap((agent) => agent.mcpServers);
+        const toolCount = Object.values(catalogue).reduce((total, tools) => total + tools.length, 0);
+
+        expect(FAKE_SERVERS.length).toBeGreaterThanOrEqual(20);
+        expect(toolCount).toBeGreaterThanOrEqual(100);
+        expect(tasks.length).toBeGreaterThanOrEqual(16);
+        expect(tasks.every((task) => task.servers.length === FAKE_SERVERS.length)).toBe(true);
+        expect(tasks.filter((task) => task.expect_servers.length >= 3).length).toBeGreaterThanOrEqual(6);
+        expect([...owners].sort()).toEqual([...FAKE_SERVERS].sort());
+        expect(usableAgents(agents, FAKE_SERVERS).size).toBe(agents.size);
+        expect(topLevelAgents(agents)).toEqual(expect.arrayContaining(['comms', 'home', 'media', 'meals']));
     });
 
     it('starts each canned server with its own tools', async () => {
@@ -714,9 +737,11 @@ describe('the agents eval', () => {
 
             expect(names).toContain('mcp__mail__list_inbox');
             expect(names).toContain('mcp__todos__list_todos');
-            expect(names.length).toBeGreaterThan(30);
+            expect(names).toContain('mcp__files__search');
+            expect(names).toContain('mcp__bank__search');
+            expect(names.length).toBeGreaterThanOrEqual(100);
         } finally {
             await toolbox.close();
         }
-    });
+    }, 60_000);
 });

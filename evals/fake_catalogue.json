@@ -270,5 +270,664 @@
       ],
       "reply": "Updated."
     }
+  ],
+  "files": [
+    {
+      "name": "search",
+      "description": "Search the user's stored files by name or words, returning paths.",
+      "parameters": [
+        "query"
+      ],
+      "reply": "Matches: /Documents/Travel/porto-itinerary.odt (changed 29 Oct), /Documents/Home/lease-renewal-2026.pdf (changed 2 Nov)."
+    },
+    {
+      "name": "read_file",
+      "description": "Read a stored file by its path.",
+      "parameters": [
+        "path"
+      ],
+      "reply": "porto-itinerary.odt: Day 1, land in Porto and check in at Casa Ribeira guesthouse, Rua das Flores 88. Day 2, port cellar tour at 15:00. Day 3, train to Aveiro."
+    },
+    {
+      "name": "list_folder",
+      "description": "List what is in a folder of the stored files.",
+      "parameters": [
+        "path"
+      ],
+      "reply": "Documents/: Home/, Travel/, Taxes/, cv-2026.pdf, scan-0412.jpg."
+    },
+    {
+      "name": "move_file",
+      "description": "Move a stored file to another folder.",
+      "parameters": [
+        "path",
+        "destination"
+      ],
+      "reply": "Moved."
+    },
+    {
+      "name": "share_file",
+      "description": "Share a stored file with someone by email.",
+      "parameters": [
+        "path",
+        "email"
+      ],
+      "reply": "Shared; a link was sent."
+    }
+  ],
+  "bookmarks": [
+    {
+      "name": "search",
+      "description": "Search the saved bookmarks by words, returning titles and links.",
+      "parameters": [
+        "query"
+      ],
+      "reply": "Bookmarks: \"Porto tram routes\" (tram.example.pt/routes), \"Sourdough starter guide\" (bakehaus.example.net/starter)."
+    },
+    {
+      "name": "list_bookmarks",
+      "description": "List the most recent bookmarks.",
+      "parameters": [],
+      "reply": "Recent: \"Home insurance renewal\" (cover.example.com/renew), \"Sourdough starter guide\", \"Porto tram routes\"."
+    },
+    {
+      "name": "add_bookmark",
+      "description": "Save a web page as a bookmark.",
+      "parameters": [
+        "url",
+        "title"
+      ],
+      "reply": "Bookmarked."
+    },
+    {
+      "name": "delete_bookmark",
+      "description": "Delete a bookmark by title.",
+      "parameters": [
+        "title"
+      ],
+      "reply": "Deleted."
+    }
+  ],
+  "music": [
+    {
+      "name": "search",
+      "description": "Search the music library for songs, albums, artists or playlists.",
+      "parameters": [
+        "query"
+      ],
+      "reply": "Found: album \"Low Tide Lanterns\" by The Marrow Pines; playlist \"Sunday Slow\"."
+    },
+    {
+      "name": "now_playing",
+      "description": "Say what is playing on the speaker now.",
+      "parameters": [],
+      "reply": "Now playing: \"Harbour Glass\" by Odile Ferrand, from the album \"Salt Hours\"."
+    },
+    {
+      "name": "play",
+      "description": "Play a song, album or playlist on the speaker.",
+      "parameters": [
+        "item"
+      ],
+      "reply": "Playing."
+    },
+    {
+      "name": "pause",
+      "description": "Pause the speaker.",
+      "parameters": [],
+      "reply": "Paused."
+    },
+    {
+      "name": "list_playlists",
+      "description": "List the user's playlists with their song counts.",
+      "parameters": [],
+      "reply": "Playlists: Sunday Slow (42 songs), Running Mix (31 songs), Focus (58 songs)."
+    },
+    {
+      "name": "add_to_playlist",
+      "description": "Add a song to a playlist.",
+      "parameters": [
+        "song",
+        "playlist"
+      ],
+      "reply": "Added."
+    }
+  ],
+  "photos": [
+    {
+      "name": "search",
+      "description": "Search the photo library by place, person or words.",
+      "parameters": [
+        "query"
+      ],
+      "reply": "Found 23 photos; best match IMG_5521, taken 14 June 2026 at Praia da Ursa."
+    },
+    {
+      "name": "list_albums",
+      "description": "List the photo albums with their photo counts.",
+      "parameters": [],
+      "reply": "Albums: Porto 2025 (212 photos), Garden (48 photos), Mila's birthday (96 photos)."
+    },
+    {
+      "name": "get_photo_info",
+      "description": "Get when and where a photo was taken.",
+      "parameters": [
+        "photo"
+      ],
+      "reply": "IMG_5521: taken 14 June 2026 at 18:02, Praia da Ursa, Sintra."
+    },
+    {
+      "name": "share_album",
+      "description": "Share a photo album with someone by email.",
+      "parameters": [
+        "album",
+        "email"
+      ],
+      "reply": "Shared."
+    }
+  ],
+  "lights": [
+    {
+      "name": "list_lights",
+      "description": "List the home's lights and whether each is on.",
+      "parameters": [],
+      "reply": "Lights: living room on (70%), kitchen off, bedroom on (20%), porch off."
+    },
+    {
+      "name": "turn_on",
+      "description": "Turn on the lights in a room.",
+      "parameters": [
+        "room"
+      ],
+      "reply": "Done."
+    },
+    {
+      "name": "turn_off",
+      "description": "Turn off the lights in a room.",
+      "parameters": [
+        "room"
+      ],
+      "reply": "Done."
+    },
+    {
+      "name": "set_brightness",
+      "description": "Set a room's light brightness in percent.",
+      "parameters": [
+        "room",
+        "percent"
+      ],
+      "reply": "Done."
+    },
+    {
+      "name": "set_scene",
+      "description": "Set a lighting scene for the whole home.",
+      "parameters": [
+        "scene"
+      ],
+      "reply": "Scene set."
+    }
+  ],
+  "thermostat": [
+    {
+      "name": "get_temperature",
+      "description": "Get the indoor temperature, the heating target and whether the heating is on.",
+      "parameters": [],
+      "reply": "Indoors 19.5 degrees, target 21 degrees, heating on."
+    },
+    {
+      "name": "set_temperature",
+      "description": "Set the heating target in degrees.",
+      "parameters": [
+        "degrees"
+      ],
+      "reply": "Target set."
+    },
+    {
+      "name": "get_schedule",
+      "description": "Get the heating schedule for today.",
+      "parameters": [],
+      "reply": "Schedule: 06:30 21 degrees, 08:30 17 degrees, 17:00 21 degrees, 22:30 16 degrees."
+    },
+    {
+      "name": "set_mode",
+      "description": "Set the heating mode: heat, eco or off.",
+      "parameters": [
+        "mode"
+      ],
+      "reply": "Mode set."
+    }
+  ],
+  "shopping": [
+    {
+      "name": "list_items",
+      "description": "List what is on the shopping list.",
+      "parameters": [],
+      "reply": "Shopping list (5): oat milk, lemons, basmati rice, dishwasher tablets, birthday candles."
+    },
+    {
+      "name": "add_item",
+      "description": "Add an item to the shopping list.",
+      "parameters": [
+        "item"
+      ],
+      "reply": "Added."
+    },
+    {
+      "name": "remove_item",
+      "description": "Remove an item from the shopping list.",
+      "parameters": [
+        "item"
+      ],
+      "reply": "Removed."
+    },
+    {
+      "name": "clear_list",
+      "description": "Remove every item from the shopping list.",
+      "parameters": [],
+      "reply": "Cleared."
+    }
+  ],
+  "recipes": [
+    {
+      "name": "search",
+      "description": "Search the saved recipes by dish or ingredient.",
+      "parameters": [
+        "query"
+      ],
+      "reply": "Recipes: \"Lemon orzo with peas\" (25 min), \"Chickpea tray bake\" (40 min)."
+    },
+    {
+      "name": "get_recipe",
+      "description": "Get a recipe's ingredients and cooking time by its title.",
+      "parameters": [
+        "title"
+      ],
+      "reply": "Lemon orzo with peas, serves 2: 150 g orzo, 1 lemon, 120 g peas, 30 g parmesan, 1 shallot. Ready in 25 minutes."
+    },
+    {
+      "name": "list_favourites",
+      "description": "List the favourite recipes.",
+      "parameters": [],
+      "reply": "Favourites: Lemon orzo with peas, Shakshuka, Miso aubergine."
+    },
+    {
+      "name": "scale_recipe",
+      "description": "Scale a recipe's amounts to a number of servings.",
+      "parameters": [
+        "title",
+        "servings"
+      ],
+      "reply": "Lemon orzo with peas for 4: 300 g orzo, 2 lemons, 240 g peas, 60 g parmesan, 2 shallots."
+    }
+  ],
+  "fitness": [
+    {
+      "name": "get_steps",
+      "description": "Get the step count for a day.",
+      "parameters": [
+        "date"
+      ],
+      "reply": "Today: 6,412 steps (goal 9,000). Yesterday: 10,118 steps."
+    },
+    {
+      "name": "get_workouts",
+      "description": "List the latest recorded workouts.",
+      "parameters": [],
+      "reply": "Latest: Tuesday 5.2 km run in 29:40; Sunday 45 minutes cycling."
+    },
+    {
+      "name": "log_workout",
+      "description": "Record a workout.",
+      "parameters": [
+        "type",
+        "minutes"
+      ],
+      "reply": "Logged."
+    },
+    {
+      "name": "get_sleep",
+      "description": "Get last night's sleep.",
+      "parameters": [],
+      "reply": "Last night: 6 h 48 min asleep, woke twice."
+    },
+    {
+      "name": "get_heart_rate",
+      "description": "Get the resting heart rate.",
+      "parameters": [],
+      "reply": "Resting heart rate 58 bpm (7-day average 60)."
+    }
+  ],
+  "bank": [
+    {
+      "name": "get_balance",
+      "description": "Get the balance of each bank account.",
+      "parameters": [],
+      "reply": "Current account 2,914.37 euros; savings 8,250.00 euros."
+    },
+    {
+      "name": "list_transactions",
+      "description": "List the latest transactions on the current account.",
+      "parameters": [],
+      "reply": "Recent: 5 Nov Lidl 43.18, 4 Nov Gridwatch Energy 96.40, 3 Nov Cafe Nordlys 7.90, 1 Nov rent 950.00."
+    },
+    {
+      "name": "search",
+      "description": "Search the transactions by payee or words.",
+      "parameters": [
+        "query"
+      ],
+      "reply": "Matches: 4 Nov Gridwatch Energy 96.40 euros (direct debit); 4 Oct Gridwatch Energy 91.75 euros."
+    },
+    {
+      "name": "list_upcoming_bills",
+      "description": "List bills due soon and whether each is paid.",
+      "parameters": [],
+      "reply": "Upcoming: 12 Nov Lumafone 24.99 (direct debit); 15 Nov water 38.60 (direct debit); 30 Nov Invoice 4471 1,280.00 (not paid)."
+    },
+    {
+      "name": "pay_bill",
+      "description": "Pay a bill to a payee.",
+      "parameters": [
+        "payee",
+        "amount"
+      ],
+      "reply": "Payment scheduled."
+    }
+  ],
+  "travel": [
+    {
+      "name": "list_trips",
+      "description": "List the user's booked trips with their dates and flights.",
+      "parameters": [],
+      "reply": "Trips: Porto, 21 to 24 November (flight TP1947); Bergen, 18 to 22 December (flight not booked)."
+    },
+    {
+      "name": "get_flight",
+      "description": "Get a flight's times, terminal and seat by its flight number.",
+      "parameters": [
+        "flight"
+      ],
+      "reply": "TP1947 Lisbon to Porto, Friday 21 November: departs 18:45 from Terminal 1, arrives 19:40, seat 14C."
+    },
+    {
+      "name": "get_booking",
+      "description": "Get the hotel booking for a trip.",
+      "parameters": [
+        "trip"
+      ],
+      "reply": "Porto: Casa Ribeira guesthouse, 3 nights, booking reference KQ7-22M, check-in from 15:00."
+    },
+    {
+      "name": "check_in",
+      "description": "Check in for a flight.",
+      "parameters": [
+        "flight"
+      ],
+      "reply": "Checked in; the boarding pass is in the app."
+    }
+  ],
+  "maps": [
+    {
+      "name": "search",
+      "description": "Search for a place, returning its address.",
+      "parameters": [
+        "query"
+      ],
+      "reply": "Places: Casa Ribeira guesthouse, Rua das Flores 88, Porto; Clinica Alameda, Avenida Almirante Reis 140, Lisbon."
+    },
+    {
+      "name": "get_travel_time",
+      "description": "Get the travel time between two places by car and by public transport.",
+      "parameters": [
+        "origin",
+        "destination"
+      ],
+      "reply": "By car 27 minutes in current traffic; by public transport 38 minutes."
+    },
+    {
+      "name": "get_directions",
+      "description": "Get step-by-step directions between two places.",
+      "parameters": [
+        "origin",
+        "destination"
+      ],
+      "reply": "Take the A2 north, exit 4, then follow signs for the centre; 27 minutes by car."
+    },
+    {
+      "name": "list_saved_places",
+      "description": "List the user's saved places.",
+      "parameters": [],
+      "reply": "Saved: Home (Rua do Sol 12), Work (Avenida da Liberdade 210), Gym (Rua Garrett 5)."
+    }
+  ],
+  "news": [
+    {
+      "name": "get_headlines",
+      "description": "Get today's headlines, optionally on a topic.",
+      "parameters": [
+        "topic"
+      ],
+      "reply": "Headlines: \"Tram line 28 extension approved\", \"Heat pump grants reopen in December\", \"Port wine exports hit a record\"."
+    },
+    {
+      "name": "search",
+      "description": "Search news articles by words.",
+      "parameters": [
+        "query"
+      ],
+      "reply": "Articles: \"Heat pump grants reopen in December\" (Civic Ledger, 6 Nov)."
+    },
+    {
+      "name": "get_article",
+      "description": "Read a news article by its title.",
+      "parameters": [
+        "title"
+      ],
+      "reply": "Heat pump grants reopen on 1 December; a household can claim up to 3,500 euros, applying through the city portal."
+    }
+  ],
+  "translate": [
+    {
+      "name": "translate_text",
+      "description": "Translate text into another language.",
+      "parameters": [
+        "text",
+        "target_language"
+      ],
+      "reply": "Translation: \"Pode deixar a encomenda com o vizinho do segundo andar, por favor.\""
+    },
+    {
+      "name": "detect_language",
+      "description": "Detect which language a text is in.",
+      "parameters": [
+        "text"
+      ],
+      "reply": "Detected: Norwegian (Bokmal), confidence 0.97."
+    },
+    {
+      "name": "list_languages",
+      "description": "List the supported languages.",
+      "parameters": [],
+      "reply": "Supported: 64 languages, including Portuguese, Norwegian, Polish and Japanese."
+    }
+  ],
+  "timers": [
+    {
+      "name": "list_timers",
+      "description": "List the running timers.",
+      "parameters": [],
+      "reply": "Running: pasta, 6 minutes left; laundry, 41 minutes left."
+    },
+    {
+      "name": "set_timer",
+      "description": "Start a timer for a number of minutes.",
+      "parameters": [
+        "minutes",
+        "label"
+      ],
+      "reply": "Timer set."
+    },
+    {
+      "name": "list_alarms",
+      "description": "List the alarm clocks.",
+      "parameters": [],
+      "reply": "Alarms: weekdays 06:45, Saturday 08:30."
+    },
+    {
+      "name": "set_alarm",
+      "description": "Set an alarm clock for a time.",
+      "parameters": [
+        "time"
+      ],
+      "reply": "Alarm set."
+    },
+    {
+      "name": "cancel_alarm",
+      "description": "Cancel an alarm clock by its time.",
+      "parameters": [
+        "time"
+      ],
+      "reply": "Cancelled."
+    }
+  ],
+  "packages": [
+    {
+      "name": "list_deliveries",
+      "description": "List the parcels the user is expecting.",
+      "parameters": [],
+      "reply": "Expected: a Ferrowick Tools parcel (PX-48821-LT) arriving Saturday, and a bookshop parcel arriving today."
+    },
+    {
+      "name": "track_package",
+      "description": "Track a parcel by its tracking number.",
+      "parameters": [
+        "tracking_number"
+      ],
+      "reply": "PX-48821-LT (Ferrowick Tools): at the local depot, out for delivery Saturday between 10:00 and 14:00."
+    },
+    {
+      "name": "set_delivery_note",
+      "description": "Leave a note for the courier on a parcel.",
+      "parameters": [
+        "tracking_number",
+        "note"
+      ],
+      "reply": "Note saved."
+    }
+  ],
+  "car": [
+    {
+      "name": "get_status",
+      "description": "Get the car's lock state, range and odometer.",
+      "parameters": [],
+      "reply": "Car locked, 312 km of range, odometer 48,120 km."
+    },
+    {
+      "name": "get_charge",
+      "description": "Get the car battery's charge and range.",
+      "parameters": [],
+      "reply": "Battery 64%, about 312 km of range; not plugged in."
+    },
+    {
+      "name": "find_car",
+      "description": "Find where the car is parked.",
+      "parameters": [],
+      "reply": "Parked in the Chiado car park, level -2, since 08:12."
+    },
+    {
+      "name": "lock_car",
+      "description": "Lock the car.",
+      "parameters": [],
+      "reply": "Locked."
+    },
+    {
+      "name": "get_service_due",
+      "description": "Get when the car's next service is due.",
+      "parameters": [],
+      "reply": "Next service due 15 January 2027 or at 50,000 km."
+    }
+  ],
+  "health": [
+    {
+      "name": "list_appointments",
+      "description": "List upcoming doctor and clinic appointments.",
+      "parameters": [],
+      "reply": "Upcoming: GP check-up with Dr Ilse Brandvold, Tuesday 18 November at 08:40, Clinica Alameda."
+    },
+    {
+      "name": "book_appointment",
+      "description": "Ask a clinic for an appointment.",
+      "parameters": [
+        "kind",
+        "date"
+      ],
+      "reply": "Request sent; the clinic will confirm."
+    },
+    {
+      "name": "get_prescriptions",
+      "description": "List active prescriptions and refills left.",
+      "parameters": [],
+      "reply": "Active: cetirizine 10 mg, 1 refill left; vitamin D 1000 IU, 3 refills left."
+    },
+    {
+      "name": "request_refill",
+      "description": "Request a prescription refill.",
+      "parameters": [
+        "medicine"
+      ],
+      "reply": "Refill requested; ready for pickup tomorrow at Farmacia Lumen."
+    }
+  ],
+  "library": [
+    {
+      "name": "search",
+      "description": "Search the public library catalogue by title or author.",
+      "parameters": [
+        "query"
+      ],
+      "reply": "Catalogue: \"The Salt Road\" by Henrike Vass (available), \"Tidewater Maps\" by O. Kanu (on loan, 2 holds)."
+    },
+    {
+      "name": "list_loans",
+      "description": "List the books on loan and their due dates.",
+      "parameters": [],
+      "reply": "On loan: \"Under the Lindens\" due 10 November; \"Small Engines, Big Ideas\" due 24 November."
+    },
+    {
+      "name": "renew_loan",
+      "description": "Renew a book on loan.",
+      "parameters": [
+        "title"
+      ],
+      "reply": "Renewed; new due date 1 December."
+    },
+    {
+      "name": "list_holds",
+      "description": "List the books on hold and whether they are ready.",
+      "parameters": [],
+      "reply": "Holds: \"The Salt Road\" ready for pickup until 12 November."
+    }
+  ],
+  "vault": [
+    {
+      "name": "list_entries",
+      "description": "List the saved logins by site, with usernames but no passwords.",
+      "parameters": [],
+      "reply": "Entries: Gridwatch Energy (home-account-77), Lumafone (lumafone-4410), Civic Library (card 0098-2213)."
+    },
+    {
+      "name": "get_entry_info",
+      "description": "Get a saved login's username and when its password was last changed, never the password.",
+      "parameters": [
+        "site"
+      ],
+      "reply": "Lumafone: username lumafone-4410, password last changed 3 March 2025, two-factor on."
+    },
+    {
+      "name": "check_breaches",
+      "description": "Check the saved logins against known data breaches.",
+      "parameters": [],
+      "reply": "1 flagged: Gridwatch Energy appeared in a 2026 breach; change that password."
+    }
   ]
 }

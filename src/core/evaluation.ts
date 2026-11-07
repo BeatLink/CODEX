@@ -23,7 +23,8 @@ export const AGENTS_TASKS_PATH = join(EVALS_DIRECTORY, 'agents_tasks.json');
 export const AGENT_FILES_DIRECTORY = STARTER_AGENTS_DIRECTORY;
 export const FAKE_SERVER_PATH = join(EVALS_DIRECTORY, 'fake_mcp_server.mjs');
 const FAKE_CATALOGUE_PATH = join(EVALS_DIRECTORY, 'fake_catalogue.json');
-export const FAKE_SERVERS = ['mail', 'calendar', 'notes', 'contacts', 'weather', 'todos'] as const;
+// Every server in the catalogue; a task's "servers": "all" gets them all.
+export const FAKE_SERVERS: readonly string[] = Object.keys(JSON.parse(readFileSync(FAKE_CATALOGUE_PATH, 'utf-8')));
 // 'tree' sees every server's tools at once; 'agents' is the same tree with the shipped starter agents (share/agents/) to hand tasks to.
 export const RUNNER_CHOICES = ['bare', 'tree', 'agents'] as const;
 // Runners that recall from the knowledge store, and so get a seeded run beside the empty one.

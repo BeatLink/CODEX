@@ -1,0 +1,178 @@
+[
+  {
+    "id": "lights-on",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["lights"],
+    "prompt": "Which lights are on at home right now?",
+    "checks": [{"type": "contains", "value": "living room"}, {"type": "contains", "value": "bedroom"}]
+  },
+  {
+    "id": "indoor-temperature",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["thermostat"],
+    "prompt": "How warm is it in the house, and what is the heating set to?",
+    "checks": [{"type": "contains", "value": "19.5"}, {"type": "regex", "pattern": "\\b21\\b"}]
+  },
+  {
+    "id": "steps-today",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["fitness"],
+    "prompt": "How many steps have I walked today?",
+    "checks": [{"type": "regex", "pattern": "6[,.]?412"}]
+  },
+  {
+    "id": "where-car",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["car"],
+    "prompt": "Where did I park the car?",
+    "checks": [{"type": "contains", "value": "Chiado"}, {"type": "contains", "value": "-2"}]
+  },
+  {
+    "id": "library-due",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["library"],
+    "prompt": "Which library books do I have out, and when is the first one due back?",
+    "checks": [{"type": "contains", "value": "Under the Lindens"}, {"type": "contains", "value": "10 November"}]
+  },
+  {
+    "id": "next-doctor",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["health"],
+    "prompt": "When is my next doctor's appointment, and with whom?",
+    "checks": [{"type": "contains", "value": "08:40"}, {"type": "contains", "value": "Brandvold"}]
+  },
+  {
+    "id": "account-balance",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["bank"],
+    "prompt": "How much money is in my current account?",
+    "checks": [{"type": "regex", "pattern": "2[,.]?914[.,]37"}]
+  },
+  {
+    "id": "invoice-and-balance",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["mail", "bank"],
+    "prompt": "When is invoice 4471 from my email due, and how much is in my current account to pay it?",
+    "checks": [{"type": "contains", "value": "30 November"}, {"type": "regex", "pattern": "2[,.]?914[.,]37"}]
+  },
+  {
+    "id": "flight-and-drive",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["travel", "maps"],
+    "prompt": "When does my flight to Porto leave, and how long is the drive to the airport right now?",
+    "checks": [{"type": "contains", "value": "18:45"}, {"type": "regex", "pattern": "\\b27\\b"}]
+  },
+  {
+    "id": "orzo-missing-items",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["recipes", "shopping"],
+    "prompt": "Which ingredients of my lemon orzo recipe are not on my shopping list yet?",
+    "checks": [{"type": "contains", "value": "peas"}, {"type": "contains", "value": "parmesan"}, {"type": "contains", "value": "shallot"}]
+  },
+  {
+    "id": "lights-and-heating-schedule",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["lights", "thermostat"],
+    "prompt": "Which lights are on, and when does the heating come back on this evening?",
+    "checks": [{"type": "contains", "value": "living room"}, {"type": "contains", "value": "17:00"}]
+  },
+  {
+    "id": "song-and-album",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["music", "photos"],
+    "prompt": "What song is playing on the speaker, and how many photos are in my Porto 2025 album?",
+    "checks": [{"type": "contains", "value": "Harbour Glass"}, {"type": "regex", "pattern": "\\b212\\b"}]
+  },
+  {
+    "id": "breach-and-payment",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["vault", "bank"],
+    "prompt": "Which of my saved logins was in a data breach, and how much did I last pay that company?",
+    "checks": [{"type": "contains", "value": "Gridwatch"}, {"type": "regex", "pattern": "96[.,]40"}]
+  },
+  {
+    "id": "parcel-and-marcus",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["packages", "contacts"],
+    "prompt": "When will my Ferrowick Tools parcel arrive, and what is Marcus Oyelaran's phone number so I can ask him to take it in?",
+    "checks": [{"type": "contains", "value": "Saturday"}, {"type": "contains", "value": "10:00"}, {"type": "contains", "value": "900318"}]
+  },
+  {
+    "id": "porto-trip-brief",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["travel", "files", "bookmarks"],
+    "prompt": "For my Porto trip: when does the flight leave, what is the guesthouse address in my itinerary file, and which tram page did I bookmark?",
+    "checks": [{"type": "contains", "value": "18:45"}, {"type": "contains", "value": "Rua das Flores"}, {"type": "contains", "value": "tram.example.pt"}]
+  },
+  {
+    "id": "before-priya-meeting",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["maps", "car", "contacts"],
+    "prompt": "Before I head out: how long is the drive to work, how much charge does the car have, and what is Priya Raman's phone number?",
+    "checks": [{"type": "regex", "pattern": "\\b27\\b"}, {"type": "regex", "pattern": "\\b64\\b"}, {"type": "contains", "value": "900142"}]
+  },
+  {
+    "id": "orzo-for-four",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["recipes", "shopping", "timers"],
+    "prompt": "I'm cooking the lemon orzo for four tonight. Give me the amounts for four, add the peas to my shopping list, and start a 25-minute timer.",
+    "checks": [{"type": "contains", "value": "300"}, {"type": "contains", "value": "240"}, {"type": "contains", "value": "60"}]
+  },
+  {
+    "id": "gp-trip",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["health", "maps", "calendar"],
+    "prompt": "Where is my next GP appointment, how long does it take to get there by public transport, and what is in my calendar on Thursday?",
+    "checks": [{"type": "contains", "value": "Alameda"}, {"type": "regex", "pattern": "\\b38\\b"}, {"type": "contains", "value": "14:30"}]
+  },
+  {
+    "id": "morning-check",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["timers", "fitness", "weather"],
+    "prompt": "What time is my weekday alarm, how long did I sleep last night, and what is the forecast for Lisbon tomorrow?",
+    "checks": [{"type": "contains", "value": "06:45"}, {"type": "regex", "pattern": "6\\s?h(ours?)?\\s?(and\\s)?48"}, {"type": "contains", "value": "rain"}]
+  },
+  {
+    "id": "library-hold-pickup",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["library", "maps", "todos"],
+    "prompt": "Is a library book I put on hold ready, who wrote it, and how long is the drive to pick it up? Add the pickup to my to-dos.",
+    "checks": [{"type": "contains", "value": "Salt Road"}, {"type": "contains", "value": "Vass"}, {"type": "regex", "pattern": "\\b27\\b"}]
+  },
+  {
+    "id": "coming-home",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["thermostat", "lights", "music", "packages"],
+    "prompt": "I'm on my way home: how warm is the house, which lights are on, what is playing on the speaker, and is any parcel arriving today?",
+    "checks": [{"type": "contains", "value": "19.5"}, {"type": "contains", "value": "living room"}, {"type": "contains", "value": "Harbour Glass"}, {"type": "contains", "value": "bookshop"}]
+  },
+  {
+    "id": "heat-pump-grant",
+    "mode": "auto",
+    "servers": "all",
+    "expect_servers": ["news", "bank", "thermostat"],
+    "prompt": "Is there news about heat pump grants and how much can I claim? Also, what was my last energy bill and what is the heating target now?",
+    "checks": [{"type": "regex", "pattern": "3[,.]?500"}, {"type": "regex", "pattern": "96[.,]40"}, {"type": "regex", "pattern": "\\b21\\b"}]
+  }
+]

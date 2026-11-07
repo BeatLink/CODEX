@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # Run the model assessment protocol (docs/3-roadmap.md, "Model choice") for one model.
 #
-#   evals/run_model_trial.sh MODEL.gguf OUTPUT_DIR [agents|reasoning|both]
+#   evals/run_model_trial.sh MODEL.gguf OUTPUT_DIR [agents|scaled|reasoning|both|all]
 #
 # Run it from a checkout with a built dist/ (npm run build). It waits for the shared GPU lock and prints
 # each step and tool call as it happens. If codex-daemon has a model loaded it holds the lock, so free it
 # first with `codex suspend` (or stop the service) and resume afterwards.
 set -uo pipefail
 
-MODEL=${1:?usage: run_model_trial.sh MODEL.gguf OUTPUT_DIR [agents|reasoning|both]}
-OUT=${2:?usage: run_model_trial.sh MODEL.gguf OUTPUT_DIR [agents|reasoning|both]}
-SETS=${3:-both}
+MODEL=${1:?usage: run_model_trial.sh MODEL.gguf OUTPUT_DIR [agents|scaled|reasoning|both|all]}
+OUT=${2:?usage: run_model_trial.sh MODEL.gguf OUTPUT_DIR [agents|scaled|reasoning|both|all]}
+SETS=${3:-all}
 LOCK=/run/user/$(id -u)/codex-gpu.lock
 NAME=$(basename "$MODEL" .gguf)
 mkdir -p "$OUT"
@@ -27,6 +27,8 @@ run_set() {
     echo "exit ${PIPESTATUS[0]}; kernel GPU errors: $(journalctl -k --since "$since" --no-pager | grep -ciE "CrashCat|nvAssertFailed|xid")"
 }
 
-[[ $SETS == agents || $SETS == both ]] && run_set agents evals/agents_tasks.json tree,agents
-[[ $SETS == reasoning || $SETS == both ]] && run_set reasoning evals/reasoning_tasks.json bare,tree
+# 'both' is the original two sets; 'all' adds the scaled set.
+[[ $SETS == agents || $SETS == both || $SETS == all ]] && run_set agents evals/agents_tasks.json tree,agents
+[[ $SETS == scaled || $SETS == all ]] && run_set scaled evals/scaled_tasks.json tree,agents
+[[ $SETS == reasoning || $SETS == both || $SETS == all ]] && run_set reasoning evals/reasoning_tasks.json bare,tree
 echo "done $(date +%T)"
