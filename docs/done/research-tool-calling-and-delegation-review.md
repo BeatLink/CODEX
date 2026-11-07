@@ -8,23 +8,21 @@ Each finding carries an importance flag (Critical, High, Medium, Low). Line numb
 
 | # | Importance | Finding | Where | Status |
 | --- | --- | --- | --- | --- |
-| F1 | Critical | Tool calls run through a text-parsing fallback, not the native path | [toolStage.ts:91](../../src/core/toolStage.ts), [toolStage.ts:217-225](../../src/core/toolStage.ts), [model.ts:64-68](../../src/core/model.ts), [1-architecture.md:181](../1-architecture.md) | fix in progress 2026-11-07 (worktree native-tool-calls) |
-| F2 | Critical | The tool loop has no stop discipline | [toolStage.ts:168](../../src/core/toolStage.ts), [taskTree.ts:30](../../src/core/taskTree.ts), [gather.ts:80](../../src/core/steps/gather.ts) | fix in progress 2026-11-07 (worktree tool-loop-routing) |
+| F1 | Low | The regex fallback `textToolCalls` was believed to be the live path; measured 2026-11-07, native parsing already covers both models and the fallback fired 0 times in 48 runs (commit `746d399`); it now warns when it fires | [toolStage.ts:91](../../src/core/toolStage.ts), [toolStage.ts:217-225](../../src/core/toolStage.ts), [model.ts:64-68](../../src/core/model.ts), [1-architecture.md:181](../1-architecture.md) | closed: hypothesis disproved |
+| F2 | Critical | The tool loop has no stop discipline | [toolStage.ts:168](../../src/core/toolStage.ts), [taskTree.ts:30](../../src/core/taskTree.ts), [gather.ts:80](../../src/core/steps/gather.ts) | built 2026-11-07 (commit `25fcc1b`), not yet measured |
 | F3 | High | `decide` asks a six-way choice from a long prose rulebook | [taskTree.ts:141](../../src/core/taskTree.ts), [2-open-questions-and-approaches.md:29](../2-open-questions-and-approaches.md) | proposed |
-| F4 | High | Routing bakes the agent into prose and then routes again | [taskTree.ts:616-643](../../src/core/taskTree.ts) | fix in progress 2026-11-07 (worktree tool-loop-routing) |
-| F5 | High | Sequential hops inside a parent agent stop after one | [3-roadmap.md:32](../3-roadmap.md) | fix in progress 2026-11-07 (worktree tool-loop-routing) |
+| F4 | High | Routing bakes the agent into prose and then routes again | [taskTree.ts:616-643](../../src/core/taskTree.ts) | built 2026-11-07 (commit `25fcc1b`) |
+| F5 | High | Sequential hops inside a parent agent stop after one | [3-roadmap.md:32](../3-roadmap.md) | built 2026-11-07 (commit `25fcc1b`) |
 | F6 | High | The eval cannot separate harness, model and noise | [settings.ts:14](../../src/core/settings.ts), [3-roadmap.md:126-140](../3-roadmap.md) | proposed |
 | F7 | Medium | The nested run wastes its 6,144-token window | [taskTree.ts:990-997](../../src/core/taskTree.ts), [taskTree.ts:1185](../../src/core/taskTree.ts), [gather.ts:83](../../src/core/steps/gather.ts) | proposed |
 | F8 | Medium | Every brief a subagent gets is free prose | [2-open-questions-and-approaches.md:59](../2-open-questions-and-approaches.md) | proposed in doc 2; endorsed |
-| D1 | Low | Doc 1 contradicts itself on what the nested run receives | [1-architecture.md:264](../1-architecture.md) | docs fix in progress 2026-11-07 (worktree tool-loop-routing) |
+| D1 | Low | Doc 1 contradicts itself on what the nested run receives | [1-architecture.md:264](../1-architecture.md) | built 2026-11-07 (commit `25fcc1b`) |
 | D2 | Low | Two `docs/done/` files duplicate docs 1 and 3 | [done-agents-eval-report.md](done-agents-eval-report.md), [done-agent-hierarchy.md](done-agent-hierarchy.md) | proposed |
 | D3 | Low | No single failure taxonomy exists | [3-roadmap.md:30-33](../3-roadmap.md) | proposed |
 
-### F1. Tool calls run through a text-parsing fallback (Critical)
+### F1. The regex fallback was believed to be the live path (Low)
 
-Every control-flow reply is grammar-forced except the tool loop. Qwen and Spark write `<tool_call>` text, and `textToolCalls` ([toolStage.ts:91](../../src/core/toolStage.ts)) reads it with regexes. The loop only calls it when `completion.tool_calls` is empty ([toolStage.ts:217-225](../../src/core/toolStage.ts)). **Why it matters:** arguments are never validated by construction, so a misspelled key or a wrong type reaches the tool. Before commit `8e7cea8` no tool ran at all ([doc 1](../1-architecture.md), "Lesson already paid for", line 181).
-
-The leading hypothesis for the empty `response.functionCalls` is a syntax mismatch. node-llama-cpp's `QwenChatWrapper` ([node_modules/node-llama-cpp/dist/chatWrappers/QwenChatWrapper.js:72](../../node_modules/node-llama-cpp/dist/chatWrappers/QwenChatWrapper.js)) has a "3.5" variation whose call syntax is a single `<parameter=params>` JSON blob. The model writes one `<parameter=key>` per argument. The Phi-4-mini fix (`PHI_FUNCTION_CALLS`, [model.ts:64-68](../../src/core/model.ts)) shows that a custom template restores native parsing. This hypothesis is untested.
+The review read `textToolCalls` ([toolStage.ts:91](../../src/core/toolStage.ts)) as the path every tool call took, on the hypothesis that a syntax mismatch in node-llama-cpp's `QwenChatWrapper` "3.5" variation ([node_modules/node-llama-cpp/dist/chatWrappers/QwenChatWrapper.js:72](../../node_modules/node-llama-cpp/dist/chatWrappers/QwenChatWrapper.js)) left `response.functionCalls` empty. Measured the same day, that is wrong: node-llama-cpp already returns native, grammar-constrained calls for both Qwen3.5-4B and Spark-X2.6-4B. In a three-round Qwen run of the agents set all 93 tool calls were native and the fallback fired 0 times in 48 runs (commit `746d399`, [3-roadmap.md](../3-roadmap.md), "Model results"). `textToolCalls` is a leftover from the Python port; it now prints a warning to stderr when it fires, and it is not called on a turn told to answer.
 
 ### F2. The tool loop has no stop discipline (Critical)
 
@@ -70,9 +68,9 @@ Doc 3's "Failures left" bullets are the start of one. Without a table of symptom
 
 In priority order.
 
-1. Restore native tool calls (F1, Critical), then add step-wise tool routing (route enum plus a per-tool argument grammar, doc 2) where native parsing still fails.
-2. Add stop discipline to the loop (F2, Critical): a cached result for a repeated identical call with an "answer now" note, `tool_choice: none` after a successful connected call when nothing new is requested, and no 8-call floor for specialists.
-3. Make routing follow through in code (F4, F5, High): carry the agent on the subtask so there is no second routing call, and allow one re-route after a delegated result that does not meet the deliverable.
+1. Add stop discipline to the loop (F2, Critical): a cached result for a repeated identical call with an "answer now" note, `tool_choice: none` after a successful connected call when nothing new is requested, and no 8-call floor for specialists.
+2. Make routing follow through in code (F4, F5, High): carry the agent on the subtask so there is no second routing call, and allow one re-route after a delegated result that does not meet the deliverable.
+3. Add step-wise tool routing (doc 2): ask which tool, whether to call one and when to stop as separate steps. Native, grammar-constrained calls are already in place (F1), so this is the only part left.
 4. Build question-driven `decide` behind a setting and A/B it on the agents eval (F3, High).
 5. Add typed briefs with the in-request value check (F8, Medium).
 6. Slim the nested run's context (F7, Medium).
@@ -80,10 +78,10 @@ In priority order.
 
 ## Documentation issues
 
-- D1: the contradiction in doc 1 above. Fix in progress.
+- D1: the contradiction in doc 1 above. Fixed in commit `25fcc1b`.
 - D2: reduce `done-agents-eval-report.md` and `done-agent-hierarchy.md` to a pointer or archive them.
 - D3: add a failure taxonomy table to doc 3.
 
 ## Method and limits
 
-Read of `src/` and `docs/` at commit `c85e02a`. No model runs. Pass rates quoted are from `docs/3-roadmap.md` and were not re-measured. The F1 cause is a hypothesis from reading the wrapper source, not a confirmed trace. Status entries describe work in sibling worktrees as of 2026-11-07 and were not inspected here.
+Read of `src/` and `docs/` at commit `c85e02a`. No model runs. Pass rates quoted are from `docs/3-roadmap.md` and were not re-measured. The F1 cause was a hypothesis from reading the wrapper source; it was tested live the same day and disproved (commit `746d399`). Status entries were updated on 2026-11-07 as the work landed.
