@@ -68,6 +68,20 @@ describe('task graph elements', () => {
         ]);
     });
 
+    it('tells each step node which step of its task it is', () => {
+        const tasks = [task('1', 'running', [], [step('Deciding'), step('Checking'), step('Revising'), step('Checking')])];
+
+        const { nodes } = taskGraphElements(tasks);
+
+        expect(nodes.map((node) => node.step)).toEqual([
+            null,
+            { name: 'Deciding', occurrence: 0 },
+            { name: 'Checking', occurrence: 0 },
+            { name: 'Revising', occurrence: 0 },
+            { name: 'Checking', occurrence: 1 },
+        ]);
+    });
+
     it('shows dependency arrows only for the tasks in focus', () => {
         const subtask = { id: 's', source: '1', target: '1.1', kind: 'subtask' as const };
         const chain = { id: 'c', source: '1', target: '1:0', kind: 'step' as const };

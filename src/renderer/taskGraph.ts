@@ -45,7 +45,11 @@ export type TaskGraphNode = {
     tooltip: string;
     width: number;
     height: number;
+    // For a step node, which step it is: its name and how many steps of that name came before it in the task.
+    step: StepTarget | null;
 };
+
+export type StepTarget = { name: string; occurrence: number };
 
 export type TaskGraphLink = { id: string; source: string; target: string; kind: 'subtask' | 'dependency' | 'step' };
 
@@ -90,6 +94,7 @@ export function taskGraphElements(tasks: TaskNode[]): TaskGraphElements {
             tooltip: prompt,
             width: BOX_WIDTH,
             height: BOX_HEIGHT,
+            step: null,
         });
         (task.steps ?? []).forEach((step, index) => {
             const id = stepId(task.id, index);
@@ -105,6 +110,7 @@ export function taskGraphElements(tasks: TaskNode[]): TaskGraphElements {
                 tooltip: stepTooltip(step),
                 width: STEP_WIDTH,
                 height: STEP_HEIGHT,
+                step: { name: step.name, occurrence: (task.steps ?? []).slice(0, index).filter((earlier) => earlier.name === step.name).length },
             });
             const previous = index === 0 ? task.id : stepId(task.id, index - 1);
             links.push({ id: `step:${previous}>${id}`, source: previous, target: id, kind: 'step' });
@@ -191,7 +197,7 @@ export function startingX(anchorX: number, siblingIndex: number, siblingCount: n
 // Drawing
 // ============================================================================
 
-export type TaskGraphOptions = { onChoose: (taskId: string) => void };
+export type TaskGraphOptions = { onChoose: (taskId: string, step: StepTarget | null) => void };
 
 // The simulation's copies: force-graph adds positions to nodes and swaps link ends for the node objects.
 type SimNode = TaskGraphNode & { x?: number; y?: number; vx?: number; vy?: number; fy?: number };
@@ -282,7 +288,7 @@ export class TaskGraph {
             .linkWidth(1.4)
             .linkCanvasObjectMode((link) => (link.kind === 'subtask' ? undefined : 'replace'))
             .linkCanvasObject((link, context) => (link.kind === 'step' ? this.drawStepLink(link, context) : this.drawDependency(link, context)))
-            .onNodeClick((node) => this.options.onChoose(node.taskId))
+            .onNodeClick((node) => this.options.onChoose(node.taskId, node.step))
             .onNodeHover((node) => {
                 // Labels are shortened in the boxes, so the full text shows as the pointer's tooltip.
                 this.container.title = node?.tooltip ?? '';

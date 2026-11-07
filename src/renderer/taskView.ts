@@ -26,6 +26,20 @@ export function stepName(label: string): string {
     return separator < 0 ? label : label.slice(separator + STEP_SEPARATOR.length);
 }
 
+// Finds the step with this name that has this many steps of the same name before it, or -1.
+export function findStepIndex(stepNames: string[], name: string, occurrence: number): number {
+    let seen = 0;
+    for (let index = 0; index < stepNames.length; index++) {
+        if (stepNames[index] === name) {
+            if (seen === occurrence) {
+                return index;
+            }
+            seen++;
+        }
+    }
+    return -1;
+}
+
 // ============================================================================
 // Tree rows
 // ============================================================================

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    findStepIndex,
     stepName,
     stepTaskId,
     taskOutputMarkdown,
@@ -95,5 +96,16 @@ describe('task detail', () => {
             '**Note:** Checked twice',
         ]);
         expect(taskOutputMarkdown(task)).toBe('All good\n\n_The output is shortened here; the thinking above has all of it._');
+    });
+});
+
+describe('finding a step', () => {
+    it('finds the step with a name that has this many of the same name before it', () => {
+        const names = ['Deciding', 'Checking', 'Revising', 'Checking'];
+
+        expect(findStepIndex(names, 'Checking', 0)).toBe(1);
+        expect(findStepIndex(names, 'Checking', 1)).toBe(3);
+        expect(findStepIndex(names, 'Checking', 2)).toBe(-1);
+        expect(findStepIndex(names, 'Writing', 0)).toBe(-1);
     });
 });

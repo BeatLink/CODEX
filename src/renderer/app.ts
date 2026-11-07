@@ -60,7 +60,7 @@ import {
 } from './settingsForm.js';
 import { commandSuggestions, completeCommand, type CommandSuggestion } from './slashCommands.js';
 import { TaskGraph } from './taskGraph.js';
-import { stepName, taskOutputMarkdown, taskSummaryMarkdown, taskTreeBranches, visibleTaskIds, type TaskBranch } from './taskView.js';
+import { findStepIndex, stepName, taskOutputMarkdown, taskSummaryMarkdown, taskTreeBranches, visibleTaskIds, type TaskBranch } from './taskView.js';
 import type { CodexApi, Knowledge, ProposedAction, ResearchJob, Settings, SizeChoice, Status, UnfinishedRun, UserCommand } from './types.js';
 
 const codex = (window as unknown as { codex: CodexApi }).codex;
@@ -113,6 +113,7 @@ const view = {
     resumeText: element('resume-text'),
     phaseTitle: element('phase-title'),
     graphToggle: element<HTMLButtonElement>('graph-toggle'),
+    graphReset: element<HTMLButtonElement>('graph-reset'),
     taskGraph: element('task-graph'),
     outputTask: element('output-task'),
     taskSummary: element('task-summary'),
@@ -363,7 +364,15 @@ function moveInTree(event: KeyboardEvent): void {
 // Task graph
 // ============================================================================
 
-const taskGraph = new TaskGraph(view.taskGraph, { onChoose: (taskId) => dispatch(chooseTask(state, taskId)) });
+// A step chosen in the graph, shown in the task's details once they are drawn.
+let pendingStep: { taskId: string; name: string; occurrence: number } | null = null;
+
+const taskGraph = new TaskGraph(view.taskGraph, {
+    onChoose: (taskId, step) => {
+        pendingStep = step === null ? null : { taskId, ...step };
+        dispatch(chooseTask(state, taskId));
+    },
+});
 let graphedNodes: unknown = null;
 let graphedChoice: string | null = null;
 
@@ -373,6 +382,7 @@ const NO_TASKS_TEXT = 'Tasks appear here once a request is planned.';
 function renderTaskGraph(): void {
     view.graphToggle.setAttribute('aria-pressed', String(state.graphShown));
     view.taskGraph.hidden = !state.graphShown;
+    view.graphReset.hidden = !state.graphShown;
     view.taskGraph.dataset.empty = String(state.nodes.length === 0);
     view.taskGraph.dataset.emptyText = NO_TASKS_TEXT;
     const choice = state.phase === 'task' ? state.chosenTaskId : null;
@@ -391,7 +401,7 @@ function renderTaskGraph(): void {
 const NO_INPUT_TEXT = 'Shown once this task makes its first model call.';
 const NO_THINKING_TEXT = 'Each step of this task streams here as it runs.';
 
-type DrawnStep = { label: string; system: HTMLPreElement; input: HTMLPreElement; inputBlock: HTMLDetailsElement; body: Text };
+type DrawnStep = { label: string; heading: HTMLElement; system: HTMLPreElement; input: HTMLPreElement; inputBlock: HTMLDetailsElement; body: Text };
 
 let drawnTaskId: string | null = null;
 let drawnSteps: DrawnStep[] = [];
@@ -433,7 +443,7 @@ function renderTaskSteps(): void {
             const heading = span('step-heading', `▸ ${stepName(step.label)}`);
             const body = document.createTextNode('');
             view.taskThinking.append(heading, body);
-            drawnSteps.push({ label: step.label, system, input, inputBlock, body });
+            drawnSteps.push({ label: step.label, heading, system, input, inputBlock, body });
         }
         const drawn = drawnSteps[index];
         drawn.inputBlock.hidden = !step.input;
@@ -454,6 +464,20 @@ function renderTaskDetail(): void {
         renderTaskSteps();
         setMarkdown(view.taskOutput, task === null ? '_No output yet._' : taskOutputMarkdown(task));
     });
+    revealPendingStep();
+}
+
+// Scrolls to the step chosen in the graph and opens its prompt, once its task's details are showing.
+function revealPendingStep(): void {
+    if (pendingStep === null || state.chosenTaskId !== pendingStep.taskId) {
+        return;
+    }
+    const index = findStepIndex(drawnSteps.map((drawn) => stepName(drawn.label)), pendingStep.name, pendingStep.occurrence);
+    pendingStep = null;
+    if (index >= 0) {
+        drawnSteps[index].inputBlock.open = !drawnSteps[index].inputBlock.hidden;
+        drawnSteps[index].heading.scrollIntoView({ block: 'start' });
+    }
 }
 
 function renderWorkbench(): void {
@@ -1141,6 +1165,7 @@ function bindControls(): void {
     });
     view.taskTree.addEventListener('keydown', moveInTree);
     view.graphToggle.addEventListener('click', () => dispatch(setGraphShown(state, !state.graphShown)));
+    view.graphReset.addEventListener('click', () => taskGraph.resetView());
     element('notice-close').addEventListener('click', () => {
         view.notice.hidden = true;
     });

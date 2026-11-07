@@ -115,12 +115,13 @@ describe('a run from start to finish', () => {
         expect(reopened.collapsedTaskIds).toEqual([]);
     });
 
-    it('shows and hides the task graph, and keeps the choice across runs', () => {
-        const shown = setGraphShown(initialState(), true);
+    it('starts with the task graph shown, and keeps a later choice across runs', () => {
+        const hidden = setGraphShown(initialState(), false);
 
-        expect(shown.graphShown).toBe(true);
-        expect(beginRun(shown, 1).graphShown).toBe(true);
-        expect(setGraphShown(shown, false).graphShown).toBe(false);
+        expect(initialState().graphShown).toBe(true);
+        expect(hidden.graphShown).toBe(false);
+        expect(beginRun(hidden, 1).graphShown).toBe(false);
+        expect(setGraphShown(hidden, true).graphShown).toBe(true);
     });
 
     it('follows a run another interface starts, but not one this window already began', () => {

@@ -71,7 +71,7 @@ export function initialState(): WorkbenchState {
         phase: 'final',
         chosenTaskId: null,
         collapsedTaskIds: [],
-        graphShown: false,
+        graphShown: true,
         nodes: [],
         steps: [],
         lastStepLabel: '',
