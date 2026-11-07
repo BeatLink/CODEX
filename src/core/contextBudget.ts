@@ -16,6 +16,14 @@ export const MAX_FIT_ROUNDS = 4;
 
 export const TRIMMED_MARKER = '\n[Trimmed to fit the context window.]';
 
+// A section text that starts with this holds tool results as the tools returned them. It is data for the
+// later steps, so it is trimmed to fit and never condensed: a small model's summary of a listing drops entries.
+export const TOOL_RESULTS_LABEL = 'Tool call results:';
+
+export function isDataSection(text: string): boolean {
+    return text.startsWith(TOOL_RESULTS_LABEL);
+}
+
 export type Section = [heading: string, text: string];
 export type TokenCounter = (text: string) => number;
 
@@ -202,7 +210,7 @@ export function isCallFailure(error: unknown): boolean {
     return error instanceof Error && (error.constructor === Error || error.constructor === SyntaxError);
 }
 
-// Summarize the largest unpinned sections until the input fits, then trim whatever still overflows; pinned sections are never summarized.
+// Summarize the largest unpinned sections until the input fits, then trim whatever still overflows; pinned and data sections are never summarized.
 export async function condenseSections(
     sections: Section[],
     tokenBudget: number,
@@ -223,7 +231,7 @@ export async function condenseSections(
         let largest = -1;
         let largestSize = -1;
         working.forEach(([, text], index) => {
-            if (index >= pinned && !condensed.has(index)) {
+            if (index >= pinned && !condensed.has(index) && !isDataSection(text)) {
                 const size = countTokens(text);
                 if (size > largestSize) {
                     largest = index;

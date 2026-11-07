@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ChatCompletion, ChatCompletionRequest, ChatModel, ToolDefinition } from './model.js';
-import { ANSWER_NOW_CALL_NOTE, REPEATED_CALL_NOTE, callIsValid, pythonJsonLength, runToolStage, textToolCalls, type ToolCallRecord } from './toolStage.js';
+import { ANSWER_NOW_CALL_NOTE, MODEL_WORDS_LABEL, REPEATED_CALL_NOTE, callIsValid, pythonJsonLength, runToolStage, textToolCalls, type ToolCallRecord } from './toolStage.js';
+import { TOOL_RESULTS_LABEL } from './contextBudget.js';
 import { TOOL_DEFINITIONS } from './tools.js';
 
 // Records each call and answers it with the given output.
@@ -311,6 +312,20 @@ describe('tool stage', () => {
 
         expect(builtIn.requests.map((request) => request.tool_choice)).toEqual(['auto', 'auto', 'auto']);
         expect(failed.requests.map((request) => request.tool_choice)).toEqual(['auto', 'auto', 'auto']);
+    });
+
+    it('puts the tool results before the model\'s own words, and leaves them out when no tool ran', async () => {
+        const toolbox = new FakeToolbox();
+        const model = new FakeModel([toolCallReply('call-1'), textReply('The file holds notes.')]);
+
+        const result = await runToolStage(model, 'Use tools when useful.', 'Read notes.txt.', toolbox, 200, 0.1, 3);
+
+        expect(result.startsWith(TOOL_RESULTS_LABEL)).toBe(true);
+        expect(result.indexOf('sample tool output')).toBeLessThan(result.indexOf(MODEL_WORDS_LABEL));
+        expect(result.endsWith(`${MODEL_WORDS_LABEL}\nThe file holds notes.`)).toBe(true);
+
+        const plain = await runToolStage(new FakeModel([textReply('No tools needed.')]), 'Use tools.', 'Hi.', new FakeToolbox(), 200, 0.1, 3);
+        expect(plain).toBe('No tools needed.');
     });
 
     it('trims tool output to the context window', async () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     CONDENSED_MARKER,
+    TOOL_RESULTS_LABEL,
     TRIMMED_MARKER,
     type Section,
     condenseSections,
@@ -114,6 +115,31 @@ describe('condensing sections', () => {
         expect(fitted[0]).toEqual(sections[0]);
         expect(fitted[1]).toEqual(sections[1]);
         expect(fitted[2]).toEqual(['Evidence', CONDENSED_MARKER + 'short summary']);
+    });
+
+    it('trims a tool-results section instead of condensing it', async () => {
+        const countTokens = tokenCounter(wordTokenModel);
+        const sections: Section[] = [
+            ['Request', 'keep me'],
+            ['Findings', `${TOOL_RESULTS_LABEL}\n` + 'entry '.repeat(1_000)],
+        ];
+        const calls: string[] = [];
+
+        const fitted = await condenseSections(
+            sections,
+            300,
+            countTokens,
+            async (heading) => {
+                calls.push(heading);
+                return 'short summary';
+            },
+            1,
+        );
+
+        expect(calls).toEqual([]);
+        expect(fitted[1][1].startsWith(TOOL_RESULTS_LABEL)).toBe(true);
+        expect(fitted[1][1].endsWith(TRIMMED_MARKER)).toBe(true);
+        expect(countTokens(renderSections(fitted))).toBeLessThanOrEqual(300);
     });
 
     it('falls back to trimming when summaries fail', async () => {

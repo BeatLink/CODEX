@@ -2,7 +2,7 @@
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
 import type { JsonSchemaType } from '@modelcontextprotocol/sdk/validation';
 
-import { inputCharBudget, untrustedBlock } from './contextBudget.js';
+import { inputCharBudget, TOOL_RESULTS_LABEL, untrustedBlock } from './contextBudget.js';
 import { MCPToolbox } from './mcpTools.js';
 import { REPETITION_MESSAGE, type ChatCompletionRequest, type ChatMessage, type ChatModel, type ToolCall, type ToolDefinition } from './model.js';
 import type { McpServerSettings } from './settings.js';
@@ -274,7 +274,7 @@ async function toolLoop(
         } else if (request.tool_choice === 'none') {
             // A turn told to answer never runs a call written as text, so a reply that is only a call ends with the findings so far.
             if (typeof completion.content === 'string' && completion.content.trim() && !completion.content.replace(TEXT_TOOL_CALL, '').trim()) {
-                return [ANSWER_NOW_CALL_NOTE, toolHistory.length > 0 ? `Tool call results:\n${toolHistory.join('\n')}` : ''].filter(Boolean).join('\n\n');
+                return findingsText(toolHistory, [ANSWER_NOW_CALL_NOTE]);
             }
         } else {
             toolCalls = textToolCalls(completion.content, toolDefinitions);
@@ -293,23 +293,14 @@ async function toolLoop(
             if (typeof content !== 'string' || !content.trim()) {
                 throw new Error('The model returned an empty tool-stage response.');
             }
-            if (toolHistory.length > 0) {
-                return `${content.trim()}\n\nTool call results:\n${toolHistory.join('\n')}`;
-            }
-            return content.trim();
+            return findingsText(toolHistory, [content.trim()]);
         }
         if (toolCallCount >= maxToolCalls) {
             for (const toolCall of toolCalls) {
                 recordCall(toolCall, LIMIT_REACHED_ERROR);
             }
             const findings = typeof assistantMessage.content === 'string' ? assistantMessage.content.trim() : '';
-            return [
-                findings,
-                'The tool-call limit was reached; further requested tool calls were not run.',
-                toolHistory.length > 0 ? `Tool call results:\n${toolHistory.join('\n')}` : '',
-            ]
-                .filter(Boolean)
-                .join('\n\n');
+            return findingsText(toolHistory, [findings, 'The tool-call limit was reached; further requested tool calls were not run.']);
         }
 
         messages.push(assistantMessage);
@@ -368,6 +359,19 @@ async function toolLoop(
         roundsWithoutNewTool = newTool ? 0 : roundsWithoutNewTool + 1;
         answerNow = connectedAnswered && (allRepeats || roundsWithoutNewTool >= 2);
     }
+}
+
+// Put the tool results first and the model's own words after them, so when a later step trims the findings to
+// fit, it is the model's narration that is cut, not what the tools returned. Why: a run that listed a folder
+// and then narrated lost the listing to trimming, and its answer covered a quarter of the entries.
+export const MODEL_WORDS_LABEL = "The model's own words after the tool calls:";
+
+function findingsText(toolHistory: string[], notes: string[]): string {
+    const words = notes.filter(Boolean).join('\n\n');
+    if (toolHistory.length === 0) {
+        return words;
+    }
+    return [`${TOOL_RESULTS_LABEL}\n${toolHistory.join('\n')}`, words ? `${MODEL_WORDS_LABEL}\n${words}` : ''].filter(Boolean).join('\n\n');
 }
 
 // Say whether a tool's result reports an error instead of an answer.

@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 // ============================================================================
 
 export const DEFAULT_MODEL_PATH = './models/model.gguf';
-export const CONTEXT_SIZE = 4096;
+export const CONTEXT_SIZE = 6144;
 export const MAX_TOKENS = 2048;
 export const TEMPERATURE = 0.1;
 export const MODE_CHOICES = ['auto', 'answer', 'draft', 'execute'] as const;
