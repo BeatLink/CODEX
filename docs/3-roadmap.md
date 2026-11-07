@@ -196,4 +196,6 @@ Design in doc 2 ("Projects above domains"). After the mail slice's outcome recor
 
 ## Housekeeping
 
+- Move every hardcoded prompt (triage, `decide`, consolidation, titles, evaluation and the rest in `src/core/`) out of the code into YAML config files, so a user can edit or replace them without a rebuild. Follow the agent files' layout: shipped defaults, overridden by `~/.config/codex/` and then the working folder's `.codex/`, a file replacing one of the same name.
+
 - Purge the removed LM Studio notes (`docs/design/lm-studio-models-and-settings.md`, commits 46b2616 and 538c143) from the public history. Postponed: it rewrites published history.
