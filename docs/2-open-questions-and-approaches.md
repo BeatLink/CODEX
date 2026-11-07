@@ -354,7 +354,7 @@ Not taken from Nexus: inline `REMEMBER:`/`RECALL:` markers in replies (Codex's h
 
 A domain pack becomes the unit the system gets better at, not only the unit it is configured by.
 
-**Cognitive processes are job types, written once.** Planner, researcher, executor, auditor, pruner, collator and reflection are each one implementation that the scheduler runs *for* a domain: `audit(mail)`, `prune(calendar)`, `research(projects)`. The domain supplies the data (memory scope, tools, instructions, validators, goals, success signal); the process supplies the method. No per-domain copies of the processes. Already in place: each step of a task is its own record with status and timing (doc 1, "Steps are records"), still run inside one task-tree run.
+**Cognitive processes are job types, written once.** Planner, researcher, executor, auditor, pruner, collator and reflection are each one implementation that the scheduler runs *for* a domain: `audit(mail)`, `prune(calendar)`, `research(projects)`. The domain supplies the data (memory scope, tools, instructions, validators, goals, success signal); the process supplies the method. No per-domain copies of the processes. Already in place: each step of a task is its own record with status and timing (doc 1, "Steps are records") and its own module under `core/steps/`, still run inside one task-tree run.
 
 | Process | Built today as | Per-domain job |
 | --- | --- | --- |

@@ -1,49 +1,21 @@
 // Run a request as a tree of tasks, where each task is answered, worked with tools, or split into subtasks.
 import { resolve } from 'node:path';
 
-import { MAX_AGENT_DEPTH, loadAgents, serversBehind, serversFor, topLevelAgents, type AgentDefinition } from './agents.js';
-import { actionReportProblems, calculationProblems, unbackedClaims, uncitedUrls, unsupportedValues, type ActionRecord } from './checks.js';
+import { loadAgents, serversBehind, serversFor, type AgentDefinition } from './agents.js';
+import { type ActionRecord } from './checks.js';
 import { expandCommand, isMemoryCommand, runMemoryCommand } from './commands.js';
 import { condenseSections, inputTokenBudget, isCallFailure, renderSections, tokenCounter, type Section, type TokenCounter } from './contextBudget.js';
 import { getEmbedder } from './embeddings.js';
-import {
-    CONNECTED_EVIDENCE_RULE,
-    MAX_SEARCH_QUERIES,
-    MAX_SEARCH_QUERY_CHARS,
-    MEMORY_LABEL,
-    NO_EVIDENCE_RULE,
-    RESEARCHED_EVIDENCE_RULE,
-    VERIFIED_EVIDENCE_RULE,
-    buildToolbox,
-    filesystemNote,
-    formatRecall,
-    isSelfContained,
-    isSqliteError,
-    pageSummarizer,
-    pythonJson,
-    queueStaleTopics,
-    queueUnsupportedClaims,
-    requiresWebResearch,
-    searchQuery,
-    searchWithMemory,
-    sectionSummarizer,
-    type SectionSummarizer,
-} from './evidence.js';
+import { CONNECTED_EVIDENCE_RULE, MAX_SEARCH_QUERIES, MAX_SEARCH_QUERY_CHARS, MEMORY_LABEL, NO_EVIDENCE_RULE, RESEARCHED_EVIDENCE_RULE, VERIFIED_EVIDENCE_RULE, buildToolbox, formatRecall, isSqliteError, pythonJson, queueStaleTopics, requiresWebResearch, sectionSummarizer, type SectionSummarizer } from './evidence.js';
 import { INSTRUCTIONS_LABEL, SKILLS_LABEL, loadInstructions, loadSkills } from './instructions.js';
 import { KnowledgeStore, MAX_RECALLED_RELATIONSHIPS, casefold, type EventTrust as Trust, type Recalled, type Row, type RecalledFact, type RecalledRelationship } from './knowledge.js';
 import { loadModel, runStage, type ChatModel, type ModelCache } from './model.js';
-import {
-    CONTEXT_SIZE,
-    DEFAULT_MODEL_PATH,
-    MAX_TASK_DEPTH,
-    MAX_TASK_NODES,
-    MAX_TOKENS,
-    MODE_CHOICES,
-    TEMPERATURE,
-    expandUser,
-    type McpServerSettings,
-} from './settings.js';
-import { runToolStage } from './toolStage.js';
+import { CONTEXT_SIZE, DEFAULT_MODEL_PATH, MAX_TASK_DEPTH, MAX_TASK_NODES, MAX_TOKENS, MODE_CHOICES, TEMPERATURE, expandUser, type McpServerSettings } from './settings.js';
+import { approachesFor, agentChoices, decide } from './steps/decide.js';
+import { search, gather } from './steps/gather.js';
+import { workDirectly } from './steps/write.js';
+import { checkAndRevise, check } from './steps/check.js';
+import { planSubtasks, workSubtasks, runSubtasks } from './steps/subtasks.js';
 import { ValueError, resolvePath, type Toolbox } from './tools.js';
 
 // ============================================================================
@@ -539,7 +511,7 @@ export class TaskTree {
 // Parsing replies
 // ============================================================================
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
@@ -792,7 +764,7 @@ export type TaskRunState = {
     local_knowledge_used: boolean;
 };
 
-function errorMessage(error: unknown): string {
+export function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
@@ -802,7 +774,7 @@ function todayIso(): string {
 }
 
 // Drop repeated items, comparing their contents with keys in sorted order.
-function unique<T extends object>(items: T[]): T[] {
+export function unique<T extends object>(items: T[]): T[] {
     const byKey = new Map<string, T>();
     for (const item of items) {
         const key = JSON.stringify(Object.fromEntries(Object.entries(item).sort(([first], [second]) => (first < second ? -1 : 1))));
@@ -1249,78 +1221,15 @@ export class TaskTreeRun {
     }
 
     approachesFor(node: TaskNode): string[] {
-        let approaches: string[];
-        if (this.mode === 'execute' && this.canAct && node.parent === null) {
-            // An execute request is there to change things, so its top task acts or splits.
-            approaches = ['act'];
-        } else {
-            approaches = ['answer', 'research', 'files', ...(this.canAct ? ['act'] : [])];
-        }
-        if (this.tree.roomFor(node) >= MIN_SUBTASKS) {
-            approaches.push('decompose');
-        }
-        if (this.agentChoices().length > 0) {
-            approaches.push('delegate');
-        }
-        return approaches;
+        return approachesFor(this, node);
     }
 
-    // Return the agents this run may hand a task to: the top level's own, or the agent's sub-agents.
     agentChoices(): string[] {
-        if (this.agentDepth >= MAX_AGENT_DEPTH) {
-            return [];
-        }
-        return this.agent === null ? topLevelAgents(this.agents) : [...this.agent.agents];
+        return agentChoices(this);
     }
 
     async decide(node: TaskNode): Promise<Decision> {
-        const approaches = this.approachesFor(node);
-        const ask = node.parent === null && this.clarification === null && !this.delegated;
-        const agentNames = this.agentChoices();
-        if (agentNames.length > 0) {
-            const routed = await this.route(node, approaches, ask, agentNames);
-            if (routed !== null) {
-                return this.afterClarification(node, routed, ask);
-            }
-        }
-        let systemPrompt = DECISION_PROMPT + (ask ? CLARIFICATION_NOTE : '');
-        // Without the servers' names, a question about the user's own mail or calendar reads like a web lookup.
-        const servers = this.mcpServers.filter((server) => server.enabled ?? true);
-        if (approaches.includes('act') && servers.length > 0) {
-            systemPrompt += CONNECTED_TOOLS_NOTE + ' ' + connectedToolsList(servers) + '.';
-        }
-        if (agentNames.length > 0) {
-            systemPrompt += DELEGATE_NOTE + this.agentList(agentNames);
-        }
-        let reply: string;
-        try {
-            reply = await this.call(node, 'Deciding', systemPrompt, await this.sections(node), {
-                replyTokens: DECISION_MAX_TOKENS,
-                jsonSchema: decisionSchema(approaches, ask, agentNames),
-            });
-        } catch (error) {
-            if (!this.isTaskFailure(error)) {
-                throw error;
-            }
-            // A decision that runs out of room or goes in circles falls back to the default approach instead of ending the run.
-            this.report(node, 'Deciding failed, using the default approach');
-            return defaultDecision(node);
-        }
-        const decision = parseDecision(
-            reply,
-            node,
-            approaches,
-            this.tree.nodes().map((task) => task.prompt),
-            agentNames,
-        );
-        if (decision === null) {
-            return defaultDecision(node);
-        }
-        if (decision.approach === 'files' && this.mode === 'execute' && this.canAct) {
-            // An execute request is there to change things, and acting can read files as well.
-            decision.approach = 'act';
-        }
-        return this.afterClarification(node, decision, ask);
+        return decide(this, node);
     }
 
     // Ask the decision's question first if it has one; the answer can change how the task is best done, so it is decided again.
@@ -1432,138 +1341,16 @@ export class TaskTreeRun {
             : ['Clarification declined', `Question: ${question}\nNo answer was provided; state a reasonable assumption.`];
     }
 
-    // Gather what the task needs, write its result, and check it; split the task when that fails.
     async workDirectly(node: TaskNode, decision: Decision): Promise<void> {
-        const evidence = await this.gather(node, decision);
-        const searched = evidence.some(([label]) => SEARCH_LABELS.some((prefix) => label.startsWith(prefix)));
-        const systemPrompt = (node.parent === null ? ROOT_WRITE_PROMPT : WRITE_PROMPT) + this.sourceCheck(searched);
-        let result = '';
-        let problem = '';
-        let written: string | null = null;
-        try {
-            written = await this.call(node, 'Writing', systemPrompt, await this.sections(node, evidence));
-        } catch (error) {
-            // A task too big to write in one reply can still be split into smaller ones.
-            if (!this.isTaskFailure(error) || node.fromSplit || this.tree.roomFor(node) < MIN_SUBTASKS) {
-                throw error;
-            }
-            problem = `Writing the whole task in one reply failed (${errorMessage(error)}).`;
-        }
-        if (written !== null) {
-            [result, problem] = await this.checkAndRevise(node, systemPrompt, written, evidence, []);
-        }
-        if (problem && !node.fromSplit && this.tree.roomFor(node) >= MIN_SUBTASKS) {
-            // A task one step could not finish is split into smaller ones and tried again.
-            const subtasks = await this.planSubtasks(node, SPLIT_PROMPT, MIN_SUBTASKS, [
-                ['Failed attempt', result],
-                ['Problem with it', problem],
-            ]);
-            if (subtasks.length >= MIN_SUBTASKS) {
-                node.approach = 'decompose';
-                node.note = `Split after a failed attempt: ${problem}`;
-                await this.workSubtasks(node, subtasks, true);
-                return;
-            }
-        }
-        if (!result) {
-            throw new Error(problem);
-        }
-        node.result = result;
-        node.note = problem;
-        node.status = problem ? 'unverified' : 'done';
+        return workDirectly(this, node, decision);
     }
 
-    // Look each query up, and say whether stored summaries answered every one of them.
     async search(node: TaskNode, queries: string[]): Promise<[Section[], boolean]> {
-        const evidence: Section[] = [];
-        let answeredFromMemory = true;
-        const shown = new Set((await this.taskRecall(node))[1]);
-        for (const query of queries.slice(0, MAX_SEARCH_QUERIES)) {
-            let facts: RecalledFact[] = [];
-            if (this.knowledgeStore !== null) {
-                // A short query matches stored facts that the whole request was too long to match.
-                const recalled = await this.knowledgeStore.recall(query, { includeMemories: false });
-                facts = recalled.facts.filter((fact) => !shown.has(fact.id));
-                queueStaleTopics(this.knowledgeStore, facts, this.maxPendingResearchJobs);
-                if (facts.length > 0) {
-                    for (const fact of facts) {
-                        shown.add(fact.id);
-                    }
-                    this.recalledFacts = true;
-                    evidence.push([`Stored facts for '${query}'`, formatRecall({ facts, relationships: recalled.relationships })]);
-                }
-            }
-            this.throwIfStopped();
-            const [label, text, fromSummary] = await searchWithMemory(query, this.knowledgeStore, this.toolbox, this.maxPendingResearchJobs);
-            evidence.push([`${label} for '${query}'`, text]);
-            this.localKnowledgeUsed = this.localKnowledgeUsed || label === 'Local knowledge result';
-            // Fresh stored facts were extracted from fetched pages, so they answer a query as a stored summary does.
-            answeredFromMemory = answeredFromMemory && (fromSummary || facts.some((fact) => !fact.stale));
-        }
-        this.evidence.push(...evidence.map(([, text]) => text));
-        return [evidence, answeredFromMemory];
+        return search(this, node, queries);
     }
 
-    // Run the task's tools and return what they found, or nothing for a task answered without tools.
     async gather(node: TaskNode, decision: Decision): Promise<Section[]> {
-        if (decision.approach === 'answer') {
-            // The model cannot tell when it does not know something, so a top-level answer gets one quick search.
-            if (node.parent === null && !isSelfContained(this.userPrompt)) {
-                return (await this.search(node, [searchQuery(this.userPrompt)]))[0];
-            }
-            return [];
-        }
-        let evidence: Section[] = [];
-        if (decision.approach === 'research') {
-            // The request's own words come first at the top, so a query the model made up is never the only search.
-            const ownWords = node.parent === null ? [searchQuery(this.userPrompt)] : [];
-            const unique = [...new Set([...ownWords, ...decision.searchQueries])];
-            const queries = unique.length > 0 ? unique : [searchQuery(node.prompt)];
-            const [found, answeredFromMemory] = await this.search(node, queries);
-            evidence = found;
-            // Stored page and topic summaries answer on their own, so nothing more is fetched.
-            if (answeredFromMemory) {
-                return evidence;
-            }
-        }
-
-        if (decision.approach === 'act' && !(await this.approveActions(node))) {
-            const note = declinedActionsNote(this.actionsDecision![1]);
-            this.evidence.push(note);
-            return [...evidence, ['Action results', note]];
-        }
-        let systemPrompt = GATHER_PROMPTS[decision.approach] + filesystemNote(this.toolbox, this.allowFileWrites);
-        if (decision.approach === 'act') {
-            systemPrompt += this.sourceCheck(false) + this.testNote();
-        }
-        const toolOptions = {
-            research: {
-                allowedTools: new Set(this.trust === 'user' ? ['web_search', 'web_fetch', 'list_directory', 'read_file'] : ['web_search']),
-                pageSummarizer: pageSummarizer(this.llm, this.knowledgeStore, this.maxTokens, this.temperature, this.contextSize),
-            },
-            files: { allowedTools: new Set(['list_directory', 'read_file']) },
-            act: { blockedTools: new Set(['web_search', 'web_fetch']), mcpServers: this.mcpServers },
-        }[decision.approach as 'research' | 'files' | 'act'];
-        const actionsBefore = this.toolbox.actionLog.length;
-        const toolCalls = decision.approach === 'act' ? Math.max(this.maxToolCalls, MIN_ACT_TOOL_CALLS) : this.maxToolCalls;
-        const findings = await this.step(node, APPROACH_STEPS[decision.approach], async (label) => {
-            // Half the room goes to the input and half stays free for tool results.
-            const budget = Math.floor(inputTokenBudget(this.contextSize, this.maxTokens, this.countTokens, systemPrompt) / 2);
-            const userInput = await this.fit(node, await this.sections(node, evidence), budget, 3);
-            this.stageInputCallback?.(label, systemPrompt, userInput);
-            return runToolStage(this.llm, systemPrompt, userInput, this.toolbox, this.maxTokens, this.temperature, toolCalls, {
-                onToken: this.tokenCallbackFor(label),
-                contextSize: this.contextSize,
-                signal: this.signal ?? undefined,
-                ...toolOptions,
-            });
-        });
-        if (decision.approach === 'act') {
-            this.taskActions.set(node.id, this.toolbox.actionLog.slice(actionsBefore));
-        }
-        this.evidence.push(findings);
-        evidence.push([decision.approach !== 'act' ? 'Findings for this task' : 'Action results', findings]);
-        return evidence;
+        return gather(this, node, decision);
     }
 
     // Ask the user, once per run, whether tasks may change files, run tests, or call MCP tools.
@@ -1589,156 +1376,24 @@ export class TaskTreeRun {
         return '';
     }
 
-    // Check a result and revise it once when it fails; return the result and any problem left.
     async checkAndRevise(node: TaskNode, systemPrompt: string, result: string, evidence: Section[], results: Section[]): Promise<[string, string]> {
-        const problem = await this.check(node, result, [...evidence, ...results]);
-        if (!problem) {
-            return [result, ''];
-        }
-        let revised: string;
-        try {
-            revised = await this.call(
-                node,
-                'Revising',
-                systemPrompt + REVISE_NOTE,
-                await this.sections(node, evidence, problem, [['Previous attempt', result], ...results]),
-                { pinned: this.pinnedCount(problem) },
-            );
-        } catch (error) {
-            // A failed revision keeps the attempt it was fixing, so the task can still be split or finished.
-            if (!this.isTaskFailure(error)) {
-                throw error;
-            }
-            return [result, `${problem} The revision failed (${errorMessage(error)}).`];
-        }
-        return [revised, await this.check(node, revised, [...evidence, ...results])];
+        return checkAndRevise(this, node, systemPrompt, result, evidence, results);
     }
 
-    // Return what is wrong with a task's result, or an empty string when it delivers.
     async check(node: TaskNode, result: string, evidence: Section[] = []): Promise<string> {
-        let reply: string;
-        try {
-            reply = await this.call(node, 'Checking', CHECK_PROMPT, await this.sections(node, evidence, '', [['Result to check', result]]), {
-                pinned: 4,
-                replyTokens: CHECK_MAX_TOKENS,
-                jsonSchema: CHECK_SCHEMA,
-            });
-        } catch (error) {
-            if (!this.isTaskFailure(error)) {
-                throw error;
-            }
-            return `The check could not run (${errorMessage(error)}), so this result is unverified.`;
-        }
-        // A malformed verdict cannot say what to fix, so it does not send the task round again.
-        const problems = [parseCheck(reply) || ''];
-        // Recalled facts carry their source URLs and are offered as evidence, so they count as seen.
-        const known = [...this.evidence, ...this.dependencyResults(node).map(([, text]) => text), await this.memoryFor(node)].join('\n');
-        problems.push(
-            ...uncitedUrls(result, known).map(
-                (url) => `The result cites ${url}, which is not in the captured evidence; remove it or say it is unverified.`,
-            ),
-        );
-        // Only researched results are held to their evidence; arithmetic and rewriting produce new numbers.
-        const usedTools = this.toolbox.usedTools;
-        if (this.localKnowledgeUsed || usedTools.has('web_search') || usedTools.has('web_fetch')) {
-            const unsupported = unsupportedValues(result, `${this.userPrompt}\n${known}`);
-            queueUnsupportedClaims(this.knowledgeStore, result, unsupported, this.maxPendingResearchJobs, this.userPrompt);
-            problems.push(
-                ...unsupported.map(
-                    (value) => `The result states ${value}, which appears in no gathered evidence; remove it or say it could not be verified.`,
-                ),
-            );
-        }
-        problems.push(...calculationProblems(result));
-        const actions = this.taskActions.get(node.id);
-        if (actions !== undefined) {
-            problems.push(...actionReportProblems(result, actions));
-        } else if (this.canAct) {
-            // A task that did not act may still claim changes or passing tests that no action in the run made.
-            problems.push(...unbackedClaims(result, this.toolbox.actionLog));
-        }
-        return problems.filter(Boolean).join(' ');
+        return check(this, node, result, evidence);
     }
 
     async planSubtasks(node: TaskNode, systemPrompt: string, minItems: number, extra: Section[]): Promise<SubtaskSpec[]> {
-        let data: unknown;
-        try {
-            const reply = await this.call(node, 'Planning subtasks', systemPrompt, await this.sections(node, [], '', extra), {
-                replyTokens: DECISION_MAX_TOKENS,
-                jsonSchema: subtasksSchema(minItems),
-            });
-            data = JSON.parse(reply);
-        } catch (error) {
-            if (!this.isTaskFailure(error)) {
-                throw error;
-            }
-            return [];
-        }
-        // Subtasks not run yet are about to be replaced, so only the rest of the tree counts as existing work.
-        const replaced = new Set(node.children.filter((child) => child.status === 'pending'));
-        const existing = this.tree
-            .nodes()
-            .filter((task) => !replaced.has(task))
-            .map((task) => task.prompt);
-        const firstNumber = node.children.length - replaced.size + 1;
-        return parseSubtasks(isRecord(data) ? data.subtasks : null, existing, firstNumber);
+        return planSubtasks(this, node, systemPrompt, minItems, extra);
     }
 
-    // Plan the subtasks, then run them.
     async workSubtasks(node: TaskNode, subtasks: SubtaskSpec[], fromSplit = false): Promise<void> {
-        this.tree.setChildren(node, subtasks, fromSplit);
-        this.publish();
-        await this.runSubtasks(node, fromSplit);
+        return workSubtasks(this, node, subtasks, fromSplit);
     }
 
-    // Run the subtasks in order, re-plan the rest after one fails, then combine their results.
     async runSubtasks(node: TaskNode, fromSplit: boolean): Promise<void> {
-        let index = 0;
-        while (index < node.children.length) {
-            const child = node.children[index];
-            await this.work(child);
-            index += 1;
-            const remaining = node.children.slice(index);
-            if (child.status === 'failed' && remaining.length > 0 && node.replans < MAX_REPLANS_PER_TASK) {
-                node.replans += 1;
-                const finished = node.children
-                    .slice(0, index)
-                    .map((done, position) => `${position + 1}. ${done.prompt} [${done.status}]`)
-                    .join('\n');
-                const replanned = await this.planSubtasks(node, REPLAN_PROMPT, 1, [
-                    ['Finished subtasks', finished],
-                    ['Failure', `Subtask ${child.id} failed: ${child.note}`],
-                    ['Subtasks not run yet', remaining.map((pending) => `- ${pending.prompt}`).join('\n')],
-                ]);
-                if (replanned.length > 0) {
-                    this.tree.setChildren(node, replanned, fromSplit);
-                    this.publish();
-                }
-            }
-        }
-
-        const results: Section[] = node.children.map((child) => [
-            `Result of subtask ${child.id}: ${child.prompt}` + (child.status === 'done' ? '' : ` (${child.status}: ${child.note})`),
-            child.result || 'No result.',
-        ]);
-        const systemPrompt = (node.parent === null ? ROOT_COMBINE_PROMPT : COMBINE_PROMPT) + this.sourceCheck(false);
-        let combined: string;
-        try {
-            combined = await this.call(node, 'Combining', systemPrompt, await this.sections(node, [], '', results));
-        } catch (error) {
-            if (!this.isTaskFailure(error)) {
-                throw error;
-            }
-            // Results too long to merge in one reply are joined as they are, so the finished work is not lost.
-            node.result = node.children.map((child) => `## ${child.prompt}\n\n${child.result || 'No result.'}`).join('\n\n');
-            node.note = `The results were joined without merging, because merging them failed (${errorMessage(error)}).`;
-            node.status = 'unverified';
-            return;
-        }
-        const [result, problem] = await this.checkAndRevise(node, systemPrompt, combined, [], results);
-        node.result = result;
-        node.note = problem;
-        node.status = problem ? 'unverified' : 'done';
+        return runSubtasks(this, node, fromSplit);
     }
 
     // ==========================================================================

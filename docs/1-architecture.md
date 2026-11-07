@@ -26,7 +26,7 @@ codex-daemon: one Node process, one event loop                                  
 
 ### Request flow: task tree
 
-`core/taskTree.ts`; uses `model.ts`, `evidence.ts` (search, recall, page summaries), `checks.ts` (non-model checks). Request = task `1` (deliverable: a complete reply); subtasks numbered by path (`1.2.3`). `TaskTree` caps depth (`max_task_depth`) and size (`max_task_nodes`); `TaskTreeRun` works depth-first.
+`core/taskTree.ts` holds the tree, the run and the prompts and schemas; each step lives in its own module under `core/steps/` (`decide`, `gather`, `write`, `check`, `subtasks`) as a function that takes the run, and the run's methods of the same names call them. The steps use `model.ts`, `evidence.ts` (search, recall, page summaries), `checks.ts` (non-model checks). Request = task `1` (deliverable: a complete reply); subtasks numbered by path (`1.2.3`). `TaskTree` caps depth (`max_task_depth`) and size (`max_task_nodes`); `TaskTreeRun` works depth-first.
 
 ```
 work(task)
