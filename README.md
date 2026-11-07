@@ -556,7 +556,10 @@ user-space library, which can happen after a NixOS rebuild; a reboot fixes it.
 
 Then put a GGUF model at `./models/model.gguf`, or point `model_path` at one,
 and optionally an embedding model at `./models/embedding.gguf` (see
-[Search by meaning](#search-by-meaning)).
+[Search by meaning](#search-by-meaning)). The reference model, the one the
+evals are measured on, is
+[Spark-X2.6-4B](https://huggingface.co/XHToken/Spark-X2.6-4B-GGUF) at
+`Q4_K_M`; why is in `docs/1-architecture.md`, "Reference model".
 
 ## Usage
 

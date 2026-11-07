@@ -155,7 +155,7 @@ Listed as done in the old `TODO.md`; not yet checked against the code.
 
 ### Measured limits (dev laptop: RTX 3050 Ti Mobile 4 GB, Ryzen 5 5600H, 27 GiB RAM; display on iGPU)
 
-- **Context ceiling 6,144 tokens** with `Qwen3.5-4B-UD-Q4_K_XL` fully on GPU. 7,168–10,240 loads but the process aborts with a CUDA error on a long prompt; ≥12,288 can't create a context. A context that loads is no proof it fits. 560 MiB fixed reserve in `core/autoSize.ts` is fitted to this (2026-10-20).
+- **Context ceiling 6,144 tokens** with `Qwen3.5-4B-UD-Q4_K_XL` fully on GPU. 7,168–10,240 loads but the process aborts with a CUDA error on a long prompt; ≥12,288 can't create a context. A context that loads is no proof it fits. 560 MiB fixed reserve in `core/autoSize.ts` is fitted to this (2026-10-20). Measured with Qwen; not yet repeated for Spark-X2.6-4B, the reference since 2026-11-07, which fits fully at 6,144 tokens in 3,475 MiB.
 - **9B background model on CPU is too slow:** `Qwen3.5-9B-Q4_K_M` hadn't summarized one page in 12 min; the 4B on GPU took 28 s per page and ~80 s per topic (2026-10-20).
 
 ### Why a 4B model
@@ -188,6 +188,28 @@ Caveats: the BFCL figures use different versions/settings (not comparable); the 
 5. Codex's own evals are the deciding evidence; the benchmarks are mostly not this workload.
 
 Sources: doc 2, "References".
+
+### Reference model: Spark-X2.6-4B
+
+`models/model.gguf` points at `Spark-X2.6-4B-Q4_K_M.gguf` (SparkLLM, Apache 2.0, architecture `spark2_5`, 4.4B parameters, 3.54 GB) since 2026-11-07. Qwen3.5-4B-UD-Q4_K_XL was the reference before; its files and Phi-4-mini's were deleted that day ([done-phi-4-mini-as-generalist.md](done/done-phi-4-mini-as-generalist.md)). The embedding model is still Qwen3-Embedding-0.6B (an open decision, doc 3, "Model choice").
+
+**Why:** on the same builds, through the assessment protocol (doc 3, "Model results"):
+
+| Set, runner | Spark-X2.6-4B | Qwen3.5-4B |
+|---|---|---|
+| agents, `tree` | 19/24 | 19/24 |
+| agents, `agents` | 17/24 | 6/24 |
+| reasoning, `bare` | 59/75 | 57/75 |
+| reasoning, `tree` | 70/75 | 73/75 |
+| seconds per model call | 2.0–2.7 | 3.7–4.3 |
+
+Under the protocol this is a trade-off, not a win: far better tool use through agents and about half the time per call, against 3 fewer reasoning tasks of 75 with the harness, within round-to-round noise. The user chose Spark on that trade-off.
+
+- **Fit and speed:** all 37 layers on CUDA at 6,144 tokens use 3,475 MiB of 3,773 (Qwen used 3,627); 46.6 tok/s on a 120-token reply.
+- **Tool calls:** native calls from node-llama-cpp, plus a text form `<tool_call>name<arg_key>k</arg_key><arg_value>v</arg_value></tool_call>` that `textToolCalls` reads (Tools, above).
+- **Known misses:** `bare` runs past `max_tokens` (1,536) on `country-ending-in-lia` and `number-rhyming-with-tree`; `tree` is unsteady on `boiling-eggs`, `number-rhyming-with-tree` and `order-of-operations`.
+- **Not yet measured for Spark:** the context ceiling and the 560 MiB reserve in `core/autoSize.ts`, both fitted to Qwen (Measured limits).
+- **Outside evidence:** vendor figures only (BFCL-V4 71.8, τ²-bench 86.9, MCP-Atlas 62.4); Artificial Analysis does not list it.
 
 ## Agent hierarchy
 
@@ -245,7 +267,7 @@ Proposed extensions (per-agent memory, resume inside an agent, showing the neste
 
 ### Why agents
 
-**Hypothesis to test.** A small model (4B Qwen, 4 GB GPU) chooses and uses tools more reliably when it sees only one specialist's few tools than when it sees every tool at once. Agents are kept only if they beat the flat tree on tool tasks (see roadmap).
+**Hypothesis to test.** A small model (a 4B model on a 4 GB GPU) chooses and uses tools more reliably when it sees only one specialist's few tools than when it sees every tool at once. Agents are kept only if they beat the flat tree on tool tasks (see roadmap).
 
 **Problem.** The task tree keeps each model call small and narrow, but every call still sees the same world: all enabled tools, one set of instructions, one memory. That does not scale.
 
