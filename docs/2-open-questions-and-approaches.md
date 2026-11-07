@@ -11,7 +11,7 @@ Nothing in docs 1–2 is final. These are the largest choices still open; each s
 3. **How is memory shaped?** Proposed: keep the evidence layer and add a structured world model of facts with provenance, read by rule modules split by domain and bundled into domain packs (see "Memory layers and domain rule sets"). Open until the mail pack prototype is measured; decide before adding the entities and commitments tables.
 4. **Which model, and how many?** One 4B generalist (Qwen3.5-4B, built, or Spark-X2.6-4B in its place); a reasoning-tuned 4B for logic nodes (Phi-4-mini-reasoning); specialists swapped from disk; a 35B-A3B escalation; or voting with red-flag filters on the 4B. All unmeasured here.
 5. **How does it learn?** Model-extracted memories (built) vs model-authored skills, rules and corrections, each gated by a non-LLM verifier before it is stored.
-6. **How autonomous?** The autonomy ladder keeps authority with the user per event class. Goals, drives and initiative are part of the long-range aim; open questions are who may set them and how they are bounded.
+6. **How autonomous?** The autonomy ladder keeps authority with the user per event class. Goals, drives and initiative are part of the long-range aim; open questions are who may set them and how they are bounded. A candidate set of bounds, from Nexus, is in "Cognitive loop".
 7. **What is the unit of improvement?** Proposed: the domain, with cognitive processes as shared job types run per domain and changes kept only when they beat the current setup on that domain's past cases (see "Self-improving domains"), and projects above domains supplying the goals and tasks they work on ("Projects above domains"). Open until the mail slice shows triage getting measurably better over real mail.
 8. **What does the eval loop need first?** Every question above is settled by eval runs, so a fast, trustworthy eval loop comes before any architecture bet. Calls took ~30 s until the 2026-11-05 reboot, when CUDA had fallen back to the CPU; they now average ~4 s (doc 3, "Then: a fast, trustworthy eval loop").
 
@@ -266,6 +266,7 @@ A skill is a markdown guide the harness injects into a fresh context when a requ
 5. **Store and retrieve:** save under a skills folder; retrieve by keyword or embedding match against the request.
 - Error-driven variant: when schema validation fails on extraction (e.g. a missing `deadline`), ask the model to rewrite its instruction and save the patch, again behind the gate.
 - Why the gate: unverified self-generated text drifts ("copy of a copy"), and a wrong skill is injected into every later matching call.
+- Rejected: letting the model rewrite the harness's own source (Nexus staged such rewrites for the user to apply). Skills give the same "improve yourself" path in a form a gate can check, and a wrong code change breaks every later run, not one kind of request.
 
 ### Procedural memory and retry feedback
 
@@ -299,9 +300,14 @@ An assistant that notices, prepares and asks, and acts alone only where the user
 ### Cognitive loop: goals, drives and initiative
 
 The long-range aim (doc 0): perceive → update memory → evaluate goals → plan → act → review feedback, run continuously by the harness. Built parts: connectors and the event queue (perceive), recall and consolidation (memory), the scheduler's priority classes (prioritise), checks (review), idle research (curiosity). Proposed:
-- **Goals and drives as harness state:** numeric levels (e.g. curiosity, urgency, upkeep) and a goal list stored in the database, visible and editable by the user, injected into prompts to modulate priority and tone, and readable by rules. The same mood value could drive the mascot and the voice.
-- **Initiative:** the scheduler picks idle work from goals and drives instead of a fixed chain (see "Goal-driven idle jobs" in the roadmap).
-- **Limits:** whether the model may propose or change goals is open; any change it makes should be gated (user approval or a rule) and every action stays within the autonomy ladder.
+- **Goals and drives as harness state:** numeric levels (e.g. curiosity, urgency, upkeep) and a goal list stored in the database, visible and editable by the user, and readable by rules. The same mood value could drive the mascot and the voice.
+- **Each drive owns a behaviour:** a drive is a level plus a threshold, a priority, a floor, effects on other drives, and the job it starts when it fires (a job type and its prompt, e.g. curiosity → research a stale topic, upkeep → consolidation). **Why:** Nexus found that a drive which only colours the prompt is "a number to narrate around": the model talks about feeling curious and nothing changes. A drive that cannot start work has no measurable effect.
+- **Initiative:** the scheduler picks idle work from the drives that fire and from goals, instead of a fixed chain (see "Goal-driven idle jobs" in the roadmap); the drive's level feeds the urgency term of the scheduler's priority in "Self-improving domains".
+- **Elapsed time as input:** drives and goals see wall-clock time, how long since each job type last ran and since the user was last active, so "three days since the last research pass" can raise a drive.
+- **Limits:** whether the model may propose or change goals and drives is open; any change it makes should be gated (user approval or a rule) and every action stays within the autonomy ladder. Candidate bounds, from Nexus, which let the model retune its own drives: every value clamped to a range; effects may only name drives that exist; the user's seed drives can be disabled but not deleted; a cap on self-made drives (Nexus: 6); at least one drive always active.
+- **Change log:** every change to a goal or drive, by the model or the user, is stored with its stated reason, so the record reads as a diff the user can review and revert rather than a silent parameter change.
+
+Not taken from Nexus: inline `REMEMBER:`/`RECALL:` markers in replies (Codex's harness recalls before every call, which suits a 4B model better; a single model-requested recall hop when harness recall finds nothing is a possible later test), and a cloud model transport (against doc 0's local and private aim).
 
 **Risks named for an always-on, self-directed loop** (general claims, not measured here):
 - **Error cascade:** a hallucination written to long-term memory becomes the agent's reality and compounds over hours or days. Counters in Codex: evidence-grounded facts, expiry, `disputed` marking, untrusted-text fencing. None is a proof against drift, so drift must be measured (roadmap).
@@ -439,6 +445,22 @@ Basis: gathered 2026-11-05 as inspiration; not verified beyond the cited sources
 3. Verify, don't trust: deterministic test/schema/system check; cap retries; escalate or replan on failure. *Largely built* (deterministic checks, revise-once, re-plan once); escalation to a bigger model not built.
 4. Fixed pipeline instead of free-form agent loops; harness drives control flow, model fills narrow slots. *Core design.*
 5. Scratchpad or structured state passed between steps. *Partly: dependency results; per-agent scratchpad folder is proposed.*
+
+### Nexus: a self-directed loop with drives (2026-11-06)
+
+Nexus is an earlier browser prototype by the same author: a cloud Claude model run in an unattended loop, one call per cycle, with homeostatic drives (curiosity, social and others) choosing what it does next, a memory file it appends to, and read access to its own source. Its README was reviewed against Codex; the code, memory files and legacy versions are still to review.
+
+| Nexus feature | Where it went in Codex |
+| --- | --- |
+| Drives the model can retune within clamps, seed drives undeletable, capped self-made drives | "Cognitive loop", Limits |
+| A drive carries its own prompt and output, not only a level | "Cognitive loop", Each drive owns a behaviour |
+| Every self-change logged with its reason | "Cognitive loop", Change log |
+| Wall clock, time awake, time since last session | "Cognitive loop", Elapsed time as input |
+| Small prompt with the newest few items and counts; the rest fetched on demand | Already the core design (fresh narrow contexts, harness recall) |
+| Session state autosaved and restored | Already built (run checkpoints and resume) |
+| `REMEMBER:`/`RECALL:` markers in any reply | Not taken; see "Cognitive loop" |
+| Source rewrites staged in a sandbox for the user to apply | Rejected; see "Verified self-authored skills" |
+| Cloud transport via the Claude CLI or API | Not taken: Codex is local by aim |
 
 ### Agent structures compared (2026-11-06)
 
