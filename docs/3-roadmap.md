@@ -60,7 +60,7 @@ Properties of the code as it stood; record changes against them. Candidate impro
 - **Fact grounding is lexical:** shared words/versions/dates; a paraphrase that changes meaning but keeps words passes.
 - **Memories lack embeddings:** differently worded duplicates stay apart.
 - **Skills are matched by approach, not subject:** research tasks get research guides whatever the topic; file tasks get code guides even for non-code files.
-- **Use counts only grow:** long-ago popular topics keep refreshing frequently.
+- **Use counts only grow:** long-ago popular topics keep refreshing frequently. Proposed fix: rank by time since last recall instead of a total count, so use keeps an item alive and disuse lets it sink (Generative Agents' recency decay; see doc 2 References). Scoring importance when an item is written is the next step only if decay alone does not fix the ranking.
 
 ## Reactive assistant
 
@@ -95,6 +95,7 @@ Today: mail arrives → automatic mail dropped without the model → rest summar
 - A 6,144-token window can't hold a long thread; only one message body (≤4,000 chars) is used.
 - Triage/drafting rely on a small model; the taint limits a fooled model to a wrong summary or poor draft that the user reads first.
 - IMAP: one folder per account, new-mail check at most every 2 min, TLS on the given port only (no STARTTLS).
+- Possible tool-call injection, unconfirmed: `textToolCalls` (`core/toolStage.ts`) runs `<tool_call>` text in the model's reply as real calls to known tools, so a user run whose model copies a fetched page containing that text could call a tool the page chose. Event runs are already blocked by the trust taint. Test: a fake page with an embedded `write_file` call, read in a user run; if it fires, accept text calls only before any untrusted text is echoed, or only when the reply is nothing but calls.
 
 ## Knowledge store: open work
 

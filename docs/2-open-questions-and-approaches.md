@@ -189,6 +189,8 @@ Each node writes working notes in a grammar-enforced block (`<scratchpad>…</sc
 
 From the model-choice conversation ("Alternative models"): the harness extracts only that block, and the grammar enforces it at token level so a stray markdown block cannot break the parser.
 
+**Label evidence by how it was obtained.** Subtask results and page summaries reach the write and combine stages as plain text, looking the same as a quoted source. Proposed: tag each piece of evidence as *quoted* (text from a source or tool result), *summarised* (another step's summary of something this step never saw) or *inferred* (a model conclusion), and tell the write stage to state only quoted evidence as fact. **Why:** Nexus's session log shows a model treating one-line summaries from a sub-call as things it had read itself for four cycles, until it tried to quote them. **How to test:** on `evals/tasks.json`, compare the rate of unsupported claims in final answers with and without the labels.
+
 ### Conversation archive
 
 **Today:** a conversation is one request. A finished one is saved as an episode (prompt, title, mode, outline, answer, outcome, tree snapshot), but episodes are working memory: `learnFromEpisodes` reads each once, and once processed they are among the first things deleted when the store passes `background_max_store_megabytes`. Nothing lists past conversations (titles exist, doc 1, "Background worker"), and step inputs and tool results are not kept after a run.
@@ -321,6 +323,7 @@ The long-range aim (doc 0): perceive → update memory → evaluate goals → pl
 - **Initiative:** the scheduler picks idle work from the drives that fire and from goals, instead of a fixed chain (see "Goal-driven idle jobs" in the roadmap); the drive's level feeds the urgency term of the scheduler's priority in "Self-improving domains".
 - **Elapsed time as input:** drives and goals see wall-clock time, how long since each job type last ran and since the user was last active, so "three days since the last research pass" can raise a drive.
 - **Limits:** whether the model may propose or change goals and drives is open; any change it makes should be gated (user approval or a rule) and every action stays within the autonomy ladder. Candidate bounds, from Nexus, which let the model retune its own drives: every value clamped to a range; effects may only name drives that exist; the user's seed drives can be disabled but not deleted; a cap on self-made drives (Nexus: 6); at least one drive always active.
+- **Action record, not self-report:** the step that chooses idle work reads the harness's own record of recent jobs and their outcomes, never the model's account of what it did. The same record can become a digest of what Codex did while the user was away. Nexus put such a record at the top of every cycle's prompt, and its model used it to catch and retract its own wrong claims.
 - **Change log:** every change to a goal or drive, by the model or the user, is stored with its stated reason, so the record reads as a diff the user can review and revert rather than a silent parameter change.
 
 Not taken from Nexus: inline `REMEMBER:`/`RECALL:` markers in replies (Codex's harness recalls before every call, which suits a 4B model better; a single model-requested recall hop when harness recall finds nothing is a possible later test), and a cloud model transport (against doc 0's local and private aim).
@@ -481,7 +484,7 @@ Basis: gathered 2026-11-05 as inspiration; not verified beyond the cited sources
 
 ### Nexus: a self-directed loop with drives (2026-11-06)
 
-Nexus is an earlier browser prototype by the same author: a cloud Claude model run in an unattended loop, one call per cycle, with homeostatic drives (curiosity, social and others) choosing what it does next, a memory file it appends to, and read access to its own source. Its README was reviewed against Codex; the code, memory files and legacy versions are still to review.
+Nexus is an earlier browser prototype by the same author: a cloud Claude model run in an unattended loop, one call per cycle, with homeostatic drives (curiosity, social and others) choosing what it does next, a memory file it appends to, and read access to its own source. Its README and the log of one 5-cycle session were reviewed against Codex; the code and legacy versions are still to review. The session is evidence for bounding self-direction: left to choose, the model spent every cycle studying its own harness, and used web search for the first time in cycle 5 after deriving memory designs from first principles that a search then showed were already published.
 
 | Nexus feature | Where it went in Codex |
 | --- | --- |
@@ -494,6 +497,9 @@ Nexus is an earlier browser prototype by the same author: a cloud Claude model r
 | `REMEMBER:`/`RECALL:` markers in any reply | Not taken; see "Cognitive loop" |
 | Source rewrites staged in a sandbox for the user to apply | Rejected; see "Verified self-authored skills" |
 | Cloud transport via the Claude CLI or API | Not taken: Codex is local by aim |
+| Harness-recorded actions at the top of each prompt | "Cognitive loop", Action record |
+| Evidence graded as read / reported / inferred | "Scratchpad contract", Label evidence |
+| Commands parsed from text the model did not write | Same risk noted for text tool calls (doc 3, Reactive assistant, Known limits) |
 
 ### Agent structures compared (2026-11-06)
 
@@ -547,6 +553,8 @@ Sources cited by the research behind these docs (not re-verified):
 - TurboQuant forks: [turboquant_plus](https://github.com/thetom/turboquant_plus), [turboquant-ggml](https://github.com/Keyvanhardani/turboquant-ggml), [llama-turboquant](https://www.gitlink.org.cn/okapi/llama-turboquant)
 - Low-bit weight quants: [ITQ3_S](https://arxiv.org/pdf/2603.27914), [QTIP review](https://liner.com/review/qtip-quantization-with-trellises-and-incoherence-processing), [EXL3 vs GGUF](https://atomic.chat/blog/guides/exl3-vs-gguf), [IQ2 builders compared](https://www.orcarouter.ai/blog/ternary-bonsai-2-27b-vs-qwen-3-8-27b-gguf)
 - MoE offload: [4 GB VRAM guide](https://insiderllm.com/guides/what-can-you-run-4gb-vram/), [n-cpu-moe vs expert cache](https://www.developersdigest.tech/blog/llama-cpp-moe-offload-n-cpu-moe-vs-moe-cache-2026), [MoE offloading explained](https://dev.to/someoddcodeguy/understanding-moe-offloading-5co6), [35B-A3B on 4 GB (Reddit)](https://reddit.sentinel-team.org/posts/1utgm9q/snapshots/2026-07-17T18%3A53%3A30.39359Z), [RTX 3060 with n-cpu-moe](https://knightli.com/en/2026/05/26/rtx-3060-llama-cpp-n-cpu-moe-local-35b/), [moe-l2](https://pypi.org/project/moe-l2/0.5.1/)
+- Generative Agents (memory stream; retrieval by recency of last access, importance scored at write time, and relevance): [arXiv 2304.03442](https://arxiv.org/abs/2304.03442)
+- MemGPT (main context, searchable recall store of past messages, archival store, paged by function calls): [arXiv 2310.08560](https://arxiv.org/abs/2310.08560)
 - Context-Folding: [arXiv 2510.11967](https://awesomepapers.io/papers/2510.11967)
 - brainos-orchestrate: [decompose.rs](https://docs.rs/crate/brainos-orchestrate/0.5.0/source/src/decompose.rs)
 - Terminus-4B: [summary](https://awesomepapers.io/papers/garg2026terminus)
