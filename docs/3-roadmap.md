@@ -133,6 +133,7 @@ Design in doc 2 ("Conversation archive"). Not built: episodes are deleted under 
 ## Task-decomposition ideas to evaluate
 
 - **Thinking per stage:** doc 2, "Thinking per stage".
+- **Telling the model its limits per task:** doc 2, "Telling the model its limits per task".
 - **Voting + red-flag filters** on control-flow calls: doc 2, "Voting and red-flagging".
 - **Question-driven decisions:** doc 2, "Question-driven decisions".
 - **Step-wise tool routing:** doc 2, "Step-wise tool routing".

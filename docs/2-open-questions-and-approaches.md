@@ -242,6 +242,16 @@ Every call today tells Qwen not to think aloud (`thoughts: 'discourage'` in `cor
 - **Check before building:** whether node-llama-cpp's thought budget works together with a JSON grammar on the same call.
 - **Not built.** See doc 3, "Task-decomposition ideas to evaluate".
 
+### Telling the model its limits per task
+
+No prompt today tells the model what it is working with: the context budget is enforced in `core/contextBudget.ts` and the caps in `core/settings.ts`, but the model never sees them, so it plans and writes as if room were unlimited. Proposed: each stage's prompt states the limits that apply to that call, filled in from the run, and how to work within them.
+
+- **Candidates:** the context left for this call and the reply budget (so `decide` splits work that won't fit, and a writer keeps to its length); the tree caps left (`max_task_depth`, `max_task_nodes`, replans); which tools are connected and that it has no others; that it is a small local model that can't recall facts reliably, so it should look them up or say it doesn't know.
+- **Per task, not global:** a stage gets only the limits that change what it should do, so the note stays short in a 4,096–6,144-token window.
+- **Risks:** small models may follow a stated limit too literally (refusing or over-splitting) or ignore it; every line added costs context on every call.
+- **How to test:** an eval-gated prompt variant ("Eval-gated prompt variants") on the agents eval and a set of tasks that overflow the context, comparing overflow trims, splits and invented facts with and without the note.
+- **Not built.** See doc 3, "Task-decomposition ideas to evaluate".
+
 ### Fitting more into the 4 GB GPU (VRAM compression)
 
 Research from 2026-11-06 (web sources, mostly blogs, forks and single-model tests; not measured here) on ways to load a larger model or a longer context into the 4 GB GPU. Not built.
