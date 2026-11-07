@@ -91,10 +91,30 @@ The backend: a static host plus HTTP endpoints for model calls (CLI or API trans
 
 **Landed** (this commit): the never-writable rule under "Cognitive loop", Limits; background runs in "Conversation archive"; staged proposals in "Verified self-authored skills" and the roadmap's "Act with approval"; the `write_file` gap and its fix as a known limit in the roadmap's Reactive assistant section.
 
+### 5. `claude-cli.js` and `text_ai.sh`
+
+**`claude-cli.js`** is the cloud transport: it runs `claude -p --output-format json` as a subprocess with every Claude Code tool disallowed ("each definition left enabled is input tokens on every single call"; only the search endpoint gets `WebSearch` and `WebFetch` back), slash commands, session persistence and the user's own configuration off (`--safe-mode`). The CLI takes one prompt, so earlier turns are flattened into labelled blocks ("You were asked:", "You previously said:", then "You are now asked:"). At most 2 calls run at once, each with a timeout that kills the process and an optional cost cap, and the result has the same shape as the API transport so `server.js` does not branch.
+
+| Feature | Codex equivalent | Verdict and reason |
+| --- | --- | --- |
+| Cloud model through the Claude CLI | None | **Skip.** Against doc 0's local and private aim; already recorded as not taken (file 1). |
+| Only the tools a call needs, since definitions cost tokens | "Step-wise tool routing" in doc 2 | Already covered. |
+| Earlier turns flattened into labelled "You were asked / You previously said" blocks | Requests run standalone; "Conversational continuity" leaves open whether turns pass as text or summaries | **Notes only.** One concrete format for that open question, kept here as an option; too small to be its own approach in doc 2. |
+| Per-call timeout and kill; at most 2 concurrent calls | One model behind one lock; looping or repeating output is detected and the run continues | Already covered; parallel calls would only queue behind the lock. |
+
+**`text_ai.sh`** is not part of Nexus: a stand-alone bash toy that keeps a word-pair (bigram) model as plain text, generates sentences by a random walk, and learns from pasted text and good/bad ratings. Its `/ai` command uses Mistral as a teacher: Mistral writes a short prompt, the local model answers, Mistral grades it GOOD or BAD with a corrected example, and the pairs behind the answer are strengthened or weakened and the model retrains on the correction.
+
+| Idea | Codex equivalent | Verdict and reason |
+| --- | --- | --- |
+| A larger model grades a small model and supplies corrections | Doc 2 prefers non-LLM gates (skills, rules, prompt variants) because model judges drift; escalation to a larger model is proposed | **Skip.** At runtime it breaks the local aim, and as a gate it is weaker than the deterministic checks Codex plans. A stronger model writing eval tasks offline during development would be acceptable; raise it only if hand-written evals become the bottleneck. |
+| Learning from the user's good/bad ratings | Autonomy ladder learns from approvals and rejections; "Self-improving domains" uses Inbox approve/reject as its success signal | Already covered, in a stronger form. |
+| API key saved as plain text in `~/Documents` | Codex reads the IMAP password from a command | Does not apply; a flaw in the script itself. |
+
+**Landed:** nothing in docs 1–3; this section only.
+
 ## Still to review
 
-1. `claude-cli.js`, `text_ai.sh`
-2. `public/js/nexus.js` (758 lines, the core), then `mind.js`, `memory.js`, `self.js`, `state.js`, `trace.js`, `tape.js`, `parse.js`, `claude.js`, `ui.js`
-3. HTML and CSS (skim)
-4. `legacy/`: `drives.js`, `personality.js`, `curiosity.js`, `emergent.superseded.js`, `living-mind.scheduler.js`, the original HTML files (skim)
-5. `sandbox/.backups/…/nexus.js`, compared with the current `nexus.js` only
+1. `public/js/nexus.js` (758 lines, the core), then `mind.js`, `memory.js`, `self.js`, `state.js`, `trace.js`, `tape.js`, `parse.js`, `claude.js`, `ui.js`
+2. HTML and CSS (skim)
+3. `legacy/`: `drives.js`, `personality.js`, `curiosity.js`, `emergent.superseded.js`, `living-mind.scheduler.js`, the original HTML files (skim)
+4. `sandbox/.backups/…/nexus.js`, compared with the current `nexus.js` only
