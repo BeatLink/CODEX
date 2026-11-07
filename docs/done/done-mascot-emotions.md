@@ -1,6 +1,6 @@
 # Mascot emotions
 
-The CODEX icon's robot can show an emotion by animating its eyes, mouth and antenna. This page is the research behind the mascot; what was built is in doc 2, "Mascot emotions".
+The CODEX icon's robot can show an emotion by animating its eyes, mouth and antenna. This page is the research behind the mascot; what was built is in doc 1, "Mascot emotions".
 
 ## What exists
 

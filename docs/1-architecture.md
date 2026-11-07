@@ -1,8 +1,8 @@
-# Architectural ideal and proposed features
+# Architecture
 
-Paths are under `src/`. Built/not-built statuses were checked against the code on 2026-11-06 (table names, approaches, daemon methods, window pages, eval assets, and the absence of every "proposed" mechanism); behaviour details were not re-tested. Built parts are not fixed either: doc 1, "Open strategic questions", lists where the design may change.
+What is built, how it works, and why it is built that way. Only what exists in `src/` belongs here; proposals and open questions are in doc 2, and an approach moves here, with its rationale, once it is built. Paths are under `src/`. Built statuses were checked against the code on 2026-11-06 (table names, approaches, daemon methods, window pages, eval assets); behaviour details were not re-tested. Nothing here is fixed: doc 2, "Open strategic questions", lists where the design may change.
 
-## Core architecture (built)
+## Core architecture
 
 Never give the small model the whole job. Work each request as a tree of narrow tasks; each call sees only what it needs; control-flow replies are grammar-forced JSON; facts come from harness-gathered evidence, not model memory. A SQLite knowledge store keeps evidence between requests, and a background worker turns it into facts, summaries and a topic hierarchy in idle time.
 
@@ -123,9 +123,65 @@ Listed as done in the old `TODO.md`; not yet checked against the code.
 - **Evals** (`core/evaluation.ts`): the bare model against the harness on a fixed task set, and with the store empty against filled. A recall benchmark scores recall against fixed questions with known relevant facts (`core/recallBenchmark.ts`).
 - **Tests of note:** untrusted-text fencing against hostile pages; schema migrations from every earlier store version.
 
+### Why it is built this way
+
+| Decision | Why |
+| --- | --- |
+| Never give the model the whole job; work requests as a tree of narrow tasks | A small model does badly at whole jobs and cannot tell when it does not know something. |
+| Control-flow replies are forced to JSON by a grammar; choice enums list only what is currently allowed | Constrained choices keep a small model on track; malformed output degrades instead of crashing (every parser has a fallback). |
+| Facts come from evidence the harness gathered, not model memory; research is forced when `facts_to_check` is non-empty | The model can't judge its own ignorance. |
+| Deterministic checks back the model's verdicts (unseen URLs, unsupported versions/dates, acting tasks must match recorded writes/tests) | Don't trust the model to police itself. |
+| Failure stays local: subtask failure → parent re-plans once; a split task is never split again; subtasks duplicating other tasks are dropped | Prevents runaway splitting and whole-run failure. |
+| Trim from the end of the input; memory goes first; request and current task are pinned; condense (summarize) before trimming | Most important context survives a 6K window. |
+| Web/stored/tool text is fenced as `<untrusted-data>` with instruction sentences stripped | A small model obeys orders found in data, even inside a fence. External-trust events additionally lose `act`, file writes, tests, MCP tools, page fetches and file reads. |
+| One daemon, one model, one lock; interfaces are stateless | Several interfaces can watch one run; foreground waits at most one token because the background worker checks before every token and yields. |
+| Background worker uses idle time only (research, embeddings, learning, consolidation), one small step per pass | Memory grows between requests without delaying them. |
+| Knowledge in one SQLite file (topic tree + fact store + graph, FTS5 + sqlite-vec) | Single portable store; lexical and semantic recall merged with reciprocal rank fusion. |
+| Never trust a stored fact over time: sources expire, expired facts are flagged and queued for re-research; contradictions mark `disputed` | Memory stays honest as the world changes. |
+| Consolidation asks each pair once (`consolidation_checks`), with short reason + enum verdict | Cheap, bounded model use. |
+| Separate CPU-only backend when `gpu_layers` is 0; optional separate background model | A CUDA build touches the GPU even with no layers; a background model must not evict the main one. |
+| GPU lock is a kernel `flock` held by a child process, shared with other programs | Released automatically if the daemon dies; the GPU is shared. |
+| `learnFromEpisodes` must exclude secrets and personal identifiers | Privacy of stored memory. |
+
+### Measured limits (dev laptop: RTX 3050 Ti Mobile 4 GB, Ryzen 5 5600H, 27 GiB RAM; display on iGPU)
+
+- **Context ceiling 6,144 tokens** with `Qwen3.5-4B-UD-Q4_K_XL` fully on GPU. 7,168–10,240 loads but the process aborts with a CUDA error on a long prompt; ≥12,288 can't create a context. A context that loads is no proof it fits. 560 MiB fixed reserve in `core/autoSize.ts` is fitted to this (2026-10-20).
+- **9B background model on CPU is too slow:** `Qwen3.5-9B-Q4_K_M` hadn't summarized one page in 12 min; the 4B on GPU took 28 s per page and ~80 s per topic (2026-10-20).
+
+### Why a 4B model
+
+Basis: published benchmarks, gathered 2026-11-05; Codex's own eval results were not consulted.
+
+**Verdict:** yes, if the harness does most of the work. A 4B model handles narrow, well-specified jobs; it is not good enough as an autonomous agent that plans and recovers on its own. Codex is built around the first approach.
+
+| Evidence | Result | Reading |
+| --- | --- | --- |
+| BFCL, Qwen3-4B prompt mode (TinyLLM, arXiv 2511.22138) | ~62% overall, 83% non-live, 75% live | single-turn fine |
+| Same study, multi-turn | ~35% | weak |
+| BFCL-V4, Qwen3-4B-Instruct-2507 | ~35.5% overall, 22% multi-turn | weak |
+| tau2 Telecom (arXiv 2511.08042) | 27% instruct, 19% thinking | long-horizon fails |
+| Community 4B fine-tune on tau2 | 59% Pass@4 vs 14% base | training helps |
+| MAKER (arXiv 2511.09030) | 1,048,575 steps, zero errors, small non-reasoning models | decomposition works |
+| 3B on a Raspberry Pi (anecdotal) | ~50% → 84% with atomic checklist steps | task design matters |
+
+Caveats: the BFCL figures use different versions/settings (not comparable); the enterprise paper argues tau2/BFCL poorly predict real-world agent performance; MAKER is one domain with perfectly verifiable steps; Pass@4 isn't the official Pass^k; pairing a 4B with grammar-constrained decoding is community opinion, not measurement.
+
+**What works / fails.** Narrow jobs (set a reminder, look up a fact, read/write a file, route a request, summarize) work with schema-checked outputs and retries. Open-ended jobs (ambiguous requests, long dependent tool chains, noticing an earlier step went wrong) fail, and confidently.
+
+**Lesson already paid for:** before commit `8e7cea8`, no tool ever ran in a task tree because Qwen3.5's tool calls came back as text in `content`; the writer invented plausible tool results and nothing caught it. A bigger model would invent more convincingly. The fix is a harness that verifies real state, not a larger model.
+
+**Decisions**
+1. Keep the 4B model as default with a fixed pipeline, not a free-form agent loop; the harness owns control flow, the model fills narrow slots.
+2. Verify results with deterministic tests; never trust the model's account of what it did.
+3. Use constrained decoding for tool-call formats.
+4. Keep Qwen3.5-35B-A3B (~3B active parameters, possibly affordable on this hardware) as an escalation path for planning and repeatedly failing steps (not built; doc 2, "Model escalation").
+5. Codex's own evals are the deciding evidence; the benchmarks are mostly not this workload.
+
+Sources: doc 2, "References".
+
 ## Agent hierarchy
 
-A task can hand its work to a named specialist agent, which works it as its own task tree with its own tools, instructions and memory. See [rationale](1-rationale-and-decisions.md#agent-hierarchy) for why.
+A task can hand its work to a named specialist agent, which works it as its own task tree with its own tools, instructions and memory. Why: see "Why agents" below.
 
 ### Agent definition
 
@@ -172,15 +228,44 @@ Agents eval assets (on `main`):
 - `evals/agents_tasks.json`: eight tasks: six need one specialist, one needs two hops (find a contact, then search their mail), one needs two unrelated specialists. Per-task `servers` field.
 - An `agents` runner beside the flat `tree` runner; they differ only in whether agent files are present.
 
-Proposed, not built:
-- **Per-agent persistence:** a memory scope per agent in the knowledge store, filled by learning from that agent's episodes, plus a scratchpad folder under the state directory.
-- **Resume inside an agent:** checkpoints save the delegating task, not the nested run, so a resume restarts the delegation.
-- **Show the nested tree** in the interfaces.
-- **Per-agent skills and tool allow lists** beyond MCP servers.
+Proposed extensions (per-agent memory, resume inside an agent, showing the nested tree): doc 2, "Agent hierarchy: not built yet".
+
+### Why agents
+
+**Hypothesis to test.** A small model (4B Qwen, 4 GB GPU) chooses and uses tools more reliably when it sees only one specialist's few tools than when it sees every tool at once. Agents are kept only if they beat the flat tree on tool tasks (see roadmap).
+
+**Problem.** The task tree keeps each model call small and narrow, but every call still sees the same world: all enabled tools, one set of instructions, one memory. That does not scale.
+
+- **Tools crowd the window.** Each MCP server adds tool schemas to every `act` call. A small model with a 6,144-token window picks worse the more tools it sees, and unrelated servers (mail, calendar, home automation) have nothing to do with each other.
+- **Choosing among many is hard; among few is easy.** Picking one of three specialists is an easy constrained choice; one of fifty tools is not. Split the choice across levels.
+- **Specialist knowledge is noise elsewhere.** How the user likes email drafted should not occupy room in a file-editing task.
+
+Analogy: an organisation uses roles. The assistant knows who handles mail; the clerk knows which system sends it; neither needs the other's manuals.
+
+**Decisions.**
+
+| Decision | Why |
+| --- | --- |
+| Agents are persistent configuration, not running processes | One model, one GPU, one request at a time. Delegation adds serial hops, never concurrency. |
+| Agents decide who works a task and what the worker sees; the task tree stays the way every request is worked | Reuses the existing machinery; no second execution model. |
+| A tool server claimed by any agent is withheld from every other run | Tool exposure is the point: top-level `act` sees only unclaimed servers. |
+| Nested run receives only the task's prompt, deliverable and dependency results, not the original request | Keeps the specialist's context narrow. |
+| Parent's evidence, found addresses and tool use are shared with the nested run | Evidence-vs-result checks still work across the boundary. |
+| Nested run cannot ask the user a clarification question | Clarification stays with the top level. |
+| Delegating task is not checked a second time | The nested run already checks its own answer. |
+| Max nesting depth 3 (as in EffGen) | Each hop loses detail and can misroute. |
+| Files in Markdown + YAML front matter, global and per-folder, folder wins | Same convention as skills and user commands. |
+| Start with a few hand-written agents | Many agents are a maintenance cost. |
+
+### Risks
+
+- **Compounding error.** At 90% per hop, three hops ≈ 73%. Mitigated by the nested run's own check and real-state checks on its actions.
+- **Misrouting.** A vague `description` sends tasks to the wrong agent; it is the only thing the parent knows about an agent, so write it carefully.
+- **Sprawl.** See above.
 
 ## Reactive assistant
 
-The built plumbing (queue, scheduler, handler registry) is already summarised under "Background worker" above; this adds detail.
+The built plumbing (queue, scheduler, handler registry) is already summarised under "Background worker" above; this adds detail. Target behaviour and planned features: doc 2, "How autonomous?".
 
 ### Data
 
@@ -211,32 +296,33 @@ A job = name + class + step (same signature as existing background steps). The d
 
 Event runs (`core/eventTree.ts`) additionally never act, even for `user` events. A `user.request` may use the web and local files; its answer waits in the Inbox.
 
-### The ideal (target behaviour)
+### Why
 
-An assistant that notices, prepares and asks, and acts alone only where the user has said it may.
-- **Many sources, one queue:** mail, calendar, files, timers, webhooks post events; the same queue, scheduler and Inbox serve them.
-- **Work shaped like the event:** cheap triage first; a task tree only if needed; result is a draft, filed item, calendar entry or nothing.
-- **Autonomy ladder per event class:** approving moves a class up, a rejection moves it down; rules are stored as memories the user can read and delete.
-- **Untrusted text never steers:** fenced, read with no tools or the narrowest set, can't widen its own permissions.
-- **Model of the user's world:** people, threads, commitments with a lifecycle (open/done/overdue), so "who am I waiting on" and "what did I promise" have answers.
-- **Idle time with a purpose:** meeting pre-research, stale-commitment sweep, entity profiles from past requests, daily digest; pruning/consolidation as upkeep, not the main job; budgeted.
-- **Always yields to the user:** a foreground request takes the model from any background run within one call.
+Goal: turn Codex from a request-answerer with idle-time knowledge work into an assistant that reacts to events (e.g. an email arrives) and uses idle time to prune, research, restructure and consolidate. The task tree stays the work engine; this changes what starts work, what work produces, and what the assistant may do alone.
 
-### Planned features
-- **Approval and autonomy ladder** (observe → notify → draft → act with approval → act unattended; rules learned from approvals/rejections). Until it exists no event run can change anything.
-- **Entities and commitments** (as structured facts in the world model, see "Fact and rule engine"), then idle jobs driven by them: pre-research for tomorrow's meetings, stale-commitment sweeps, entity profiles from episodes, daily digest.
-- Other connectors: calendar, tasks/to-dos, bookmarks, notes, file watchers, timers, webhooks.
-- Mailbox coalescing / backlog policy; rolling thread summaries; idle-work budget.
+**Problem.** Only the user could start work; the background loop was a fixed chain with no way to be told something happened. The store was topic-centred, but an assistant needs people, threads and commitments with a lifecycle (open/done/overdue). Work always ended in a reply, whereas a reactive result is a proposal (draft, calendar entry, notification, filed item, or nothing).
 
-## Model escalation (proposed)
+| Decision | Why |
+| --- | --- |
+| Events are rows in a durable SQLite queue, not callbacks; connectors only append | Survives restarts; dedupe, prioritise, inspect. |
+| One scheduler, three priority classes: interactive > reactive (events) > maintenance (research, index, learn, consolidate); `BackgroundPaused` preemption lets a higher class take the model | Reuses existing preemption. |
+| Event needing real work becomes a task tree (request = event + recalled context); cheap triage first | Don't spend a tree on a newsletter. |
+| Results are `actions` (proposed → approved/rejected/done), not replies | Assistant proposes; user decides. |
+| Trust follows provenance: events are `user` or `external` trust; external runs may not use side-effecting tools without approval | Third-party text (email body) is the main prompt-injection route. Only the user, or a user-written rule, widens trust. |
+| Autonomy ladder per event class: observe, notify, draft, act with approval, act unattended; rules learned from approvals/rejections, stored as memories | Graduated, learnable trust. |
+| Entities and commitments get their own tables, not folded into the graph | They have a lifecycle topic/fact/memory tables don't model. *Proposed instead: structured facts in the world model, see doc 2, "Memory layers and domain rule sets".* |
+| Maildir before IMAP | A synced Maildir (mbsync, offlineimap) needs no credentials in Codex; the daemon never holds a mail password. |
+| IMAP password comes from running `password_command` (program + args, never a shell string) at poll time; mailbox opened read-only (`EXAMINE`), `BODY.PEEK` | Settings and DB never hold the password; polling changes nothing on the server. |
+| Event runs never act, even for `user` events | Nobody is there to approve; acting stays in the foreground until approval exists. |
+| Drafts are only proposed, never sent | Safety. |
 
-Default to the 4B model in a fixed harness-owned pipeline. Proposed: escalate planning and steps that fail repeatedly to Qwen3.5-35B-A3B (~3B active parameters). Not built. See rationale doc, "Is a 4B model enough?".
+**Design limits.**
+- One model + one lock: events are handled one at a time. A mailbox sync needs coalescing and a backlog policy, not one call per message.
+- A 6,144-token window can't hold a long thread; needs rolling summaries in the store plus the condense-then-trim path.
+- Idle work needs a budget or it becomes noise.
+- Event handling shares the background pause: paused background means events wait.
 
-## Voting and red-flagging (proposed, from MAKER)
-
-Sample a step several times and decide by first-to-ahead-by-K voting; discard confused answers (too long, badly formatted) before they vote and resample. Candidate for control-flow calls (decisions, checks) where replies are schema-constrained and cheap. Not built. Evidence is from one perfectly verifiable domain; test on Codex's own evals before adopting.
-
-## Mascot emotions (built)
+## Mascot emotions
 
 The robot from the CODEX icon sits at the foot of the workbench sidebar, above the run status, at about two thirds of the sidebar's width.
 
@@ -245,144 +331,11 @@ The robot from the CODEX icon sits at the foot of the workbench sidebar, above t
 
 **Moods** are RoboEyes' own, chosen by state, most urgent first (`src/renderer/mascot.ts`): `asleep` (daemon unavailable or suspended), `thinking` (run in progress), `default` otherwise. When a run ends, `happy` (completed) or `sad` (failed) shows for 3 seconds through RoboEyes' `setMood(mood, { for })`, unless the daemon is unavailable.
 
-**Loading:** the renderer has no bundler, so an import map in `index.html` points `@x-tech-laboratories/roboeyes` at `node_modules` beside `dist`; the content security policy allows the map by its hash. RoboEyes follows `prefers-reduced-motion` itself. The tray icon stays a still image.
+**Loading:** the renderer has no bundler, so an import map in `index.html` points `@x-tech-laboratories/roboeyes` at `node_modules` beside `dist`; the content security policy allows the map by its hash. RoboEyes follows `prefers-reduced-motion` itself. The tray icon stays a still image. More moods: doc 2, "Mascot: more moods".
 
-**Not built:** more states mapped to moods. Candidates (state in `src/renderer/runState.ts`): a clarification or approval waiting (`clarifications` not empty; curious), background research working (`backgroundStatus` not `Idle`; focused), daemon unreachable (`connection: 'unavailable'`; worried, today `asleep`), the user cancelling (`cancelling`; startled), resuming from suspend or connecting at launch (waking), a final answer arriving (`phase: 'final'`; excited). Needs a priority order when several hold at once (e.g. worried, asleep, startled, curious, thinking, focused, calm), with happy/sad/excited as brief moments rather than states. The removed CSS mascot also had an antenna pulse while thinking, floating z's while asleep and a slow head bob (git history); RoboEyes draws none of these.
+### Why
 
-## Speech output (proposed)
+- **CODEX draws only the robot, in the theme colour around a black screen; RoboEyes draws the eyes and mouth unchanged** (its own moods, colours and settings). The screen is black, not see-through, because a transparent head showed the light theme's pale background and hid the white face; white on black was chosen over a blue face after comparing both. The icon's hexagon was dropped as wasted space. The CSS-only mascot this replaces is gone.
+- **RoboEyes as an npm git dependency pinned to a commit,** loaded through an import map whose hash the content security policy allows. It isn't on npm; Nix builds it with `makeCacheWritable`.
+- **RoboEyes' built-in moods follow the run state** (`asleep` when the daemon is unavailable or suspended, `thinking`, else `default`), with `happy` or `sad` for a few seconds when a run ends. Placement: the foot of the workbench sidebar, beside the run status.
 
-Give the mascot a voice: a TTS engine feeds RoboEyes' `speakVisemes` with real phonemes and durations, and a mood value drives eyes, mouth and voice together. Engine choice and trade-offs are in the rationale doc ("Text-to-speech"). Chatterbox would be an optional backend behind a small local server on a machine with enough VRAM; the dev laptop's 4 GB GPU is shared with the main model (see GPU lock), so voice must not compete for it. Not built.
-
-## Core structure ideas (proposed unless noted)
-
-Rationale, caveats and how each compares with the built design are in doc 1 ("Core structure ideas"). Checked 2026-11-06: none is built.
-
-### Blueprints: deterministic task graphs
-
-Hard-coded task graphs for requests whose shape is known (e.g. "process my morning inbox": fetch unread, loop in code, one item plus a strict schema per model call, deterministic summary). The model never plans these; it fills one narrow slot per node. Mail triage and drafting already work this way. Open: whether blueprints become the main way requests are worked, with `decide` as the fallback for requests no blueprint covers, or stay a few special cases (doc 1, open question 1). A rule engine could choose the blueprint (see "Fact and rule engine").
-
-### Model-planned task graphs
-
-For requests no blueprint fits, the model's first turn emits a JSON task graph of atomic items and the harness executes it item by item. `decide` is a per-task version of this (built).
-
-### Question-driven decisions
-
-`decide` asks the model to pick one of six approaches from a long prompt that defines them all (`DECISION_PROMPT` in `core/taskTree.ts`), with rules such as "must be chosen whenever…" left to the model to apply. It is already partly question-driven: `reason` and `facts_to_check` come before `approach` in the schema, and `parseDecision` turns `answer` into `research` when any fact is listed. Proposed: take this all the way. The schema asks the model a few narrow questions, and code picks the approach from the answers.
-
-```
-needs_outside_facts: string[]     the current facts_to_check
-needs_user_data:     "" | server  does it need anything a connected tool holds? which?
-changes_things:      boolean      does it ask for files to be changed or tests to be run?
-reads_local_files:   boolean
-matching_agent:      "" | agent   does an agent's description cover this task?
-distinct_parts:      string[]     the separate pieces of real work, if more than one
-```
-
-Approach chosen in code, first match wins: agent → `delegate`; user data or changes → `act`; local files → `files`; facts → `research`; two or more parts → `decompose`; otherwise `answer`. Settings still limit which approaches are allowed.
-
-- **Why:** a yes/no question about one property is easier for a 4B model than a choice among six with every definition in mind. Each "must be chosen whenever X" becomes a rule in code, not prompt text a small model can drop. Grammar-forced JSON is written in schema order, so each answer sits in front of the model when it writes the next.
-- **Rewording alone is not the change:** "Does this task need a tool?" in place of "Select a tool" probably changes little. The gain comes from the separate fields and the rules moving into code.
-- **Same idea for tool choice:** the `act` gather prompt could first ask what the task must find out or change and which listed tool does it, so there is a short plan before any tool is called.
-- **Costs:** more output tokens per decision (booleans are cheap, lists are not). Answers can contradict each other (e.g. `changes_things` true while the parts only read), which the fixed order resolves.
-- **Not built.** Keep `DECISION_PROMPT` behind a setting so the agents eval can compare the two; see doc 3, "Task-decomposition ideas to evaluate".
-
-### Verified self-authored skills
-
-A skill is a markdown guide the harness injects into a fresh context when a request matches it (matching exists, by approach).
-1. **Attempt:** the task runs normally.
-2. **Judge:** the harness decides whether the run was messy or failed, from deterministic signals (tool errors, failed checks, user correction), not from the model's opinion.
-3. **Reflect:** the trace is fed back with a prompt asking for a reusable checklist for that kind of request.
-4. **Gate:** the draft is saved only if a non-LLM check passes: a generated test run against a sandbox or mock state (`run_tests`), a schema validator, or a deterministic baseline. Generate several, keep those that pass; discard the rest.
-5. **Store and retrieve:** save under a skills folder; retrieve by keyword or embedding match against the request.
-- Error-driven variant: when schema validation fails on extraction (e.g. a missing `deadline`), ask the model to rewrite its instruction and save the patch, again behind the gate.
-- Why the gate: unverified self-generated text drifts ("copy of a copy"), and a wrong skill is injected into every later matching call.
-
-### Procedural memory and retry feedback
-
-- Log each tool/format failure mode to a lessons store and inject it into later prompts for the same tool (partly covered by learned corrections and skill lessons; a failure-mode log specifically is unconfirmed).
-- On invalid output, feed the validation error back for one cheap correction turn (current design: grammar-forced JSON, fallbacks, one revise pass).
-- Reflection after failure (Reflexion-style): give the model the failure log and ask why the plan failed and what to change; store the answer behind the same verifier gate as skills.
-
-### Scratchpad contract
-
-Each node writes working notes in a grammar-enforced block (`<scratchpad>…</scratchpad>` beside `<output>`, or a `scratchpad` field in the JSON schema). The harness stores the scratchpad with the task and injects it into later nodes that depend on it, as memory scoped to the run. Today only dependency results are passed forward; a per-agent scratchpad folder is proposed under Agent hierarchy.
-
-### Specialist models
-
-Keep several 1–4B task-specific models on disk (extraction/classification, code, summarisation, a reasoning-tuned model such as Phi-4-mini-reasoning for logic nodes; ~2–2.5 GB each at 4-bit per the chat) and load the right one per task into the 4 GB GPU, unloading after. Built parts that help: `ModelCache` reload, optional separate background model, GPU lock. Missing: a router choosing the model, specialist selection, measured swap latency (the chat says "a fraction of a second to a few seconds"). Constraints: the router must be reliable; the specialist sees only pre-filtered context; a reasoning model's long thinking must be constrained or it costs latency. Compare against "Model escalation" above.
-
-### Fact and rule engine (neuro-symbolic)
-
-A deterministic rule layer beside the model; rationale in doc 1 ("Neuro-symbolic reasoning").
-- **Facts:** structured predicates extracted by the model from text (schema-constrained), plus facts the harness knows directly (event headers, dates, settings, approvals).
-- **Rules:** `IF condition THEN action` over those facts, stored as data the user can read and edit, evaluated in TypeScript or SQL over the SQLite store. Rules decide; the model never does in their domain.
-- **Two directions:** model → rules (extract facts, rules decide) and rules → model (rules decide, the model only phrases the fixed result).
-- **First uses, all rule-shaped already:** mail triage heuristics, the autonomy ladder's learned rules (sender/class → ignore, notify, draft, act), the commitments overdue sweep, choosing a blueprint for a request, and the deterministic checks.
-- **Learning rules:** a rule proposed by the model (e.g. from repeated approvals) is stored only behind the verifier gate or the user's approval.
-
-**Store layout.** The engine does not replace the knowledge store. The evidence layer (topics, sources, facts, memories, episodes, FTS5, vectors, graph) stays for recall and grounding. A new **world model** holds the structured facts about the user's world:
-- `world_facts`: predicate, arguments (entity ids or values), source (event, episode, source row, or `user`), the source text span, extracting model call, confidence, valid from/to, status (`active`/`retracted`/`superseded`).
-- `entities`: people, organisations, threads, projects, with aliases; shared by every domain.
-- `rules`: domain, name, conditions, action, priority, origin (`builtin`/`user`/`learned`), enabled, with approvals for learned ones.
-- `rule_firings`: which rule fired on which facts and what it did, so every decision traces back to source text.
-
-Rules act only on facts at or above a confidence threshold; below it they propose or ask instead. Rule modules are split by domain and run for their domain's events; cross-domain rules form a separate small module. All modules read one shared world model.
-
-**Engine.** A small forward-chaining evaluator in TypeScript, or Datalog-style recursive queries in SQLite, so the stack stays Node + SQLite (Drools needs a JVM, CLIPS/experta are C/Python).
-
-### Domain packs
-
-A domain pack is the unit a domain is added as, one folder per domain (global and per working folder, folder wins, like agents and skills):
-
-| Part | Holds |
-| --- | --- |
-| Extraction schema | The predicates the model extracts from this domain's text, as a JSON schema enforced by grammar |
-| Rule module | The domain's rules (also editable in the `rules` table) |
-| Blueprints | Fixed task graphs for the domain's recurring requests |
-| Agent file | Instructions, tools and MCP servers (see Agent hierarchy) |
-| Autonomy settings | Starting rung on the autonomy ladder per event class |
-| Memory scope | The domain's own memories and lessons, beside the shared store (see "Self-improving domains") |
-| Validators | Non-LLM checks of what correct means here: a draft names the right recipient, a calendar entry doesn't clash |
-| Goals | Standing goals that create jobs unprompted, e.g. "no mail awaiting reply older than two days" |
-| Success signal | The outcome measured after the fact, e.g. approve/reject, edit distance of a sent draft, tests passing |
-
-Flow for an event: the connector posts it → the pack's extraction call turns its text into world facts (fenced as untrusted, schema-constrained, no tools) → the pack's rules and cross-domain rules fire → each outcome is an action on the ladder, a blueprint run, or, if no rule covers it, a task tree. The model phrases results (drafts, summaries, notifications) from the decided outcome.
-
-First pack: mail, since triage heuristics and drafting exist. Then calendar and tasks, which share people and commitments with mail.
-
-### Self-improving domains
-
-Rationale in doc 1 ("Self-improving domains"). A domain pack becomes the unit the system gets better at, not only the unit it is configured by.
-
-**Cognitive processes are job types, written once.** Planner, researcher, executor, auditor, pruner, collator and reflection are each one implementation that the scheduler runs *for* a domain: `audit(mail)`, `prune(calendar)`, `research(projects)`. The domain supplies the data (memory scope, tools, instructions, validators, goals, success signal); the process supplies the method. No per-domain copies of the processes.
-
-| Process | Built today as | Per-domain job |
-| --- | --- | --- |
-| Planner | `decide` / `decompose`, blueprints (proposed) | plans with the domain's blueprints and tools |
-| Memory | `recall`, `searchWithMemory` | recalls from the domain's scope plus the shared store |
-| Researcher | gather tool loop, `researchOneTopic` | researches topics the domain's goals name |
-| Executor | `act`, MCP tools | only the domain's tools, on the autonomy ladder |
-| Auditor | `check`, `checks.ts` | the domain's validators, plus re-reading real state after an action |
-| Pruner / collator | consolidation, `tidy` | consolidates the domain's memory scope |
-| Reflection | `learnFromEpisodes` (generic) | turns recorded outcomes into proposed changes (below) |
-
-**Improvement loop per domain:**
-1. **Record:** every run and event outcome is stored with the domain's success signal once it is known (an Inbox approval, the sent text of a draft, a test result).
-2. **Reflect:** a reflection job reads recent failures and proposes one change: a rule, an instruction line, a memory, a validator or a skill.
-3. **Test:** the change is replayed on that domain's stored past cases (a held-out set kept per domain) against the current setup.
-4. **Keep or drop:** kept only if it scores better and breaks no passing case; otherwise dropped, or put in the Inbox for the user to decide. Every kept change is a readable row with its origin, score and date, so it can be rolled back.
-
-Improvements live in data (rules, instructions, memories, validators, skills), never in weights. This is "Verified self-authored skills" and "Refinement across runs" generalised to everything a domain holds, with the domain's past cases as the gate.
-
-**Scheduler.** One model runs one prompt at a time; the scheduler decides which. Jobs come from three sources: reactive (events), goal-driven (a domain's standing goals, checked against the store) and maintenance (research, consolidation, reflection). Priority = urgency × expected value × staleness, with a budget per domain per day so one busy domain cannot starve the rest. A foreground request still pre-empts everything, as today.
-
-**What stays shared.** Requests cross domains ("the email from Sam about Thursday" touches mail, calendar and contacts), so domains are not silos:
-- The task tree stays the top-level coordinator: it routes a request to one or more domains and combines their results. Domains nest at most one or two levels; each hand-off loses detail.
-- User memory, entities (people, organisations, threads) and the world model are shared; a domain's scope holds only what is specific to it. This matches "Memory layers and domain rule sets" in doc 1: facts shared, rule modules per domain.
-
-### Cognitive loop: goals, drives and initiative
-
-The long-range aim (doc 0): perceive → update memory → evaluate goals → plan → act → review feedback, run continuously by the harness. Built parts: connectors and the event queue (perceive), recall and consolidation (memory), the scheduler's priority classes (prioritise), checks (review), idle research (curiosity). Proposed:
-- **Goals and drives as harness state:** numeric levels (e.g. curiosity, urgency, upkeep) and a goal list stored in the database, visible and editable by the user, injected into prompts to modulate priority and tone, and readable by rules. The same mood value could drive the mascot and the voice.
-- **Initiative:** the scheduler picks idle work from goals and drives instead of a fixed chain (see "Goal-driven idle jobs" in the roadmap).
-- **Limits:** whether the model may propose or change goals is open; any change it makes should be gated (user approval or a rule) and every action stays within the autonomy ladder.

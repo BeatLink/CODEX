@@ -17,8 +17,10 @@ Codex is a harness for running small local LLMs as personal assistants on consum
 ## The docs
 
 - `0-goal.md`: this file.
-- `1-rationale-and-decisions.md`: why the design is the way it is, and the options still open.
-- `2-architectural-ideal-and-proposed-features.md`: target design and features, with built/not-built status.
-- `3-roadmap.md`: what is left to build and how to measure it.
+- `1-architecture.md`: what is built, how it works, and why.
+- `2-open-questions-and-approaches.md`: the open questions, and the unbuilt approaches that answer them.
+- `3-roadmap.md`: order, status, and how to measure each step.
+
+An approach moves from doc 2 to doc 1, with its rationale, once it is built; one an eval rejects moves to `docs/done/` with the result.
 
 They were distilled from the research notes and design conversations kept in `docs/done/`, and from the old `TODO.md` (see git history). Built/not-built statuses were checked against the code on 2026-11-06; the roadmap says what remains unchecked.

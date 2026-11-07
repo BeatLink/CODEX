@@ -8,7 +8,7 @@ Status claims in docs 2–3 were checked against `src/`: tables, approaches, dae
 
 ## Then: a fast, trustworthy eval loop
 
-Every open strategic question (doc 1) is settled by eval runs, so this comes before any architecture bet. Speed is fixed (2026-11-06): all 33 layers of the 4B load on the GPU under CUDA, a model call averages ~4 s, and one 16-run round of the agents eval takes ~10 min. The earlier ~30 s calls date from before the 2026-11-05 reboot, when CUDA fell back to the CPU. `--output` now records every run's tool calls (name and arguments) beside its answer. Still to do: benchmark on real maintenance tasks, not only the fixed sets.
+Every open strategic question (doc 2) is settled by eval runs, so this comes before any architecture bet. Speed is fixed (2026-11-06): all 33 layers of the 4B load on the GPU under CUDA, a model call averages ~4 s, and one 16-run round of the agents eval takes ~10 min. The earlier ~30 s calls date from before the 2026-11-05 reboot, when CUDA fell back to the CPU. `--output` now records every run's tool calls (name and arguments) beside its answer. Still to do: benchmark on real maintenance tasks, not only the fixed sets.
 
 ## In progress
 
@@ -16,12 +16,12 @@ Every open strategic question (doc 1) is settled by eval runs, so this comes bef
 
 ## Agent hierarchy
 
-**Direction (2026-11-06):** the hierarchy stays as the design for scale. Long tasks and projects can be split again and again, and a flat tool list stops working once dozens of servers are connected. Small atomic steps with only the context they need are the part with evidence behind it (MAKER, doc 1), and both runners already have that. What the evals decide is how agents are built (routing, depth, what each agent sees), not whether they exist. The 8-task eval is a baseline and a bug-finder: with 6 servers and 32 tools it cannot show a scaling advantage, so the real test is a scaled task set (next steps 5 and 6).
+**Direction (2026-11-06):** the hierarchy stays as the design for scale. Long tasks and projects can be split again and again, and a flat tool list stops working once dozens of servers are connected. Small atomic steps with only the context they need are the part with evidence behind it (MAKER, doc 2), and both runners already have that. What the evals decide is how agents are built (routing, depth, what each agent sees), not whether they exist. The 8-task eval is a baseline and a bug-finder: with 6 servers and 32 tools it cannot show a scaling advantage, so the real test is a scaled task set (next steps 5 and 6).
 
 ### Status
 
 - **Prototype landed:** `delegate`, agent files, nested runs (depth ≤ 3), per-agent MCP servers; covered by scripted-model unit tests.
-- **Eval built and run** (assets on `main`): see the eval assets in doc 2. Model is Qwen3.5-4B-UD-Q4_K_XL; the 35B was never loaded (file deleted).
+- **Eval built and run** (assets on `main`): see the eval assets in doc 1. Model is Qwen3.5-4B-UD-Q4_K_XL; the 35B was never loaded (file deleted).
 - **First full round (2026-11-06, one run each):** `tree` 3/8 tasks (6/14 checks, 83 calls, 356 s); `agents` 0/8 (0/14, 57 calls, 205 s). Rerunning three of the tasks gave `agents` 2/3 and `tree` 1/3, so single rounds swing widely and only repeated rounds count. Three rounds before the fix below: `tree` 4/24 tasks (17%, 171 calls); `agents` 2/24 (8%, 239 calls); a run reached an MCP tool in 5/24 (`tree`) and 2/24 (`agents`).
 - **Main failure: the model never reaches the connected tools.** MCP servers are reachable only through the `act` approach, but `decide` was not told which servers are connected, so a question about the user's own data read like a web lookup: `marcus-phone` made no tool calls on either runner and answered from the top task's forced web search (a real plumber of that name); `first-todo` / `tree` ran `list_directory` and four `web_search` calls instead of the to-do tools. Fixed in `e4f4b6d`: `decide` names each connected server and its tools and says a task needing them must choose `act`. Three rounds after it: `tree` 17/24 (71%, 268 calls); `agents` 8/24 (33%, 229 calls); runs reaching an MCP tool 19/24 and 8/24.
 - **Failures left after the fix** (from the recorded tool calls):
@@ -127,10 +127,10 @@ Today: mail arrives → automatic mail dropped without the model → rest summar
 
 ## Mascot
 
-Built: see doc 2, "Mascot emotions". Still open:
+Built: see doc 1, "Mascot emotions". Still open:
 
 1. Try other placements (top bar, an empty workbench, the answer area) once the sidebar one has been lived with.
-2. Map more states to moods (clarification waiting, background research, unreachable daemon, cancelling, waking): see doc 2, "Mascot emotions", Not built.
+2. Map more states to moods (clarification waiting, background research, unreachable daemon, cancelling, waking): see doc 2, "Mascot: more moods".
 
 ## Speech output
 
@@ -140,7 +140,7 @@ Built: see doc 2, "Mascot emotions". Still open:
 
 ## Core structure ideas and strategic options
 
-Design in doc 2 ("Core structure ideas"); the questions they answer are in doc 1 ("Open strategic questions"). Each is tested against the built design on the same eval tasks; whichever wins becomes the design, including replacing built parts. The sources are unchecked chats, so each item starts with a cheap test.
+Design, and the open questions each answers, are in doc 2. Each is tested against the built design on the same eval tasks; whichever wins becomes the design, including replacing built parts. The sources are unchecked chats, so each item starts with a cheap test.
 
 1. **Check what exists** (model-authored skills, a failure-mode log, validation-error retry): no code for model-authored skills was found; the other two need a closer read.
 2. **Blueprints vs model planning:** pick one recurring request (e.g. "process my inbox"), hard-code its graph, and compare pass rate and model calls with the same request via `decide`. If blueprints win, design how requests are matched to blueprints (rules, or one constrained classification call) with `decide` as the fallback.
@@ -152,7 +152,7 @@ Design in doc 2 ("Core structure ideas"); the questions they answer are in doc 1
 
 ## Self-improving domains: mail slice first
 
-Design in doc 2 ("Self-improving domains"), rationale in doc 1. Build one domain end to end before generalising; mail first, because connectors, triage, drafting and the Inbox's approve/reject signal already exist. Shares work with Core structure ideas item 3 (mail pack) and Reactive assistant items 4 and 6.
+Design and rationale in doc 2 ("Self-improving domains"). Build one domain end to end before generalising; mail first, because connectors, triage, drafting and the Inbox's approve/reject signal already exist. Shares work with Core structure ideas item 3 (mail pack) and Reactive assistant items 4 and 6.
 
 1. **Record outcomes:** store each mail event's triage class and draft beside what the user then did (approved, rejected, edited and sent, ignored). This is the success signal and the past-case set.
 2. **Mail memory scope:** memories and lessons tagged with the domain, recalled for mail runs beside the shared store.
