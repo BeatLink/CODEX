@@ -61,6 +61,13 @@ export const TOKEN_LIMIT_MESSAGE =
     'A model call reached the token limit; raise max_tokens (background_max_tokens for background research) or context_size, or use Auto size in Options.';
 export const REPETITION_MESSAGE = 'A model call kept repeating itself, so it was stopped.';
 
+// Phi-4-mini's template has a <|tool|> block, and the model writes calls in <|tool_call|>; it drops the "||" of node-llama-cpp's generic "||call:" syntax.
+const PHI_TOOL_BLOCK = "'<|tool|>'";
+const PHI_FUNCTION_CALLS = {
+    call: '<|tool_call|>[{"name": "{{functionName}}", "arguments": {{functionParams}}}]<|/tool_call|>',
+    result: '\n<|tool_response|>{{functionCallResult}}\n',
+} as const;
+
 export type ChatCompletion = {
     content: string;
     tool_calls: ToolCall[];
@@ -182,7 +189,14 @@ export class LocalModel implements ChatModel {
     private async complete(request: ChatCompletionRequest): Promise<ChatCompletion> {
         const { LlamaChat, resolveChatWrapper } = await import('node-llama-cpp');
         // Every call asks for a direct reply, so a model that can think out loud is told not to.
-        this.chatWrapper ??= resolveChatWrapper(this.model, { customWrapperSettings: { qwen: { thoughts: 'discourage' } } });
+        const template = this.model.fileInfo.metadata?.tokenizer?.chat_template;
+        const phiTools = typeof template === 'string' && template.includes(PHI_TOOL_BLOCK);
+        this.chatWrapper ??= resolveChatWrapper(this.model, {
+            customWrapperSettings: {
+                qwen: { thoughts: 'discourage' },
+                ...(phiTools ? { jinjaTemplate: { functionCallMessageTemplate: PHI_FUNCTION_CALLS } } : {}),
+            },
+        });
         const chat = new LlamaChat({ contextSequence: this.sequence, chatWrapper: this.chatWrapper as never, autoDisposeSequence: false });
         const history = chatHistory(request.messages);
         const toolsOffered = (request.tools?.length ?? 0) > 0 && request.tool_choice !== 'none';
