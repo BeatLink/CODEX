@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { type ActionRecord, actionReportProblems, calculationProblems, unbackedClaims, uncitedUrls, unsupportedValues } from './checks.js';
+import { type ActionRecord, actionReportProblems, asksForCoverage, asksForSubfolders, calculationProblems, coverage, coverageProblems, normalFolder, parseListing, unbackedClaims, uncitedUrls, unsupportedValues } from './checks.js';
 
 // ============================================================================
 // Evidence
@@ -109,5 +109,57 @@ describe('calculations', () => {
         expect(calculationProblems('10 / 0 = 5 and 07 + 1 = 9.')).toEqual([]);
         expect(calculationProblems('2 ^ 101 = 3.')).toEqual([]);
         expect(calculationProblems('1,000 * 3 = 2,000.')).toEqual(['The working states 1,000 * 3 = 2,000, but it equals 3,000.']);
+    });
+});
+
+// ============================================================================
+// Coverage
+// ============================================================================
+
+function listing(files: string[], folders: string[] = []): string {
+    return JSON.stringify([...files.map((name) => ({ name, type: 'file' })), ...folders.map((name) => ({ name, type: 'directory' }))]);
+}
+
+describe('coverage', () => {
+    it('applies only to requests that ask for every item', () => {
+        expect(asksForCoverage('Categorize the files in this folder.')).toBe(true);
+        expect(asksForCoverage('Go through my inbox.')).toBe(true);
+        expect(asksForCoverage('Give each file a suggested folder.')).toBe(true);
+        expect(asksForCoverage('List all invoices.')).toBe(true);
+        expect(asksForCoverage('Turn each run of characters into a hyphen.')).toBe(false);
+        expect(asksForCoverage('How long is each night\'s copy kept?')).toBe(false);
+        expect(asksForSubfolders('Use list_directory on every subfolder.')).toBe(true);
+        expect(asksForSubfolders('Categorize the files.')).toBe(false);
+    });
+
+    it('reads folder listings and connected list or search results, and nothing else', () => {
+        const folder = parseListing('list_directory', '{"path":"./Invoices/"}', listing(['a.pdf'], ['2025']));
+        const root = parseListing('list_directory', '{}', listing(['b.txt']));
+        const inbox = parseListing('mcp__mail__list_inbox', '{}', JSON.stringify({ messages: [{ subject: 'Rent due' }, { id: 7 }] }));
+
+        expect(folder).toEqual({ tool: 'list_directory', path: 'Invoices', entries: [{ name: 'a.pdf', folder: false }, { name: '2025', folder: true }] });
+        expect(root?.path).toBe('.');
+        expect(inbox?.entries).toEqual([{ name: 'Rent due', folder: false }]);
+        expect(parseListing('read_file', '{"path":"a"}', '[]')).toBeNull();
+        expect(parseListing('mcp__mail__read_email', '{}', '[{"name":"x"}]')).toBeNull();
+        expect(parseListing('list_directory', '{}', 'Tool error: path is not a directory.')).toBeNull();
+        expect(normalFolder('/home/someone/docs/Invoices/2025', '/home/someone/docs')).toBe('Invoices/2025');
+    });
+
+    it('names the listed files an answer leaves out, and the subfolders never listed', () => {
+        const listings = [
+            parseListing('list_directory', '{"path":"."}', listing(['tax_return.pdf', 'holiday.jpg'], ['Invoices', 'Photos']))!,
+            parseListing('list_directory', '{"path":"Photos"}', listing(['beach.png']))!,
+        ];
+
+        const found = coverage('Finance: tax\\_return.pdf. Photos: BEACH.png', listings, true);
+
+        expect(found).toEqual({ items: 3, missing: ['holiday.jpg'], unentered: ['Invoices'] });
+        expect(coverageProblems(found)).toEqual([
+            'The tools listed 3 items, but the result leaves out 1: holiday.jpg.',
+            'The request covers subfolders, but these were listed and never gone through: Invoices.',
+        ]);
+        expect(coverage('tax_return.pdf holiday.jpg beach.png', listings, false).unentered).toEqual([]);
+        expect(coverageProblems(null)).toEqual([]);
     });
 });

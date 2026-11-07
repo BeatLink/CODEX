@@ -2,7 +2,7 @@
 import { resolve } from 'node:path';
 
 import { loadAgents, serversBehind, serversFor, usableAgents, type AgentDefinition } from './agents.js';
-import { type ActionRecord } from './checks.js';
+import { type ActionRecord, type GatheredListings } from './checks.js';
 import { expandCommand, isMemoryCommand, runMemoryCommand } from './commands.js';
 import { condenseSections, inputTokenBudget, isCallFailure, renderSections, tokenCounter, type Section, type TokenCounter } from './contextBudget.js';
 import { getEmbedder } from './embeddings.js';
@@ -68,7 +68,10 @@ export const APPROACH_SKILLS: Record<string, string> = { research: 'research', f
 export const MAX_EPISODE_PATHS = 30;
 
 // A part routed to an agent names it, so the subtask goes straight to that agent.
-export type SubtaskSpec = { prompt: string; deliverable: string; depends_on: number[]; agent?: string };
+export type SubtaskSpec = { prompt: string; deliverable: string; depends_on: number[]; agent?: string; unit?: TaskUnit };
+
+// The folders a subtask made by splitting along a listing covers, whether it goes into their subfolders, and how it gathers.
+export type TaskUnit = { paths: string[]; recursive: boolean; approach: string };
 type JsonSchema = Record<string, unknown>;
 
 function subtaskSchema(minItems: number): JsonSchema {
@@ -220,7 +223,7 @@ export type TaskSnapshot = {
     steps: StepRecord[];
 };
 
-export type TaskState = TaskSnapshot & { replans: number; from_split: boolean; agent?: string };
+export type TaskState = TaskSnapshot & { replans: number; from_split: boolean; agent?: string; unit?: TaskUnit };
 
 // One task: what to do, what finished looks like, and how it went.
 export class TaskNode {
@@ -235,6 +238,8 @@ export class TaskNode {
     fromSplit: boolean;
     // The agent routing gave this task to, or nothing when the task is decided as usual.
     agent: string;
+    // The folders this task covers when it was made by splitting along a listing, or null.
+    unit: TaskUnit | null;
 
     constructor(
         public id: string,
@@ -242,10 +247,11 @@ export class TaskNode {
         public deliverable: string,
         public parent: TaskNode | null = null,
         public dependsOn: string[] = [],
-        options: { fromSplit?: boolean; agent?: string } = {},
+        options: { fromSplit?: boolean; agent?: string; unit?: TaskUnit | null } = {},
     ) {
         this.fromSplit = options.fromSplit ?? false;
         this.agent = options.agent ?? '';
+        this.unit = options.unit ?? null;
     }
 
     get depth(): number {
@@ -265,7 +271,11 @@ export class TaskNode {
 
     // Everything needed to rebuild this task when a run is resumed.
     state(): TaskState {
-        return { ...this.snapshot(), result: this.result, replans: this.replans, from_split: this.fromSplit, agent: this.agent };
+        const state: TaskState = { ...this.snapshot(), result: this.result, replans: this.replans, from_split: this.fromSplit, agent: this.agent };
+        if (this.unit !== null) {
+            state.unit = this.unit;
+        }
+        return state;
     }
 
     snapshot(): TaskSnapshot {
@@ -326,7 +336,7 @@ export class TaskTree {
         const added = chosen.map((spec, index) => {
             const offset = kept.length + 1 + index;
             const dependsOn = spec.depends_on.filter((number) => number < offset).map((number) => `${node.id}.${number}`);
-            return new TaskNode(`${node.id}.${offset}`, spec.prompt, spec.deliverable, node, dependsOn, { fromSplit, agent: spec.agent ?? '' });
+            return new TaskNode(`${node.id}.${offset}`, spec.prompt, spec.deliverable, node, dependsOn, { fromSplit, agent: spec.agent ?? '', unit: spec.unit });
         });
         node.children = [...kept, ...added];
         return added;
@@ -352,6 +362,7 @@ export class TaskTree {
             node.fromSplit = saved.from_split;
             // Checkpoints saved before tasks named their agent have none.
             node.agent = saved.agent ?? '';
+            node.unit = saved.unit ?? null;
             if (parent !== null) {
                 parent.children.push(node);
             }
@@ -738,6 +749,8 @@ export class TaskTreeRun {
     evidence: string[] = [];
     // The file writes and test runs each acting task made, so its report can be held to them.
     readonly taskActions = new Map<string, ActionRecord[]>();
+    // What each task's gather step listed, and whether it ran out of calls or had a result cut, for the coverage check and splitting.
+    readonly taskListings = new Map<string, GatheredListings>();
     readonly mode: string;
     readonly canAct: boolean;
     readonly trust: Trust;

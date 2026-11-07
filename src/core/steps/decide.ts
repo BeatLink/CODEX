@@ -32,6 +32,10 @@ export function agentChoices(run: TaskTreeRun): string[] {
 }
 
 export async function decide(run: TaskTreeRun, node: TaskNode): Promise<Decision> {
+    if (node.unit !== null) {
+        // A task made for some folders gathers the way the task it was split from did, so there is nothing to decide.
+        return new Decision(node.unit.approach);
+    }
     const approaches = run.approachesFor(node);
     if (run.specialist && approaches.length === 1 && approaches[0] === 'act') {
         // With one way open there is nothing to decide, so the call is skipped.

@@ -41,7 +41,13 @@ export type ToolStageOptions = {
     signal?: AbortSignal;
     // Hears every tool call the model makes in this stage, in order, once its result is known.
     onToolCall?: ((call: ToolCallRecord) => void) | null;
+    // Hears the full result of every call the stage ran, before it is cut to fit.
+    onToolResult?: ((name: string, rawArguments: string, result: string) => void) | null;
+    // Hears how the stage ended: whether it used up its calls and whether a result was cut to fit.
+    onStageEnd?: ((summary: ToolStageSummary) => void) | null;
 };
+
+export type ToolStageSummary = { toolCalls: number; limitReached: boolean; resultsCut: boolean };
 
 // Measure a value as Python's json.dumps writes it, with spaced separators and escaped non-ASCII, so budgets match.
 export function pythonJsonLength(value: unknown): number {
@@ -220,7 +226,7 @@ async function toolLoop(
     maxToolCalls: number,
     options: ToolStageOptions,
 ): Promise<string> {
-    const { allowedTools, blockedTools, pageSummarizer, onToken, onToolCall } = options;
+    const { allowedTools, blockedTools, pageSummarizer, onToken, onToolCall, onToolResult, onStageEnd } = options;
     const toolDefinitions = [...toolbox.toolDefinitions, ...mcpToolbox.toolDefinitions].filter((definition) =>
         isPermitted(definition.function.name, allowedTools, blockedTools),
     );
@@ -231,6 +237,7 @@ async function toolLoop(
     const toolHistory: string[] = [];
     let toolCallCount = 0;
     let toolOutputChars = 0;
+    let resultsCut = false;
     // Each call's result by tool name and arguments, so a repeated call is answered without running the tool again.
     const earlierResults = new Map<string, string>();
     const usedTools = new Set<string>();
@@ -238,6 +245,11 @@ async function toolLoop(
     let roundsWithoutNewTool = 0;
     let answerNow = false;
     const messageCharBudget = options.contextSize != null ? inputCharBudget(options.contextSize, maxTokens, pythonJson(toolDefinitions)) : null;
+
+    const finish = (text: string): string => {
+        onStageEnd?.({ toolCalls: toolCallCount, limitReached: toolCallCount >= maxToolCalls, resultsCut });
+        return text;
+    };
 
     const recordCall = (toolCall: ToolCall, result: string) => {
         const name = toolCall.function?.name ?? '';
@@ -274,7 +286,7 @@ async function toolLoop(
         } else if (request.tool_choice === 'none') {
             // A turn told to answer never runs a call written as text, so a reply that is only a call ends with the findings so far.
             if (typeof completion.content === 'string' && completion.content.trim() && !completion.content.replace(TEXT_TOOL_CALL, '').trim()) {
-                return findingsText(toolHistory, [ANSWER_NOW_CALL_NOTE]);
+                return finish(findingsText(toolHistory, [ANSWER_NOW_CALL_NOTE]));
             }
         } else {
             toolCalls = textToolCalls(completion.content, toolDefinitions);
@@ -293,14 +305,14 @@ async function toolLoop(
             if (typeof content !== 'string' || !content.trim()) {
                 throw new Error('The model returned an empty tool-stage response.');
             }
-            return findingsText(toolHistory, [content.trim()]);
+            return finish(findingsText(toolHistory, [content.trim()]));
         }
         if (toolCallCount >= maxToolCalls) {
             for (const toolCall of toolCalls) {
                 recordCall(toolCall, LIMIT_REACHED_ERROR);
             }
             const findings = typeof assistantMessage.content === 'string' ? assistantMessage.content.trim() : '';
-            return findingsText(toolHistory, [findings, 'The tool-call limit was reached; further requested tool calls were not run.']);
+            return finish(findingsText(toolHistory, [findings, 'The tool-call limit was reached; further requested tool calls were not run.']));
         }
 
         messages.push(assistantMessage);
@@ -335,6 +347,7 @@ async function toolLoop(
                 usedTools.add(name);
                 result = await runOneCall(name, toolCall.function?.arguments ?? '{}', toolbox, mcpToolbox, pageSummarizer, userInput);
                 earlierResults.set(key, result);
+                onToolResult?.(name, toolCall.function?.arguments ?? '{}', result);
                 connectedAnswered = connectedAnswered || (name.startsWith(CONNECTED_TOOL_PREFIX) && !isToolError(result));
             }
 
@@ -348,12 +361,14 @@ async function toolLoop(
             }
             remainingOutput = Math.max(0, remainingOutput);
             if (result.length > remainingOutput) {
+                // A repeat's earlier result is already in the findings whole, so only a first result counts as cut.
+                resultsCut = resultsCut || earlier === undefined;
                 result = result.slice(0, remainingOutput);
             }
             toolOutputChars += result.length;
 
             messages.push({ role: 'tool', tool_call_id: callId, content: untrustedBlock(result) });
-            toolHistory.push(historyEntry ?? `${name}: ${result}`);
+            toolHistory.push(historyEntry ?? `${historyName(name, toolCall.function?.arguments ?? '{}')}: ${result}`);
         }
         // Once a connected tool has answered, a round of only repeats or two rounds without a new tool make the next turn answer without tools.
         roundsWithoutNewTool = newTool ? 0 : roundsWithoutNewTool + 1;
@@ -372,6 +387,19 @@ function findingsText(toolHistory: string[], notes: string[]): string {
         return words;
     }
     return [`${TOOL_RESULTS_LABEL}\n${toolHistory.join('\n')}`, words ? `${MODEL_WORDS_LABEL}\n${words}` : ''].filter(Boolean).join('\n\n');
+}
+
+// Name a listing by its folder in the findings, so the writer can tell which folder each file is in.
+function historyName(name: string, rawArguments: string): string {
+    if (name !== 'list_directory') {
+        return name;
+    }
+    try {
+        const path = (JSON.parse(rawArguments) as { path?: unknown }).path;
+        return `${name} of "${typeof path === 'string' && path.trim() ? path : '.'}"`;
+    } catch {
+        return name;
+    }
 }
 
 // Say whether a tool's result reports an error instead of an answer.

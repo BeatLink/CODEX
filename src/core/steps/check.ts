@@ -1,5 +1,5 @@
 // The checking step of a task: check a result against its evidence, and revise it once when it falls short.
-import { actionReportProblems, calculationProblems, unbackedClaims, uncitedUrls, unsupportedValues } from '../checks.js';
+import { actionReportProblems, asksForCoverage, asksForSubfolders, calculationProblems, coverage, coverageProblems, insideFolder, unbackedClaims, uncitedUrls, unsupportedValues, type Coverage } from '../checks.js';
 import { type Section } from '../contextBudget.js';
 import { queueUnsupportedClaims } from '../evidence.js';
 import { type Recalled } from '../knowledge.js';
@@ -66,6 +66,7 @@ export async function check(run: TaskTreeRun, node: TaskNode, result: string, ev
         );
     }
     problems.push(...calculationProblems(result));
+    problems.push(...coverageProblems(taskCoverage(run, node, result)));
     const actions = run.taskActions.get(node.id);
     if (actions !== undefined) {
         problems.push(...actionReportProblems(result, actions));
@@ -74,4 +75,21 @@ export async function check(run: TaskTreeRun, node: TaskNode, result: string, ev
         problems.push(...unbackedClaims(result, run.toolbox.actionLog));
     }
     return problems.filter(Boolean).join(' ');
+}
+
+// Compare a result with what the task's own gather step listed, when the task asks for every item to be covered.
+export function taskCoverage(run: TaskTreeRun, node: TaskNode, result: string): Coverage | null {
+    const gathered = run.taskListings.get(node.id);
+    const unit = node.unit;
+    if (gathered === undefined || gathered.listings.length === 0 || (unit === null && !asksForCoverage(node.prompt))) {
+        return null;
+    }
+    // A task made for some folders is held only to the listings of those folders.
+    const listings =
+        unit === null
+            ? gathered.listings
+            : gathered.listings.filter(
+                  (listing) => listing.tool !== 'list_directory' || unit.paths.some((path) => (unit.recursive ? insideFolder(listing.path, path) : listing.path === path)),
+              );
+    return coverage(result, listings, unit?.recursive ?? asksForSubfolders(node.prompt));
 }

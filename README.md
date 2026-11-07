@@ -129,6 +129,16 @@ top task's write or combine step is the final answer.
   task. A task whose result still fails its check after one revision is then
   split into smaller subtasks and tried again, when depth and node limits
   allow; otherwise its result is kept and marked unverified.
+- **A folder tree is split by folder.** When a request asks to go through
+  every file in a folder and its subfolders, and the gather step listed
+  subfolders it never entered (for instance because it ran out of tool
+  calls), or a listing was cut to fit, or the result still leaves out listed
+  files after its revision, the task is split in code: one subtask for the
+  files directly in the folder and one per subfolder, each named in its
+  prompt. Their results are joined under one heading per folder without a
+  model merging them. When there are more folders than `max_task_nodes` and
+  five subtasks per task allow, neighbouring folders share a subtask and the
+  answer says so.
 - **No runaway recursion.** A subtask that restates its parent, or a
   decomposition into fewer than two real subtasks, is dropped, and the task is
   done directly instead. Dependencies may only point to earlier subtasks.
@@ -152,7 +162,12 @@ top task's write or combine step is the final answer.
   and "2026-10-09" all match, and numbers in code blocks are not checked. A task
   that acted is held to what its tools really did: its result must name every
   file written, say when a write or a test run failed, give the test result,
-  and not claim a change when nothing was written.
+  and not claim a change when nothing was written. When the request asks to
+  cover every item (classify, categorize, go through, list all, or "each" or
+  "every" before a word such as file, folder or email) and a tool listed
+  items (`list_directory`, or a connected tool that lists or searches), a
+  result that leaves listed names out fails its check, naming them; with
+  subfolders asked for, so does a subfolder that was never listed.
 - **Earlier results are condensed, not cut.** Each call's input is measured
   with the model's own tokenizer and fitted to `context_size` minus that call's
   reply budget. When it would overflow, the largest earlier results are

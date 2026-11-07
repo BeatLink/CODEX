@@ -431,3 +431,165 @@ export function calculationProblems(text: string): string[] {
     }
     return [...problems, ...weekdayProblems(prose)];
 }
+
+// ============================================================================
+// Coverage
+// ============================================================================
+
+// Words that ask for every listed item to be handled: "classify", "categorize", "go through", "list all", or "each" or "every" before an item word.
+const COVERAGE_REQUEST =
+    /\b(?:classif(?:y|ies|ied|ying)|categori[sz](?:e|es|ed|ing)|go(?:es|ing)? through|list (?:all|every)|(?:each|every)\s+(?:one\s+of\s+the\s+|of\s+the\s+)?(?:\w+\s+)?(?:files?|entr(?:y|ies)|items?|(?:sub-?)?folders?|(?:sub-?)?director(?:y|ies)|documents?|e-?mails?|messages?|notes?|photos?|images?|events?|contacts?|results?))\b/i;
+// Words that ask for the folders inside a folder to be gone through too.
+const SUBFOLDER_REQUEST = /\b(?:sub-?folders?|sub-?director(?:y|ies)|recursive(?:ly)?|nested folders?)\b/i;
+// Fields of a connected tool's result item that name it, in the order they are tried.
+const ITEM_NAME_FIELDS = ['name', 'title', 'filename', 'file_name', 'subject'];
+// A longer item name is rarely copied word for word into an answer, so it is not held to coverage.
+const MAX_ITEM_NAME_CHARS = 80;
+const MAX_NAMED_MISSES = 15;
+
+export type ListedEntry = { name: string; folder: boolean };
+
+// What one listing tool call returned: the folder or call it lists, and its entries.
+export type Listing = { tool: string; path: string; entries: ListedEntry[] };
+
+// What a task's gather step listed, and whether it used up its tool calls or had a result cut to fit.
+export type GatheredListings = { listings: Listing[]; limitReached: boolean; resultsCut: boolean };
+
+export type Coverage = { items: number; missing: string[]; unentered: string[] };
+
+export function asksForCoverage(request: string): boolean {
+    return COVERAGE_REQUEST.test(request);
+}
+
+export function asksForSubfolders(request: string): boolean {
+    return SUBFOLDER_REQUEST.test(request);
+}
+
+// Write a folder path one way, relative to the root, so listings of the same folder match.
+export function normalFolder(path: string, root = ''): string {
+    let plain = path.trim().replaceAll('\\', '/');
+    if (root && (plain === root || plain.startsWith(`${root.replace(/\/$/, '')}/`))) {
+        plain = plain.slice(root.replace(/\/$/, '').length);
+    }
+    const parts: string[] = [];
+    for (const part of plain.split('/')) {
+        if (part === '..') {
+            parts.pop();
+        } else if (part && part !== '.') {
+            parts.push(part);
+        }
+    }
+    return parts.length > 0 ? parts.join('/') : '.';
+}
+
+export function joinFolder(folder: string, name: string): string {
+    return folder === '.' ? name : `${folder}/${name}`;
+}
+
+// Say whether a path is the folder itself or lies inside it.
+export function insideFolder(path: string, folder: string): boolean {
+    return folder === '.' || path === folder || path.startsWith(`${folder}/`);
+}
+
+function itemName(item: unknown): string {
+    if (typeof item === 'string') {
+        return item;
+    }
+    if (typeof item !== 'object' || item === null) {
+        return '';
+    }
+    const record = item as Record<string, unknown>;
+    const field = ITEM_NAME_FIELDS.find((key) => typeof record[key] === 'string' && record[key]);
+    return field === undefined ? '' : (record[field] as string);
+}
+
+// Read the entries a listing tool returned, or null for any other call or a result that is not a list.
+export function parseListing(tool: string, rawArguments: string, result: string, root = ''): Listing | null {
+    let data: unknown;
+    let argumentsGiven: Record<string, unknown> = {};
+    try {
+        data = JSON.parse(result);
+        const parsed: unknown = JSON.parse(rawArguments || '{}');
+        if (typeof parsed === 'object' && parsed !== null) {
+            argumentsGiven = parsed as Record<string, unknown>;
+        }
+    } catch {
+        return null;
+    }
+    if (tool === 'list_directory') {
+        if (!Array.isArray(data)) {
+            return null;
+        }
+        const entries = data
+            .filter((entry): entry is { name: string; type?: string } => typeof entry?.name === 'string')
+            .map((entry) => ({ name: entry.name, folder: entry.type === 'directory' }));
+        return { tool, path: normalFolder(String(argumentsGiven.path ?? '.'), root), entries };
+    }
+    // A connected tool counts as a listing when its name says it lists or searches and it returned a list.
+    const toolName = tool.split('__').at(-1) ?? '';
+    if (!tool.startsWith('mcp__') || !/list|search|find|query/i.test(toolName)) {
+        return null;
+    }
+    let items: unknown = data;
+    if (!Array.isArray(items) && typeof items === 'object' && items !== null) {
+        const arrays = Object.values(items).filter(Array.isArray);
+        items = arrays.length === 1 ? arrays[0] : null;
+    }
+    if (!Array.isArray(items)) {
+        return null;
+    }
+    const entries = items
+        .map(itemName)
+        .filter((name) => name && name.length <= MAX_ITEM_NAME_CHARS)
+        .map((name) => ({ name, folder: false }));
+    return entries.length > 0 ? { tool, path: `${tool} ${JSON.stringify(argumentsGiven)}`, entries } : null;
+}
+
+// Fold case, spacing and markdown escapes, so a name written as "my\_file" still matches.
+function folded(text: string): string {
+    return text
+        .replace(/\\([_*`[\]()#])/g, '$1')
+        .replace(/\s+/g, ' ')
+        .toLowerCase();
+}
+
+// Compare the items the tools listed with the names in the answer; with subfolders asked for, also find folders never listed.
+export function coverage(answer: string, listings: Listing[], subfolders: boolean): Coverage {
+    const text = folded(answer);
+    const listed = new Set(listings.filter((listing) => listing.tool === 'list_directory').map((listing) => listing.path));
+    const items = new Map<string, string>();
+    const unentered = new Set<string>();
+    for (const listing of listings) {
+        const isFolder = listing.tool === 'list_directory';
+        for (const entry of listing.entries) {
+            const path = isFolder ? joinFolder(listing.path, entry.name) : entry.name;
+            if (!entry.folder) {
+                items.set(path, entry.name);
+            } else if (subfolders && !listed.has(path)) {
+                unentered.add(path);
+            }
+        }
+    }
+    const missing = [...items].filter(([, name]) => !text.includes(folded(name))).map(([path]) => path);
+    return { items: items.size, missing, unentered: [...unentered] };
+}
+
+function named(paths: string[]): string {
+    const shown = paths.slice(0, MAX_NAMED_MISSES).join(', ');
+    return paths.length > MAX_NAMED_MISSES ? `${shown} and ${paths.length - MAX_NAMED_MISSES} more` : shown;
+}
+
+// Say which listed items the answer leaves out and which subfolders were never gone through.
+export function coverageProblems(found: Coverage | null): string[] {
+    if (found === null) {
+        return [];
+    }
+    const problems: string[] = [];
+    if (found.missing.length > 0) {
+        problems.push(`The tools listed ${found.items} items, but the result leaves out ${found.missing.length}: ${named(found.missing)}.`);
+    }
+    if (found.unentered.length > 0) {
+        problems.push(`The request covers subfolders, but these were listed and never gone through: ${named(found.unentered)}.`);
+    }
+    return problems;
+}

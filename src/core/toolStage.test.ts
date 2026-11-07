@@ -328,6 +328,29 @@ describe('tool stage', () => {
         expect(plain).toBe('No tools needed.');
     });
 
+    it('names each listed folder, hands over full results, and says when calls ran out or a result was cut', async () => {
+        const toolbox = new FakeToolbox((name) => (name === 'list_directory' ? '[{"name":"a.txt","type":"file"}]' : 'y'.repeat(9_000)));
+        const model = new FakeModel([
+            toolCallReply('call-1', 'list_directory', { path: 'Invoices' }),
+            toolCallReply('call-2', 'read_file', { path: 'Invoices/a.txt' }),
+            textReply('Done.'),
+        ]);
+        const results: Array<[string, string, number]> = [];
+        const summaries: unknown[] = [];
+
+        const findings = await runToolStage(model, 'Use tools.', 'List Invoices.', toolbox, 200, 0.1, 2, {
+            onToolResult: (name, rawArguments, result) => results.push([name, rawArguments, result.length]),
+            onStageEnd: (summary) => summaries.push(summary),
+        });
+
+        expect(findings).toContain('list_directory of "Invoices": [{"name":"a.txt","type":"file"}]');
+        expect(results).toEqual([
+            ['list_directory', '{"path":"Invoices"}', 32],
+            ['read_file', '{"path":"Invoices/a.txt"}', 9_000],
+        ]);
+        expect(summaries).toEqual([{ toolCalls: 2, limitReached: true, resultsCut: true }]);
+    });
+
     it('trims tool output to the context window', async () => {
         const toolbox = new FakeToolbox(() => 'z'.repeat(50_000));
         const model = new FakeModel([toolCallReply('call-1'), textReply('Done.')]);

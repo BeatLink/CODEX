@@ -1,4 +1,5 @@
 // The gathering step of a task: look things up in stored knowledge and on the web, then work the tool loop.
+import { parseListing, type GatheredListings } from '../checks.js';
 import { inputTokenBudget, type Section } from '../contextBudget.js';
 import { filesystemNote, formatRecall, isSelfContained, MAX_SEARCH_QUERIES, pageSummarizer, queueStaleTopics, searchQuery, searchWithMemory } from '../evidence.js';
 import { type RecalledFact } from '../knowledge.js';
@@ -77,6 +78,7 @@ export async function gather(run: TaskTreeRun, node: TaskNode, decision: Decisio
         act: { blockedTools: new Set(['web_search', 'web_fetch']), mcpServers: run.mcpServers },
     }[decision.approach as 'research' | 'files' | 'act'];
     const actionsBefore = run.toolbox.actionLog.length;
+    const gathered: GatheredListings = { listings: [], limitReached: false, resultsCut: false };
     // A specialist's part is one narrow lookup or action, so it keeps the configured budget instead of the larger acting one.
     const toolCalls = decision.approach === 'act' && !run.specialist ? Math.max(run.maxToolCalls, MIN_ACT_TOOL_CALLS) : run.maxToolCalls;
     const findings = await run.step(node, APPROACH_STEPS[decision.approach], async (label) => {
@@ -89,9 +91,20 @@ export async function gather(run: TaskTreeRun, node: TaskNode, decision: Decisio
             contextSize: run.contextSize,
             signal: run.signal ?? undefined,
             onToolCall: run.toolCallCallback === null ? null : (call) => run.toolCallCallback!({ ...call, agent: run.agent?.name ?? null, depth: run.agentDepth }),
+            onToolResult: (name, rawArguments, result) => {
+                const listing = parseListing(name, rawArguments, result, run.toolbox.root);
+                if (listing !== null) {
+                    gathered.listings.push(listing);
+                }
+            },
+            onStageEnd: (summary) => {
+                gathered.limitReached = summary.limitReached;
+                gathered.resultsCut = summary.resultsCut;
+            },
             ...toolOptions,
         });
     });
+    run.taskListings.set(node.id, gathered);
     if (decision.approach === 'act') {
         run.taskActions.set(node.id, run.toolbox.actionLog.slice(actionsBefore));
     }

@@ -803,6 +803,131 @@ describe('subtasks', () => {
 // Parsing
 // ============================================================================
 
+// ============================================================================
+// Coverage and splitting along a listing
+// ============================================================================
+
+type Folders = Record<string, [files: string[], folders: string[]]>;
+
+// A tool stage that lists, for each task, the folders given for it, and says whether it ran out of calls.
+function listFolders(byTask: Record<string, Folders>, limitReached: string[] = []): void {
+    mocks.runToolStage.mockImplementation(async (_llm, _system, input: string, _toolbox, _maxTokens, _temperature, _maxToolCalls, options: ToolStageOptions) => {
+        const task = /Current task:\nTask (\S+):/.exec(input)![1];
+        const lines: string[] = [];
+        for (const [path, [files, folders]] of Object.entries(byTask[task] ?? {})) {
+            const result = JSON.stringify([...files.map((name) => ({ name, type: 'file' })), ...folders.map((name) => ({ name, type: 'directory' }))]);
+            options.onToolResult?.('list_directory', JSON.stringify({ path }), result);
+            lines.push(`list_directory of "${path}": ${result}`);
+        }
+        options.onStageEnd?.({ toolCalls: lines.length, limitReached: limitReached.includes(task), resultsCut: false });
+        return `Tool call results:\n${lines.join('\n')}`;
+    });
+}
+
+const TREE_REQUEST = 'Categorize the files in this folder; use list_directory on every subfolder.';
+
+describe('coverage', () => {
+    it('fails the check of a result that leaves out a listed file, naming it', async () => {
+        listFolders({ '1': { '.': [['tax_return.pdf', 'beach.jpg', 'notes.txt'], []] } });
+
+        const { result, model } = await runTree(
+            {
+                'decide 1': decision('files'),
+                'write 1': 'Finance: tax_return.pdf. Photos: beach.jpg.',
+                'revise 1': 'Finance: tax_return.pdf. Photos: beach.jpg. Other: notes.txt.',
+            },
+            { prompt: 'Categorize every file in this folder.' },
+        );
+
+        expect(result).toContain('notes.txt');
+        expect(model.call('revise', '1').input).toContain('the result leaves out 1: notes.txt');
+    });
+
+    it('does not hold a request that does not ask for every item to the listing', async () => {
+        listFolders({ '1': { '.': [['tax_return.pdf', 'beach.jpg'], []] } });
+
+        const { model } = await runTree({ 'decide 1': decision('files'), 'write 1': 'There is a tax return.' }, { prompt: 'Is there a tax return here?' });
+
+        expect(model.steps()).toEqual(['decide 1', 'write 1', 'check 1']);
+    });
+
+    it('splits by folder when subfolders were listed but never entered, and joins the parts in code', async () => {
+        listFolders(
+            {
+                '1': { '.': [['notes.txt'], ['Invoices', 'Photos']] },
+                '1.1': { '.': [['notes.txt'], ['Invoices', 'Photos']] },
+                '1.2': { Invoices: [['march.pdf'], []] },
+                '1.3': { Photos: [['beach.png'], []] },
+            },
+            ['1'],
+        );
+
+        const { result, model, trees } = await runTree(
+            {
+                'decide 1': decision('files'),
+                'write 1.1': 'Other: notes.txt',
+                'write 1.2': 'Finance: march.pdf',
+                'write 1.3': 'Photos: beach.png',
+            },
+            { prompt: TREE_REQUEST },
+        );
+
+        expect(model.steps()).toEqual(['decide 1', 'write 1.1', 'check 1.1', 'write 1.2', 'check 1.2', 'write 1.3', 'check 1.3']);
+        expect(result).toBe(
+            '## Files directly in the top folder\n\nOther: notes.txt\n\n' +
+                '## Files in "Invoices" and below\n\nFinance: march.pdf\n\n' +
+                '## Files in "Photos" and below\n\nPhotos: beach.png',
+        );
+        expect(model.call('write', '1.2').input).toContain('Task 1.2: Do what the original request asks for every file in "Invoices" and in every subfolder inside it');
+        const root = trees.at(-1)![0];
+        expect(root.approach).toBe('decompose');
+        expect(root.status).toBe('done');
+        expect(root.note).toBe('Split by folder: 2 subfolders were listed but never gone through before the tool-call limit was reached.');
+    });
+
+    it('batches the folders when there are more than the node budget allows, and says so', async () => {
+        listFolders({
+            '1': { '.': [['notes.txt'], ['Invoices', 'Photos']] },
+            '1.1': { '.': [['notes.txt'], ['Invoices', 'Photos']] },
+            '1.2': { Invoices: [['march.pdf'], []], Photos: [['beach.png'], []] },
+        });
+
+        const { result, trees } = await runTree(
+            { 'decide 1': decision('files'), 'write 1.1': 'Other: notes.txt', 'write 1.2': 'Finance: march.pdf. Photos: beach.png' },
+            { prompt: TREE_REQUEST, maxTaskNodes: 3 },
+        );
+
+        expect(trees.at(-1)!.map((node) => node.id)).toEqual(['1', '1.1', '1.2']);
+        expect(result.startsWith('Some folders were worked together to stay within the task budget (max_task_nodes, max_task_depth): "Invoices" and "Photos".')).toBe(true);
+    });
+
+    it('splits by folder instead of asking the model when the result still leaves out listed files', async () => {
+        listFolders({
+            '1': { '.': [['notes.txt'], ['Docs']], Docs: [['plan.pdf'], []] },
+            '1.1': { '.': [['notes.txt'], ['Docs']] },
+            '1.2': { Docs: [['plan.pdf'], []] },
+        });
+
+        const { result, model } = await runTree(
+            { 'decide 1': decision('files'), 'write 1': 'Other: notes.txt', 'revise 1': 'Other: notes.txt', 'write 1.1': 'Other: notes.txt', 'write 1.2': 'Documents: plan.pdf' },
+            { prompt: TREE_REQUEST },
+        );
+
+        expect(model.steps()).not.toContain('split 1');
+        expect(model.steps()).toContain('revise 1');
+        expect(result).toContain('Documents: plan.pdf');
+    });
+
+    it("keeps a folder part's unit in a checkpoint", () => {
+        const tree = new TaskTree('Folders', 3, 10);
+        tree.setChildren(tree.root, [{ prompt: 'Cover Docs', deliverable: 'Docs covered', depends_on: [], unit: { paths: ['Docs'], recursive: true, approach: 'files' } }]);
+
+        const restored = TaskTree.fromState('Folders', tree.nodes().map((node) => node.state()), 3, 10);
+
+        expect(restored.nodes().map((node) => node.unit)).toEqual([null, { paths: ['Docs'], recursive: true, approach: 'files' }]);
+    });
+});
+
 describe('parsing', () => {
     it('does a task directly when it decomposes into fewer than two real subtasks', () => {
         const node = new TaskNode('1', 'Plan a trip', 'A plan');
