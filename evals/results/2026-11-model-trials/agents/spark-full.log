@@ -1,0 +1,60 @@
+Loading model from models/Spark-X2.6-4B-Q4_K_M.gguf...
+[inbox-newest / tree #1] 2/2 in 13.25s: pass
+[inbox-newest / agents #1] 2/2 in 11.08s: pass
+[next-meeting / tree #1] 2/2 in 8.5s: pass
+[next-meeting / agents #1] 2/2 in 7.38s: pass
+[garage-code / tree #1] 0/1 in 6.4s: fail (contains '7391-delta')
+[garage-code / agents #1] 0/1 in 10.5s: fail (contains '7391-delta')
+[marcus-phone / tree #1] 1/1 in 10.26s: pass
+[marcus-phone / agents #1] 0/1 in 11.71s: fail (contains '900318')
+[lisbon-forecast / tree #1] 2/2 in 10.84s: pass
+[lisbon-forecast / agents #1] 2/2 in 10.14s: pass
+[first-todo / tree #1] 2/2 in 10.24s: pass
+[first-todo / agents #1] 2/2 in 9.68s: pass
+[priya-last-email / tree #1] 2/2 in 14.41s: pass
+[priya-last-email / agents #1] 2/2 in 28.9s: pass
+[free-slot-and-weather / tree #1] 2/2 in 10.84s: pass
+[free-slot-and-weather / agents #1] 2/2 in 43.89s: pass
+[inbox-newest / tree #2] 2/2 in 10.93s: pass
+[inbox-newest / agents #2] 2/2 in 9.79s: pass
+[next-meeting / tree #2] 2/2 in 9.17s: pass
+[next-meeting / agents #2] 2/2 in 8.43s: pass
+[garage-code / tree #2] 1/1 in 10.53s: pass
+[garage-code / agents #2] 0/1 in 10.74s: fail (contains '7391-delta')
+[marcus-phone / tree #2] 0/1 in 26.46s: fail (contains '900318')
+[marcus-phone / agents #2] 0/1 in 9.33s: fail (contains '900318')
+[lisbon-forecast / tree #2] 2/2 in 9.99s: pass
+[lisbon-forecast / agents #2] 2/2 in 8.08s: pass
+[first-todo / tree #2] 2/2 in 9.64s: pass
+[first-todo / agents #2] 2/2 in 8.6s: pass
+[priya-last-email / tree #2] 2/2 in 14.11s: pass
+[priya-last-email / agents #2] 2/2 in 28.92s: pass
+[free-slot-and-weather / tree #2] 2/2 in 14.48s: pass
+[free-slot-and-weather / agents #2] 2/2 in 63.08s: pass
+[inbox-newest / tree #3] 2/2 in 13.42s: pass
+[inbox-newest / agents #3] 2/2 in 10.73s: pass
+[next-meeting / tree #3] 2/2 in 10.24s: pass
+[next-meeting / agents #3] 2/2 in 9.14s: pass
+[garage-code / tree #3] 0/1 in 8.5s: fail (contains '7391-delta')
+[garage-code / agents #3] 0/1 in 12.04s: fail (contains '7391-delta')
+[marcus-phone / tree #3] 0/1 in 20.59s: fail (contains '900318')
+[marcus-phone / agents #3] 0/1 in 10.23s: fail (contains '900318')
+[lisbon-forecast / tree #3] 2/2 in 10.56s: pass
+[lisbon-forecast / agents #3] 2/2 in 9.2s: pass
+[first-todo / tree #3] 2/2 in 10.9s: pass
+[first-todo / agents #3] 2/2 in 9.41s: pass
+[priya-last-email / tree #3] 2/2 in 15.38s: pass
+[priya-last-email / agents #3] 2/2 in 29.76s: pass
+[free-slot-and-weather / tree #3] 1/2 in 13.59s: fail (contains 'Wednesday')
+[free-slot-and-weather / agents #3] 1/2 in 68.53s: fail (contains '14')
+
+runner             tasks    checks errors   seconds  calls   tokens   rate  per round
+-------------------------------------------------------------------------------------
+tree             19/24     37/42        0     293.2    132     4868    79%  7 7 5
+agents           17/24     35/42        0     439.3    225     8387    71%  6 6 5
+
+Tasks that passed in only some rounds:
+  garage-code: tree 1/3
+  marcus-phone: tree 1/3
+  free-slot-and-weather: tree 2/3, agents 2/3
+

@@ -1,0 +1,2604 @@
+{
+  "model_path": "models/Qwen3.5-4B-UD-Q4_K_XL.gguf",
+  "tasks_path": "evals/reasoning_tasks.json",
+  "seed": null,
+  "seed_store": null,
+  "repeat": 3,
+  "summary": {
+    "bare": {
+      "tasks": 75,
+      "tasks_passed": 57,
+      "pass_rate": 0.76,
+      "round_passes": [
+        19,
+        18,
+        20
+      ],
+      "checks_passed": 81,
+      "checks_total": 99,
+      "errors": 0,
+      "seconds": 418.1,
+      "model_calls": 75,
+      "completion_tokens": 12392
+    },
+    "tree": {
+      "tasks": 75,
+      "tasks_passed": 73,
+      "pass_rate": 0.973,
+      "round_passes": [
+        25,
+        24,
+        24
+      ],
+      "checks_passed": 97,
+      "checks_total": 99,
+      "errors": 0,
+      "seconds": 1136.86,
+      "model_calls": 306,
+      "completion_tokens": 19204
+    }
+  },
+  "task_passes": {
+    "months-with-28-days": {
+      "bare": {
+        "passed": 3,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "square-root-or-cube-root": {
+      "bare": {
+        "passed": 3,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "boiling-eggs": {
+      "bare": {
+        "passed": 3,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "decimal-9-9-or-9-11": {
+      "bare": {
+        "passed": 1,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "decimal-9-11-or-9-9": {
+      "bare": {
+        "passed": 2,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "pi-or-3-14": {
+      "bare": {
+        "passed": 3,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "country-ending-in-lia": {
+      "bare": {
+        "passed": 0,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "capital-of-france": {
+      "bare": {
+        "passed": 3,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "largest-planet": {
+      "bare": {
+        "passed": 3,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "order-of-operations": {
+      "bare": {
+        "passed": 3,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "distance-at-60-mph": {
+      "bare": {
+        "passed": 3,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "clock-angle-3-15": {
+      "bare": {
+        "passed": 0,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "letter-r-in-strawberry": {
+      "bare": {
+        "passed": 0,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 1,
+        "runs": 3
+      }
+    },
+    "number-rhyming-with-tree": {
+      "bare": {
+        "passed": 0,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "letters-in-mississippi": {
+      "bare": {
+        "passed": 3,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "outer-planets-mission": {
+      "bare": {
+        "passed": 3,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "voyager-1-speed": {
+      "bare": {
+        "passed": 2,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "voyager-2-speed": {
+      "bare": {
+        "passed": 2,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "galaxies-in-universe": {
+      "bare": {
+        "passed": 3,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "apples-bought": {
+      "bare": {
+        "passed": 3,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "feathers-or-bricks": {
+      "bare": {
+        "passed": 2,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "red-and-green-balls": {
+      "bare": {
+        "passed": 3,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "ten-minus-one": {
+      "bare": {
+        "passed": 3,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "doubling-sequence": {
+      "bare": {
+        "passed": 3,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "burying-survivors": {
+      "bare": {
+        "passed": 3,
+        "runs": 3
+      },
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      }
+    }
+  },
+  "results": [
+    {
+      "task_id": "months-with-28-days",
+      "runner": "bare",
+      "answer": "All **12** months have at least 28 days.\n\nHere is the breakdown:\n*   **February** has exactly 28 days (or 29 in a leap year).\n*   **April, June, September,** and **November** have 30 days.\n*   **January, March, May, July, August, October,** and **December** have 31 days.\n\nSince every month contains a full week (7 days) plus some extra days, and 28 is exactly 4 weeks, every single month in the calendar year includes at least 28 days.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 3.68,
+      "model_calls": 1,
+      "completion_tokens": 130,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "months-with-28-days",
+      "runner": "tree",
+      "answer": "All 12 months have at least 28 days, but only February has exactly 28 days in common years (29 days in leap years).",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 9.42,
+      "model_calls": 3,
+      "completion_tokens": 114,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "square-root-or-cube-root",
+      "runner": "bare",
+      "answer": "To determine which value is greater, let's calculate each one step by step:\n\n1.  **The square root of 16**:\n    The square root of a number $x$ is a value that, when multiplied by itself, equals $x$.\n    $$ \\sqrt{16} = 4 $$\n    (Because $4 \\times 4 = 16$)\n\n2.  **The cube root of 27**:\n    The cube root of a number $x$ is a value that, when multiplied by itself three times, equals $x$.\n    $$ \\sqrt[3]{27} = 3 $$\n    (Because $3 \\times 3 \\times 3 = 27$)\n\n**Comparison**:\nNow we compare the two results:\n$$ 4 > 3 $$\n\n**Conclusion**:\nThe square root of 16 is greater.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 5.28,
+      "model_calls": 1,
+      "completion_tokens": 193,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "square-root-or-cube-root",
+      "runner": "tree",
+      "answer": "The square root of 16 is 4, and the cube root of 27 is 3; therefore, the square root of 16 is greater.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 8.05,
+      "model_calls": 3,
+      "completion_tokens": 122,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "boiling-eggs",
+      "runner": "bare",
+      "answer": "It will still take **1 minute**.\n\nHere is the reasoning:\nBoiling eggs is a process that happens simultaneously in a pot of water. Once the water reaches a rolling boil, you can drop all 10 eggs in at the same time. They will cook together in the same amount of time as the first two eggs. The number of eggs does not change the duration of the boiling process, provided the pot is large enough to hold them all.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 2.72,
+      "model_calls": 1,
+      "completion_tokens": 93,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "boiling-eggs",
+      "runner": "tree",
+      "answer": "The time required to boil 10 eggs is the same as boiling 2 eggs, which is 1 minute. Boiling eggs is a parallel process where the heat source cooks all eggs simultaneously in the same pot of water; adding more eggs does not increase the duration needed for them to reach the desired temperature, provided the pot can hold them.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 9.24,
+      "model_calls": 3,
+      "completion_tokens": 154,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "decimal-9-9-or-9-11",
+      "runner": "bare",
+      "answer": "The number **9.9** is greater than 9.11.\n\nHere is the step-by-step comparison:\n\n1.  **Compare the whole numbers**: Both numbers have **9** before the decimal point. They are equal so far.\n2.  **Compare the tenths place** (the first digit after the decimal):\n    *   In **9.9**, the digit is **9**.\n    *   In **9.11**, the first digit is **1**.\n3.  **Conclusion**: Since 9 is greater than 1, **9.9** is the larger number.\n\n*Note: This is a common trick. Many people mistakenly think 9.11 is bigger because it has more digits, but in decimal notation, place value matters more than the total number of digits.*",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "not_regex 9\\.11 is (greater|larger|bigger)"
+      ],
+      "seconds": 5.01,
+      "model_calls": 1,
+      "completion_tokens": 174,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "decimal-9-9-or-9-11",
+      "runner": "tree",
+      "answer": "9.9 is greater than 9.11. When comparing decimals, place value matters: 9.9 equals 9.90, and since 90 hundredths is greater than 11 hundredths, 9.9 is larger.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 9.38,
+      "model_calls": 3,
+      "completion_tokens": 148,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "decimal-9-11-or-9-9",
+      "runner": "bare",
+      "answer": "To determine which number is greater, let's compare them step-by-step:\n\n1.  **Compare the whole number parts**: Both numbers have **9** before the decimal point. Since they are equal, we move to the next part.\n2.  **Compare the tenths place** (the first digit after the decimal):\n    *   In **9.11**, the tenths digit is **1**.\n    *   In **9.9**, the tenths digit is **9**.\n3.  **Conclusion**: Since 9 is greater than 1, **9.9** is the larger number.\n\nYou can also think of 9.9 as being equal to **9.90**. When comparing 9.11 and 9.90, it is clear that 9.90 is greater because the 9 in the tenths place is larger than the 1.\n\n**Answer:** 9.9 is greater.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 6.0,
+      "model_calls": 1,
+      "completion_tokens": 203,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "decimal-9-11-or-9-9",
+      "runner": "tree",
+      "answer": "9.9 is greater than 9.11. When comparing decimal numbers, you look at the place values from left to right: the tenths place (9 vs 1) determines the result, so 9.9 is larger.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 9.3,
+      "model_calls": 3,
+      "completion_tokens": 148,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "pi-or-3-14",
+      "runner": "bare",
+      "answer": "The number **$\\pi$** (pi) is greater than **3.14**.\n\nHere is the breakdown:\n*   The value of $\\pi$ is approximately **3.14159265...**\n*   The value of 3.14 is exactly **3.14000000...**\n\nSince the digit in the thousandths place of $\\pi$ (which is **1**) is greater than the digit in the thousandths place of 3.14 (which is **0**), $\\pi$ is larger.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 3.93,
+      "model_calls": 1,
+      "completion_tokens": 120,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "pi-or-3-14",
+      "runner": "tree",
+      "answer": "\u03c0 is greater than 3.14. This is because \u03c0 is an irrational number with a value of approximately 3.14159..., whereas 3.14 is a rounded, finite approximation that truncates the digits after the hundredths place. The evidence from web searches confirms that \u03c0's actual value exceeds 3.14.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 9.51,
+      "model_calls": 3,
+      "completion_tokens": 151,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "country-ending-in-lia",
+      "runner": "bare",
+      "answer": "One country whose name ends with \"lia\" is **Bulgaria**.\n\nIts capital city is **Sofia**.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "regex Australia[\\s\\S]*Canberra|Somalia[\\s\\S]*Mogadishu|Mongolia[\\s\\S]*Ula+n ?ba+tar"
+      ],
+      "seconds": 0.84,
+      "model_calls": 1,
+      "completion_tokens": 25,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "country-ending-in-lia",
+      "runner": "tree",
+      "answer": "Australia is a country whose name ends with 'lia', and its capital city is Canberra.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 7.84,
+      "model_calls": 3,
+      "completion_tokens": 109,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "capital-of-france",
+      "runner": "bare",
+      "answer": "The capital of France is **Paris**.\n\nLocated in the north-central part of the country, Paris is the country's political, economic, and cultural center. It is also the most populous city in France and one of the most populous cities in the world.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 1.83,
+      "model_calls": 1,
+      "completion_tokens": 52,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "capital-of-france",
+      "runner": "tree",
+      "answer": "The capital of France is Paris.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 7.57,
+      "model_calls": 3,
+      "completion_tokens": 97,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "largest-planet",
+      "runner": "bare",
+      "answer": "The largest planet in our solar system is **Jupiter**.\n\nIt is a gas giant with a mass more than twice that of all the other planets combined. Jupiter's equatorial diameter is approximately 139,820 kilometers (86,881 miles), making it significantly larger than the next largest planet, Saturn.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 2.5,
+      "model_calls": 1,
+      "completion_tokens": 69,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "largest-planet",
+      "runner": "tree",
+      "answer": "The largest planet in our solar system is Jupiter. Based on web search results, Jupiter has a diameter of approximately 142,800 kilometers, which is about 11 times that of Earth, and its mass is nearly 2.5 times that of all other planets combined.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 8.73,
+      "model_calls": 3,
+      "completion_tokens": 137,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "order-of-operations",
+      "runner": "bare",
+      "answer": "To solve the expression $8 + (6 \\times 2) - (3 + 5) \\div 4$, we follow the **Order of Operations** (PEMDAS/BODMAS):\n\n1.  **P**arentheses: Solve operations inside parentheses first.\n2.  **E**xponents: (None in this problem).\n3.  **M**ultiplication and **D**ivision: Solve from left to right.\n4.  **A**ddition and **S**ubtraction: Solve from left to right.\n\n### Step-by-Step Solution\n\n**Step 1: Solve the operations inside the parentheses.**\n*   First parenthesis: $(6 \\times 2) = 12$\n*   Second parenthesis: $(3 + 5) = 8$\n\nNow the expression looks like this:\n$$8 + 12 - 8 \\div 4$$\n\n**Step 2: Perform Multiplication and Division.**\n*   We have a division operation: $8 \\div 4 = 2$\n\nNow the expression looks like this:\n$$8 + 12 - 2$$\n\n**Step 3: Perform Addition and Subtraction.**\n*   Perform addition first: $8 + 12 = 20$\n*   Then perform subtraction: $20 - 2 = 18$\n\n### Final Answer\n$$18$$",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 9.56,
+      "model_calls": 1,
+      "completion_tokens": 302,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "order-of-operations",
+      "runner": "tree",
+      "answer": "The result of 8 + (6 \u00d7 2) \u2212 (3 + 5) \u00f7 4 is 18.\n\nStep-by-step calculation:\n1. 6 \u00d7 2 = 12\n2. 3 + 5 = 8\n3. 8 \u00f7 4 = 2\n4. 8 + 12 \u2212 2 = 18",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 15.63,
+      "model_calls": 5,
+      "completion_tokens": 276,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "distance-at-60-mph",
+      "runner": "bare",
+      "answer": "To find the distance the car will travel, you can use the formula:\n\n$$ \\text{Distance} = \\text{Speed} \\times \\text{Time} $$\n\nGiven:\n*   **Speed**: 60 miles per hour\n*   **Time**: 2 hours\n\nCalculation:\n$$ 60 \\text{ miles/hour} \\times 2 \\text{ hours} = 120 \\text{ miles} $$\n\nThe car will travel **120 miles**.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 3.66,
+      "model_calls": 1,
+      "completion_tokens": 107,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "distance-at-60-mph",
+      "runner": "tree",
+      "answer": "To find the distance, multiply the speed by the time: 60 miles per hour \u00d7 2 hours = 120 miles. The car will travel 120 miles.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 8.72,
+      "model_calls": 3,
+      "completion_tokens": 124,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "clock-angle-3-15",
+      "runner": "bare",
+      "answer": "To find the angle between the hour hand and the minute hand at 3:15, we can calculate the position of each hand relative to the 12 o'clock position (0 degrees).\n\n### Step 1: Calculate the position of the Minute Hand\nThe minute hand moves in a full circle ($360^\\circ$) in 60 minutes.\n- Speed of minute hand = $360^\\circ / 60 \\text{ min} = 6^\\circ$ per minute.\n- At 15 minutes past the hour, the minute hand is at:\n  $$15 \\times 6^\\circ = 90^\\circ$$\n  (This corresponds to the 3 o'clock position).\n\n### Step 2: Calculate the position of the Hour Hand\nThe hour hand moves in a full circle ($360^\\circ$) in 12 hours.\n- Speed of hour hand = $360^\\circ / 12 \\text{ hours} = 30^\\circ$ per hour.\n- Additionally, the hour hand moves as the minutes pass. It moves $30^\\circ$ in 60 minutes, which is $0.5^\\circ$ per minute ($30/60$).\n- At 3:15, the hour hand has moved past the 3 o'clock position by 15 minutes.\n  - Position at 3:00 = $3 \\times 30^\\circ = 90^\\circ$.\n  - Movement due to 15 minutes = $15 \\times 0.5^\\circ = 7.5^\\circ$.\n- Total position of the hour hand:\n  $$90^\\circ + 7.5^\\circ = 97.5^\\circ$$\n\n### Step 3: Calculate the difference\nNow, find the absolute difference between the two positions:\n$$ \\text{Angle} = | \\text{Position of Hour Hand} - \\text{Position of Minute Hand} | $$\n$$ \\text{Angle} = | 97.5^\\circ - 90^\\circ | $$\n$$ \\text{Angle} = 7.5^\\circ $$\n\n*(Note: The other angle around the circle would be $360^\\circ - 7.5^\\circ = 352.5^\\circ$, but the standard \"angle between hands\" refers to the smaller angle.)*\n\n### Conclusion\nThe angle between the hour hand and the minute hand at 3:15 is **$7.5^\\circ$**.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "regex \\b7(\\.5|\u00bd)\\s*(\u00b0|deg)"
+      ],
+      "seconds": 17.49,
+      "model_calls": 1,
+      "completion_tokens": 553,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "clock-angle-3-15",
+      "runner": "tree",
+      "answer": "The angle between the hour hand and the minute hand at 3:15 is 7.5\u00b0.\n\nThis is calculated by noting the minute hand points exactly at the 3 (90\u00b0 from 12 o'clock), while the hour hand, having moved 0.5\u00b0 per minute past the 3, is at 97.5\u00b0 (30\u00b0 for the hour plus 15 \u00d7 0.5\u00b0). The difference is 97.5\u00b0 - 90\u00b0 = 7.5\u00b0.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 11.94,
+      "model_calls": 3,
+      "completion_tokens": 205,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "letter-r-in-strawberry",
+      "runner": "bare",
+      "answer": "There are **3** \"r\"s in the word \"strawberry\".\n\nHere is the breakdown:\n1.  str**a**wb**e**rr**y** (Wait, let me re-check the spelling carefully).\n\nLet's spell it out letter by letter:\ns - t - **r** - a - w - b - e - **r** - **r** - y\n\n1.  The first **r** is after the \"t\".\n2.  The second **r** is after the \"e\".\n3.  The third **r** is right next to the second one.\n\nSo, the count is **3**.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "not_regex \\b(2|two)\\b"
+      ],
+      "seconds": 4.73,
+      "model_calls": 1,
+      "completion_tokens": 141,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "letter-r-in-strawberry",
+      "runner": "tree",
+      "answer": "The word \"strawberry\" contains three r's. They appear at the third, eighth, and ninth positions in the spelling s-t-r-a-w-b-e-r-r-y.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 8.61,
+      "model_calls": 3,
+      "completion_tokens": 124,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "number-rhyming-with-tree",
+      "runner": "bare",
+      "answer": "The word used to describe a tall plant is **tall** (or sometimes **lofty** or **high**, but \"tall\" is the most direct synonym).\n\nThe number that rhymes with \"tall\" is **four**.\n\n*   **Word:** Tall\n*   **Rhyming Number:** Four",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "regex \\b(three|3)\\b"
+      ],
+      "seconds": 2.17,
+      "model_calls": 1,
+      "completion_tokens": 67,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "number-rhyming-with-tree",
+      "runner": "tree",
+      "answer": "The word used to describe a tall plant is \"tree,\" and the number that rhymes with it is **three**.\n\nThis is confirmed by the \"Basic Number Rhyme Peg List 0-10\" found in the search results, which explicitly pairs the number **3** with the word **Tree**.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 11.72,
+      "model_calls": 3,
+      "completion_tokens": 217,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "letters-in-mississippi",
+      "runner": "bare",
+      "answer": "The word \"Mississippi\" contains **11** letters.\n\nHere is the breakdown:\n1.  M\n2.  i\n3.  s\n4.  s\n5.  i\n6.  s\n7.  s\n8.  i\n9.  p\n10. p\n11. i\n\nIt consists of 11 characters in total.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 2.72,
+      "model_calls": 1,
+      "completion_tokens": 85,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "letters-in-mississippi",
+      "runner": "tree",
+      "answer": "The word \"Mississippi\" contains 11 letters in total. This is confirmed by multiple sources, which also note that it uses only four unique letters (M, I, S, P) with a frequency breakdown of one M, four I's, four S's, and two P's.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 9.29,
+      "model_calls": 3,
+      "completion_tokens": 146,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "outer-planets-mission",
+      "runner": "bare",
+      "answer": "The mission you are describing is the **Voyager** program (specifically **Voyager 1** and **Voyager 2**).\n\nLaunched in 1977, these twin spacecraft were designed to explore the outer planets of our solar system (Jupiter, Saturn, Uranus, and Neptune) and their moons. They carried scientific instruments to study planetary atmospheres, magnetic fields, and surface features.\n\nAfter completing their primary objectives, they continued to travel beyond the orbit of Neptune into interstellar space. Today, **Voyager 1** is the first human-made object to enter interstellar space, while **Voyager 2** is the only spacecraft to have visited all four outer planets. They remain operational and continue to send back data from deep space.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 5.12,
+      "model_calls": 1,
+      "completion_tokens": 164,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "outer-planets-mission",
+      "runner": "tree",
+      "answer": "The Voyager program, specifically the twin spacecraft Voyager 1 and Voyager 2 launched in 1977, was the mission designed to explore the outer planets (Jupiter, Saturn, Uranus, and Neptune), study their atmospheres and moons, and travel into interstellar space.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 9.64,
+      "model_calls": 3,
+      "completion_tokens": 144,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "voyager-1-speed",
+      "runner": "bare",
+      "answer": "As of 2026, the speed of **Voyager 1** is approximately **17.1 kilometers per second** (about **38,200 miles per hour** or **61,500 kilometers per hour**).\n\nHere are a few key details about its velocity:\n*   **Current Status**: It is traveling faster than any human-made object ever launched from Earth.\n*   **Source of Speed**: A significant portion of this speed comes from the gravitational slingshot it performed around Jupiter in 1979, which accelerated it to its current hyperbolic trajectory.\n*   **Comparison**: To put this in perspective, Voyager 1 is moving at roughly **3.7% of the speed of light**.\n*   **Future Trajectory**: Because it is moving so fast relative to the Sun, it is expected to eventually escape the Sun's gravitational influence entirely, becoming an interstellar traveler.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 6.59,
+      "model_calls": 1,
+      "completion_tokens": 198,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "voyager-1-speed",
+      "runner": "tree",
+      "answer": "Based on the web search results, Voyager 1 is currently traveling at approximately **16.918 km/sec** (about 38,000 mph or 61,500 km/h) as it traverses interstellar space. This speed was recorded when the probe was at a distance of 171.42 AU from the Sun.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 10.48,
+      "model_calls": 3,
+      "completion_tokens": 171,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "voyager-2-speed",
+      "runner": "bare",
+      "answer": "The speed of the Voyager 2 spacecraft varies depending on whether you are measuring its speed relative to the Sun or relative to Earth, as it is constantly moving through the solar system and beyond.\n\n### 1. Speed Relative to the Sun\nThis is the most common metric used to describe the spacecraft's velocity. Voyager 2 is traveling at an average speed of approximately **12.2 miles per second (19.6 kilometers per second)**.\n\n*   **Context**: This speed is incredibly fast. To put it in perspective, Voyager 2 has been traveling at this speed for over 40 years. At this rate, it would take roughly 13,000 years to reach the nearest star (Proxima Centauri), even though it is currently much closer than that distance.\n*   **Variation**: The speed is not perfectly constant. As Voyager 2 moves through the gravitational wells of planets (like Jupiter and Saturn) during its flybys, it gains a small amount of speed (a \"gravity assist\"). However, as it moves away from the Sun and the influence of the planets diminishes, its speed relative to the Sun stabilizes.\n\n### 2. Speed Relative to Earth\nThe speed relative to Earth fluctuates significantly because Earth is also moving around the Sun at about 67,000 mph (107,000 km/h).\n*   When Voyager 2 is moving in the same direction as Earth, the relative speed is lower.\n*   When it is moving in the opposite direction, the relative speed is higher.\n*   Currently, as Voyager 2 travels outward through the heliosheath (the boundary of the solar system), its speed relative to Earth is roughly **10 to 12 miles per second (16 to 19 kilometers per second)**, depending on the specific orbital alignment at any given moment.\n\n### Current Status\nAs of late 2023 and into 2024, Voyager 2 is located about **14.8 billion miles (23.8 billion kilometers)** from Earth. It is currently traveling through the heliosheath and is expected to cross the heliopause (the edge of the solar system) in the coming years. Its instruments are still functioning, allowing NASA to track its precise trajectory and velocity.\n\n**Summary:**\n*   **Average speed relative to the Sun:** ~19.6 km/s (12.2 mi/s)\n*   **Current approximate speed relative to Earth:** ~16\u201319 km/s (10\u201312 mi/s)",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "regex \\b15(\\.\\d+)?\\s*(km/s|km per second|kilomet(er|re)s per second)|\\b3[45],?\\d{3}\\s*(mph|miles per hour)|\\b5[56],?\\d{3}\\s*(km/h|kph|kilomet(er|re)s per hour)"
+      ],
+      "seconds": 17.9,
+      "model_calls": 1,
+      "completion_tokens": 543,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "voyager-2-speed",
+      "runner": "tree",
+      "answer": "As of 2026-11-07, the speed of Voyager 2 relative to the Sun is approximately **15.4 km/s** (specifically 15.341 km/s based on historical data), though this figure has not been verified with new measurements since 2012. The exact current distance from Earth cannot be confirmed beyond the last known detection in 2012, and its orbital period around the Sun cannot be accurately calculated without precise, up-to-date orbital parameters.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 138.59,
+      "model_calls": 32,
+      "completion_tokens": 2313,
+      "tool_calls": [
+        {
+          "name": "web_search",
+          "arguments": "{\"query\":\"Voyager 2 speed relative to Sun 2026\",\"max_results\":5}"
+        },
+        {
+          "name": "web_fetch",
+          "arguments": "{\"url\":\"https://en.wikipedia.org/wiki/Voyager_2\",\"focus\":\"Voyager 2 speed relative to Sun current or latest measured value\"}"
+        }
+      ],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "galaxies-in-universe",
+      "runner": "bare",
+      "answer": "There is no single, exact number of galaxies in the universe because we cannot see the entire cosmos, and our current models of the universe's size and structure are still being refined. However, astronomers have made very strong estimates based on data from the **Hubble Space Telescope** and the **James Webb Space Telescope**.\n\nHere is the breakdown of how that number is derived:\n\n1.  **The Observable Universe**: We can only see a finite portion of the universe (the \"observable universe\"), which is a sphere with a radius of about 46.5 billion light-years.\n2.  **The Hubble Deep Field**: In the 1990s, the Hubble Space Telescope pointed at a tiny, seemingly empty patch of sky for several days. It revealed thousands of galaxies in that small area. By extrapolating this density across the entire observable universe, scientists estimated there are roughly **100 to 200 billion** galaxies.\n3.  **The James Webb Update**: More recently, the James Webb Space Telescope has observed even fainter and more distant galaxies than Hubble could. These observations suggest that the early universe was much more populated with galaxies than previously thought. Some studies based on JWEB data have revised the estimate upward, suggesting there could be as many as **2 trillion** galaxies in the observable universe.\n\n**Why the number is uncertain:**\n*   **Dark Matter and Dark Energy**: We cannot see these components, and they influence how galaxies form and move, making precise counting difficult.\n*   **The Edge of the Universe**: We don't know if the universe is infinite or if it has a boundary beyond our observable horizon. If the universe is infinite, the total number of galaxies would be infinite.\n*   **Galaxy Mergers**: Galaxies constantly collide and merge. Some of the \"trillions\" might be temporary structures formed by merging smaller galaxies that haven't fully consolidated yet.\n\n### Conclusion\n\nWhile the exact number remains an estimate, the most widely accepted current scientific consensus is that there are approximately **2 trillion** galaxies in the observable universe.\n\n*   **Older Estimate**: ~100\u2013200 billion\n*   **Current Best Estimate**: ~2 trillion",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 16.17,
+      "model_calls": 1,
+      "completion_tokens": 460,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "galaxies-in-universe",
+      "runner": "tree",
+      "answer": "Based on the web search results, estimates for the number of galaxies in the observable universe vary significantly depending on the methodology used. One estimate suggests there are approximately 2 trillion or more galaxies, while another estimate places the number between 100 and 200 billion. Because we can only observe a small region of the universe, these figures remain estimates rather than exact counts.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 10.75,
+      "model_calls": 3,
+      "completion_tokens": 171,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "apples-bought",
+      "runner": "bare",
+      "answer": "If a person starts with 3 apples and buys 2 more, we can calculate the total by adding the two amounts together:\n\n$$3 + 2 = 5$$\n\nSo, the person now has **5** apples.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 1.54,
+      "model_calls": 1,
+      "completion_tokens": 48,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "apples-bought",
+      "runner": "tree",
+      "answer": "To find the total number of apples, start with the initial amount of 3 apples and add the 2 more apples purchased. The calculation is 3 + 2 = 5. Therefore, the person now has 5 apples.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 9.28,
+      "model_calls": 3,
+      "completion_tokens": 130,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "feathers-or-bricks",
+      "runner": "bare",
+      "answer": "They are **exactly the same weight**.\n\nSince both items weigh **1 kilogram**, they have the same mass. The common riddle relies on the fact that bricks are much denser and smaller in volume than feathers, which can trick the brain into thinking the heavier object is the one with more mass. However, if the weight is specified as exactly 1 kg for both, they are equal.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 2.91,
+      "model_calls": 1,
+      "completion_tokens": 81,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "feathers-or-bricks",
+      "runner": "tree",
+      "answer": "Both 1 kilogram of feathers and 1 kilogram of bricks weigh exactly the same because they both have a mass of 1 kilogram; the difference lies in their volume and density, not their weight.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 9.27,
+      "model_calls": 3,
+      "completion_tokens": 121,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "red-and-green-balls",
+      "runner": "bare",
+      "answer": "To find the total number of balls, you simply add the number of red balls to the number of green balls:\n\n*   Red balls: 3\n*   Green balls: 2\n\n$3 + 2 = 5$\n\nYou have **5** balls in total.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 1.8,
+      "model_calls": 1,
+      "completion_tokens": 59,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "red-and-green-balls",
+      "runner": "tree",
+      "answer": "You have 5 balls in total. This is calculated by adding the 3 red balls and the 2 green balls together (3 + 2 = 5).",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 8.74,
+      "model_calls": 3,
+      "completion_tokens": 112,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "ten-minus-one",
+      "runner": "bare",
+      "answer": "If you subtract 1 from 10, the result is **9**.\n\nCalculation: $10 - 1 = 9$",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 1.12,
+      "model_calls": 1,
+      "completion_tokens": 30,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "ten-minus-one",
+      "runner": "tree",
+      "answer": "The result of subtracting 1 from 10 is 9.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 8.35,
+      "model_calls": 3,
+      "completion_tokens": 109,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "doubling-sequence",
+      "runner": "bare",
+      "answer": "The sequence you provided is a geometric progression where each term is multiplied by 2 to get the next term:\n*   $2 \\times 2 = 4$\n*   $4 \\times 2 = 8$\n*   $8 \\times 2 = 16$\n\nFollowing this pattern, the next number is calculated as:\n$16 \\times 2 = 32$\n\nThe next number in the sequence is **32**.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 3.29,
+      "model_calls": 1,
+      "completion_tokens": 99,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "doubling-sequence",
+      "runner": "tree",
+      "answer": "The next number in the sequence is 32, found by multiplying the last term, 16, by the common ratio of 2 (16 \u00d7 2 = 32).",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 9.46,
+      "model_calls": 3,
+      "completion_tokens": 129,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "burying-survivors",
+      "runner": "bare",
+      "answer": "They don't bury the survivors.\n\nThe premise of the question contains a logical contradiction: **survivors** are people who have survived the crash and are alive. Therefore, they cannot be buried.\n\nAdditionally, while the crash occurred on the border, the location of the crash itself (whether in the US or Canada) is irrelevant to the fact that living people are not buried.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 2.66,
+      "model_calls": 1,
+      "completion_tokens": 78,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "burying-survivors",
+      "runner": "tree",
+      "answer": "The survivors are not buried because they are alive; by definition, you do not bury survivors.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 8.34,
+      "model_calls": 3,
+      "completion_tokens": 106,
+      "tool_calls": [],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "months-with-28-days",
+      "runner": "bare",
+      "answer": "All **12** months have at least 28 days.\n\nWhile February is the only month that has exactly 28 days in a common year (and 29 in a leap year), every other month has 30 or 31 days. Since 28 days is less than 30 or 31, all months in the calendar contain that many days.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 2.83,
+      "model_calls": 1,
+      "completion_tokens": 81,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "months-with-28-days",
+      "runner": "tree",
+      "answer": "All 12 months have at least 28 days, but only February has exactly 28 days in common years and 29 days in leap years.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 8.2,
+      "model_calls": 3,
+      "completion_tokens": 118,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "square-root-or-cube-root",
+      "runner": "bare",
+      "answer": "To determine which value is greater, let's calculate each one step by step:\n\n1.  **The square root of 16**:\n    The square root of a number $x$ is a value that, when multiplied by itself, equals $x$.\n    $$ \\sqrt{16} = 4 $$\n    (Because $4 \\times 4 = 16$)\n\n2.  **The cube root of 27**:\n    The cube root of a number $x$ is a value that, when multiplied by itself three times, equals $x$.\n    $$ \\sqrt[3]{27} = 3 $$\n    (Because $3 \\times 3 \\times 3 = 27$)\n\n**Comparison**:\nNow we compare the two results:\n$$ 4 > 3 $$\n\n**Conclusion**:\nThe **square root of 16** is greater.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 6.24,
+      "model_calls": 1,
+      "completion_tokens": 195,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "square-root-or-cube-root",
+      "runner": "tree",
+      "answer": "The square root of 16 is 4, and the cube root of 27 is 3; therefore, the square root of 16 is greater.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 8.45,
+      "model_calls": 3,
+      "completion_tokens": 122,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "boiling-eggs",
+      "runner": "bare",
+      "answer": "It will still take **1 minute**.\n\nHere is the reasoning:\nBoiling eggs is a process that happens simultaneously in a pot of water. Once the water reaches a rolling boil, you can drop all 10 eggs in at the same time. They will cook together, so the time required does not increase with the number of eggs (assuming the pot is large enough to hold them all without overcrowding the heat source).",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 2.8,
+      "model_calls": 1,
+      "completion_tokens": 87,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "boiling-eggs",
+      "runner": "tree",
+      "answer": "The time required to boil 10 eggs is 1 minute. Boiling eggs is a parallel process where multiple eggs are cooked simultaneously in the same pot of water; therefore, adding more eggs does not increase the total time needed, provided the pot has enough capacity.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 8.94,
+      "model_calls": 3,
+      "completion_tokens": 138,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "decimal-9-9-or-9-11",
+      "runner": "bare",
+      "answer": "The number **9.9** is greater than 9.11.\n\nHere is the step-by-step comparison:\n\n1.  **Compare the whole numbers**: Both numbers have the same whole number part, which is **9**.\n2.  **Compare the tenths place** (the first digit after the decimal point):\n    *   In **9.9**, the digit is **9**.\n    *   In **9.11**, the digit is **1**.\n3.  **Conclusion**: Since 9 is greater than 1, **9.9** is the larger number.\n\nIt is a common mistake to think that 9.11 is larger because it has more digits, but in decimal notation, the position of the digit determines its value, not the total count of digits.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "not_regex 9\\.11 is (greater|larger|bigger)"
+      ],
+      "seconds": 6.07,
+      "model_calls": 1,
+      "completion_tokens": 171,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "decimal-9-9-or-9-11",
+      "runner": "tree",
+      "answer": "9.9 is greater than 9.11. When comparing decimals, you look at the place values: both numbers have 9 in the ones place, but 9.9 has a 9 in the tenths place while 9.11 has a 1 in the tenths place. Since 9 is greater than 1, 9.9 is the larger number.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 10.27,
+      "model_calls": 3,
+      "completion_tokens": 175,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "decimal-9-11-or-9-9",
+      "runner": "bare",
+      "answer": "To determine which number is greater, let's compare them step-by-step:\n\n1.  **Compare the whole number parts**: Both numbers have **9** before the decimal point. Since they are equal, we move to the next part.\n2.  **Compare the tenths place** (the first digit after the decimal):\n    *   In **9.11**, the digit is **1**.\n    *   In **9.9**, the digit is **9**.\n3.  **Conclusion**: Since 9 is greater than 1, **9.9** is the larger number.\n\nIt is a common mistake to think that 9.11 is greater because it has more digits, but in decimal notation, the position of the digit determines its value. 9.9 is actually equal to 9.90.\n\n**Answer:** 9.9 is greater.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "not_regex 9\\.11 is (greater|larger|bigger)"
+      ],
+      "seconds": 5.8,
+      "model_calls": 1,
+      "completion_tokens": 188,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "decimal-9-11-or-9-9",
+      "runner": "tree",
+      "answer": "To compare 9.11 and 9.9, first express both numbers with the same number of decimal places by adding a zero to 9.9, making it 9.90. Next, compare the digits from left to right: both numbers have 9 in the ones place. In the tenths place, 9.90 has a 9 while 9.11 has a 1. Since 9 is greater than 1, 9.90 is larger than 9.11. Therefore, 9.9 is greater.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 11.9,
+      "model_calls": 3,
+      "completion_tokens": 214,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "pi-or-3-14",
+      "runner": "bare",
+      "answer": "The number **$\\pi$ (pi)** is greater than **3.14**.\n\nHere is the breakdown:\n*   The value of $\\pi$ is approximately **3.14159265...**\n*   The value of 3.14 is exactly **3.14000000...**\n\nWhen comparing the two digit by digit:\n1.  Both have 3 in the ones place.\n2.  Both have 1 in the tenths place.\n3.  Both have 4 in the hundredths place.\n4.  In the thousandths place, $\\pi$ has a **1**, while 3.14 has a **0**.\n\nSince $1 > 0$, it follows that $\\pi > 3.14$.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 6.16,
+      "model_calls": 1,
+      "completion_tokens": 171,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "pi-or-3-14",
+      "runner": "tree",
+      "answer": "\u03c0 is greater than 3.14 because \u03c0 is an irrational number approximately equal to 3.14159..., whereas 3.14 is a finite rounded approximation. The evidence confirms that the exact value of \u03c0 exceeds the truncated decimal 3.14.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 9.34,
+      "model_calls": 3,
+      "completion_tokens": 136,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "country-ending-in-lia",
+      "runner": "bare",
+      "answer": "One country whose name ends with \"lia\" is **Bulgaria**.\n\nIts capital city is **Sofia**.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "regex Australia[\\s\\S]*Canberra|Somalia[\\s\\S]*Mogadishu|Mongolia[\\s\\S]*Ula+n ?ba+tar"
+      ],
+      "seconds": 0.86,
+      "model_calls": 1,
+      "completion_tokens": 25,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "country-ending-in-lia",
+      "runner": "tree",
+      "answer": "Australia is a country whose name ends with 'lia', and its capital city is Canberra.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 7.75,
+      "model_calls": 3,
+      "completion_tokens": 101,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "capital-of-france",
+      "runner": "bare",
+      "answer": "The capital of France is **Paris**.\n\nLocated in the north-central part of the country, Paris is the nation's political, economic, and cultural center. It is also the most populous city in France and one of the most influential cities in the world.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 1.63,
+      "model_calls": 1,
+      "completion_tokens": 52,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "capital-of-france",
+      "runner": "tree",
+      "answer": "The capital of France is Paris. This is confirmed by multiple sources, including Wikipedia, which states that Paris is the capital and largest city of France as of January 2026.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 8.54,
+      "model_calls": 3,
+      "completion_tokens": 128,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "largest-planet",
+      "runner": "bare",
+      "answer": "The largest planet in our solar system is **Jupiter**.\n\nIt is a gas giant with a mass more than twice that of all the other planets combined. Jupiter's equatorial diameter is approximately 139,820 kilometers (86,881 miles), making it significantly larger than the next largest planet, Saturn.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 2.15,
+      "model_calls": 1,
+      "completion_tokens": 69,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "largest-planet",
+      "runner": "tree",
+      "answer": "The largest planet in our solar system is Jupiter. Based on evidence from NASA and WorldAtlas, Jupiter is the largest by size, mass, and volume, with a diameter of approximately 142,800 kilometers (about 11 times that of Earth). It is a gas giant located as the fifth planet from the Sun.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 9.49,
+      "model_calls": 3,
+      "completion_tokens": 146,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "order-of-operations",
+      "runner": "bare",
+      "answer": "To solve the expression $8 + (6 \\times 2) - (3 + 5) \\div 4$, we follow the **Order of Operations (PEMDAS/BODMAS)**:\n\n1.  **P**arentheses: Solve operations inside parentheses first.\n2.  **E**xponents: (None in this problem)\n3.  **M**ultiplication and **D**ivision: Solve from left to right.\n4.  **A**ddition and **S**ubtraction: Solve from left to right.\n\n### Step-by-Step Solution\n\n**Step 1: Solve the operations inside the parentheses.**\n*   First parenthesis: $(6 \\times 2) = 12$\n*   Second parenthesis: $(3 + 5) = 8$\n\nNow the expression looks like this:\n$$8 + 12 - 8 \\div 4$$\n\n**Step 2: Perform Multiplication and Division.**\n*   We have a division operation: $8 \\div 4 = 2$\n\nNow the expression looks like this:\n$$8 + 12 - 2$$\n\n**Step 3: Perform Addition and Subtraction (from left to right).**\n*   First, add: $8 + 12 = 20$\n*   Next, subtract: $20 - 2 = 18$\n\n### Final Answer\n$$18$$",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 10.16,
+      "model_calls": 1,
+      "completion_tokens": 307,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "order-of-operations",
+      "runner": "tree",
+      "answer": "To solve 8 + (6 \u00d7 2) \u2212 (3 + 5) \u00f7 4, first calculate the multiplication inside the first parentheses: 6 \u00d7 2 equals 12. Next, calculate the addition inside the second parentheses: 3 + 5 equals 8. Then, divide that result by 4: 8 \u00f7 4 equals 2. Substitute these values back into the expression to get 8 + 12 \u2212 2. Finally, perform the addition and subtraction from left to right: 8 + 12 is 20, and 20 \u2212 2 is 18. The final answer is 18.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 12.47,
+      "model_calls": 3,
+      "completion_tokens": 234,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "distance-at-60-mph",
+      "runner": "bare",
+      "answer": "To find the distance the car will travel, you can use the formula:\n\n$$ \\text{Distance} = \\text{Speed} \\times \\text{Time} $$\n\nGiven:\n*   **Speed**: 60 miles per hour\n*   **Time**: 2 hours\n\nCalculation:\n$$ 60 \\text{ miles/hour} \\times 2 \\text{ hours} = 120 \\text{ miles} $$\n\nThe car will travel **120 miles**.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 4.03,
+      "model_calls": 1,
+      "completion_tokens": 107,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "distance-at-60-mph",
+      "runner": "tree",
+      "answer": "To find the distance, multiply the speed by the time: 60 miles per hour \u00d7 2 hours = 120 miles. The car will travel 120 miles.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 9.08,
+      "model_calls": 3,
+      "completion_tokens": 128,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "clock-angle-3-15",
+      "runner": "bare",
+      "answer": "To find the angle between the hour hand and the minute hand at 3:15, we can calculate the position of each hand relative to the 12 o'clock position (0 degrees).\n\n### Step 1: Calculate the position of the Minute Hand\nThe minute hand moves in a full circle ($360^\\circ$) in 60 minutes.\n- Speed of minute hand = $360^\\circ / 60 \\text{ min} = 6^\\circ$ per minute.\n- At 15 minutes past the hour, the minute hand is at the 3 position.\n- Angle of minute hand = $15 \\times 6^\\circ = 90^\\circ$.\n\n### Step 2: Calculate the position of the Hour Hand\nThe hour hand moves in a full circle ($360^\\circ$) in 12 hours.\n- Speed of hour hand = $360^\\circ / 12 \\text{ hours} = 30^\\circ$ per hour.\n- Additionally, the hour hand moves as the minutes pass. It moves $30^\\circ$ in 60 minutes, which is $0.5^\\circ$ per minute ($30/60$).\n- At 3:15, the hour hand has moved past the 3 o'clock position.\n- Base position (at 3:00) = $3 \\times 30^\\circ = 90^\\circ$.\n- Movement due to 15 minutes = $15 \\times 0.5^\\circ = 7.5^\\circ$.\n- Total angle of hour hand = $90^\\circ + 7.5^\\circ = 97.5^\\circ$.\n\n### Step 3: Calculate the difference\nNow, find the absolute difference between the two angles:\n$$ \\text{Angle} = | \\text{Hour Hand Angle} - \\text{Minute Hand Angle} | $$\n$$ \\text{Angle} = | 97.5^\\circ - 90^\\circ | $$\n$$ \\text{Angle} = 7.5^\\circ $$\n\n*(Note: The smaller angle between two hands is usually required. Since $7.5^\\circ < 180^\\circ$, this is the final answer.)*\n\n### Conclusion\nThe angle between the hour hand and the minute hand at 3:15 is **$7.5^\\circ$**.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "regex \\b7(\\.5|\u00bd)\\s*(\u00b0|deg)"
+      ],
+      "seconds": 17.47,
+      "model_calls": 1,
+      "completion_tokens": 526,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "clock-angle-3-15",
+      "runner": "tree",
+      "answer": "The angle between the hour and minute hands at 3:15 is 7.5\u00b0.\n\n**Calculation:**\n1.  **Minute hand position:** At 15 minutes, the minute hand points exactly at the 3. Since each hour mark represents 30\u00b0 (360\u00b0 / 12), the minute hand is at 15 \u00d7 6\u00b0 = 90\u00b0 from the 12 o'clock position.\n2.  **Hour hand position:** The hour hand moves 30\u00b0 per hour and 0.5\u00b0 per minute. At 3:15, it has moved past the 3 by 15 minutes.\n    *   Position = (3 hours \u00d7 30\u00b0) + (15 minutes \u00d7 0.5\u00b0)\n    *   Position = 90\u00b0 + 7.5\u00b0 = 97.5\u00b0 from the 12 o'clock position.\n3.  **Difference:** Subtract the minute hand's angle from the hour hand's angle: 97.5\u00b0 - 90\u00b0 = 7.5\u00b0.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 16.18,
+      "model_calls": 3,
+      "completion_tokens": 331,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "letter-r-in-strawberry",
+      "runner": "bare",
+      "answer": "There are **3** \"r\"s in the word \"strawberry\".\n\nHere is the breakdown:\n1.  str**a**wb**e**rr**y** (Wait, let me re-check the spelling carefully).\n\nLet's spell it out letter by letter:\ns - t - **r** - a - w - b - e - **r** - r - y\n\n1.  The first **r** is after the \"t\".\n2.  The second **r** is after the \"e\".\n3.  The third **r** is right next to the second one.\n\nSo, the count is **3**.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "not_regex \\b(2|two)\\b"
+      ],
+      "seconds": 5.14,
+      "model_calls": 1,
+      "completion_tokens": 139,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "letter-r-in-strawberry",
+      "runner": "tree",
+      "answer": "The word \"strawberry\" contains three r's.\n\nCounting them step by step:\n1. The first 'r' is in the third position (s-t-**r**-a-w-b-e-r-r-y).\n2. The second 'r' is in the eighth position (s-t-r-a-w-b-e-**r**-r-y).\n3. The third 'r' is in the ninth position (s-t-r-a-w-b-e-r-**r**-y).\n\nWhile some AI models have historically miscounted this as two, the correct count is three.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "not_regex \\b(2|two)\\b"
+      ],
+      "seconds": 12.23,
+      "model_calls": 3,
+      "completion_tokens": 208,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "number-rhyming-with-tree",
+      "runner": "bare",
+      "answer": "The word used to describe a tall plant is **tall** (or sometimes **lofty** or **towering**, but \"tall\" is the most direct synonym).\n\nThe number that rhymes with \"tall\" is **four** (or **fourteen**, **fourty**, etc.).\n\n*   **Word:** Tall\n*   **Rhyming Number:** Four",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "regex \\b(three|3)\\b"
+      ],
+      "seconds": 2.89,
+      "model_calls": 1,
+      "completion_tokens": 80,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "number-rhyming-with-tree",
+      "runner": "tree",
+      "answer": "The word used to describe a tall plant is \"tree,\" and the number that rhymes with it is **three**.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 8.3,
+      "model_calls": 3,
+      "completion_tokens": 113,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "letters-in-mississippi",
+      "runner": "bare",
+      "answer": "The word \"Mississippi\" contains **11** letters.\n\nHere is the breakdown:\n1.  M\n2.  i\n3.  s\n4.  s\n5.  i\n6.  s\n7.  s\n8.  i\n9.  p\n10. p\n11. i\n\nIt consists of 11 characters in total.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 2.97,
+      "model_calls": 1,
+      "completion_tokens": 85,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "letters-in-mississippi",
+      "runner": "tree",
+      "answer": "The word \"Mississippi\" contains 11 letters. This is confirmed by the search results, which state that the total number of letters including repetitions is 11 (M: 1, I: 4, S: 4, P: 2).",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 9.25,
+      "model_calls": 3,
+      "completion_tokens": 142,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "outer-planets-mission",
+      "runner": "bare",
+      "answer": "The mission you are referring to is the **Voyager** mission (specifically **Voyager 1** and **Voyager 2**).\n\nLaunched in 1977, these twin spacecraft were designed to explore the outer planets of our solar system\u2014Jupiter, Saturn, Uranus, and Neptune\u2014and study their atmospheres, moons, and rings. They successfully completed their primary objectives by visiting all four gas giants.\n\nAfter leaving the solar system, they continued to explore the heliosheath (the boundary of the solar system) and interstellar space. **Voyager 1** became the first human-made object to enter interstellar space in 2012, while **Voyager 2** followed shortly after. Today, they remain the only human-made objects to have traveled through interstellar space, continuing to send back data from over 40 billion kilometers away.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 6.1,
+      "model_calls": 1,
+      "completion_tokens": 189,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "outer-planets-mission",
+      "runner": "tree",
+      "answer": "The Voyager program, specifically the twin spacecraft Voyager 1 and Voyager 2 launched in 1977, was the mission designed to explore the outer planets (Jupiter, Saturn, Uranus, and Neptune), study their atmospheres and moons, and travel into interstellar space.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 9.61,
+      "model_calls": 3,
+      "completion_tokens": 144,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "voyager-1-speed",
+      "runner": "bare",
+      "answer": "As of 2026, the speed of **Voyager 1** is approximately **17.1 kilometers per second** (about **38,400 miles per hour** or **61,800 kilometers per hour**).\n\nHere are a few key details about its velocity:\n*   **Current Status:** It is currently traveling faster than any human-made object ever has.\n*   **Speed Relative to the Sun:** This speed is measured relative to the Sun.\n*   **Speed Relative to Earth:** Because Earth is also moving around the Sun, the speed of Voyager 1 relative to Earth varies slightly depending on the alignment of the two planets, but it is generally much faster than Earth's orbital speed.\n*   **Trajectory:** It is on a hyperbolic trajectory, meaning it will never return to the Solar System. It is currently in interstellar space, having crossed the heliopause in 2012.\n\n*Note: The exact speed fluctuates slightly due to gravitational interactions with the Sun and planets, but 17.1 km/s is the widely accepted current figure.*",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 8.89,
+      "model_calls": 1,
+      "completion_tokens": 237,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "voyager-1-speed",
+      "runner": "tree",
+      "answer": "Voyager 1 is currently traveling at approximately 16.918 km/sec (about 61,500 km/h or 38,200 mph), as reported by sources including Wandering Astronomer and Science Focus. This speed was measured at a distance of 171.42 AU from the Sun, and the probe is projected to reach another star in roughly 38,200 years.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 10.82,
+      "model_calls": 3,
+      "completion_tokens": 186,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "voyager-2-speed",
+      "runner": "bare",
+      "answer": "The speed of the **Voyager 2** spacecraft varies depending on whether you are measuring its speed relative to the Sun or relative to Earth, and it changes over time as the spacecraft moves further away from the Sun.\n\nHere are the key figures:\n\n*   **Speed relative to the Sun:** As of late 2023/early 2024, Voyager 2 is traveling at approximately **35,500 miles per hour (57,100 km/h)** or about **9.9 km/s** relative to the Sun. This speed is achieved due to the gravity assists it received from Jupiter and Saturn, which accelerated it significantly.\n*   **Speed relative to Earth:** Because Earth is also moving around the Sun, the speed of Voyager 2 relative to Earth fluctuates. Currently, it is traveling at roughly **10,000 miles per hour (16,000 km/h)** relative to Earth.\n*   **Historical Peak:** At its closest approach to the Sun (perihelion) in 1980, Voyager 2 reached a maximum speed of about **120,000 mph (193,000 km/h)** relative to the Sun.\n\n**Important Context:**\nVoyager 2 is currently the fastest human-made object ever launched into space. It is traveling faster than any other probe currently in the solar system. Its speed is sufficient to reach the interstellar medium, and it is expected to continue traveling at this velocity for billions of years, eventually escaping the Sun's gravitational influence entirely.\n\n**Summary:**\n*   **Current Speed (relative to Sun):** ~35,500 mph (57,100 km/h)\n*   **Current Speed (relative to Earth):** ~10,000 mph (16,000 km/h)",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 15.15,
+      "model_calls": 1,
+      "completion_tokens": 397,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "voyager-2-speed",
+      "runner": "tree",
+      "answer": "Voyager 2 travels at approximately 15.4 kilometers per second (about 55,000 kilometers per hour) relative to the Sun.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 71.84,
+      "model_calls": 17,
+      "completion_tokens": 1223,
+      "tool_calls": [
+        {
+          "name": "web_fetch",
+          "arguments": "{\"url\":\"https://www.wionews.com/photos/how-fast-is-voyager-2-travelling-and-what-does-that-speed-mean-in-space-1756941483935\",\"focus\":\"Voyager 2 current speed relative to the Sun in km/s and km/h\"}"
+        }
+      ],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "galaxies-in-universe",
+      "runner": "bare",
+      "answer": "Estimating the total number of galaxies in the universe is one of the most challenging tasks in astronomy because we can only observe a tiny fraction of it. The answer depends heavily on the method used and the assumptions made about the universe's structure.\n\nHere is a breakdown of the current scientific estimates:\n\n### 1. The Observable Universe\nAstronomers can only count galaxies within the **observable universe**, which is the region of space from which light has had time to reach us since the Big Bang (about 13.8 billion years ago).\n\n*   **Hubble's Early Estimate:** For decades, the Hubble Space Telescope estimated there were roughly **100 billion** ($10^{11}$) galaxies.\n*   **The Hubble Ultra-Deep Field (HUDF):** In 2016, a team of astronomers analyzed data from the HUDF and found that the number of galaxies was actually much higher than previously thought. They estimated there are approximately **2 trillion** ($2 \\times 10^{12}$) galaxies in the observable universe.\n*   **The Planck Satellite Update:** In 2016, data from the European Space Agency's Planck satellite suggested that the number might be even higher, closer to **2.2 trillion** ($2.2 \\times 10^{12}$). This is based on the idea that many galaxies are extremely faint and small, making them difficult to detect with current telescopes.\n\n### 2. The Entire Universe\nIf we consider the **entire universe** (which may be infinite or much larger than the observable part), the number becomes impossible to calculate precisely. However, cosmologists use the **Cosmological Principle**, which assumes the universe is homogeneous and isotropic (the same everywhere) on large scales.\n\n*   Based on this assumption, if the universe is infinite, the number of galaxies is likely **infinite**.\n*   If the universe is finite but much larger than the observable part, the number would be **trillions upon trillions**, far exceeding the $2.2$ trillion figure for the observable section.\n\n### Important Caveats\nThere is a significant debate regarding the count of **2 trillion**. Some astronomers argue that this number is an overestimate because it relies on statistical models that may not account for the distribution of galaxies accurately across different redshifts (distances). Other studies suggest the number might be closer to **200 billion** ($2 \\times 10^{11}$), similar to Hubble's original estimate.\n\n### Conclusion\nWhile we cannot know the exact number for the entire universe, the most widely accepted estimate for the **observable universe** is:\n\n**Approximately 2 trillion ($2 \\times 10^{12}$) galaxies.**\n\nHowever, due to the limitations of our telescopes and the possibility that many galaxies are too faint to see, the true number could be significantly higher or lower.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 22.49,
+      "model_calls": 1,
+      "completion_tokens": 614,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "galaxies-in-universe",
+      "runner": "tree",
+      "answer": "Based on the web search results, estimates for the number of galaxies in the observable universe vary significantly depending on the method used. One estimate suggests there are approximately 2 trillion or more galaxies, while another estimate places the number between 100 and 200 billion. The exact count remains uncertain because astronomers can only make estimates based on observations of small regions of the universe.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 10.57,
+      "model_calls": 3,
+      "completion_tokens": 178,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "apples-bought",
+      "runner": "bare",
+      "answer": "If a person starts with 3 apples and buys 2 more, we can calculate the total by adding the two amounts together:\n\n$$3 + 2 = 5$$\n\nSo, the person now has **5** apples.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 1.68,
+      "model_calls": 1,
+      "completion_tokens": 48,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "apples-bought",
+      "runner": "tree",
+      "answer": "Starting with 3 apples and adding 2 more gives a total of 5 apples (3 + 2 = 5).",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 8.02,
+      "model_calls": 3,
+      "completion_tokens": 108,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "feathers-or-bricks",
+      "runner": "bare",
+      "answer": "They are **exactly the same weight**.\n\nSince both items weigh **1 kilogram**, they have the same mass. The common riddle plays on the misconception that bricks are heavier because they feel denser and more substantial to the touch, but if the mass is specified as identical, the weight is identical regardless of the material.\n\n*(Note: If you were asking about **volume**, the 1 kilogram of bricks would take up much less space than the 1 kilogram of feathers.)*",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "not_regex bricks are heavier|feathers are heavier"
+      ],
+      "seconds": 3.28,
+      "model_calls": 1,
+      "completion_tokens": 99,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "feathers-or-bricks",
+      "runner": "tree",
+      "answer": "1 kilogram of feathers and 1 kilogram of bricks have exactly the same mass, which is 1 kilogram. While bricks are denser and occupy less space, the weight is identical because both quantities are defined as 1 kilogram.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 9.02,
+      "model_calls": 3,
+      "completion_tokens": 130,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "red-and-green-balls",
+      "runner": "bare",
+      "answer": "To find the total number of balls, you simply add the number of red balls to the number of green balls:\n\n*   Red balls: 3\n*   Green balls: 2\n\n$3 + 2 = 5$\n\nYou have **5** balls in total.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 2.17,
+      "model_calls": 1,
+      "completion_tokens": 59,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "red-and-green-balls",
+      "runner": "tree",
+      "answer": "You have 5 balls in total. This is calculated by adding the 3 red balls and the 2 green balls together (3 + 2 = 5).",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 9.26,
+      "model_calls": 3,
+      "completion_tokens": 128,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "ten-minus-one",
+      "runner": "bare",
+      "answer": "If you subtract 1 from 10, the result is **9**.\n\nCalculation: $10 - 1 = 9$",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 1.46,
+      "model_calls": 1,
+      "completion_tokens": 30,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "ten-minus-one",
+      "runner": "tree",
+      "answer": "The result of subtracting 1 from 10 is 9.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 8.08,
+      "model_calls": 3,
+      "completion_tokens": 102,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "doubling-sequence",
+      "runner": "bare",
+      "answer": "The sequence you provided is a geometric progression where each term is multiplied by 2 to get the next term:\n*   $2 \\times 2 = 4$\n*   $4 \\times 2 = 8$\n*   $8 \\times 2 = 16$\n\nFollowing this pattern, the next number is calculated as:\n$16 \\times 2 = 32$\n\nThe next number in the sequence is **32**.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 3.48,
+      "model_calls": 1,
+      "completion_tokens": 99,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "doubling-sequence",
+      "runner": "tree",
+      "answer": "The sequence 2, 4, 8, 16 is a geometric progression where each term is multiplied by 2 to get the next term. To find the next number, multiply 16 by 2, which equals 32. The next number in the sequence is 32.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 10.08,
+      "model_calls": 3,
+      "completion_tokens": 152,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "burying-survivors",
+      "runner": "bare",
+      "answer": "They don't bury the survivors.\n\nThe premise of your question contains a logical contradiction: **survivors** are people who have survived the crash and are still alive. Therefore, there is no need to bury them.\n\nAdditionally, while the crash occurred on the border, the location of the crash itself (whether in the US or Canada) is irrelevant to the fact that living people are not buried.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 2.92,
+      "model_calls": 1,
+      "completion_tokens": 82,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "burying-survivors",
+      "runner": "tree",
+      "answer": "You do not bury the survivors because, by definition, survivors are people who are still alive after the crash. The question is a classic riddle designed to test attention to detail, as burying living people is impossible.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 9.11,
+      "model_calls": 3,
+      "completion_tokens": 135,
+      "tool_calls": [],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "months-with-28-days",
+      "runner": "bare",
+      "answer": "All 12 months of the year have at least 28 days.\n\nWhile February is the only month that has exactly 28 days in a common year (and 29 in a leap year), every other month has 30 or 31 days. Since 28 days is less than 30 or 31, those months still contain 28 days within their total count.\n\nTherefore, the answer is **12**.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 3.32,
+      "model_calls": 1,
+      "completion_tokens": 96,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "months-with-28-days",
+      "runner": "tree",
+      "answer": "All 12 months have at least 28 days, but only February has exactly 28 days in common years (29 days in leap years).",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 8.0,
+      "model_calls": 3,
+      "completion_tokens": 117,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "square-root-or-cube-root",
+      "runner": "bare",
+      "answer": "To determine which value is greater, let's calculate each one step by step:\n\n1.  **The square root of 16**:\n    The square root of a number $x$ is a value that, when multiplied by itself, equals $x$.\n    $$ \\sqrt{16} = 4 $$\n    (Because $4 \\times 4 = 16$)\n\n2.  **The cube root of 27**:\n    The cube root of a number $x$ is a value that, when multiplied by itself three times, equals $x$.\n    $$ \\sqrt[3]{27} = 3 $$\n    (Because $3 \\times 3 \\times 3 = 27$)\n\n**Comparison**:\nNow we compare the two results:\n$$ 4 > 3 $$\n\n**Conclusion**:\nThe square root of 16 is greater.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 6.3,
+      "model_calls": 1,
+      "completion_tokens": 193,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "square-root-or-cube-root",
+      "runner": "tree",
+      "answer": "The square root of 16 is 4, and the cube root of 27 is 3; therefore, the square root of 16 is greater.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 8.1,
+      "model_calls": 3,
+      "completion_tokens": 122,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "boiling-eggs",
+      "runner": "bare",
+      "answer": "It will still take **1 minute**.\n\nHere is the reasoning:\nBoiling eggs is a process that happens simultaneously in a pot of water. Once the water reaches a rolling boil, you can drop all 10 eggs in at the same time. They will cook together in the same amount of time as the first two eggs. The number of eggs does not change the duration required for the water to boil or for the eggs to cook, assuming the pot is large enough to hold them all.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 3.42,
+      "model_calls": 1,
+      "completion_tokens": 101,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "boiling-eggs",
+      "runner": "tree",
+      "answer": "It takes 1 minute to boil 10 eggs because boiling is a parallel process where the pot of water boils all eggs simultaneously; the time does not increase with the number of eggs.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 8.52,
+      "model_calls": 3,
+      "completion_tokens": 122,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "decimal-9-9-or-9-11",
+      "runner": "bare",
+      "answer": "The number **9.9** is greater than 9.11.\n\nHere is the step-by-step comparison:\n\n1.  **Compare the whole numbers**: Both numbers have the same whole number part, which is **9**.\n2.  **Compare the tenths place** (the first digit after the decimal point):\n    *   In **9.9**, the digit is **9**.\n    *   In **9.11**, the digit is **1**.\n3.  **Conclusion**: Since 9 is greater than 1, **9.9** is the larger number.\n\n*Note: This is a common trick because 9.11 looks like it has more digits, but in decimal notation, the position of the digit determines its value, not the total count of digits.*",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 5.49,
+      "model_calls": 1,
+      "completion_tokens": 171,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "decimal-9-9-or-9-11",
+      "runner": "tree",
+      "answer": "9.9 is greater than 9.11. When comparing decimals, we look at the place values: both numbers have 9 in the ones place, but 9.9 has a 9 in the tenths place while 9.11 has a 1 in the tenths place. Since 9 is greater than 1, 9.9 is the larger number.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 10.14,
+      "model_calls": 3,
+      "completion_tokens": 175,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "decimal-9-11-or-9-9",
+      "runner": "bare",
+      "answer": "To determine which number is greater, let's compare them step-by-step:\n\n1.  **Compare the whole number parts**: Both numbers have **9** before the decimal point. Since they are equal, we move to the next part.\n2.  **Compare the tenths place** (the first digit after the decimal):\n    *   In **9.11**, the tenths digit is **1**.\n    *   In **9.9**, the tenths digit is **9**.\n3.  **Conclusion**: Since 9 is greater than 1, **9.9** is the larger number.\n\nIt is a common mistake to count the total number of digits (thinking 9.11 has more digits than 9.9), but in decimal numbers, the position of the digit determines its value.\n\n**Answer:** 9.9 is greater.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 5.65,
+      "model_calls": 1,
+      "completion_tokens": 185,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "decimal-9-11-or-9-9",
+      "runner": "tree",
+      "answer": "To compare 9.11 and 9.9, first express both numbers with the same number of decimal places by adding a zero to 9.9, making it 9.90. Next, compare the digits from left to right: both numbers have 9 in the ones place. Moving to the tenths place, 9.90 has a 9 while 9.11 has a 1. Since 9 is greater than 1, 9.90 is larger than 9.11. Therefore, 9.9 is greater.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 11.26,
+      "model_calls": 3,
+      "completion_tokens": 215,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "pi-or-3-14",
+      "runner": "bare",
+      "answer": "The number **$\\pi$ (pi)** is greater than **3.14**.\n\nHere is the breakdown:\n*   The value of $\\pi$ is approximately **3.14159265...**\n*   The number **3.14** can be written as **3.140000...**\n\nWhen comparing the two, we look at the digits from left to right:\n1.  Both have 3 in the ones place.\n2.  Both have 1 in the tenths place.\n3.  Both have 4 in the hundredths place.\n4.  In the thousandths place, $\\pi$ has a **1**, while 3.14 has a **0**.\n\nSince $1 > 0$, it follows that $\\pi > 3.14$.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 5.43,
+      "model_calls": 1,
+      "completion_tokens": 178,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "pi-or-3-14",
+      "runner": "tree",
+      "answer": "The number \u03c0 is greater than 3.14 because \u03c0 is approximately 3.14159, which has more digits than 3.14.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 8.55,
+      "model_calls": 3,
+      "completion_tokens": 126,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "country-ending-in-lia",
+      "runner": "bare",
+      "answer": "One country whose name ends with \"lia\" is **Bulgaria**.\n\nIts capital city is **Sofia**.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "regex Australia[\\s\\S]*Canberra|Somalia[\\s\\S]*Mogadishu|Mongolia[\\s\\S]*Ula+n ?ba+tar"
+      ],
+      "seconds": 1.01,
+      "model_calls": 1,
+      "completion_tokens": 25,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "country-ending-in-lia",
+      "runner": "tree",
+      "answer": "Australia's capital city is Canberra.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 7.52,
+      "model_calls": 3,
+      "completion_tokens": 98,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "capital-of-france",
+      "runner": "bare",
+      "answer": "The capital of France is **Paris**.\n\nLocated in the north-central part of the country, Paris is the country's most populous city and its principal center of business, finance, commerce, culture, education, tourism, and industry. It is also the seat of the French government and the highest-ranking administrative divisions, the regions.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 2.15,
+      "model_calls": 1,
+      "completion_tokens": 66,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "capital-of-france",
+      "runner": "tree",
+      "answer": "The capital of France is Paris.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 7.42,
+      "model_calls": 3,
+      "completion_tokens": 97,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "largest-planet",
+      "runner": "bare",
+      "answer": "The largest planet in our solar system is **Jupiter**.\n\nIt is a gas giant with a mass more than twice that of all the other planets combined. Jupiter's equatorial diameter is approximately 139,820 kilometers (86,881 miles), making it significantly larger than Earth, which is often referred to as the \"fourth planet from the Sun\" in terms of size ranking, though it is the fifth planet by distance from the Sun.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 3.15,
+      "model_calls": 1,
+      "completion_tokens": 97,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "largest-planet",
+      "runner": "tree",
+      "answer": "The largest planet in our solar system is Jupiter. This conclusion is supported by multiple sources, including NASA and WorldAtlas, which confirm that Jupiter has the greatest diameter, mass, and volume among all planets. Its diameter is approximately 142,800 kilometers, which is about 11 times that of Earth.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 8.73,
+      "model_calls": 3,
+      "completion_tokens": 143,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "order-of-operations",
+      "runner": "bare",
+      "answer": "To solve the expression $8 + (6 \\times 2) - (3 + 5) \\div 4$, we follow the **Order of Operations (PEMDAS/BODMAS)**:\n\n1.  **P**arentheses: Solve operations inside parentheses first.\n2.  **E**xponents: (None in this problem).\n3.  **M**ultiplication and **D**ivision: Solve from left to right.\n4.  **A**ddition and **S**ubtraction: Solve from left to right.\n\n### Step-by-Step Solution\n\n**Step 1: Solve the operations inside the parentheses.**\n*   First group: $(6 \\times 2) = 12$\n*   Second group: $(3 + 5) = 8$\n\nNow the expression looks like this:\n$$8 + 12 - 8 \\div 4$$\n\n**Step 2: Perform Multiplication and Division.**\n*   We have a division operation: $8 \\div 4 = 2$\n\nNow the expression looks like this:\n$$8 + 12 - 2$$\n\n**Step 3: Perform Addition and Subtraction (from left to right).**\n*   First, add: $8 + 12 = 20$\n*   Next, subtract: $20 - 2 = 18$\n\n### Final Answer\n$$18$$",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 9.83,
+      "model_calls": 1,
+      "completion_tokens": 307,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "order-of-operations",
+      "runner": "tree",
+      "answer": "To solve 8 + (6 \u00d7 2) \u2212 (3 + 5) \u00f7 4, follow the order of operations (PEMDAS): first, calculate the parentheses (6 \u00d7 2 = 12 and 3 + 5 = 8), then perform division (8 \u00f7 4 = 2), and finally addition and subtraction from left to right (8 + 12 \u2212 2 = 18). The result is 18.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 10.21,
+      "model_calls": 3,
+      "completion_tokens": 192,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "distance-at-60-mph",
+      "runner": "bare",
+      "answer": "To find the distance the car will travel, you can use the formula:\n\n$$ \\text{Distance} = \\text{Speed} \\times \\text{Time} $$\n\nGiven:\n*   **Speed**: 60 miles per hour\n*   **Time**: 2 hours\n\nCalculation:\n$$ 60 \\text{ miles/hour} \\times 2 \\text{ hours} = 120 \\text{ miles} $$\n\nThe car will travel **120 miles**.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 3.49,
+      "model_calls": 1,
+      "completion_tokens": 107,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "distance-at-60-mph",
+      "runner": "tree",
+      "answer": "To find the distance, multiply the speed by the time: 60 miles per hour \u00d7 2 hours = 120 miles. The car will travel 120 miles.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 8.55,
+      "model_calls": 3,
+      "completion_tokens": 128,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "clock-angle-3-15",
+      "runner": "bare",
+      "answer": "To find the angle between the hour hand and the minute hand at 3:15, we can calculate the position of each hand relative to the 12 o'clock position (0 degrees).\n\n### Step 1: Calculate the position of the Minute Hand\nThe minute hand moves in a full circle ($360^\\circ$) in 60 minutes.\n- Speed of minute hand = $360^\\circ / 60 \\text{ min} = 6^\\circ$ per minute.\n- At 15 minutes past the hour, the minute hand is at:\n  $$15 \\times 6^\\circ = 90^\\circ$$\n  (This corresponds to the 3 o'clock position).\n\n### Step 2: Calculate the position of the Hour Hand\nThe hour hand moves in a full circle ($360^\\circ$) in 12 hours.\n- Speed of hour hand = $360^\\circ / 12 \\text{ hours} = 30^\\circ$ per hour.\n- Additionally, the hour hand moves as the minutes pass. It moves $30^\\circ$ in 60 minutes, which is $0.5^\\circ$ per minute ($30/60$).\n- At 3:15, the hour hand has moved past the 3 o'clock position by 15 minutes.\n  - Position at 3:00 = $3 \\times 30^\\circ = 90^\\circ$.\n  - Movement due to 15 minutes = $15 \\times 0.5^\\circ = 7.5^\\circ$.\n- Total position of the hour hand:\n  $$90^\\circ + 7.5^\\circ = 97.5^\\circ$$\n\n### Step 3: Calculate the difference\nNow, find the absolute difference between the two positions:\n$$ \\text{Angle} = | \\text{Position of Hour Hand} - \\text{Position of Minute Hand} | $$\n$$ \\text{Angle} = | 97.5^\\circ - 90^\\circ | $$\n$$ \\text{Angle} = 7.5^\\circ $$\n\n*(Note: The smaller angle between two hands is always taken, which in this case is $7.5^\\circ$. The larger reflex angle would be $360^\\circ - 7.5^\\circ = 352.5^\\circ$.)*\n\n### Conclusion\nThe angle between the hour hand and the minute hand at 3:15 is **$7.5^\\circ$**.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "regex \\b7(\\.5|\u00bd)\\s*(\u00b0|deg)"
+      ],
+      "seconds": 17.81,
+      "model_calls": 1,
+      "completion_tokens": 559,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "clock-angle-3-15",
+      "runner": "tree",
+      "answer": "The angle between the hour and minute hands at 3:15 is 7.5 degrees.\n\n**Calculation:**\n1.  **Minute hand:** At 15 minutes, it points at the 3, which is $15 \\times 6 = 90^\\circ$ from 12 o'clock.\n2.  **Hour hand:** At 3:00, it is at $3 \\times 30 = 90^\\circ$. It moves $0.5^\\circ$ per minute. In 15 minutes, it moves $15 \\times 0.5 = 7.5^\\circ$. Total position is $90 + 7.5 = 97.5^\\circ$.\n3.  **Difference:** $|97.5^\\circ - 90^\\circ| = 7.5^\\circ$.\n\nThe result is 7.5 degrees.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 172.27,
+      "model_calls": 20,
+      "completion_tokens": 3795,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "letter-r-in-strawberry",
+      "runner": "bare",
+      "answer": "There are **3** \"r\"s in the word \"strawberry\".\n\nHere is the breakdown:\n1.  str**a**wb**e**rr**y** (Wait, let me re-check the spelling carefully).\n\nLet's spell it out letter by letter:\ns - t - **r** - a - w - b - e - **r** - r - y\n\n1.  The first **r** is after the \"t\".\n2.  The second **r** is after the \"e\".\n3.  The third **r** is right next to the second one.\n\nSo, the count is **3**.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "not_regex \\b(2|two)\\b"
+      ],
+      "seconds": 5.31,
+      "model_calls": 1,
+      "completion_tokens": 139,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "letter-r-in-strawberry",
+      "runner": "tree",
+      "answer": "The word \"strawberry\" contains three r's.\n\nCounting them step by step:\n1. The first 'r' is in the third position (s-t-**r**-a-w-b-e-r-r-y).\n2. The second 'r' is in the eighth position (s-t-r-a-w-b-e-**r**-r-y).\n3. The third 'r' is in the ninth position (s-t-r-a-w-b-e-r-**r**-y).\n\nWhile some AI models historically reported two, the correct count is three.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "not_regex \\b(2|two)\\b"
+      ],
+      "seconds": 12.06,
+      "model_calls": 3,
+      "completion_tokens": 207,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "number-rhyming-with-tree",
+      "runner": "bare",
+      "answer": "The word used to describe a tall plant is **tall** (or sometimes **towering**).\n\nThe number that rhymes with \"tall\" is **four** (as in \"four\").\n\n*   **Word:** Tall\n*   **Rhyming Number:** Four",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "regex \\b(three|3)\\b"
+      ],
+      "seconds": 2.32,
+      "model_calls": 1,
+      "completion_tokens": 59,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "number-rhyming-with-tree",
+      "runner": "tree",
+      "answer": "The word used to describe a tall plant is \"tree,\" and the number that rhymes with it is \"three.\"",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 10.73,
+      "model_calls": 3,
+      "completion_tokens": 182,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "letters-in-mississippi",
+      "runner": "bare",
+      "answer": "The word \"Mississippi\" contains **11** letters.\n\nHere is the breakdown:\n1.  M\n2.  i\n3.  s\n4.  s\n5.  i\n6.  s\n7.  s\n8.  i\n9.  p\n10. p\n11. i\n\nIt consists of 11 characters in total.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 3.37,
+      "model_calls": 1,
+      "completion_tokens": 85,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "letters-in-mississippi",
+      "runner": "tree",
+      "answer": "The word \"Mississippi\" contains 11 letters. This is confirmed by multiple sources, which also note that it consists of 7 consonants and 4 vowels.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 8.87,
+      "model_calls": 3,
+      "completion_tokens": 126,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "outer-planets-mission",
+      "runner": "bare",
+      "answer": "The mission you are describing is the **Voyager** program (specifically **Voyager 1** and **Voyager 2**).\n\nLaunched in 1977, these twin spacecraft were designed to explore the outer planets of our solar system (Jupiter, Saturn, Uranus, and Neptune) and study their atmospheres, moons, and rings. However, their mandate extended far beyond the planets themselves.\n\n*   **Voyager 1** flew by Jupiter and Saturn and is now the farthest human-made object from Earth, having entered **interstellar space** in 2012.\n*   **Voyager 2** flew by Jupiter, Saturn, Uranus, and Neptune, providing the first close-up views of Uranus and Neptune and their moons.\n\nBoth spacecraft continue to transmit data back to Earth, making them the longest-running and most successful missions in NASA's history.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 7.74,
+      "model_calls": 1,
+      "completion_tokens": 193,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "outer-planets-mission",
+      "runner": "tree",
+      "answer": "The Voyager program, specifically the twin spacecraft Voyager 1 and Voyager 2 launched in 1977, was the mission designed to explore the outer planets (Jupiter, Saturn, Uranus, and Neptune), study their atmospheres and moons, and travel into interstellar space.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 9.64,
+      "model_calls": 3,
+      "completion_tokens": 144,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "voyager-1-speed",
+      "runner": "bare",
+      "answer": "As of 2026, the speed of **Voyager 1** is approximately **17.03 miles per second** (about **31.4 kilometers per second**).\n\nHere are a few key details regarding its velocity:\n*   **Current Speed:** It is traveling at roughly **61,000 miles per hour** (98,000 km/h).\n*   **Record Holder:** Voyager 1 holds the record for the fastest human-made object ever launched from Earth.\n*   **Comparison:** To put this in perspective, Voyager 1 is moving about **17 times faster** than the International Space Station and roughly **10 times faster** than the fastest spacecraft ever launched (Parker Solar Probe, which reaches speeds of about 430,000 mph but only briefly near the Sun).\n*   **Trajectory:** It is moving away from the Sun at a speed that will eventually allow it to escape the Sun's gravitational influence entirely, though it is currently still within the heliosphere (the bubble of solar wind).\n\n*Note: The exact speed fluctuates slightly due to gravitational assists from planets and the changing position of the Sun, but 17.03 miles per second is the widely accepted current figure.*",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "regex \\b1[67](\\.\\d+)?\\s*(km/s|km per second|kilomet(er|re)s per second)|\\b3[78],?\\d{3}\\s*(mph|miles per hour)|\\b6[01],?\\d{3}\\s*(km/h|kph|kilomet(er|re)s per hour)"
+      ],
+      "seconds": 9.94,
+      "model_calls": 1,
+      "completion_tokens": 269,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "voyager-1-speed",
+      "runner": "tree",
+      "answer": "Based on the web search results, Voyager 1 is currently traveling at approximately **16.918 km/sec** (about 38,000 mph) as it traverses interstellar space. This speed was recorded when the probe was at a distance of 171.42 AU from the Sun. The data indicates the probe is moving unhindered through the outskirts of the solar system, having passed the heliosphere boundary in 2012.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 11.59,
+      "model_calls": 3,
+      "completion_tokens": 187,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "voyager-2-speed",
+      "runner": "bare",
+      "answer": "The speed of the **Voyager 2** spacecraft varies depending on whether you are measuring its speed relative to the Sun or relative to Earth, as it is constantly moving through the solar system and has been traveling for over 45 years.\n\nHere is the breakdown of its current velocity:\n\n*   **Speed relative to the Sun:** As of late 2023/early 2024, Voyager 2 is traveling at approximately **35,400 miles per hour (57,000 km/h)**. This is roughly **10 kilometers per second (km/s)**. This speed is incredibly fast; to put it in perspective, it would take Voyager 2 about 100,000 years to travel the distance from Earth to the Sun at this constant speed.\n*   **Speed relative to Earth:** Because Earth is also moving around the Sun at about 67,000 mph (107,000 km/h), the speed of Voyager 2 relative to Earth fluctuates. When Voyager 2 is moving in the same direction as Earth, the relative speed is lower; when they are moving in opposite directions, the relative speed is higher. Currently, the relative speed is roughly **10,000 to 15,000 miles per hour (16,000 to 24,000 km/h)**.\n\n**Key Context:**\nVoyager 2 was launched in 1977 and is currently the farthest human-made object from Earth, having passed Jupiter, Saturn, Uranus, and Neptune. Its high speed is largely due to the **gravity assist maneuvers** it performed during its flybys of the outer planets, which accelerated it significantly without using extra fuel.\n\n**Summary:**\nVoyager 2 is currently traveling at approximately **57,000 km/h (35,400 mph)** relative to the Sun.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 14.64,
+      "model_calls": 1,
+      "completion_tokens": 409,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "voyager-2-speed",
+      "runner": "tree",
+      "answer": "The speed of Voyager 2 is approximately **15.4 kilometers per second** relative to the Sun, and it is located about **21.65 billion kilometers** from Earth. The claim that it has an orbital period of 1.5 hours around Earth is incorrect; the spacecraft is no longer in orbit around Earth, and its orbital period cannot be calculated or verified from available data.\n\n*Note: The date \"2026-11-07\" mentioned in the correction note was not part of the factual evidence gathered and has been omitted from the final response as per instructions to only state facts supported by evidence.*",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 78.45,
+      "model_calls": 22,
+      "completion_tokens": 1379,
+      "tool_calls": [
+        {
+          "name": "web_search",
+          "arguments": "{\"query\":\"Voyager 2 current speed relative to Sun distance from Earth 2026\",\"max_results\":5}"
+        }
+      ],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "galaxies-in-universe",
+      "runner": "bare",
+      "answer": "There is no single, exact number of galaxies in the universe because we cannot see beyond the edge of the observable universe, and we cannot count every galaxy within it. However, astronomers have made very strong estimates based on data from the **Hubble Space Telescope** and the **James Webb Space Telescope**.\n\nHere is the breakdown of current scientific understanding:\n\n*   **The Observable Universe**: We can only see a finite portion of the universe (the observable universe). Based on deep-field images showing that the universe is far more populated than previously thought, astronomers estimate there are approximately **2 trillion** ($2 \\times 10^{12}$) galaxies in the observable universe.\n    *   *Note*: This number has increased significantly since the late 1990s, when estimates were around 100 billion. Newer data suggests many more faint, dwarf galaxies exist than we can currently resolve.\n\n*   **The Entire Universe**: If the universe is infinite (which is a major topic of cosmological debate), then the number of galaxies would be **infinite**. Even if the universe is finite but larger than the observable part, the number would be vastly larger than 2 trillion, though we have no way of knowing the exact figure.\n\n**Conclusion**\n\nFor all practical purposes, the scientific consensus is that there are approximately **2 trillion** galaxies in the **observable** universe. If the universe extends beyond our observable horizon, the total number is likely much larger or infinite.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 10.46,
+      "model_calls": 1,
+      "completion_tokens": 305,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "galaxies-in-universe",
+      "runner": "tree",
+      "answer": "Based on the web search results, estimates for the number of galaxies in the observable universe vary significantly depending on the measurement method. One estimate suggests there are between 100 and 200 billion galaxies, while another indicates there are approximately 2 trillion galaxies. The latter figure is derived from counting galaxies in the Hubble Deep Field and extrapolating that density across the entire observable universe, though this count may include many very faint dwarf galaxies that are difficult to detect.\n\nThe exact number remains uncertain because we can only observe a limited portion of the universe, and the total count depends on how strictly we define what constitutes a galaxy.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 12.01,
+      "model_calls": 3,
+      "completion_tokens": 229,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "apples-bought",
+      "runner": "bare",
+      "answer": "If a person has 3 apples and buys 2 more, we simply add the two amounts together:\n\n$$3 + 2 = 5$$\n\nSo, the person now has **5** apples.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 1.74,
+      "model_calls": 1,
+      "completion_tokens": 43,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "apples-bought",
+      "runner": "tree",
+      "answer": "To find the total number of apples, start with the initial amount of 3 apples. Then, add the 2 more apples purchased. The calculation is 3 + 2 = 5. Therefore, the person now has 5 apples.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 8.59,
+      "model_calls": 3,
+      "completion_tokens": 132,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "feathers-or-bricks",
+      "runner": "bare",
+      "answer": "They are **exactly the same weight**.\n\nSince both items weigh **1 kilogram**, they have the same mass. The common riddle relies on the fact that bricks are much denser and feel heavier when you lift a single brick, while feathers are light and fluffy. However, when comparing the total weight of a specific mass (1 kg) of each, the difference in density does not change the total weight.\n\n*Note: If you were comparing them in a vacuum, they would also weigh the same. In the real world, air resistance might make the feathers feel slightly lighter if you were trying to lift them individually, but their total mass remains identical.*",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 4.45,
+      "model_calls": 1,
+      "completion_tokens": 134,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "feathers-or-bricks",
+      "runner": "tree",
+      "answer": "1 kilogram of feathers and 1 kilogram of bricks weigh exactly the same because they both have a mass of 1 kg. While bricks are denser and occupy less space, the total weight is identical when the mass is equal.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 8.59,
+      "model_calls": 3,
+      "completion_tokens": 130,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "red-and-green-balls",
+      "runner": "bare",
+      "answer": "To find the total number of balls, you simply add the number of red balls to the number of green balls:\n\n*   Red balls: 3\n*   Green balls: 2\n\n$3 + 2 = 5$\n\nYou have **5** balls in total.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 2.02,
+      "model_calls": 1,
+      "completion_tokens": 59,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "red-and-green-balls",
+      "runner": "tree",
+      "answer": "You have 5 balls in total. This is calculated by adding the 3 red balls and the 2 green balls together (3 + 2 = 5).",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 8.08,
+      "model_calls": 3,
+      "completion_tokens": 112,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "ten-minus-one",
+      "runner": "bare",
+      "answer": "If you subtract 1 from 10, the result is **9**.\n\nCalculation: $10 - 1 = 9$",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 0.95,
+      "model_calls": 1,
+      "completion_tokens": 30,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "ten-minus-one",
+      "runner": "tree",
+      "answer": "The result of subtracting 1 from 10 is 9.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 7.78,
+      "model_calls": 3,
+      "completion_tokens": 109,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "doubling-sequence",
+      "runner": "bare",
+      "answer": "The sequence you provided is: **2, 4, 8, 16, ...**\n\n### Step-by-step Deduction:\n1.  **Analyze the pattern**:\n    *   From 2 to 4: $2 \\times 2 = 4$\n    *   From 4 to 8: $4 \\times 2 = 8$\n    *   From 8 to 16: $8 \\times 2 = 16$\n\n2.  **Identify the rule**:\n    Each term is obtained by multiplying the previous term by **2**. This is a geometric progression with a common ratio of 2. Alternatively, these are powers of 2 starting from $2^1$:\n    *   $2^1 = 2$\n    *   $2^2 = 4$\n    *   $2^3 = 8$\n    *   $2^4 = 16$\n\n3.  **Calculate the next term**:\n    To find the next number, multiply the last term (16) by 2:\n    $$16 \\times 2 = 32$$\n    *(Or calculate the next power of 2: $2^5 = 32$)*\n\n### Final Answer:\nThe next number in the sequence is **32**.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 9.35,
+      "model_calls": 1,
+      "completion_tokens": 289,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "doubling-sequence",
+      "runner": "tree",
+      "answer": "The next number in the sequence 2, 4, 8, 16 is 32, found by multiplying the last term (16) by the common ratio of 2.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 8.72,
+      "model_calls": 3,
+      "completion_tokens": 130,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "burying-survivors",
+      "runner": "bare",
+      "answer": "They don't bury the survivors.\n\nThe premise of your question contains a logical contradiction: **survivors** are people who have survived the crash and are still alive. Therefore, there is no need to bury them.\n\nAdditionally, while the crash occurred on the border, the location of the crash itself (whether in the US or Canada) is irrelevant to the fact that living people are not buried.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 2.72,
+      "model_calls": 1,
+      "completion_tokens": 82,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "burying-survivors",
+      "runner": "tree",
+      "answer": "You do not bury the survivors because, by definition, survivors are people who are still alive after the crash.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 7.83,
+      "model_calls": 3,
+      "completion_tokens": 109,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": true
+    }
+  ]
+}

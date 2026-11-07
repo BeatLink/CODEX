@@ -1,0 +1,59 @@
+Loading model from models/Qwen3.5-4B-UD-Q4_K_XL.gguf...
+[inbox-newest / tree #1] 2/2 in 16.27s: pass
+[inbox-newest / agents #1] 2/2 in 21.0s: pass
+[next-meeting / tree #1] 2/2 in 133.71s: pass
+[next-meeting / agents #1] 0/2 in 146.42s: fail (contains '14:30'; contains 'Priya')
+[garage-code / tree #1] 0/1 in 12.95s: fail (contains '7391-delta')
+[garage-code / agents #1] 0/1 in 30.54s: fail (contains '7391-delta')
+[marcus-phone / tree #1] 1/1 in 15.45s: pass
+[marcus-phone / agents #1] 0/1 in 17.67s: fail (contains '900318')
+[lisbon-forecast / tree #1] 2/2 in 14.49s: pass
+[lisbon-forecast / agents #1] 1/2 in 25.28s: fail (contains '14')
+[first-todo / tree #1] 2/2 in 15.55s: pass
+[first-todo / agents #1] 2/2 in 19.65s: pass
+[priya-last-email / tree #1] 1/2 in 155.44s: fail (contains 'budget variance')
+[priya-last-email / agents #1] 0/2 in 41.97s: fail (contains 'priya.raman@example.org'; contains 'budget variance')
+[free-slot-and-weather / tree #1] 2/2 in 18.22s: pass
+[free-slot-and-weather / agents #1] 1/2 in 239.34s: fail (contains '14')
+[inbox-newest / tree #2] 2/2 in 15.01s: pass
+[inbox-newest / agents #2] 2/2 in 22.4s: pass
+[next-meeting / tree #2] 0/2 in 102.38s: fail (contains '14:30'; contains 'Priya')
+[next-meeting / agents #2] 0/2 in 187.38s: fail (contains '14:30'; contains 'Priya')
+[garage-code / tree #2] 0/1 in 13.21s: fail (contains '7391-delta')
+[garage-code / agents #2] 0/1 in 14.39s: fail (contains '7391-delta')
+[marcus-phone / tree #2] 1/1 in 16.56s: pass
+[marcus-phone / agents #2] 0/1 in 20.31s: fail (contains '900318')
+[lisbon-forecast / tree #2] 2/2 in 15.11s: pass
+[lisbon-forecast / agents #2] 1/2 in 25.18s: fail (contains '14')
+[first-todo / tree #2] 2/2 in 15.6s: pass
+[first-todo / agents #2] 2/2 in 17.47s: pass
+[priya-last-email / tree #2] 2/2 in 216.55s: pass
+[priya-last-email / agents #2] 1/2 in 24.45s: fail (contains 'budget variance')
+[free-slot-and-weather / tree #2] 2/2 in 17.45s: pass
+[free-slot-and-weather / agents #2] 1/2 in 19.44s: fail (contains '14')
+[inbox-newest / tree #3] 2/2 in 15.11s: pass
+[inbox-newest / agents #3] 2/2 in 21.77s: pass
+[next-meeting / tree #3] 2/2 in 84.18s: pass
+[next-meeting / agents #3] 0/2 in 158.6s: fail (contains '14:30'; contains 'Priya')
+[garage-code / tree #3] 0/1 in 12.38s: fail (contains '7391-delta')
+[garage-code / agents #3] 0/1 in 79.96s: fail (contains '7391-delta')
+[marcus-phone / tree #3] 1/1 in 14.73s: pass
+[marcus-phone / agents #3] 0/1 in 18.83s: fail (contains '900318')
+[lisbon-forecast / tree #3] 2/2 in 13.99s: pass
+[lisbon-forecast / agents #3] 1/2 in 24.34s: fail (contains '14')
+[first-todo / tree #3] 2/2 in 14.38s: pass
+[first-todo / agents #3] 2/2 in 16.41s: pass
+[priya-last-email / tree #3] 2/2 in 18.56s: pass
+[priya-last-email / agents #3] 0/2 in 39.51s: fail (contains 'priya.raman@example.org'; contains 'budget variance')
+[free-slot-and-weather / tree #3] 2/2 in 17.61s: pass
+[free-slot-and-weather / agents #3] 0/2 in 256.79s: fail (contains 'Wednesday'; contains '14')
+
+runner             tasks    checks errors   seconds  calls   tokens   rate  per round
+-------------------------------------------------------------------------------------
+tree             19/24     36/42        0     984.9    228    15479    79%  6 6 7
+agents            6/24     18/42        0    1489.1    359    23939    25%  2 2 2
+
+Tasks that passed in only some rounds:
+  next-meeting: tree 2/3
+  priya-last-email: tree 2/3
+

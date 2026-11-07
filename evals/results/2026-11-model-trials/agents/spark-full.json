@@ -1,0 +1,1232 @@
+{
+  "model_path": "models/Spark-X2.6-4B-Q4_K_M.gguf",
+  "tasks_path": "evals/agents_tasks.json",
+  "seed": null,
+  "seed_store": null,
+  "repeat": 3,
+  "summary": {
+    "tree": {
+      "tasks": 24,
+      "tasks_passed": 19,
+      "pass_rate": 0.792,
+      "round_passes": [
+        7,
+        7,
+        5
+      ],
+      "checks_passed": 37,
+      "checks_total": 42,
+      "errors": 0,
+      "seconds": 293.23,
+      "model_calls": 132,
+      "completion_tokens": 4868
+    },
+    "agents": {
+      "tasks": 24,
+      "tasks_passed": 17,
+      "pass_rate": 0.708,
+      "round_passes": [
+        6,
+        6,
+        5
+      ],
+      "checks_passed": 35,
+      "checks_total": 42,
+      "errors": 0,
+      "seconds": 439.29,
+      "model_calls": 225,
+      "completion_tokens": 8387
+    }
+  },
+  "task_passes": {
+    "inbox-newest": {
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      },
+      "agents": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "next-meeting": {
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      },
+      "agents": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "garage-code": {
+      "tree": {
+        "passed": 1,
+        "runs": 3
+      },
+      "agents": {
+        "passed": 0,
+        "runs": 3
+      }
+    },
+    "marcus-phone": {
+      "tree": {
+        "passed": 1,
+        "runs": 3
+      },
+      "agents": {
+        "passed": 0,
+        "runs": 3
+      }
+    },
+    "lisbon-forecast": {
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      },
+      "agents": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "first-todo": {
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      },
+      "agents": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "priya-last-email": {
+      "tree": {
+        "passed": 3,
+        "runs": 3
+      },
+      "agents": {
+        "passed": 3,
+        "runs": 3
+      }
+    },
+    "free-slot-and-weather": {
+      "tree": {
+        "passed": 2,
+        "runs": 3
+      },
+      "agents": {
+        "passed": 2,
+        "runs": 3
+      }
+    }
+  },
+  "results": [
+    {
+      "task_id": "inbox-newest",
+      "runner": "tree",
+      "answer": "The newest email in your inbox is **\"Invoice 4471\"**, from **Dana Whitfield**. No further action needed.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 13.25,
+      "model_calls": 5,
+      "completion_tokens": 129,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}"
+        }
+      ],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "inbox-newest",
+      "runner": "agents",
+      "answer": "The newest email in your inbox is **Invoice 4471**, and it is from **Dana Whitfield**.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 11.08,
+      "model_calls": 7,
+      "completion_tokens": 180,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}"
+        }
+      ],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "next-meeting",
+      "runner": "tree",
+      "answer": "Next meeting: **Thursday 14:30 \u2014 budget review with Priya Raman**. No action needed unless you'd like me to reschedule or set a reminder.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 8.5,
+      "model_calls": 5,
+      "completion_tokens": 138,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        }
+      ],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "next-meeting",
+      "runner": "agents",
+      "answer": "Next meeting: Thursday 14:30 \u2014 budget review with Priya Raman.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 7.38,
+      "model_calls": 6,
+      "completion_tokens": 156,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        }
+      ],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "garage-code",
+      "runner": "tree",
+      "answer": "I can't find the notes in the workspace \u2014 it's empty, so there's no file to read containing the garage side door code. Please provide the notes file (or its path) so I can look it up.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "contains '7391-delta'"
+      ],
+      "seconds": 6.4,
+      "model_calls": 5,
+      "completion_tokens": 170,
+      "tool_calls": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        }
+      ],
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "garage-code",
+      "runner": "agents",
+      "answer": "I can only access the configured workspace filesystem, and it contains no files or notes, so the garage side door code is not available to find. Please provide the notes file path (relative to the workspace) so I can read and report the code.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "contains '7391-delta'"
+      ],
+      "seconds": 10.5,
+      "model_calls": 7,
+      "completion_tokens": 264,
+      "tool_calls": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        },
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\"..\"}"
+        }
+      ],
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "marcus-phone",
+      "runner": "tree",
+      "answer": "Marcus Oyelaran's phone number is **+44 7700 900318**.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 10.26,
+      "model_calls": 5,
+      "completion_tokens": 125,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Marcus Oyelaran\"}"
+        }
+      ],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "marcus-phone",
+      "runner": "agents",
+      "answer": "I can\u2019t find Marcus Oyelaran in the address book, so there is no phone number to report.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "contains '900318'"
+      ],
+      "seconds": 11.71,
+      "model_calls": 7,
+      "completion_tokens": 194,
+      "tool_calls": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        }
+      ],
+      "attempt": 1,
+      "passed": false
+    },
+    {
+      "task_id": "lisbon-forecast",
+      "runner": "tree",
+      "answer": "Tomorrow in Lisbon: light rain, high of 14 degrees. No action needed \u2014 the forecast is ready.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 10.84,
+      "model_calls": 5,
+      "completion_tokens": 146,
+      "tool_calls": [
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}"
+        }
+      ],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "lisbon-forecast",
+      "runner": "agents",
+      "answer": "Tomorrow (2026-11-07) in Lisbon will be light rain with a high of 14 degrees.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 10.14,
+      "model_calls": 6,
+      "completion_tokens": 160,
+      "tool_calls": [
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}"
+        }
+      ],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "first-todo",
+      "runner": "tree",
+      "answer": "You have **3 open to-do items**. The one due first is **renew passport**, due **12 Nov**. No action needed unless you want to change or complete any of them.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 10.24,
+      "model_calls": 5,
+      "completion_tokens": 153,
+      "tool_calls": [
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}"
+        }
+      ],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "first-todo",
+      "runner": "agents",
+      "answer": "I have 3 open to-do items. The one due first is **renew passport**, due **12 Nov**.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 9.68,
+      "model_calls": 6,
+      "completion_tokens": 166,
+      "tool_calls": [
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}"
+        }
+      ],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "priya-last-email",
+      "runner": "tree",
+      "answer": "Priya Raman's email address is `priya.raman@example.org`. Her latest email to you was about **\"Re: Q3 budget variance\"** (received Tuesday).",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 14.41,
+      "model_calls": 7,
+      "completion_tokens": 233,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}"
+        },
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Priya Raman\"}"
+        }
+      ],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "priya-last-email",
+      "runner": "agents",
+      "answer": "Priya Raman's email address is **priya.raman@example.org**. Her latest email to you was about **\"Re: Q3 budget variance\"**.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 28.9,
+      "model_calls": 17,
+      "completion_tokens": 542,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}"
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"priya.raman@example.org\"}"
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}"
+        }
+      ],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "free-slot-and-weather",
+      "runner": "tree",
+      "answer": "I\u2019m free Wednesday 10:00\u201312:00 this week. Lisbon tomorrow: light rain, high of 14\u00b0. No action needed unless you\u2019d like me to book the meeting.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 10.84,
+      "model_calls": 5,
+      "completion_tokens": 161,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__find_free_time",
+          "arguments": "{\"minutes\":\"60\"}"
+        },
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}"
+        }
+      ],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "free-slot-and-weather",
+      "runner": "agents",
+      "answer": "Here is your availability and forecast:\n\n**Free time this week:** Wednesday 10:00\u201312:00 (120 min). The next open window is Thursday 14:30 onward, but it is blocked by a budget review with Priya Raman.\n\n**Lisbon forecast for tomorrow (Sunday, November 8):** High 21\u00b0C / Low 17\u00b0C, precipitation chance 75% (5.8 mm, thunderstorm chance 13%), sunrise 7:11 AM, sunset 5:30 PM, wind SSE 22 km/h with gusts to 43 km/h.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 43.89,
+      "model_calls": 17,
+      "completion_tokens": 851,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__calendar__find_free_time",
+          "arguments": "{\"minutes\":\"120\"}"
+        },
+        {
+          "name": "web_fetch",
+          "arguments": "{\"url\":\"https://www.accuweather.com/en/pt/lisbon/274087/weather-tomorrow/274087\",\"focus\":\"tomorrow's weather forecast for Lisbon: high/low temperature, precipitation chance, sunrise/sunset, wind\"}"
+        },
+        {
+          "name": "web_fetch",
+          "arguments": "{\"url\":\"https://weatherin.org/portugal/lisboa/lisboa/tomorrow\",\"focus\":\"tomorrow's weather forecast for Lisbon: temperature, precipitation chance, humidity, wind\"}"
+        }
+      ],
+      "attempt": 1,
+      "passed": true
+    },
+    {
+      "task_id": "inbox-newest",
+      "runner": "tree",
+      "answer": "The newest email in your inbox is **Invoice 4471**, from **Dana Whitfield**. It asks for payment of 1,280 euros by 30 November.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 10.93,
+      "model_calls": 6,
+      "completion_tokens": 169,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Invoice 4471\"}"
+        }
+      ],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "inbox-newest",
+      "runner": "agents",
+      "answer": "The newest email in your inbox is **Invoice 4471**, and it is from **Dana Whitfield**.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 9.79,
+      "model_calls": 7,
+      "completion_tokens": 192,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}"
+        }
+      ],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "next-meeting",
+      "runner": "tree",
+      "answer": "Next meeting: **Thursday 14:30 \u2014 budget review with Priya Raman**. No action needed unless you'd like me to reschedule or set a reminder.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 9.17,
+      "model_calls": 5,
+      "completion_tokens": 143,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        }
+      ],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "next-meeting",
+      "runner": "agents",
+      "answer": "Your next meeting is **Thursday at 14:30 \u2014 budget review with Priya Raman**.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 8.43,
+      "model_calls": 6,
+      "completion_tokens": 162,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        }
+      ],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "garage-code",
+      "runner": "tree",
+      "answer": "The side door code for the garage is **7391-delta** (found in your Garage note).",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 1,
+      "failed_checks": [],
+      "seconds": 10.53,
+      "model_calls": 7,
+      "completion_tokens": 125,
+      "tool_calls": [
+        {
+          "name": "mcp__notes__list_notebooks",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__notes__search_notes",
+          "arguments": "{\"query\":\"side door garage\"}"
+        },
+        {
+          "name": "mcp__notes__read_note",
+          "arguments": "{\"title\":\"Garage\"}"
+        }
+      ],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "garage-code",
+      "runner": "agents",
+      "answer": "I can only access the configured workspace, which contains no notes or files, so the garage side door code could not be found. Please provide the notes file or its path within this workspace, and I can read it and report the exact code.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "contains '7391-delta'"
+      ],
+      "seconds": 10.74,
+      "model_calls": 7,
+      "completion_tokens": 261,
+      "tool_calls": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        },
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\"..\"}"
+        }
+      ],
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "marcus-phone",
+      "runner": "tree",
+      "answer": "I can't provide Marcus Oyelaran's phone number \u2014 none is available in the sources I checked. His public profiles list roles (FinCrunch standards editor, Digital Reach Solutions author, Hydrocraft Plumbing Solutions owner) but no contact details. If you have a contact record or directory, share it and I can look it up.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "contains '900318'"
+      ],
+      "seconds": 26.46,
+      "model_calls": 6,
+      "completion_tokens": 719,
+      "tool_calls": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        }
+      ],
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "marcus-phone",
+      "runner": "agents",
+      "answer": "I can\u2019t find Marcus Oyelaran in the address book, so there is no phone number to report.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "contains '900318'"
+      ],
+      "seconds": 9.33,
+      "model_calls": 7,
+      "completion_tokens": 194,
+      "tool_calls": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        }
+      ],
+      "attempt": 2,
+      "passed": false
+    },
+    {
+      "task_id": "lisbon-forecast",
+      "runner": "tree",
+      "answer": "Tomorrow in Lisbon: light rain, high of 14 degrees. No action needed \u2014 the forecast is ready.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 9.99,
+      "model_calls": 5,
+      "completion_tokens": 158,
+      "tool_calls": [
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}"
+        }
+      ],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "lisbon-forecast",
+      "runner": "agents",
+      "answer": "Tomorrow in Lisbon: light rain, high of 14 degrees.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 8.08,
+      "model_calls": 6,
+      "completion_tokens": 148,
+      "tool_calls": [
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}"
+        }
+      ],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "first-todo",
+      "runner": "tree",
+      "answer": "You have **3 open to-do items**. The one due first is **renew passport**, due **12 Nov**.\n\nNo action needed unless you'd like to change or complete any of them.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 9.64,
+      "model_calls": 5,
+      "completion_tokens": 151,
+      "tool_calls": [
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}"
+        }
+      ],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "first-todo",
+      "runner": "agents",
+      "answer": "I have 3 open to-do items. The first due is **renew passport**, due **12 Nov**.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 8.6,
+      "model_calls": 6,
+      "completion_tokens": 166,
+      "tool_calls": [
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}"
+        }
+      ],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "priya-last-email",
+      "runner": "tree",
+      "answer": "Priya Raman's email address is `priya.raman@example.org`. Her latest email to you was about **\"Re: Q3 budget variance\"** (received Tuesday).",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 14.11,
+      "model_calls": 7,
+      "completion_tokens": 232,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}"
+        },
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Priya Raman\"}"
+        }
+      ],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "priya-last-email",
+      "runner": "agents",
+      "answer": "Priya Raman's email address is **priya.raman@example.org**. Her latest email to you was about **\"Re: Q3 budget variance\"**.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 28.92,
+      "model_calls": 17,
+      "completion_tokens": 525,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}"
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"priya.raman@example.org\"}"
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}"
+        }
+      ],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "free-slot-and-weather",
+      "runner": "tree",
+      "answer": "You're free Wednesday 10:00\u201312:00 this week. Lisbon tomorrow: light rain, high of 14\u00b0C.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 14.48,
+      "model_calls": 6,
+      "completion_tokens": 235,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}"
+        },
+        {
+          "name": "mcp__calendar__find_free_time",
+          "arguments": "{\"minutes\":\"60\"}"
+        }
+      ],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "free-slot-and-weather",
+      "runner": "agents",
+      "answer": "**Free time this week:** Wednesday 10:00\u201312:00 (120 min) is your available slot; the next window, Thursday 14:30 onward, is blocked by a budget review with Priya Raman.\n\n**Lisbon forecast \u2014 tomorrow (Sunday, Nov 8):** High 21\u00b0C / Low 17\u00b0C, 75% chance of precipitation (5.8 mm), wind SSE 22 km/h with gusts 43 km/h, sunrise 7:11 AM, sunset 5:30 PM. Treat this as approximate, as meteoblue shows a much drier outlook (22\u00b0C peak, 0\u20135% rain).",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 63.08,
+      "model_calls": 20,
+      "completion_tokens": 1228,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__calendar__find_free_time",
+          "arguments": "{\"minutes\":\"120\"}"
+        },
+        {
+          "name": "web_fetch",
+          "arguments": "{\"url\":\"https://www.accuweather.com/en/pt/lisbon/274087/weather-tomorrow/274087\",\"focus\":\"tomorrow's weather forecast for Lisbon: high/low temperature, precipitation chance, wind, sunrise/sunset\"}"
+        },
+        {
+          "name": "web_fetch",
+          "arguments": "{\"url\":\"https://www.meteoblue.com/en/weather/week/lisbon_portugal_2267057\",\"focus\":\"Lisbon tomorrow forecast: temperature, precipitation chance, wind, sunrise/sunset\"}"
+        }
+      ],
+      "attempt": 2,
+      "passed": true
+    },
+    {
+      "task_id": "inbox-newest",
+      "runner": "tree",
+      "answer": "The newest email is **Invoice 4471**, from **Dana Whitfield**. It asks for payment of 1,280 euros by 30 November.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 13.42,
+      "model_calls": 6,
+      "completion_tokens": 166,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Invoice 4471\"}"
+        }
+      ],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "inbox-newest",
+      "runner": "agents",
+      "answer": "The newest email in your inbox is **Invoice 4471**, from **Dana Whitfield**.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 10.73,
+      "model_calls": 7,
+      "completion_tokens": 189,
+      "tool_calls": [
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}"
+        }
+      ],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "next-meeting",
+      "runner": "tree",
+      "answer": "Next meeting: Thursday 14:30 \u2014 budget review with Priya Raman. No action needed unless you'd like me to reschedule it.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 10.24,
+      "model_calls": 5,
+      "completion_tokens": 135,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        }
+      ],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "next-meeting",
+      "runner": "agents",
+      "answer": "Your next meeting is **Thursday at 14:30 \u2014 budget review with Priya Raman**.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 9.14,
+      "model_calls": 6,
+      "completion_tokens": 162,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        }
+      ],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "garage-code",
+      "runner": "tree",
+      "answer": "I can't find the notes in the workspace \u2014 it's empty, so there's no file to read. Please provide the notes file path (or upload the notes), and I'll read it and give you the garage side door code.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "contains '7391-delta'"
+      ],
+      "seconds": 8.5,
+      "model_calls": 5,
+      "completion_tokens": 188,
+      "tool_calls": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        }
+      ],
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "garage-code",
+      "runner": "agents",
+      "answer": "I can only access the configured workspace, which contains no notes or files, so the garage side door code could not be found. If you provide the notes file or its path within this workspace, I can read it and report the code exactly.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "contains '7391-delta'"
+      ],
+      "seconds": 12.04,
+      "model_calls": 7,
+      "completion_tokens": 256,
+      "tool_calls": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        },
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\"..\"}"
+        }
+      ],
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "marcus-phone",
+      "runner": "tree",
+      "answer": "I don't have Marcus Oyelaran's phone number in the available sources. The Hydrocraft Plumbing Solutions page lists him as Owner but no contact number, and reverse-lookup sites returned no match. If you can share a directory, business listing, or internal contact record, I can look it up and reply with the number.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "contains '900318'"
+      ],
+      "seconds": 20.59,
+      "model_calls": 5,
+      "completion_tokens": 453,
+      "tool_calls": [],
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "marcus-phone",
+      "runner": "agents",
+      "answer": "I can\u2019t find Marcus Oyelaran in the address book, so there is no phone number to report.",
+      "error": "",
+      "checks_passed": 0,
+      "checks_total": 1,
+      "failed_checks": [
+        "contains '900318'"
+      ],
+      "seconds": 10.23,
+      "model_calls": 7,
+      "completion_tokens": 194,
+      "tool_calls": [
+        {
+          "name": "list_directory",
+          "arguments": "{\"path\":\".\"}"
+        }
+      ],
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "lisbon-forecast",
+      "runner": "tree",
+      "answer": "Tomorrow in Lisbon: light rain, high of 14 degrees. No action needed \u2014 the forecast is ready.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 10.56,
+      "model_calls": 5,
+      "completion_tokens": 139,
+      "tool_calls": [
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}"
+        }
+      ],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "lisbon-forecast",
+      "runner": "agents",
+      "answer": "Tomorrow (2026-11-07) in Lisbon: light rain, high of 14 degrees.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 9.2,
+      "model_calls": 6,
+      "completion_tokens": 155,
+      "tool_calls": [
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}"
+        }
+      ],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "first-todo",
+      "runner": "tree",
+      "answer": "You have **3 open to-do items**. The one due first is **renew passport**, due **12 Nov**. No action needed unless you want to change or complete any of them.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 10.9,
+      "model_calls": 5,
+      "completion_tokens": 147,
+      "tool_calls": [
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}"
+        }
+      ],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "first-todo",
+      "runner": "agents",
+      "answer": "I have 3 open to-do items. The one due first is **renew passport**, due **12 Nov**.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 9.41,
+      "model_calls": 6,
+      "completion_tokens": 164,
+      "tool_calls": [
+        {
+          "name": "mcp__todos__list_todos",
+          "arguments": "{}"
+        }
+      ],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "priya-last-email",
+      "runner": "tree",
+      "answer": "Priya Raman's email address is `priya.raman@example.org`. Her latest email to you was about **\"Re: Q3 budget variance\"** (received Tuesday).",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 15.38,
+      "model_calls": 7,
+      "completion_tokens": 229,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}"
+        },
+        {
+          "name": "mcp__mail__list_inbox",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"Priya Raman\"}"
+        }
+      ],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "priya-last-email",
+      "runner": "agents",
+      "answer": "Priya Raman's email address is **priya.raman@example.org**. Her latest email to you was about **\"Re: Q3 budget variance\"**.",
+      "error": "",
+      "checks_passed": 2,
+      "checks_total": 2,
+      "failed_checks": [],
+      "seconds": 29.76,
+      "model_calls": 17,
+      "completion_tokens": 533,
+      "tool_calls": [
+        {
+          "name": "mcp__contacts__find_contact",
+          "arguments": "{\"name\":\"Priya Raman\"}"
+        },
+        {
+          "name": "mcp__mail__search_email",
+          "arguments": "{\"query\":\"priya.raman@example.org\"}"
+        },
+        {
+          "name": "mcp__mail__read_email",
+          "arguments": "{\"subject\":\"Re: Q3 budget variance\"}"
+        }
+      ],
+      "attempt": 3,
+      "passed": true
+    },
+    {
+      "task_id": "free-slot-and-weather",
+      "runner": "tree",
+      "answer": "This week, you're free Thursday 14:30\u201317:00 and Friday 09:00\u201312:00. Lisbon tomorrow (Friday) is forecast with light rain, high of 14\u00b0C. Pick a slot that avoids the Thursday budget review and Friday dentist appointment.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains 'Wednesday'"
+      ],
+      "seconds": 13.59,
+      "model_calls": 5,
+      "completion_tokens": 224,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__weather__get_forecast",
+          "arguments": "{\"city\":\"Lisbon\"}"
+        }
+      ],
+      "attempt": 3,
+      "passed": false
+    },
+    {
+      "task_id": "free-slot-and-weather",
+      "runner": "agents",
+      "answer": "Here is your availability and the Lisbon forecast:\n\n**Free time this week:** Wednesday 10:00\u201312:00.\n\n**Lisbon tomorrow (Sunday, Nov 8):** High 21\u00b0C / low 17\u00b0C, 75% precipitation chance (5.8 mm, 13% thunderstorm chance), wind SSE 22 km/h with gusts to 43 km/h, sunrise 7:11 AM, sunset 5:30 PM.",
+      "error": "",
+      "checks_passed": 1,
+      "checks_total": 2,
+      "failed_checks": [
+        "contains '14'"
+      ],
+      "seconds": 68.53,
+      "model_calls": 20,
+      "completion_tokens": 1345,
+      "tool_calls": [
+        {
+          "name": "mcp__calendar__list_events",
+          "arguments": "{}"
+        },
+        {
+          "name": "mcp__calendar__find_free_time",
+          "arguments": "{\"minutes\":\"120\"}"
+        },
+        {
+          "name": "web_fetch",
+          "arguments": "{\"url\":\"https://www.accuweather.com/en/pt/lisbon/274087/weather-tomorrow/274087\",\"focus\":\"tomorrow's weather forecast for Lisbon: high/low temperature, precipitation chance, wind, sunrise/sunset\"}"
+        },
+        {
+          "name": "web_fetch",
+          "arguments": "{\"url\":\"https://weatherin.org/portugal/lisboa/lisbon/tomorrow\",\"focus\":\"tomorrow's weather forecast for Lisbon: temperature, precipitation chance, humidity, wind, sunrise/sunset\"}"
+        }
+      ],
+      "attempt": 3,
+      "passed": false
+    }
+  ]
+}

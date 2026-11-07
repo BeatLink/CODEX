@@ -140,7 +140,7 @@ Design in doc 2 ("Conversation archive"). Not built: episodes are deleted under 
 
 **Assessment protocol.** Every candidate model is run on the same `dist/` build, under the GPU lock, on two sets with `--repeat 3`: `evals/agents_tasks.json` (`--runners tree,agents`) for tool use, and `evals/reasoning_tasks.json` (`--runners bare,tree`) for reasoning and intelligence. Record pass rate per runner on each set, the tasks passed in only some rounds, model calls and seconds per call. The reasoning set's `bare` score is the model alone; `tree` minus `bare` is what the harness adds. A model that wins on tool use but drops on reasoning is reported as a trade-off, not a win. Qwen3.5-4B's reasoning baseline and Spark-X2.6-4B's were run on 2026-11-07 (below).
 
-**Model results.** One row per model, set, runner and build; `--repeat 3` at the 6,144-token context with every layer on the GPU. Raw `--output` files are not kept in the repo.
+**Model results.** One row per model, set, runner and build; `--repeat 3` at the 6,144-token context with every layer on the GPU. The raw `--output` files and logs of the 2026-11-06/07 trials are in `evals/results/2026-11-model-trials/`; `evals/run_model_trial.sh MODEL.gguf OUTPUT_DIR` runs the protocol for one model.
 
 | Date | Model | Set | Build | Runner | Tasks passed | Per round | Runs reaching an MCP tool | Model calls | s per call |
 |---|---|---|---|---|---|---|---|---|---|
