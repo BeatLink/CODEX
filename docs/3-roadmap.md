@@ -119,6 +119,7 @@ Today: mail arrives → automatic mail dropped without the model → rest summar
 
 - **Voting + red-flag filters** on control-flow calls (decide, check): measure whether they improve eval pass rate enough to justify the extra calls (calls are ~4 s each on the dev machine's GPU, so cost still matters).
 - **Question-driven decisions** (doc 2): replace the six-way `approach` choice in `decide` with narrow yes/no and list questions, and choose the approach in code from the answers. Run both versions on the same eval tasks over several rounds; eight tasks give noisy pass rates, so one round settles nothing.
+- **Step-wise tool routing** (doc 2): add a routed variant of the tool loop (route → fill → execute per step) beside the current one, run both on `evals/agents_tasks.json` with the fake MCP servers, and compare tool-choice accuracy, argument validity, task success and model calls. Score route and fill errors separately.
 - **Alternative plans (tree of thought, lite):** at `decide`, sample 2–3 candidate plans and let `check` or a vote pick one, instead of following the single plan with one re-plan on failure. Affordable now that calls take ~4 s; measure pass rate against the extra calls.
 - **Corrective sub-plan on step failure** (brainos-style) vs the current "re-plan the rest once": compare.
 - **Capped retries** (practitioner: 3) and capped excerpts of step output passed forward: check against the current limits.
@@ -132,6 +133,7 @@ Built: see doc 1, "Mascot emotions". Still open:
 
 1. Try other placements (top bar, an empty workbench, the answer area) once the sidebar one has been lived with.
 2. Map more states to moods (clarification waiting, background research, unreachable daemon, cancelling, waking): see doc 2, "Mascot: more moods".
+3. Mood from content: one enum-schema call at the end of a run or on an event (doc 2, "Mascot: more moods"). Check by hand on a sample of runs that the mood fits the reply, and time the extra call.
 
 ## Speech output
 
@@ -163,6 +165,18 @@ Design and rationale in doc 2 ("Self-improving domains"). Build one domain end t
 6. **Scheduler:** add goal-driven jobs and a per-domain budget beside the reactive and maintenance classes in `core/scheduler.ts`.
 
 **Validation:** over a few weeks of real mail, track triage agreement with the user's actions and draft edit distance, before and after kept changes. Check that a deliberately wrong change is rejected by the replay gate. If mail improves, generalise the shape to calendar and tasks; if it doesn't, find out whether the signal, the reflection or the gate is at fault before adding domains.
+
+## Projects
+
+Design in doc 2 ("Projects above domains"). After the mail slice's outcome recording and scheduler steps, which projects reuse.
+
+1. **Records:** `projects` (goal, metric, status) and project tasks (prompt, deliverable, `depends_on`, due date, status, result), linked to topics, facts and entities by graph edges; created by hand from the interfaces or CLI.
+2. **Refuse goals as tasks:** a task needs a checkable deliverable; one without is kept as a goal.
+3. **Scheduler:** ready project tasks (dependencies done) become goal-driven jobs; working one is one task-tree run whose result is stored on the task.
+4. **Project memory scope:** move the `project` memory store from folder keys to project keys, folder as one optional link.
+5. **Model-proposed tasks:** the model suggests a few next tasks into the Inbox; the user accepts, edits or rejects; record those decisions as the project's signal.
+
+**Validation:** first project: fitness, mostly research tasks. Check that ready tasks get worked in idle time without blocking foreground runs, that results are recalled in later project tasks, and the share of proposed tasks the user accepts.
 
 ## Housekeeping
 

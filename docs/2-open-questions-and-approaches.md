@@ -12,7 +12,7 @@ Nothing in docs 1–2 is final. These are the largest choices still open; each s
 4. **Which model, and how many?** One 4B generalist (Qwen3.5-4B, built); a reasoning-tuned 4B for logic nodes (Phi-4-mini-reasoning); specialists swapped from disk; a 35B-A3B escalation; or voting with red-flag filters on the 4B. All unmeasured here.
 5. **How does it learn?** Model-extracted memories (built) vs model-authored skills, rules and corrections, each gated by a non-LLM verifier before it is stored.
 6. **How autonomous?** The autonomy ladder keeps authority with the user per event class. Goals, drives and initiative are part of the long-range aim; open questions are who may set them and how they are bounded.
-7. **What is the unit of improvement?** Proposed: the domain, with cognitive processes as shared job types run per domain and changes kept only when they beat the current setup on that domain's past cases (see "Self-improving domains"). Open until the mail slice shows triage getting measurably better over real mail.
+7. **What is the unit of improvement?** Proposed: the domain, with cognitive processes as shared job types run per domain and changes kept only when they beat the current setup on that domain's past cases (see "Self-improving domains"), and projects above domains supplying the goals and tasks they work on ("Projects above domains"). Open until the mail slice shows triage getting measurably better over real mail.
 8. **What does the eval loop need first?** Every question above is settled by eval runs, so a fast, trustworthy eval loop comes before any architecture bet. Calls took ~30 s until the 2026-11-05 reboot, when CUDA had fallen back to the CPU; they now average ~4 s (doc 3, "Then: a fast, trustworthy eval loop").
 
 ## Who plans the work?
@@ -54,6 +54,23 @@ A 4B model cannot judge in advance whether a task is large, so the harness split
 - **Split on failure as the backstop:** a task whose check still fails, or that runs out of tool calls or context, is split instead of answered badly. Partly built: "still failing → split into smaller subtasks" (doc 1); not yet for the tool-call and context limits. **Why:** needs no prediction, at the cost of one wasted attempt.
 - **Long tasks split as far as possible (MAKER-style):** for long chains of checkable steps, never ask about size; split until each step is atomic, then add voting and red flags ("Voting and red-flagging"). Plan lazily: the top level plans phases, and each phase is planned only when work reaches it, from the results so far. `max_task_depth`, `max_task_nodes` and the no-resplit rule become budgets a long task can raise, with checkpoints, instead of fixed caps. **Why:** MAKER's million-step result came from maximal splitting with minimal context per step; fixed caps stop a long project however well each step goes.
 - **Not built.** See doc 3, Agent hierarchy, next step 4.
+
+### Step-wise tool routing
+
+In the gather tool loop (`core/toolStage.ts`) one free-form generation sees every allowed tool and picks a tool, writes its arguments and decides whether it is done, all at once. It is the only control-flow step not forced by a grammar, and the reason Qwen's text tool calls need parsing. Proposed: split each tool step into narrow calls.
+
+```
+loop (≤ max_tool_calls):
+  route:   {reason, tool: enum[allowed tools… | "done"]}   grammar-forced, short tool descriptions only
+  fill:    arguments for that tool only                     grammar from that tool's own JSON schema
+  execute: harness runs it, fences the result               results go into the next route call
+```
+
+- **Not a router that plans every call from the planner's output.** Most chains depend on earlier results (search, then fetch a URL from the results, then read what the page names), so a plan made up front cannot know the arguments; placeholders such as "fetch result 2" would be a small plan language the 4B model must learn, and multi-turn planning is its weakest point (BFCL multi-turn ~22–35%). The router picks only the next step.
+- **Why:** the same principle as `decide`: an enum of what is allowed now. Argument filling sees one schema instead of every tool's, and the grammar makes the arguments valid by construction. `done` becomes an explicit choice, so the model can't drift into answering mid-loop. Route and fill errors can be scored separately.
+- **Deterministic routing first:** the planner's `search_queries` already go straight to search; tools stay filtered by approach and trust before the router sees them; with one allowed tool the route call is skipped. With many MCP tools, choose the server first and then the tool, which is what agents do (doc 1, "Agent hierarchy"), so routing and the hierarchy are the same idea at two levels and MCP tools probably need only one of them.
+- **Costs:** about twice the model calls per tool step, mostly prompt processing on a 6,144-token window.
+- **Not built.** See doc 3, "Task-decomposition ideas to evaluate".
 
 ## Where does reasoning happen?
 
@@ -251,6 +268,32 @@ Improvements live in data (rules, instructions, memories, validators, skills), n
 - The task tree stays the top-level coordinator: it routes a request to one or more domains and combines their results. Domains nest at most one or two levels; each hand-off loses detail.
 - User memory, entities (people, organisations, threads) and the world model are shared; a domain's scope holds only what is specific to it. This matches "Memory layers and domain rule sets" above: facts shared, rule modules per domain.
 
+### Projects above domains
+
+Domains say *how* Codex does a kind of work; nothing yet says *why*. Proposed: projects as the top layer, holding the user's goals, the tasks that serve them, and their context. Three separate axes:
+
+| Axis | Answers | Examples |
+| --- | --- | --- |
+| Projects | why and what: the user's goals, persistent | Fitness, House move, CODEX |
+| Domains | how: capabilities with tools, validators, signals | research, mail, calendar, notes |
+| Cognitive processes | method: written once, run as jobs | plan, research, audit, prune, reflect |
+
+A project uses domains rather than being one: in a fitness project, "research a diet strategy to lose weight" uses research, "book gym sessions" uses calendar, "log weekly weight" uses notes. Making each project a domain would need tools and validators per project.
+
+**A project is a goal, a persistent task DAG and a context:**
+- **Goals are not tasks.** "Lose weight" can never be marked done, so it is a goal with a metric (weight, by when). A task is an atomic item with a checkable output ("research diet strategies → summary with sources"). The harness refuses a goal as a task.
+- **Tasks persist.** Today's task tree lives for one request (`task_runs` only checkpoints it for resume). Project tasks are the same nodes made long-lived: status, `depends_on`, due date, result kept. Working one project task is one task-tree run.
+- **The scheduler pulls ready tasks.** A task whose dependencies are done is a goal-driven job, which gives "Self-improving domains" and "Cognitive loop" a concrete source of goals.
+- **Context is the project's memory scope.** `user_memory` has a `project` store keyed to a folder; keyed to a project instead, "fitness" recalls its findings, constraints and results from any folder.
+
+**Graph: linked, not merged.** The topic hierarchy says what the world is ("nutrition → caloric deficit"); the project hierarchy says what the user wants ("fitness → lose weight → research diet"). Merged, consolidation would re-file goals as world knowledge. Two trees joined by edges: `project —uses→ topic`, `task —produced→ fact`, `task —involves→ person`. Topics are a tree (one `parent_id`); project tasks need a real DAG, since a task can wait on several.
+
+**Who plans.** Breaking a goal into tasks is long-horizon planning, the 4B model's weakest skill (doc 1, "Why a 4B model"). The model proposes a few tasks into the Inbox; the user accepts, edits or rejects them. Those decisions, tasks completed and the goal's metric over time are the project's success signals, beside each domain's.
+
+**Risks:** goal-shaped tasks that never finish; plans that look sensible and lead nowhere (the metric shows it); health and similar project data is sensitive, so it stays in the local store like everything else.
+
+**Not built.** First version: projects as plain records the user creates by hand, worked by the scheduler; model-proposed tasks only once that loop works. See doc 3, "Projects".
+
 ## Other proposals
 
 ### Agent hierarchy: not built yet
@@ -263,6 +306,8 @@ Improvements live in data (rules, instructions, memories, validators, skills), n
 ### Mascot: more moods
 
 **Not built:** more states mapped to moods. Candidates (state in `src/renderer/runState.ts`): a clarification or approval waiting (`clarifications` not empty; curious), background research working (`backgroundStatus` not `Idle`; focused), daemon unreachable (`connection: 'unavailable'`; worried, today `asleep`), the user cancelling (`cancelling`; startled), resuming from suspend or connecting at launch (waking), a final answer arriving (`phase: 'final'`; excited). Needs a priority order when several hold at once (e.g. worried, asleep, startled, curious, thinking, focused, calm), with happy/sad/excited as brief moments rather than states. The removed CSS mascot also had an antenna pulse while thinking, floating z's while asleep and a slow head bob (git history); RoboEyes draws none of these.
+
+**Mood from content, not only run state:** the moods above follow what the harness is doing; none reflects what the conversation says. Proposed: one schema call with an enum of moods at the end of a run, or when an event arrives, reading the request and the reply (or the event summary). It drives the mascot and, later, the voice ("Speech output"), and could feed the drives in "Cognitive loop". A fixed stage, not an agent; skipped when the run is cancelled. Cost: one short call per run.
 
 ### Speech output
 
@@ -304,6 +349,24 @@ Basis: gathered 2026-11-05 as inspiration; not verified beyond the cited sources
 3. Verify, don't trust: deterministic test/schema/system check; cap retries; escalate or replan on failure. *Largely built* (deterministic checks, revise-once, re-plan once); escalation to a bigger model not built.
 4. Fixed pipeline instead of free-form agent loops; harness drives control flow, model fills narrow slots. *Core design.*
 5. Scratchpad or structured state passed between steps. *Partly: dependency results; per-agent scratchpad folder is proposed.*
+
+### Agent structures compared (2026-11-06)
+
+Three ways to organise agents were compared against what is built:
+
+| Structure | Idea | Where Codex stands |
+| --- | --- | --- |
+| Cognitive processes | Dedicated top-level agents per reasoning step (planner, memory manager, researcher, executor, pruner, collator, auditor, user interactor, emotion manager), run by a job scheduler | All but the emotion manager exist as stages or background jobs, not agents: `decide`, `recall`, gather, `act`, consolidation, `check` and `checks.ts`, clarification and the Inbox. The scheduler runs one job at a time |
+| Domain agents | Nested domain specialists with their own memory, rules, instructions and validators (assistant → communications → email → triage) | Prototype: agent files with instructions, MCP servers and sub-agents, depth ≤ 3. Memory, validators and skills per agent not built |
+| Freeform agents | Generic tree nodes; each parent decides which kind of work a child does | Closest: the task tree, where each node's `decide` picks its approach |
+
+**Verdict:** keep the hybrid. The task tree stays the spine; cognitive processes are fixed stages and shared job types the harness runs, not agents a planner prompts; domains (and projects above them) scope tools, memory and signals. Why not the others alone:
+- **Parallel agents can't run:** one model behind one lock on a 4 GB GPU; they would only queue.
+- **A planner writing prompts for other agents** is open-ended planning, where the 4B model fails confidently; the harness writes prompts and the model fills slots.
+- **Audit and pruning must always run.** As optional freeform choices the model would have to decide to check its own work, and small models don't; each extra option also makes `decide` harder.
+- **Deep domain trees lose detail per hand-off:** the four-level example is past the depth limit; one or two levels.
+
+Taken from them: per-domain memory and validators ("Self-improving domains"), an auditor that re-reads real state after an action, a content-driven mood stage ("Mascot: more moods"), and idle-time collation and pruning (built).
 
 ### Core structure ideas (design conversation)
 
