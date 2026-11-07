@@ -144,4 +144,5 @@ export type CodexApi = {
     listCommands(filesystemRoot: string): Promise<UserCommand[]>;
     getAutostart(): Promise<boolean>;
     setAutostart(enabled: boolean): Promise<boolean>;
+    restartDaemon(): Promise<boolean>;
 };

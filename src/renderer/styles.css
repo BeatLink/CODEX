@@ -825,6 +825,10 @@ main {
     gap: 8px;
 }
 
+#restart-daemon {
+    align-self: flex-start;
+}
+
 .topic-row {
     align-items: flex-end;
 }

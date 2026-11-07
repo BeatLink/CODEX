@@ -121,3 +121,24 @@ describe('launch at login', () => {
         expect(enabled).toBe(true);
     });
 });
+
+describe('restarting the daemon', () => {
+    it('restarts it for a trusted window only', async () => {
+        const handlers = new Map<string, (...args: unknown[]) => unknown>();
+        const restartDaemon = vi.fn();
+        let trusted = true;
+        registerIpc({
+            ipcMain: { handle: (channel: string, handler: (...args: unknown[]) => unknown) => handlers.set(channel, handler) },
+            restartDaemon,
+            isTrustedSender: () => trusted,
+        } as unknown as IpcDependencies);
+
+        const restarted = await handlers.get(CHANNELS.restartDaemon)!({});
+        trusted = false;
+        const refused = await handlers.get(CHANNELS.restartDaemon)!({});
+
+        expect(restarted).toEqual({ ok: true, result: true });
+        expect(refused).toEqual({ ok: false, error: 'Untrusted sender.' });
+        expect(restartDaemon).toHaveBeenCalledTimes(1);
+    });
+});

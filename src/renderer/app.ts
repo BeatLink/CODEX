@@ -727,7 +727,8 @@ function buildOptionsForm(): void {
     const desktop = document.createElement('fieldset');
     desktop.className = 'options-group';
     desktop.innerHTML =
-        '<h2 class="eyebrow">Desktop</h2><label class="switch-row"><input type="checkbox" id="launch-at-login"><span>Launch at login, in the system tray</span></label>';
+        '<h2 class="eyebrow">Desktop</h2><label class="switch-row"><input type="checkbox" id="launch-at-login"><span>Launch at login, in the system tray</span></label>' +
+        '<button type="button" id="restart-daemon" title="Stop the daemon and start a fresh one">Restart daemon</button>';
     view.optionsForm.append(desktop);
 }
 
@@ -738,6 +739,16 @@ async function setLaunchAtLogin(enabled: boolean): Promise<void> {
         notifyUser(input.checked ? 'CODEX will start in the tray when you log in.' : 'CODEX will no longer start when you log in.');
     } catch (error) {
         input.checked = !enabled;
+        notifyUser((error as Error).message, true);
+    }
+}
+
+// The window reconnects by itself once the old daemon has gone.
+async function restartDaemon(): Promise<void> {
+    try {
+        await codex.restartDaemon();
+        notifyUser('Restarting the daemon...');
+    } catch (error) {
         notifyUser((error as Error).message, true);
     }
 }
@@ -1220,6 +1231,7 @@ function bindControls(): void {
 
     const launchAtLogin = element<HTMLInputElement>('launch-at-login');
     launchAtLogin.addEventListener('change', () => void setLaunchAtLogin(launchAtLogin.checked));
+    element('restart-daemon').addEventListener('click', () => void restartDaemon());
     element('apply-options').addEventListener('click', () => void applySettings());
     element('save-options').addEventListener('click', () => void saveSettings());
     element('auto-size').addEventListener('click', () => void autoSize());

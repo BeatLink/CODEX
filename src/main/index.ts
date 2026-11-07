@@ -327,6 +327,7 @@ registerIpc({
         isEnabled: () => autostart.isEnabled(autostartOptions),
         setEnabled: setLaunchAtLogin,
     },
+    restartDaemon,
     isTrustedSender,
 });
 

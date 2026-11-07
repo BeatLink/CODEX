@@ -1,4 +1,4 @@
-// The IPC the window may use: daemon requests from a fixed list, daemon events, native dialogs, the clipboard, user commands, and launch at login.
+// The IPC the window may use: daemon requests from a fixed list, daemon events, native dialogs, the clipboard, user commands, launch at login, and restarting the daemon.
 import type { BrowserWindow, IpcMain, IpcMainInvokeEvent, OpenDialogOptions, SaveDialogOptions } from 'electron';
 
 import { loadCommands } from '../core/commands.js';
@@ -13,6 +13,7 @@ export const CHANNELS = {
     listCommands: 'codex:list-commands',
     getAutostart: 'codex:get-autostart',
     setAutostart: 'codex:set-autostart',
+    restartDaemon: 'codex:restart-daemon',
 } as const;
 
 // The window hears this alongside the daemon's events when launch at login changes from the tray.
@@ -21,7 +22,7 @@ export const AUTOSTART_CHANGED_EVENT = 'autostart.changed';
 // The window hears this when the tray asks for the Inbox page.
 export const SHOW_INBOX_EVENT = 'inbox.show';
 
-// Shutdown is left out, since closing a window must never stop a daemon other interfaces share.
+// Shutdown is left out, since closing a window must never stop a daemon other interfaces share; a restart has its own channel.
 export const ALLOWED_METHODS = new Set([
     'status',
     'get_settings',
@@ -137,6 +138,7 @@ export type IpcDependencies = {
     showSaveDialog: (window: BrowserWindow, options: SaveDialogOptions) => Promise<{ canceled: boolean; filePath?: string }>;
     writeClipboard: (text: string) => void;
     autostart: { isEnabled: () => boolean; setEnabled: (enabled: boolean) => void };
+    restartDaemon: () => void;
     isTrustedSender: (event: IpcMainInvokeEvent) => boolean;
 };
 
@@ -169,6 +171,10 @@ export function registerIpc(dependencies: IpcDependencies): void {
     ipcMain.handle(CHANNELS.setAutostart, guarded((_event, enabled) => wrap(() => {
         dependencies.autostart.setEnabled(Boolean(enabled));
         return dependencies.autostart.isEnabled();
+    })));
+    ipcMain.handle(CHANNELS.restartDaemon, guarded(() => wrap(() => {
+        dependencies.restartDaemon();
+        return true;
     })));
 }
 
