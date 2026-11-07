@@ -484,7 +484,7 @@ Basis: gathered 2026-11-05 as inspiration; not verified beyond the cited sources
 
 ### Nexus: a self-directed loop with drives (2026-11-06)
 
-Nexus is an earlier browser prototype by the same author: a cloud Claude model run in an unattended loop, one call per cycle, with homeostatic drives (curiosity, social and others) choosing what it does next, a memory file it appends to, and read access to its own source. Its README and the log of one 5-cycle session were reviewed against Codex; the code and legacy versions are still to review. The session is evidence for bounding self-direction: left to choose, the model spent every cycle studying its own harness, and used web search for the first time in cycle 5 after deriving memory designs from first principles that a search then showed were already published.
+Nexus is an earlier browser prototype by the same author: a cloud Claude model run in an unattended loop, one call per cycle, with homeostatic drives (curiosity, social and others) choosing what it does next, a memory file it appends to, and read access to its own source. Its README and the log of one 5-cycle session were reviewed against Codex; the code and legacy versions are still to review. Findings, verdicts and reasons per file: `docs/done/research-nexus-review.md`. The session is evidence for bounding self-direction: left to choose, the model spent every cycle studying its own harness, and used web search for the first time in cycle 5 after deriving memory designs from first principles that a search then showed were already published.
 
 | Nexus feature | Where it went in Codex |
 | --- | --- |
