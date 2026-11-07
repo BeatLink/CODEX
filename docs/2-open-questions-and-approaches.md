@@ -224,6 +224,36 @@ Every call today tells Qwen not to think aloud (`thoughts: 'discourage'` in `cor
 - **Check before building:** whether node-llama-cpp's thought budget works together with a JSON grammar on the same call.
 - **Not built.** See doc 3, "Task-decomposition ideas to evaluate".
 
+### Fitting more into the 4 GB GPU (VRAM compression)
+
+Research from 2026-11-06 (web sources, mostly blogs, forks and single-model tests; not measured here) on ways to load a larger model or a longer context into the 4 GB GPU. Not built.
+
+**No lossless option fits.** Quantization is lossy compression: it drops precision for good. Lossless weight compression exists (DFloat11 Huffman-codes the BF16 exponent bits to ~70% of the original with bit-identical output; ZipNN and Huff-LLM work the same way), but it applies only to full-precision weights: the 4B at BF16 is ~8 GB, ~5.5 GB lossless, still too big and nearly twice the Q4 file (2.91 GB). Quantized weights are close to random, so entropy coding a Q4 saves only a few percent and the two don't stack. The practical stand-in for lossless is a quant with no measurable loss: Q8_0 (weights or KV cache), with Q6_K close behind.
+
+**Options, cheapest first:**
+
+1. **KV cache quantization (recommended first).** `createContext` in `src/core/model.ts` sets only `contextSize`, so the cache runs at the default F16 and flash attention is off. node-llama-cpp 3.22 exposes `experimentalKvCacheKeyType` / `experimentalKvCacheValueType` (llama.cpp's `-ctk`/`-ctv`); a quantized V cache needs `flashAttention: true`.
+   - q8_0 for both roughly halves the cache and is reported near-lossless.
+   - q4_0 saves more but loses quality measurably (reports range from +0.2 perplexity to collapsed output similarity on one model). Keys are more sensitive than values; K=q8_0 / V=q5_0 is reported as a sweet spot (community data).
+   - Gain: a context past the 6,144-token ceiling, or headroom for a larger model such as Spark-X2.6-4B (3.54 GB). Qwen3.5-4B is hybrid linear/full attention, so only its full-attention layers keep a KV cache and the saving may be smaller than on a pure-attention model.
+   - Risk: node-llama-cpp marks both options as unstable and able to crash the process, and llama.cpp aborts on CUDA errors, so test under the GPU lock. The 560 MiB reserve in `core/autoSize.ts` was fitted to an F16 cache and must be measured again.
+   - TurboQuant (Google, ICLR 2026; ~3.5 bits per value, ~4.6× K-cache compression, small perplexity loss) exists only in community llama.cpp forks, not mainline or node-llama-cpp.
+2. **Lower-bit weight quants.** Builder matters at the same size: on one 27B, Unsloth's `UD-IQ2_XXS` scored perplexity 7.65 against bartowski's `IQ2_XXS` 8.54. IQ3_S on Llama-3-8B is ~0.9 perplexity above FP16; below ~3 bits small models degrade much faster than large ones. "A bigger model at IQ3 beats a smaller one at Q8" is the usual rule, but less reliable for small models making strict tool calls; a 7–9B at IQ2/IQ3 (~2.5–3.5 GB) could just fit and would need its tool-call reliability tested. EXL3 (QTIP trellis quantization) beats GGUF on quality per bit but is ExLlamaV3/Python only, outside Codex's llama.cpp stack.
+3. **MoE expert offload** (`--n-cpu-moe`, plus a newer `--moe-cache-mib` expert cache): experts stay in system RAM; attention, shared weights and the KV cache stay on the GPU. One anecdote runs a 35B-A3B on 4 GB with `-ncmoe 999`; another source puts the GPU-resident part of a 35B-A3B at ~10 GB. With ~20 of 27 GiB RAM already in use on the dev laptop, not practical here.
+4. **Partial layer offload** (`gpu_layers` below all layers): works with any model, but offloaded layers run at system-RAM speed (see the 9B-on-CPU result in doc 1, "Measured limits").
+
+**Speed.** Single-stream token generation is bound by memory bandwidth, not compute: each token reads every weight once. The RTX 3050 Ti Laptop has ~192 GB/s, so the ceiling is about 192 ÷ model size in GB (~65 tok/s for the 2.91 GB Q4; real speed is lower).
+
+| Setup | Effect on speed |
+|---|---|
+| Smaller weight quant (Q8 → Q4 → IQ3) | Faster: fewer bytes per token. Unpacking is cheap; IQ quants unpack a little slower than K-quants but stay bandwidth-bound |
+| KV cache q8_0 / q4_0 with flash attention | About the same; prompt processing may lose a few percent, and long-context decoding can gain slightly from reading a smaller cache |
+| Lossless (DFloat11) | Slower than the same model uncompressed in VRAM (decompression each pass); much faster than offloading |
+| Partial layer offload | Much slower, roughly in proportion to the share offloaded |
+| MoE expert offload | Slow but workable with enough RAM; only the active experts (~3B of 35B) are read per token |
+
+Anything that keeps the whole model in VRAM keeps it fast; anything that pushes weights to system RAM costs speed. **How to test:** doc 3, "Model choice".
+
 ## How does it learn?
 
 ### Verified self-authored skills
@@ -458,6 +488,10 @@ Sources cited by the research behind these docs (not re-verified):
 - Qwen3-4B with grammar-constrained decoding (community guide): [d-central](https://d-central.tech/local-llm-agent-capability/)
 - Recursive decomposition with scratchpads: [cyberdagger](https://cyberdagger.com/blog/scratchpads-recursive-decomposition-c2-agent-generation/)
 - Spark-X2.6 release: [aiweekly](https://aiweekly.co/alerts/sparkllm-ships-spark-x26-on-device-models-in-17b-and-4b); GGUF builds: [XHToken](https://huggingface.co/XHToken/Spark-X2.6-4B-GGUF), [AtomicChat](https://huggingface.co/AtomicChat/Spark-X2.6-4B-GGUF); vendor benchmarks: [model card summary](https://mer.vin/linkedin/spark-x2-6-4b-4b-on-device-agent-model-benchmarks-and-local-setup-linkedin/), [labmemo](https://labmemo.com/spark-x26-4b-ondevice-llm-2026-10/)
+- KV cache quantization: [InventiveHQ benchmark](https://inventivehq.com/blog/kv-cache-quantization-quality-benchmark), [32K context in 8 GB](https://dev.to/plasmon_imp/q4-kv-cache-fit-32k-context-into-8gb-vram-only-math-broke-209k), [12 GB write-up](https://dev.to/kenimo49/kv-cache-quantization-i-stretched-qwen-35bs-context-8x-on-12gb-vram-2o8j), [Ollama K/V quantisation](https://smcleod.net/2024/12/bringing-k/v-context-quantisation-to-ollama/), [mixed K/V types (Reddit)](https://reddit.sentinel-team.org/posts/1thu6os/snapshots/2026-05-19T23%3A39%3A57.330026Z), [node-llama-cpp v3.18.1](https://github.com/withcatai/node-llama-cpp/releases/tag/v3.18.1)
+- TurboQuant forks: [turboquant_plus](https://github.com/thetom/turboquant_plus), [turboquant-ggml](https://github.com/Keyvanhardani/turboquant-ggml), [llama-turboquant](https://www.gitlink.org.cn/okapi/llama-turboquant)
+- Low-bit weight quants: [ITQ3_S](https://arxiv.org/pdf/2603.27914), [QTIP review](https://liner.com/review/qtip-quantization-with-trellises-and-incoherence-processing), [EXL3 vs GGUF](https://atomic.chat/blog/guides/exl3-vs-gguf), [IQ2 builders compared](https://www.orcarouter.ai/blog/ternary-bonsai-2-27b-vs-qwen-3-8-27b-gguf)
+- MoE offload: [4 GB VRAM guide](https://insiderllm.com/guides/what-can-you-run-4gb-vram/), [n-cpu-moe vs expert cache](https://www.developersdigest.tech/blog/llama-cpp-moe-offload-n-cpu-moe-vs-moe-cache-2026), [MoE offloading explained](https://dev.to/someoddcodeguy/understanding-moe-offloading-5co6), [35B-A3B on 4 GB (Reddit)](https://reddit.sentinel-team.org/posts/1utgm9q/snapshots/2026-07-17T18%3A53%3A30.39359Z), [RTX 3060 with n-cpu-moe](https://knightli.com/en/2026/05/26/rtx-3060-llama-cpp-n-cpu-moe-local-35b/), [moe-l2](https://pypi.org/project/moe-l2/0.5.1/)
 - Context-Folding: [arXiv 2510.11967](https://awesomepapers.io/papers/2510.11967)
 - brainos-orchestrate: [decompose.rs](https://docs.rs/crate/brainos-orchestrate/0.5.0/source/src/decompose.rs)
 - Terminus-4B: [summary](https://awesomepapers.io/papers/garg2026terminus)
