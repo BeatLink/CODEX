@@ -122,7 +122,7 @@ describe('loadTasks', () => {
 
         const counts = names.map((name) => loadTasks(join(EVALS_DIRECTORY, name)).length);
 
-        expect(names.length).toBe(5);
+        expect(names.length).toBe(6);
         expect(counts.every((count) => count > 0)).toBe(true);
     });
 

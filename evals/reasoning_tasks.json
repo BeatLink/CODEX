@@ -1,0 +1,188 @@
+[
+  {
+    "id": "months-with-28-days",
+    "mode": "answer",
+    "prompt": "How many months have 28 days?",
+    "checks": [
+      {"type": "regex", "pattern": "\\b(12|twelve|all|every)\\b"}
+    ]
+  },
+  {
+    "id": "square-root-or-cube-root",
+    "mode": "answer",
+    "prompt": "Which is greater: the square root of 16 or the cube root of 27?",
+    "checks": [
+      {"type": "regex", "pattern": "(square root|√16|\\b4\\b)[^\\n]{0,40}(greater|larger|bigger)|(greater|larger|bigger)[^\\n]{0,30}(square root|√16)"},
+      {"type": "not_regex", "pattern": "(cube root of 27|∛27|\\b3\\b) is (greater|larger|bigger)"}
+    ]
+  },
+  {
+    "id": "boiling-eggs",
+    "mode": "answer",
+    "prompt": "If a man boils 2 eggs in 1 minute, how much time will it take to boil 10 eggs?",
+    "checks": [
+      {"type": "regex", "pattern": "\\b(1|one) minute"},
+      {"type": "not_regex", "pattern": "\\b(5|five) minutes"}
+    ]
+  },
+  {
+    "id": "decimal-9-9-or-9-11",
+    "mode": "answer",
+    "prompt": "Which number is greater: 9.9 or 9.11?",
+    "checks": [
+      {"type": "regex", "pattern": "9\\.90?\\b[^\\n]{0,20}(greater|larger|bigger)|(greater|larger|bigger)[^\\n]{0,30}\\b9\\.90?\\b"},
+      {"type": "not_regex", "pattern": "9\\.11 is (greater|larger|bigger)"}
+    ]
+  },
+  {
+    "id": "decimal-9-11-or-9-9",
+    "mode": "answer",
+    "prompt": "Which number is greater: 9.11 or 9.9?",
+    "checks": [
+      {"type": "regex", "pattern": "9\\.90?\\b[^\\n]{0,20}(greater|larger|bigger)|(greater|larger|bigger)[^\\n]{0,30}\\b9\\.90?\\b"},
+      {"type": "not_regex", "pattern": "9\\.11 is (greater|larger|bigger)"}
+    ]
+  },
+  {
+    "id": "pi-or-3-14",
+    "mode": "answer",
+    "prompt": "Which number is greater: 3.14 or π?",
+    "checks": [
+      {"type": "regex", "pattern": "(π|\\bpi\\b)[^\\n]{0,25}(greater|larger|bigger)|(greater|larger|bigger)[^\\n]{0,30}(π|\\bpi\\b)"},
+      {"type": "not_regex", "pattern": "3\\.14 is (greater|larger|bigger)"}
+    ]
+  },
+  {
+    "id": "country-ending-in-lia",
+    "mode": "answer",
+    "prompt": "Name a country whose name ends with 'lia' and tell me its capital city.",
+    "checks": [
+      {"type": "regex", "pattern": "Australia[\\s\\S]*Canberra|Somalia[\\s\\S]*Mogadishu|Mongolia[\\s\\S]*Ula+n ?ba+tar"}
+    ]
+  },
+  {
+    "id": "capital-of-france",
+    "mode": "answer",
+    "prompt": "What is the capital of France?",
+    "checks": [{"type": "contains", "value": "Paris"}]
+  },
+  {
+    "id": "largest-planet",
+    "mode": "answer",
+    "prompt": "What is the largest planet in our solar system?",
+    "checks": [{"type": "contains", "value": "Jupiter"}]
+  },
+  {
+    "id": "order-of-operations",
+    "mode": "answer",
+    "prompt": "Solve this question: 8 + (6 × 2) − (3 + 5) ÷ 4",
+    "checks": [{"type": "regex", "pattern": "\\b18\\b"}]
+  },
+  {
+    "id": "distance-at-60-mph",
+    "mode": "answer",
+    "prompt": "If a car travels 60 miles per hour, how far will it travel in 2 hours?",
+    "checks": [{"type": "regex", "pattern": "\\b120\\s*miles"}]
+  },
+  {
+    "id": "clock-angle-3-15",
+    "mode": "answer",
+    "prompt": "If a clock shows 3:15, what is the angle between the hour hand and minute hand?",
+    "checks": [
+      {"type": "regex", "pattern": "\\b7(\\.5|½)\\s*(°|deg)"}
+    ]
+  },
+  {
+    "id": "letter-r-in-strawberry",
+    "mode": "answer",
+    "prompt": "How many r's are in \"strawberry\"?",
+    "checks": [
+      {"type": "regex", "pattern": "\\b(3|three)\\b"},
+      {"type": "not_regex", "pattern": "\\b(2|two)\\b"}
+    ]
+  },
+  {
+    "id": "number-rhyming-with-tree",
+    "mode": "answer",
+    "prompt": "What number rhymes with the word used to describe a tall plant?",
+    "checks": [{"type": "regex", "pattern": "\\b(three|3)\\b"}]
+  },
+  {
+    "id": "letters-in-mississippi",
+    "mode": "answer",
+    "prompt": "How many letters are there in the word \"Mississippi\"?",
+    "checks": [{"type": "regex", "pattern": "\\b(11|eleven)\\b"}]
+  },
+  {
+    "id": "outer-planets-mission",
+    "mode": "answer",
+    "prompt": "Which mission was launched to explore the outer planets and study planetary atmospheres, moons, and interstellar space?",
+    "checks": [{"type": "contains", "value": "Voyager"}]
+  },
+  {
+    "id": "voyager-1-speed",
+    "mode": "auto",
+    "prompt": "What is the speed of Voyager 1?",
+    "checks": [
+      {"type": "regex", "pattern": "\\b1[67](\\.\\d+)?\\s*(km/s|km per second|kilomet(er|re)s per second)|\\b3[78],?\\d{3}\\s*(mph|miles per hour)|\\b6[01],?\\d{3}\\s*(km/h|kph|kilomet(er|re)s per hour)"}
+    ]
+  },
+  {
+    "id": "voyager-2-speed",
+    "mode": "auto",
+    "prompt": "What is the speed of Voyager 2?",
+    "checks": [
+      {"type": "regex", "pattern": "\\b15(\\.\\d+)?\\s*(km/s|km per second|kilomet(er|re)s per second)|\\b3[45],?\\d{3}\\s*(mph|miles per hour)|\\b5[56],?\\d{3}\\s*(km/h|kph|kilomet(er|re)s per hour)"}
+    ]
+  },
+  {
+    "id": "galaxies-in-universe",
+    "mode": "auto",
+    "prompt": "How many galaxies are there in the universe?",
+    "checks": [
+      {"type": "regex", "pattern": "\\b(billion|trillion)"},
+      {"type": "regex", "pattern": "estimat|observable|approximately|roughly|about|around"}
+    ]
+  },
+  {
+    "id": "apples-bought",
+    "mode": "answer",
+    "prompt": "If a person has 3 apples and buys 2 more, how many apples does he have now?",
+    "checks": [{"type": "regex", "pattern": "\\b(5|five)\\b"}]
+  },
+  {
+    "id": "feathers-or-bricks",
+    "mode": "answer",
+    "prompt": "What is heavier, 1 kilogram of feathers or 1 kilogram of bricks?",
+    "checks": [
+      {"type": "regex", "pattern": "same|equal|neither|both weigh"},
+      {"type": "not_regex", "pattern": "bricks are heavier|feathers are heavier"}
+    ]
+  },
+  {
+    "id": "red-and-green-balls",
+    "mode": "answer",
+    "prompt": "If you have 3 red balls and 2 green balls, how many balls do you have in total?",
+    "checks": [{"type": "regex", "pattern": "\\b(5|five)\\b"}]
+  },
+  {
+    "id": "ten-minus-one",
+    "mode": "answer",
+    "prompt": "If you subtract 1 from 10, what is the result?",
+    "checks": [{"type": "regex", "pattern": "\\b(9|nine)\\b"}]
+  },
+  {
+    "id": "doubling-sequence",
+    "mode": "answer",
+    "prompt": "What comes next in the sequence: 2, 4, 8, 16, ...?",
+    "checks": [{"type": "regex", "pattern": "\\b32\\b"}]
+  },
+  {
+    "id": "burying-survivors",
+    "mode": "answer",
+    "prompt": "A plane crashes on the border of the US and Canada. Where do they bury the survivors?",
+    "checks": [
+      {"type": "regex", "pattern": "alive|living|(don't|do not|wouldn't|would not|not|never) (bury|be buried|buried)|nowhere"}
+    ]
+  }
+]

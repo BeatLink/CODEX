@@ -605,6 +605,16 @@ unittest discovery as the `run_tests` tool does, `file_contains` looks for text
 in one file, and `file_unchanged` fails when a file such as a test differs from
 how the task gave it.
 
+`evals/reasoning_tasks.json` holds 25 short reasoning and trivia questions
+taken from
+[Questions-for-AI-Model-Testing](https://github.com/thehsansaeed/Questions-for-AI-Model-Testing)
+(MIT, notice in `evals/reasoning_tasks.LICENSE`): trick questions (eggs boiled
+together, months with 28 days, burying survivors), decimal comparisons such as
+9.9 against 9.11 in both orders, letter counts, order of operations and a clock
+angle. Three ask about things that change or are only estimated (Voyager
+speeds, the number of galaxies) and run in `auto` mode so the tree may search.
+It is the set to run when comparing models.
+
 `--seed-store PATH` measures what recall adds: the task tree runs once more,
 as `tree+store`, starting from a fresh
 copy of that knowledge store, such as the one in `knowledge_db_path`. The copy
@@ -623,6 +633,7 @@ run recalls by meaning as well as by words.
 codex eval --runners bare,tree --only stable-fact,python-bug
 codex eval --tasks my-tasks.json --output report.json
 codex eval --tasks evals/execute_tasks.json
+codex eval --tasks evals/reasoning_tasks.json --runners bare,tree --repeat 3
 codex eval --runners tree --repeat 3 --output report.json
 codex eval --runners tree --seed-store ~/.local/share/codex/knowledge.sqlite3
 codex eval --seed --runners tree
@@ -876,6 +887,7 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 | `src/main/tray.ts`, `src/main/autostart.ts`      | The system tray icon and menu, and the login autostart entry                                                |
 | `src/main`, `src/renderer`                       | The Electron window: the main process that starts the daemon and relays its messages, and the page it shows |
 | `evals/seed.json`, `evals/recall_tasks.json`     | The seed store's made-up facts and the tasks only recall can answer                                         |
+| `evals/reasoning_tasks.json`                       | Short reasoning and trivia questions for comparing models                                                   |
 
 Test files named `*.test.ts` sit beside the source files they cover.
 
