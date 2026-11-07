@@ -154,10 +154,24 @@ Mostly the implementation of features already reviewed in files 1–6. One new l
 | `claude.js`: one client, a rolling history cap, refusals raised as errors | Local model behind the daemon | Does not apply. |
 | `ui.js`: all model text inserted with `textContent` | `renderer/markdown.ts` escapes before insertion (file 1) | Already covered. |
 
-**Doc 2/3 edits:** the small "Action record" tweak above, waiting for the user's go-ahead.
+**Landed** (with file 8): the period and carried-over labels on the action record in "Cognitive loop".
+
+### 8. `public/index.html` and `public/css/` (skimmed)
+
+One page: control (wake, sleep, cycle slider from 5 to 120 s, full reset), a reasoning stream coloured by kind of action, the conversation, an editable memory file ("Yours to edit"), the bootstrap prompt in an editable panel ("edit it while it runs and the change lands on the next call"), proposed code changes with diffs, and counters (cycles, times it spoke, things learned, actions taken). `base.css` holds the shared structure and `theme-nexus.css` only the theme's tokens; both still carry styles for the removed constitution strip and values view.
+
+| Feature | Codex equivalent | Verdict and reason |
+| --- | --- | --- |
+| Bootstrap prompt editable in the window, applying from the next call | Persona proposal (file 2) names a user-owned file only | **Docs (small).** The persona is editable in the window as well as on disk, with a change applying from the next call; editing it should not need a rebuild or a restart. |
+| Reasoning stream coloured by kind of action | Task graph with each step drawn as its own box | Already covered. |
+| Proposed changes shown as diffs with Apply and Discard | Staged proposals in the Inbox (file 4) | Already covered. |
+| Counters of cycles, messages, things learned and actions | "While you were away" digest from the action record (files 3 and 7) | Already covered. |
+| The whole memory file editable as text | `/remember`, `/memories`, `/forget` and the knowledge view | **Skip.** Free-text editing of a structured store would bypass the source links and statuses that files 3 and 6 rely on. |
+| Leftover styles for the removed constitution and values views | None | Does not apply; dead code in Nexus. |
+
+**Landed** (this commit): the persona edit-in-window note under "Persona for user-facing replies".
 
 ## Still to review
 
-1. HTML and CSS (skim)
-3. `legacy/`: `drives.js`, `personality.js`, `curiosity.js`, `emergent.superseded.js`, `living-mind.scheduler.js`, the original HTML files (skim)
-4. `sandbox/.backups/…/nexus.js`, compared with the current `nexus.js` only
+1. `legacy/`: `drives.js`, `personality.js`, `curiosity.js`, `emergent.superseded.js`, `living-mind.scheduler.js`, the original HTML files (skim)
+2. `sandbox/.backups/…/nexus.js`, compared with the current `nexus.js` only
