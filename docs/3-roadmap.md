@@ -208,4 +208,6 @@ Design in doc 2 ("Projects above domains"). After the mail slice's outcome recor
 
 - Move every hardcoded prompt (triage, `decide`, consolidation, titles, evaluation and the rest in `src/core/`) out of the code into YAML config files, so a user can edit or replace them without a rebuild. Follow the agent files' layout: shipped defaults, overridden by `~/.config/codex/` and then the working folder's `.codex/`, a file replacing one of the same name.
 
+- Add Mermaid diagrams to doc 1 beside the prose they illustrate: ERDs for the knowledge store tables and the reactive assistant's `events` and `actions`, and flowcharts or sequence diagrams for the processes, the task-tree request flow, agent delegation, the background worker and the data flow. GitHub renders Mermaid in Markdown, so they stay text, diffable and edited in the same commit as the change they describe.
+
 - Purge the removed LM Studio notes (`docs/design/lm-studio-models-and-settings.md`, commits 46b2616 and 538c143) from the public history. Postponed: it rewrites published history.
