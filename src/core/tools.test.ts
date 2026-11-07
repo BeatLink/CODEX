@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Toolbox, extractHtmlText, isPublicAddress, parseSearchResults, validatePublicWebUrl } from './tools.js';
 
@@ -140,6 +140,20 @@ describe('file tools', () => {
 
         expect(await toolbox.call('read_file', { path: '.env' })).toContain('credential or secret');
         expect(await toolbox.call('read_file', { path: 'keys/server.pem' })).toContain('credential or secret');
+    });
+
+    it("refuse to write the harness's own folder, instructions files and config folder", async () => {
+        const root = temporaryFolder();
+        vi.stubEnv('XDG_CONFIG_HOME', join(root, 'config'));
+        const toolbox = new Toolbox(root, { allowFileWrites: true });
+
+        for (const path of ['.codex/agents/mail.md', 'sub/.codex/skills/code/guide.md', 'CODEX.md', 'docs/AGENTS.md', 'config/codex/CODEX.md', 'config/codex/agents/new.md']) {
+            expect(await toolbox.call('write_file', { path, content: 'x' })).toContain('blocked; edit them by hand');
+            expect(existsSync(join(root, path))).toBe(false);
+        }
+        expect(await toolbox.call('write_file', { path: 'notes/agents.md', content: 'x' })).toContain('Wrote');
+        expect(await toolbox.call('write_file', { path: 'config/other/CODEX.txt', content: 'x' })).toContain('Wrote');
+        vi.unstubAllEnvs();
     });
 
     it('hide secret files and mark links when listing', async () => {

@@ -6,6 +6,7 @@ import { BlockList, isIP } from 'node:net';
 import { isAbsolute, join, resolve, sep } from 'node:path';
 
 import type { ActionRecord } from './checks.js';
+import { configDirectory, INSTRUCTIONS_FILE_NAMES } from './instructions.js';
 import type { ToolDefinition } from './model.js';
 import { expandUser } from './settings.js';
 
@@ -396,6 +397,23 @@ function rejectSensitivePath(path: string): void {
     }
 }
 
+// Say whether a path holds the harness's own configuration: the `.codex` folder, a standing-instructions
+// file, or anything under the user's config folder. What is written there loads into every later call.
+export function isHarnessPath(path: string): boolean {
+    const parts = path.split(sep).filter(Boolean);
+    if (parts.includes(HARNESS_FOLDER) || (INSTRUCTIONS_FILE_NAMES as readonly string[]).includes(parts[parts.length - 1] ?? '')) {
+        return true;
+    }
+    const config = resolvePath(configDirectory());
+    return path === config || path.startsWith(config + sep);
+}
+
+function rejectHarnessPath(path: string): void {
+    if (isHarnessPath(path)) {
+        throw new ValueError("writing the harness's own agents, skills, commands or instructions is blocked; edit them by hand.");
+    }
+}
+
 function checkArguments(argumentsGiven: Record<string, unknown>, required: string[], optional: string[]): void {
     const keys = Object.keys(argumentsGiven);
     const missing = required.filter((key) => !keys.includes(key)).sort();
@@ -709,6 +727,7 @@ export class Toolbox {
         checkArguments(argumentsGiven, ['path', 'content'], []);
         let path = this.resolveInsideRoot(argumentsGiven.path);
         rejectSensitivePath(path);
+        rejectHarnessPath(path);
         if (statOrNull(path)?.isDirectory()) {
             throw new ValueError('path is a directory; give a file path to write.');
         }

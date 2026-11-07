@@ -819,7 +819,7 @@ background model, it sizes that model on its own device as well and sets
 | `web_search`                    | research             | DuckDuckGo results from its HTML search page, capped by `max_search_results`                                                                       |
 | `web_fetch`                     | research             | Public HTTP(S) pages only; private and local addresses are refused, including after redirects. The page is summarized for a focus the model supplies |
 | `list_directory`, `read_file` | research, files, act | Paths must stay under `filesystem_root`                                                                                                            |
-| `write_file`                    | act                  | Only with `allow_file_writes`; creates or replaces files and cannot delete                                                                         |
+| `write_file`                    | act                  | Only with `allow_file_writes`; creates or replaces files and cannot delete; refuses `.codex/`, `CODEX.md`, `AGENTS.md` and the config folder    |
 | `run_tests`                     | act                  | Only with `enable_test_execution`; runs Python `unittest` discovery under the root with a 120-second limit                                       |
 
 `filesystem_root` is resolved from the current directory. Paths are relative to
