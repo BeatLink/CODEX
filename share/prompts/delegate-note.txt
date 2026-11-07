@@ -1,0 +1,1 @@
+ 'delegate' hands the task to one specialist agent named in 'agent', and must be chosen when an agent's description covers the task or the task needs the user's own data that the agent's tools hold, which no web search can find; otherwise leave 'agent' empty. Agents:

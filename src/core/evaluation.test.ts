@@ -508,6 +508,14 @@ describe('comparing result files', () => {
         expect(printed.join('\n')).toMatch(/garage-code\s+agents\s+0\/3\s+1\/1\s+\+1\.00/);
     });
 
+    it('takes a prompts folder and refuses one that does not exist', async () => {
+        expect(parseEvalArguments(['--prompts', 'variants']).prompts).toBe('variants');
+        expect(parseEvalArguments([]).prompts).toBeNull();
+
+        expect(await main(['--prompts', join(directory, 'missing')])).toBe(1);
+        expect(loadModel).not.toHaveBeenCalled();
+    });
+
     it('pairs a new run with an earlier file and prints the pass counts per task', async () => {
         loadModel.mockResolvedValue(new ReplyingModel('4') as unknown as LocalModel);
         const older = join(directory, 'older.json');

@@ -15,6 +15,7 @@ export const INSTRUCTIONS_FILE_NAMES = ['CODEX.md', 'AGENTS.md'] as const;
 // Instructions go into every model call, so they are kept short enough to leave room for the work itself.
 export const MAX_INSTRUCTIONS_CHARS = 4000;
 
+// Section headings the code writes and matches, so they stay in code rather than share/prompts/.
 export const INSTRUCTIONS_LABEL = 'Standing instructions from the user';
 
 export function configDirectory(): string {

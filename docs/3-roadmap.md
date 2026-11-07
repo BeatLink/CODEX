@@ -276,7 +276,7 @@ Design in doc 2 ("Projects above domains"). After the mail slice's outcome recor
 
 ## Housekeeping
 
-- Move every hardcoded prompt (triage, `decide`, consolidation, titles, evaluation and the rest in `src/core/`) out of the code into YAML config files, so a user can edit or replace them without a rebuild. Follow the agent files' layout: shipped defaults, overridden by `~/.config/codex/` and then the working folder's `.codex/`, a file replacing one of the same name.
+- ~~Move every hardcoded prompt (triage, `decide`, consolidation, titles, evaluation and the rest in `src/core/`) out of the code into YAML config files, so a user can edit or replace them without a rebuild.~~ Done in part (2026-11-07): the prompts moved to a shipped bundle, `share/prompts/`, one text file each, read at startup (doc 1, "Prompt bundle"), with the text byte-identical so earlier eval results stay valid; the eval's `--prompts DIR` runs a variant folder without a rebuild. Text the code also parses or matches (section labels, the tool-stage notes, the fence note, the eval's file-block format) stayed in code. Deliberately not done: a user override from `~/.config/codex/` or `.codex/`, since prompts are promoted only through the eval (doc 2, prompt refinement). Revisit only for instruction-like prompts, and only once an eval gate checks a user's copy.
 
 - Add Mermaid diagrams to doc 1 beside the prose they illustrate: ERDs for the knowledge store tables and the reactive assistant's `events` and `actions`, and flowcharts or sequence diagrams for the processes, the task-tree request flow, agent delegation, the background worker and the data flow. GitHub renders Mermaid in Markdown, so they stay text, diffable and edited in the same commit as the change they describe.
 

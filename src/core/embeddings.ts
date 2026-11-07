@@ -10,7 +10,8 @@ import { loadGgufModel } from './model.js';
 // Settings
 // ============================================================================
 
-// Qwen3 embedding models expect a task instruction before a query, and nothing before a document.
+// Qwen3 embedding models expect a task instruction before a query, and nothing before a document;
+// the format is the model's, so it stays in code rather than share/prompts/.
 export const QUERY_INSTRUCTION = 'Instruct: Given a question, retrieve stored facts and topics that help answer it\nQuery:';
 
 // Facts and topic summaries are short, so a small window keeps the model's memory use low.

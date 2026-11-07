@@ -635,6 +635,13 @@ better or worse. `--compare OLD --against NEW` pairs two saved files without
 running anything or loading the model. Any result file works, including ones
 saved before these fields existed.
 
+`--prompts DIR` runs with prompt variants: each file in `DIR` replaces the
+shipped one of the same name in `share/prompts/` (for example a `decision.txt`
+of your own), the rest stay as shipped, and the `--output` file records the
+folder as `prompts_dir`. Setting `CODEX_PROMPTS_DIR` does the same. Nothing is
+rebuilt, so variants can be swapped between runs and compared with
+`--compare`.
+
 `--output` writes every run with its answer, checks, seconds, model calls,
 tokens and native `tool_calls`, and beside them `agents` (each hand-over to an
 agent in order, with the agent that handed it over and its depth),
@@ -872,6 +879,12 @@ context that fits in memory, up to 32768 tokens, then gives a quarter of it to
 background model, it sizes that model on its own device as well and sets
 `background_context_size` and `background_max_tokens` from it.
 
+The model's prompts ship with the program in `share/prompts/`, one text file
+per prompt, and are not a settings file: there is no user copy to override
+them, because a prompt changes only when the eval shows the new wording does
+better. To try a variant, point the eval at a folder of replacement files with
+`--prompts DIR` (see Evaluation).
+
 ## Tools and safety
 
 | Tool                              | Approach             | Notes                                                                                                                                                |
@@ -945,6 +958,7 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 | `src/core/knowledge.ts`                            | SQLite knowledge store, memory stores, queue, and graph                                                     |
 | `src/core/environment.ts`                          | Probing the machine for the locations and software memory stores                                            |
 | `src/core/agents.ts`, `share/agents/`              | Reading agent definitions and the MCP servers each one may use; the starter agents copied on first run       |
+| `src/core/prompts.ts`, `share/prompts/`            | The model's prompts, one text file each, and the loader that reads them                                      |
 | `src/core/recallBenchmark.ts`                      | Scoring recall against questions with known relevant facts                                                  |
 | `src/core/embeddings.ts`                           | The embedding model used to find facts and topics by meaning                                                |
 | `src/core/background.ts`                           | One background research job                                                                                 |

@@ -1,0 +1,1 @@
+ When no listed topic is broader but a well-known broader subject would group it with a listed topic, such as 'Pine64' for both 'PinePhone' and 'PineTime', pick '{{NEW_PARENT}}' and give that subject's name of one to {{MAX_TITLE_WORDS}} words as 'new_parent'; otherwise leave 'new_parent' empty.

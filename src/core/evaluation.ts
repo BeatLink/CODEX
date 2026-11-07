@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { getEmbedder, type TextEmbedder } from './embeddings.js';
 import { KnowledgeStore, type SearchResult } from './knowledge.js';
 import { LocalModel, runStage, type ChatCompletion, type ChatCompletionRequest, type ChatModel } from './model.js';
+import { PROMPTS_OVERRIDE_VARIABLE, prompt } from './prompts.js';
 import { defaultSettingsPath, expandUser, loadSettings, validateSettings, type McpServerSettings, type Settings } from './settings.js';
 import { STARTER_AGENTS_DIRECTORY } from './agents.js';
 import { executeTaskTree, type AgentToolCall, type Delegation } from './taskTree.js';
@@ -30,7 +31,8 @@ export const RUNNER_CHOICES = ['bare', 'tree', 'agents'] as const;
 // Runners that recall from the knowledge store, and so get a seeded run beside the empty one.
 export const STORE_RUNNERS: readonly string[] = ['tree'];
 export const SEEDED_SUFFIX = '+store';
-export const BARE_SYSTEM_PROMPT = "You are a helpful assistant. Answer the user's request.";
+export const BARE_SYSTEM_PROMPT = prompt('bare-system');
+// The 'File: <path>' format this note asks for is what FILE_BLOCK parses, so the note stays beside it in code.
 export const BARE_FILES_NOTE =
     "The files below are the whole project. To create or change a file, give its full new content as a line" +
     " 'File: <path>' followed by a fenced code block; files you leave out stay as they are.";
@@ -1057,8 +1059,8 @@ const PROGRAM = 'codex eval';
 const USAGE =
     `usage: ${PROGRAM} [-h] [--tasks TASKS] [--settings SETTINGS] [--runners RUNNERS] [--only ONLY] [--output OUTPUT]\n` +
     '                  [--seed-store SEED_STORE] [--seed [SEED]] [--repeat REPEAT] [--model-path MODEL_PATH] [--stream]\n' +
-    '                  [--compare OLD] [--against NEW]';
-const VALUE_OPTIONS = ['tasks', 'settings', 'runners', 'only', 'output', 'seed-store', 'repeat', 'model-path', 'compare', 'against'] as const;
+    '                  [--compare OLD] [--against NEW] [--prompts PROMPTS]';
+const VALUE_OPTIONS = ['tasks', 'settings', 'runners', 'only', 'output', 'seed-store', 'repeat', 'model-path', 'compare', 'against', 'prompts'] as const;
 
 function helpText(): string {
     return [
@@ -1084,6 +1086,8 @@ function helpText(): string {
         '  --stream              Print each step and tool call of every run as it happens.',
         '  --compare OLD         After the run, pair each task with its passes in this earlier --output file.',
         '  --against NEW         With --compare, pair the two result files without running anything or loading the model.',
+        '  --prompts PROMPTS     Folder of prompt variants: each file there replaces the shipped one of the same name in',
+        '                        share/prompts/ for this run, and the folder is recorded in the --output file.',
     ].join('\n');
 }
 
@@ -1100,6 +1104,7 @@ export type EvalArguments = {
     stream: boolean;
     compare: string | null;
     against: string | null;
+    prompts: string | null;
 };
 
 class UsageError extends Error {}
@@ -1123,6 +1128,7 @@ export function parseEvalArguments(argv: string[]): EvalArguments {
         stream: false,
         compare: null,
         against: null,
+        prompts: null,
     };
     const unrecognized: string[] = [];
     for (let index = 0; index < argv.length; index += 1) {
@@ -1199,6 +1205,17 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     }
     if (args.against !== null && args.compare === null) {
         return usageFailure('--against needs --compare to name the older file');
+    }
+    if (args.prompts !== null) {
+        const directory = resolve(expandUser(args.prompts));
+        if (!existsSync(directory) || !statSync(directory).isDirectory()) {
+            console.error(`Error: no prompts folder at ${directory}`);
+            return 1;
+        }
+        // The prompts are read when the modules load, so the run starts again with the folder set.
+        if (process.env[PROMPTS_OVERRIDE_VARIABLE] !== directory) {
+            return await rerunWithPrompts(directory, argv);
+        }
     }
     let oldRecords: PassRecord[] | null = null;
     try {
@@ -1283,6 +1300,21 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     }
 }
 
+// Run this eval again in a new process that reads its prompts from the variant folder.
+function rerunWithPrompts(directory: string, argv: string[]): Promise<number> {
+    const child = spawn(process.execPath, [...process.execArgv, process.argv[1], ...argv], {
+        stdio: 'inherit',
+        env: { ...process.env, [PROMPTS_OVERRIDE_VARIABLE]: directory },
+    });
+    return new Promise((resolveExit) => {
+        child.on('error', (error) => {
+            console.error(`Error: ${errorText(error)}`);
+            resolveExit(1);
+        });
+        child.on('exit', (code) => resolveExit(code ?? 1));
+    });
+}
+
 const REPORT_FLOAT_KEYS = new Set(['seconds', 'pass_rate', 'pass_every_round_rate', 'tool_choice_accuracy']);
 
 async function runAndReport(
@@ -1323,6 +1355,8 @@ async function runAndReport(
         const report = {
             model_path: settings.model_path,
             tasks_path: args.tasks,
+            // A run with prompt variants is labelled with their folder; null means the shipped prompts.
+            prompts_dir: process.env[PROMPTS_OVERRIDE_VARIABLE] || null,
             seed: args.seed,
             seed_store: !args.seed ? args.seed_store : null,
             repeat: args.repeat,

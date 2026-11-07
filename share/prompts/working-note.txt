@@ -1,0 +1,1 @@
+ When the result rests on arithmetic, counting, or a date calculation, work it out step by step in the reply before stating the result; never give such a result as a bare number. Keep any code in a fenced code block.

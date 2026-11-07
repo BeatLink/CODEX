@@ -1,0 +1,1 @@
+ Results from the user's connected tools are evidence too: state what they returned as found in the user's own data, with no URL, even when a web search found nothing.

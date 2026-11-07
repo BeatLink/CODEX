@@ -4,6 +4,7 @@ import { basename, join, resolve } from 'node:path';
 
 import { INSTRUCTIONS_FILE_NAMES, configDirectory, projectInstructionsPath } from './instructions.js';
 import { MEMORY_STORES, MEMORY_STORE_LABELS, SCOPED_MEMORY_STORES, casefold, type MemoryStore as StoreName } from './knowledge.js';
+import { prompt } from './prompts.js';
 import { expandUser } from './settings.js';
 
 // ============================================================================
@@ -252,11 +253,7 @@ function fillTemplate(template: string, argumentsText: string): string {
 // /init
 // ============================================================================
 
-export const INIT_PROMPT =
-    "Read this folder's README, build and package files, and test setup, then write a short" +
-    ` ${INSTRUCTIONS_FILE_NAMES[0]} for it: how to build it, how to run its tests, how its files are` +
-    ' laid out, and the rules anyone changing it must follow. Give each rule as one short, plain line' +
-    ' under a few headings, and include only what the files show.';
+export const INIT_PROMPT = prompt('init', { INSTRUCTIONS_FILE_NAME: INSTRUCTIONS_FILE_NAMES[0] });
 
 function initPrompt(filesystemRoot: string, allowFileWrites: boolean, argumentsText: string): [string, string] {
     const existing = projectInstructionsPath(filesystemRoot);

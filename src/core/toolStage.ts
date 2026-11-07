@@ -14,6 +14,8 @@ import type { McpServerSettings } from './settings.js';
 export const MAX_TOOL_HISTORY_CHARS = 8_000;
 // Connected tools are the MCP servers' tools, named with this prefix.
 export const CONNECTED_TOOL_PREFIX = 'mcp__';
+// These two notes stay in code rather than share/prompts/: the stage finds the first by its opening
+// words in a result, and tests match both exactly.
 export const REPEATED_CALL_NOTE = 'Same call as before; this result is already above. Answer from it now.';
 const LIMIT_REACHED_ERROR = 'Tool error: the configured tool-call limit was reached.';
 export const ANSWER_NOW_CALL_NOTE = 'The model tried to call a tool after being told to answer; the call was not run.';

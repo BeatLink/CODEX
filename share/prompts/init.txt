@@ -1,0 +1,1 @@
+Read this folder's README, build and package files, and test setup, then write a short {{INSTRUCTIONS_FILE_NAME}} for it: how to build it, how to run its tests, how its files are laid out, and the rules anyone changing it must follow. Give each rule as one short, plain line under a few headings, and include only what the files show.

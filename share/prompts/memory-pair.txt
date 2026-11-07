@@ -1,0 +1,1 @@
+Compare two things remembered, replying with JSON only. Say 'same' when they say the same thing in different words, 'contradict' when the second replaces the first or both cannot hold at once, such as two different preferred languages for one job or two different places for one folder, and otherwise 'different'.

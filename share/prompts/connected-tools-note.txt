@@ -1,0 +1,1 @@
+ Connected tools hold the user's own accounts and data, which no web search can find, so a task that needs anything they hold must choose 'act'. Connected tools:
