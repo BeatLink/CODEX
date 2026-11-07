@@ -156,6 +156,17 @@ describe('file tools', () => {
             { name: 'link', type: 'symlink' },
         ]);
     });
+
+    it("leave the harness's own folder out of listings but still read a named file in it", async () => {
+        const root = temporaryFolder();
+        mkdirSync(join(root, '.codex', 'agents'), { recursive: true });
+        writeFileSync(join(root, '.codex', 'agents', 'notes.md'), 'You work with the notes.');
+        writeFileSync(join(root, 'todo.txt'), 'x');
+        const toolbox = new Toolbox(root);
+
+        expect(JSON.parse(await toolbox.call('list_directory', {}))).toEqual([{ name: 'todo.txt', type: 'file' }]);
+        expect(await toolbox.call('read_file', { path: '.codex/agents/notes.md' })).toContain('You work with the notes.');
+    });
 });
 
 // ============================================================================

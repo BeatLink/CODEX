@@ -26,7 +26,9 @@ export const SEARCH_URL = 'https://html.duckduckgo.com/html/';
 // The tests are run with this interpreter, found on the PATH.
 export const PYTHON_COMMAND = 'python3';
 
-export const READ_ONLY_TOOL_NAMES = new Set(['web_search', 'web_fetch', 'list_directory', 'read_file']);
+// The project folder that holds the harness's own agents, skills and instructions.
+export const HARNESS_FOLDER = '.codex';
+export const READ_ONLY_TOOL_NAMES =new Set(['web_search', 'web_fetch', 'list_directory', 'read_file']);
 export const ACTION_TOOL_NAMES = new Set(['write_file', 'run_tests']);
 
 export const TOOL_DEFINITIONS: ToolDefinition[] = [
@@ -663,7 +665,8 @@ export class Toolbox {
         const entries: Array<{ name: string; type: string }> = [];
         for (const name of readdirSync(directory).sort().slice(0, MAX_DIRECTORY_ENTRIES)) {
             const entry = join(directory, name);
-            if (isSensitivePath(entry)) {
+            // The harness reads its own folder itself; listed, its agent and skill files pass for the user's notes.
+            if (isSensitivePath(entry) || name === HARNESS_FOLDER) {
                 continue;
             }
             const link = lstatOrNull(entry);
