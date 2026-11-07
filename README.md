@@ -595,6 +595,12 @@ can pass one run and fail the next. `--repeat N` goes through the whole set N
 times and adds each runner's pass rate and its passes per round to the table,
 then lists the tasks a runner passed in only some rounds.
 
+`--stream` prints each run's start, every task-tree step and every tool call
+as it happens, prefixed with the task, runner and round and the seconds since
+the run began, such as `[inbox-newest / agents #2] +4.1s tool
+mcp__mail__list_inbox {"limit":1}`. Without it a run prints nothing until it
+ends, so a slow or looping one cannot be told apart from a working one.
+
 `evals/execute_tasks.json` holds execute-mode tasks. Each one carries `files`,
 a small project written into the scratch root before the run, and the task
 tree may change those files and run their tests. The bare model gets
@@ -635,6 +641,7 @@ codex eval --tasks my-tasks.json --output report.json
 codex eval --tasks evals/execute_tasks.json
 codex eval --tasks evals/reasoning_tasks.json --runners bare,tree --repeat 3
 codex eval --runners tree --repeat 3 --output report.json
+codex eval --tasks evals/agents_tasks.json --runners tree,agents --stream
 codex eval --runners tree --seed-store ~/.local/share/codex/knowledge.sqlite3
 codex eval --seed --runners tree
 ```

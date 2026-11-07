@@ -23,6 +23,7 @@ import {
     formatUnsteadyTasks,
     loadTasks,
     main,
+    parseEvalArguments,
     runEval,
     runTask,
     summarize,
@@ -233,6 +234,29 @@ describe('runTask', () => {
 
         expect(result.tool_calls).toEqual([{ name: 'mail__list_inbox', arguments: '{"limit":1}' }]);
         expect(result.toJson().tool_calls).toEqual(result.tool_calls);
+    });
+
+    it('streams each step and tool call while the run works', async () => {
+        const toolCall = { id: 'call-1', type: 'function', function: { name: 'mail__list_inbox', arguments: '{"limit":1}' } };
+        fakeTree.mockImplementation(async (_prompt, options = {}) => {
+            options.progressCallback!('Deciding how to answer');
+            await options.llm!.createChatCompletion({ messages: [] });
+            return '4';
+        });
+        const model = {
+            createChatCompletion: async () => ({ content: '', tool_calls: [toolCall], finish_reason: 'tool_calls' }) as ChatCompletion,
+        };
+        const lines: string[] = [];
+
+        await runTask(sumTask(undefined, 'answer'), 'tree', model, SETTINGS, null, 2, (line) => lines.push(line));
+
+        expect(lines.map((line) => line.replace(/\+\d+\.\d+s /, ''))).toEqual([
+            '[sum / tree #2] start',
+            '[sum / tree #2] step Deciding how to answer',
+            '[sum / tree #2] tool mail__list_inbox {"limit":1}',
+        ]);
+        expect(parseEvalArguments(['--stream']).stream).toBe(true);
+        expect(parseEvalArguments([]).stream).toBe(false);
     });
 
     it('gives the tree runner an empty store and a scratch root', async () => {

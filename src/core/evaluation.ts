@@ -432,13 +432,18 @@ export class CountingModel implements ChatModel {
     completionTokens = 0;
     toolCalls: RecordedToolCall[] = [];
 
-    constructor(private readonly llm: ChatModel) {}
+    constructor(
+        private readonly llm: ChatModel,
+        private readonly onToolCall: ((call: RecordedToolCall) => void) | null = null,
+    ) {}
 
     async createChatCompletion(request: ChatCompletionRequest): Promise<ChatCompletion> {
         this.calls += 1;
         const response: CompletionWithUsage = await this.llm.createChatCompletion(request);
         for (const call of response.tool_calls ?? []) {
-            this.toolCalls.push({ name: call.function.name, arguments: call.function.arguments });
+            const recorded = { name: call.function.name, arguments: call.function.arguments };
+            this.toolCalls.push(recorded);
+            this.onToolCall?.(recorded);
         }
         // A reply without a usage count is measured by tokenizing what it says.
         const usage = response.usage?.completion_tokens;
@@ -512,7 +517,11 @@ function roundTo(value: number, places: number): number {
     return Math.round(value * scale) / scale;
 }
 
+// Longest tool-call arguments a streamed line shows.
+const STREAMED_ARGUMENTS_CHARS = 160;
+
 // Answer one task with one runner and score the answer, recording a failure as an error.
+// onEvent, when given, hears each step and tool call as it happens, so a slow or looping run can be watched.
 export async function runTask(
     task: EvalTask,
     runner: string,
@@ -520,11 +529,20 @@ export async function runTask(
     settings: Settings,
     seedStore: string | null = null,
     attempt = 1,
+    onEvent: ((line: string) => void) | null = null,
 ): Promise<RunResult> {
-    const countingModel = new CountingModel(llm);
     const label = seedStore !== null ? runner + SEEDED_SUFFIX : runner;
     const result = new RunResult({ task_id: task.id, runner: label, checks_total: task.checks.length, attempt });
     const started = performance.now();
+    const say =
+        onEvent === null
+            ? null
+            : (text: string) => onEvent(`[${task.id} / ${label} #${attempt}] +${((performance.now() - started) / 1000).toFixed(1)}s ${text}`);
+    const countingModel = new CountingModel(
+        llm,
+        say === null ? null : (call) => say(`tool ${call.name} ${call.arguments.slice(0, STREAMED_ARGUMENTS_CHARS)}`),
+    );
+    say?.('start');
     // Each run gets its own store, empty or a fresh copy of the seed, so no run sees what an earlier one stored.
     const scratchDirectory = mkdtempSync(join(tmpdir(), 'codex-eval-'));
     try {
@@ -535,7 +553,7 @@ export async function runTask(
             if (seedStore !== null) {
                 await copyStore(seedStore, join(scratchDirectory, 'knowledge.sqlite3'));
             }
-            result.answer = await answerWith(runner, task, countingModel, settings, scratchDirectory);
+            result.answer = await answerWith(runner, task, countingModel, settings, scratchDirectory, say === null ? undefined : (step) => say(`step ${step}`));
         } catch (error) {
             result.error = error instanceof Error ? `${error.name}: ${error.message}` : `Error: ${String(error)}`;
         }
@@ -627,7 +645,14 @@ function copyAgentFiles(directory: string): void {
     }
 }
 
-async function answerWith(runner: string, task: EvalTask, llm: ChatModel, settings: Settings, scratchDirectory: string): Promise<string> {
+async function answerWith(
+    runner: string,
+    task: EvalTask,
+    llm: ChatModel,
+    settings: Settings,
+    scratchDirectory: string,
+    onStep: (label: string) => void = () => undefined,
+): Promise<string> {
     const workspace = join(scratchDirectory, 'workspace');
     const hasFiles = Object.keys(task.files).length > 0;
     if (runner === 'bare') {
@@ -658,7 +683,7 @@ async function answerWith(runner: string, task: EvalTask, llm: ChatModel, settin
         embeddingModelPath: settings.embedding_model_path,
         llm,
         mode: task.mode,
-        progressCallback: () => undefined,
+        progressCallback: onStep,
         maxTaskDepth: settings.max_task_depth,
         maxTaskNodes: settings.max_task_nodes,
     });
@@ -686,7 +711,7 @@ export async function runEval(
     runners: string[],
     llm: ChatModel,
     settings: Settings,
-    options: { onResult?: (result: RunResult) => void; seedStore?: string | null; repeat?: number } = {},
+    options: { onResult?: (result: RunResult) => void; onEvent?: (line: string) => void; seedStore?: string | null; repeat?: number } = {},
 ): Promise<RunResult[]> {
     const seedStore = options.seedStore ?? null;
     const repeat = options.repeat ?? 1;
@@ -696,7 +721,7 @@ export async function runEval(
         for (const task of tasks) {
             for (const label of runnerLabels(runners, seedStore)) {
                 const runner = label.endsWith(SEEDED_SUFFIX) ? label.slice(0, -SEEDED_SUFFIX.length) : label;
-                const result = await runTask(task, runner, llm, settings, label !== runner ? seedStore : null, attempt);
+                const result = await runTask(task, runner, llm, settings, label !== runner ? seedStore : null, attempt, options.onEvent ?? null);
                 results.push(result);
                 options.onResult?.(result);
             }
@@ -827,7 +852,7 @@ export function formatResult(result: RunResult, showAttempt = false): string {
 const PROGRAM = 'codex eval';
 const USAGE =
     `usage: ${PROGRAM} [-h] [--tasks TASKS] [--settings SETTINGS] [--runners RUNNERS] [--only ONLY] [--output OUTPUT]\n` +
-    '                  [--seed-store SEED_STORE] [--seed [SEED]] [--repeat REPEAT] [--model-path MODEL_PATH]';
+    '                  [--seed-store SEED_STORE] [--seed [SEED]] [--repeat REPEAT] [--model-path MODEL_PATH] [--stream]';
 const VALUE_OPTIONS = ['tasks', 'settings', 'runners', 'only', 'output', 'seed-store', 'repeat', 'model-path'] as const;
 
 function helpText(): string {
@@ -851,6 +876,7 @@ function helpText(): string {
         '                        chance.',
         '  --model-path MODEL_PATH',
         '                        Path to a GGUF model (overrides settings.json).',
+        '  --stream              Print each step and tool call of every run as it happens.',
     ].join('\n');
 }
 
@@ -864,6 +890,7 @@ export type EvalArguments = {
     seed: string | null;
     repeat: number;
     model_path: string | null;
+    stream: boolean;
 };
 
 class UsageError extends Error {}
@@ -884,6 +911,7 @@ export function parseEvalArguments(argv: string[]): EvalArguments {
         seed: null,
         repeat: 1,
         model_path: null,
+        stream: false,
     };
     const unrecognized: string[] = [];
     for (let index = 0; index < argv.length; index += 1) {
@@ -905,6 +933,10 @@ export function parseEvalArguments(argv: string[]): EvalArguments {
                 index += 1;
             }
             values.seed = text ?? DEFAULT_SEED_PATH;
+            continue;
+        }
+        if (flag === 'stream' && text === null) {
+            values.stream = true;
             continue;
         }
         if (!(VALUE_OPTIONS as readonly string[]).includes(flag)) {
@@ -1031,6 +1063,7 @@ const REPORT_FLOAT_KEYS = new Set(['seconds', 'pass_rate']);
 async function runAndReport(args: EvalArguments, tasks: EvalTask[], runners: string[], llm: ChatModel, settings: Settings): Promise<number> {
     const results = await runEval(tasks, runners, llm, settings, {
         onResult: (result) => console.log(formatResult(result, args.repeat > 1)),
+        onEvent: args.stream ? (line) => console.log(line) : undefined,
         seedStore: args.seed_store,
         repeat: args.repeat,
     });
