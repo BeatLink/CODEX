@@ -34,28 +34,28 @@ describe('tray menu', () => {
         expect(chosen).toEqual(['research', 'show']);
     });
 
-    it('offers show or hide, research, launch at login and quit, with the suspension when there is one', () => {
-        const actions = { toggleWindow: () => undefined, showInbox: () => undefined, toggleResearch: () => undefined, toggleAutostart: () => undefined, quit: () => undefined };
+    it('offers show or hide, research, launch at login, restart and quit, with the suspension when there is one', () => {
+        const actions = { toggleWindow: () => undefined, showInbox: () => undefined, toggleResearch: () => undefined, toggleAutostart: () => undefined, restartDaemon: () => undefined, quit: () => undefined };
 
         const shown = trayItems({ showing: true, suspended: false, researching: true, launchAtLogin: false, inbox: 0 }, actions);
         const hidden = trayItems({ showing: false, suspended: true, researching: false, launchAtLogin: true, inbox: 0 }, actions);
 
-        expect(shown.map((item) => item.label)).toEqual(['Hide CODEX', null, 'Background research', 'Launch at login', null, 'Quit']);
-        expect(shown.map((item) => item.checked)).toEqual([undefined, undefined, true, false, undefined, undefined]);
-        expect(hidden.map((item) => item.label)).toEqual(['Show CODEX', SUSPENDED_TEXT, null, 'Background research', 'Launch at login', null, 'Quit']);
+        expect(shown.map((item) => item.label)).toEqual(['Hide CODEX', null, 'Background research', 'Launch at login', null, 'Restart daemon', 'Quit']);
+        expect(shown.map((item) => item.checked)).toEqual([undefined, undefined, true, false, undefined, undefined, undefined]);
+        expect(hidden.map((item) => item.label)).toEqual(['Show CODEX', SUSPENDED_TEXT, null, 'Background research', 'Launch at login', null, 'Restart daemon', 'Quit']);
         expect(hidden[1].action).toBeNull();
-        expect(hidden.map((item) => item.checked)).toEqual([undefined, undefined, undefined, false, true, undefined, undefined]);
+        expect(hidden.map((item) => item.checked)).toEqual([undefined, undefined, undefined, false, true, undefined, undefined, undefined]);
         expect(trayTooltip(true)).toBe(SUSPENDED_TEXT);
         expect(trayTooltip(false)).toBe('CODEX');
     });
 
     it('lists the inbox with its count only while actions are waiting', () => {
         const chosen: string[] = [];
-        const actions = { toggleWindow: () => undefined, showInbox: () => chosen.push('inbox'), toggleResearch: () => undefined, toggleAutostart: () => undefined, quit: () => undefined };
+        const actions = { toggleWindow: () => undefined, showInbox: () => chosen.push('inbox'), toggleResearch: () => undefined, toggleAutostart: () => undefined, restartDaemon: () => undefined, quit: () => undefined };
 
         const waiting = trayItems({ showing: true, suspended: false, researching: true, launchAtLogin: false, inbox: 3 }, actions);
 
-        expect(waiting.map((item) => item.label)).toEqual(['Hide CODEX', 'Inbox (3)', null, 'Background research', 'Launch at login', null, 'Quit']);
+        expect(waiting.map((item) => item.label)).toEqual(['Hide CODEX', 'Inbox (3)', null, 'Background research', 'Launch at login', null, 'Restart daemon', 'Quit']);
         chooseItem(waiting, 2);
         expect(chosen).toEqual(['inbox']);
         expect(trayTooltip(false, 3)).toBe('CODEX · 3 in the inbox');

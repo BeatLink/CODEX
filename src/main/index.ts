@@ -33,6 +33,8 @@ let researching = false;
 let inboxCount = 0;
 let announcedUpTo = 0;
 let inboxRead = false;
+// True from asking the daemon to stop until it has gone, so its departure starts a fresh one.
+let restarting = false;
 
 // ============================================================================
 // Daemon connection
@@ -48,6 +50,10 @@ function connectOnce(): Promise<{ socket_path: string; started: boolean }> {
                 if (event === DISCONNECTED_EVENT) {
                     client = null;
                     connection = null;
+                    if (restarting) {
+                        restarting = false;
+                        void connectOnce().catch(() => undefined);
+                    }
                 } else if (event === 'settings.changed') {
                     researching = Boolean((data.settings as Record<string, unknown> | undefined)?.background_research_enabled);
                     refreshTray();
@@ -69,6 +75,16 @@ function connectOnce(): Promise<{ socket_path: string; started: boolean }> {
         });
     }
     return connection;
+}
+
+// Asks the daemon to stop and starts a fresh one once it has gone; with no daemon connected it only starts one.
+function restartDaemon(): void {
+    if (client === null) {
+        void connectOnce().catch(() => undefined);
+        return;
+    }
+    restarting = true;
+    void client.call('shutdown').catch(() => undefined);
 }
 
 async function readDaemonState(connected: DaemonClient): Promise<void> {
@@ -181,6 +197,7 @@ function applicationMenu(): Menu {
                 { role: 'resetZoom' },
                 { role: 'toggleDevTools' },
                 { type: 'separator' },
+                { label: 'Restart daemon', click: restartDaemon },
                 { role: 'quit' },
             ],
         },
@@ -257,6 +274,7 @@ function refreshTray(): void {
             showInbox,
             toggleResearch,
             toggleAutostart: () => setLaunchAtLogin(!autostart.isEnabled(autostartOptions)),
+            restartDaemon,
             quit: quitFromTray,
         },
     );

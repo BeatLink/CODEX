@@ -37,6 +37,7 @@ export type TrayActions = {
     showInbox: () => void;
     toggleResearch: () => void;
     toggleAutostart: () => void;
+    restartDaemon: () => void;
     quit: () => void;
 };
 
@@ -53,6 +54,7 @@ export function trayItems(state: TrayState, actions: TrayActions): MenuItem[] {
         { label: 'Background research', action: actions.toggleResearch, checked: state.researching },
         { label: 'Launch at login', action: actions.toggleAutostart, checked: state.launchAtLogin },
         { label: null },
+        { label: 'Restart daemon', action: actions.restartDaemon },
         { label: 'Quit', action: actions.quit },
     );
     return items;
