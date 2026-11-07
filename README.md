@@ -503,6 +503,16 @@ The one-shot CLI also runs from the dev shell after a build, with
 `npm run cli -- "your prompt"`. The `flock` command from util-linux must be
 on `PATH`; the Nix package and dev shell provide it.
 
+When `package-lock.json` changes, recompute `npmDepsHash` in `flake.nix`
+with `nix run nixpkgs#prefetch-npm-deps -- package-lock.json`, or the Nix
+build fails.
+
+If node-llama-cpp reports that its prebuilt CUDA build "is not compatible"
+and falls back to the CPU, check the driver before the package: call
+`cuInit` against `/run/opengl-driver/lib/libcuda.so.1`. A result of 100 (no
+device) system-wide means the loaded kernel driver does not match the
+user-space library, which can happen after a NixOS rebuild; a reboot fixes it.
+
 Then put a GGUF model at `./models/model.gguf`, or point `model_path` at one,
 and optionally an embedding model at `./models/embedding.gguf` (see
 [Search by meaning](#search-by-meaning)).
