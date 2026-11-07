@@ -13,6 +13,7 @@ import { KnowledgeStore } from './knowledge.js';
 import type { ChatCompletion, ChatCompletionRequest, ChatModel } from './model.js';
 import type { McpServerSettings } from './settings.js';
 import {
+    AGENT_TOOLS_LABEL,
     CHECK_PROMPT,
     COMBINE_PROMPT,
     CONNECTED_TOOLS_NOTE,
@@ -1107,6 +1108,24 @@ describe('agents', () => {
         expect(call.system).toContain(CONNECTED_TOOLS_NOTE + ' contacts (find_contact, list_contacts).');
     });
 
+    it('names the tools behind each agent, its sub-agents included, when deciding', async () => {
+        const root = mkdtempSync(join(workDirectory, 'agents-'));
+        writeAgents(root, {
+            comms: '---\ndescription: Email and people.\nagents: [contacts]\n---\n',
+            contacts: '---\ndescription: Looks people up.\nmcp_servers: [contacts]\n---\n',
+        });
+        const contacts = { ...mcpServer('contacts'), allowed_tools: ['find_contact'] };
+
+        const { model } = await runTree(
+            { 'decide 1': decision('answer'), 'write 1': 'Done.' },
+            { prompt: "What is Marcus's phone number?", filesystemRoot: root, allowFileWrites: false, mcpServers: [contacts] },
+        );
+
+        const call = model.call('decide', '1');
+        expect(call.system).toContain(`comms: Email and people. ${AGENT_TOOLS_LABEL} contacts (find_contact).`);
+        expect(call.system).not.toContain(CONNECTED_TOOLS_NOTE);
+    });
+
     it('names no connected tools when no server is connected', async () => {
         const root = mkdtempSync(join(workDirectory, 'agents-'));
 
@@ -1136,6 +1155,19 @@ describe('agents', () => {
 
         expect(result).toBe('Direct answer.');
         expect(model.steps()).toEqual(['decide 1', 'write 1', 'check 1']);
+    });
+
+    it('delegates when the model names an offered agent under another approach', async () => {
+        const root = mkdtempSync(join(workDirectory, 'agents-'));
+        writeAgents(root, { mail: '---\ndescription: Email.\n---\n' });
+
+        const { result, model } = await runTree(
+            { 'decide 1': [decision('research', { agent: 'mail' }), decision('answer')], 'write 1': 'From the mail agent.' },
+            { filesystemRoot: root },
+        );
+
+        expect(result).toBe('From the mail agent.');
+        expect(model.steps()).toEqual(['decide 1', 'decide 1', 'write 1', 'check 1']);
     });
 
     it('nests agents only as deep as the limit', async () => {

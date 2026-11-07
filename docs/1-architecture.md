@@ -213,11 +213,12 @@ An agent no other agent lists is **top-level**: request tasks can delegate to it
 
 ### Delegation flow
 
-1. A task's decision schema gains a `delegate` approach and an `agent` field, only when the task's agent has usable children and the depth limit is not reached.
-2. On `delegate`, the task runs a nested `TaskTreeRun` whose request is the task's prompt and deliverable plus its dependencies' results.
-3. The nested run uses the agent's instructions after the parent's, only the agent's MCP servers, and the agent's children as delegation choices. It decides, gathers, writes and checks like any run.
-4. Its final answer becomes the delegating task's result, with the nested root task's status.
-5. Parent evidence, found addresses and tool use are shared with the nested run.
+1. A task's decision schema gains a `delegate` approach and an `agent` field, only when the task's agent has usable children and the depth limit is not reached. The decision prompt lists each agent with its description and, in a trusted run, the MCP servers and tools behind it, its sub-agents' included (`serversBehind`). **Why:** in an agents setup every server belongs to an agent, so the top level has none of its own; a description alone rarely tells a 4B model that a phone number or an inbox sits behind `comms`.
+2. A decision that names an offered agent under any approach except `decompose` is treated as `delegate`. **Why:** the schema asks for `approach` before `agent`, and the 4B model often fills `agent: "comms"` with `approach: "research"`, which dropped the agent; with this, the agents eval went from 3/24 to 11/24 tasks (2026-11-06, three rounds, 4,096-token context).
+3. On `delegate`, the task runs a nested `TaskTreeRun` whose request is the task's prompt and deliverable plus its dependencies' results.
+4. The nested run uses the agent's instructions after the parent's, only the agent's MCP servers, and the agent's children as delegation choices. It decides, gathers, writes and checks like any run.
+5. Its final answer becomes the delegating task's result, with the nested root task's status.
+6. Parent evidence, found addresses and tool use are shared with the nested run.
 
 Limits: depth ≤ 3; nested run keeps the task tree's node and depth limits; a raised error fails the task like any other, and its parent re-plans.
 

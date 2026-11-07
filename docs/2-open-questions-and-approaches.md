@@ -44,7 +44,7 @@ Approach chosen in code, first match wins: agent → `delegate`; user data or ch
 - **Rewording alone is not the change:** "Does this task need a tool?" in place of "Select a tool" probably changes little. The gain comes from the separate fields and the rules moving into code.
 - **Same idea for tool choice:** the `act` gather prompt could first ask what the task must find out or change and which listed tool does it, so there is a short plan before any tool is called.
 - **Costs:** more output tokens per decision (booleans are cheap, lists are not). Answers can contradict each other (e.g. `changes_things` true while the parts only read), which the fixed order resolves.
-- **Not built.** Keep `DECISION_PROMPT` behind a setting so the agents eval can compare the two; see doc 3, "Task-decomposition ideas to evaluate".
+- **First rule built (2026-11-06):** a named offered agent wins over the chosen approach, so `agent: "comms"` with `approach: "research"` delegates (doc 1, "Delegation flow"). That alone took the agents eval from 3/24 to 11/24 tasks, which supports moving the other rules into code too. The rest is not built: keep `DECISION_PROMPT` behind a setting so the agents eval can compare the two; see doc 3, "Task-decomposition ideas to evaluate".
 
 ## Where does reasoning happen?
 

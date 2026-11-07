@@ -1,7 +1,7 @@
 // Run a request as a tree of tasks, where each task is answered, worked with tools, or split into subtasks.
 import { resolve } from 'node:path';
 
-import { MAX_AGENT_DEPTH, loadAgents, serversFor, topLevelAgents, type AgentDefinition } from './agents.js';
+import { MAX_AGENT_DEPTH, loadAgents, serversBehind, serversFor, topLevelAgents, type AgentDefinition } from './agents.js';
 import { actionReportProblems, calculationProblems, unbackedClaims, uncitedUrls, unsupportedValues, type ActionRecord } from './checks.js';
 import { expandCommand, isMemoryCommand, runMemoryCommand } from './commands.js';
 import { condenseSections, inputTokenBudget, isCallFailure, renderSections, tokenCounter, type Section, type TokenCounter } from './contextBudget.js';
@@ -175,8 +175,10 @@ export const DECISION_PROMPT =
     " 'subtasks' empty when they do not apply.";
 export const DELEGATE_NOTE =
     " 'delegate' hands the task to one specialist agent named in 'agent'," +
-    " and must be chosen when an agent's description covers the task;" +
-    " otherwise leave 'agent' empty. Agents:";
+    " and must be chosen when an agent's description covers the task or" +
+    " the task needs the user's own data that the agent's tools hold, which" +
+    " no web search can find; otherwise leave 'agent' empty. Agents:";
+export const AGENT_TOOLS_LABEL = 'Its tools:';
 export const CONNECTED_TOOLS_NOTE =
     " Connected tools hold the user's own accounts and data, which no web" +
     " search can find, so a task that needs anything they hold must choose" +
@@ -588,6 +590,13 @@ export class Decision {
     }
 }
 
+// List servers with the tools each allows, as 'mail (list_inbox, read_email); notes'.
+export function connectedToolsList(servers: McpServerSettings[]): string {
+    return servers
+        .map((server) => (server.allowed_tools.length > 0 ? `${server.name} (${server.allowed_tools.join(', ')})` : server.name))
+        .join('; ');
+}
+
 // The approach taken when the model gives no usable decision: look things up if the task needs the web, else answer.
 export function defaultDecision(node: TaskNode): Decision {
     return new Decision(requiresWebResearch(node.prompt) ? 'research' : 'answer');
@@ -609,6 +618,10 @@ export function parseDecision(
     const agent = clean(data.agent);
     if (approach === 'delegate' && !agentNames.includes(agent)) {
         return null;
+    }
+    // The schema asks for the approach before the agent, so a small model often names the right agent under another approach.
+    if (approach !== 'decompose' && agentNames.includes(agent)) {
+        approach = 'delegate';
     }
     const facts = data.facts_to_check;
     // A small model cannot tell when it does not know something, so any listed fact means research.
@@ -1202,13 +1215,18 @@ export class TaskTreeRun {
         // Without the servers' names, a question about the user's own mail or calendar reads like a web lookup.
         const servers = this.mcpServers.filter((server) => server.enabled ?? true);
         if (approaches.includes('act') && servers.length > 0) {
-            const lines = servers.map((server) =>
-                server.allowed_tools.length > 0 ? `${server.name} (${server.allowed_tools.join(', ')})` : server.name,
-            );
-            systemPrompt += CONNECTED_TOOLS_NOTE + ' ' + lines.join('; ') + '.';
+            systemPrompt += CONNECTED_TOOLS_NOTE + ' ' + connectedToolsList(servers) + '.';
         }
         if (agentNames.length > 0) {
-            systemPrompt += DELEGATE_NOTE + agentNames.map((name) => ` ${name}: ${this.agents.get(name)!.description}`).join('');
+            // An agent's description alone rarely says that a phone number or an email sits behind it, so its tools are named too.
+            const reachable = this.trust === 'user' ? this.allMcpServers.filter((server) => server.enabled ?? true) : [];
+            const agentLines = agentNames.map((name) => {
+                const names = serversBehind(name, this.agents);
+                const behind = reachable.filter((server) => names.includes(server.name));
+                const tools = behind.length > 0 ? ` ${AGENT_TOOLS_LABEL} ${connectedToolsList(behind)}.` : '';
+                return ` ${name}: ${this.agents.get(name)!.description}${tools}`;
+            });
+            systemPrompt += DELEGATE_NOTE + agentLines.join('');
         }
         let reply: string;
         try {

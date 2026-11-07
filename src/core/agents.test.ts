@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AgentDefinition, claimedServers, loadAgents, parseAgent, serversFor, topLevelAgents } from './agents.js';
+import { AgentDefinition, claimedServers, loadAgents, parseAgent, serversBehind, serversFor, topLevelAgents } from './agents.js';
 
 let root: string;
 
@@ -103,6 +103,14 @@ describe('agent scope', () => {
 
     it('offers only the agents nobody lists at the top', () => {
         expect(topLevelAgents(agents)).toEqual(['assistant', 'notes']);
+    });
+
+    it('names the servers behind an agent through its sub-agents, stopping at a cycle', () => {
+        agents.set('mail', parseAgent('mail', '---\ndescription: Email.\nmcp_servers: mail\nagents: assistant\n---\n')!);
+
+        expect(serversBehind('assistant', agents)).toEqual(['mail']);
+        expect(serversBehind('notes', agents)).toEqual(['notes']);
+        expect(serversBehind('missing', agents)).toEqual([]);
     });
 
     it('withholds a server an agent owns from everyone else', () => {

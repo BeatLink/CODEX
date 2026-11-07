@@ -249,6 +249,17 @@ export function claimedServers(agents: Map<string, AgentDefinition>): Set<string
     return new Set([...agents.values()].flatMap((agent) => agent.mcpServers));
 }
 
+// Name the MCP servers an agent can reach, its own first and then its sub-agents', each once.
+export function serversBehind(name: string, agents: Map<string, AgentDefinition>, seen: Set<string> = new Set()): string[] {
+    const agent = agents.get(name);
+    if (agent === undefined || seen.has(name)) {
+        return [];
+    }
+    seen.add(name);
+    const names = [...agent.mcpServers, ...agent.agents.flatMap((child) => serversBehind(child, agents, seen))];
+    return [...new Set(names)];
+}
+
 // Return the MCP servers a run may use: the agent's own, or those no agent owns at the top.
 export function serversFor<Server extends NamedServer>(
     agent: AgentDefinition | null,
