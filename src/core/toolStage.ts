@@ -9,6 +9,9 @@ import type { McpServerSettings } from './settings.js';
 // ============================================================================
 
 export const MAX_TOOL_HISTORY_CHARS = 8_000;
+// Connected tools are the MCP servers' tools, named with this prefix.
+export const CONNECTED_TOOL_PREFIX = 'mcp__';
+export const REPEATED_CALL_NOTE = 'Same call as before; this result is already above. Answer from it now.';
 
 // The part of a toolbox the stage uses, so the built-in toolbox or a stand-in can serve.
 export type ToolboxLike = {
@@ -187,6 +190,12 @@ async function toolLoop(
     const toolHistory: string[] = [];
     let toolCallCount = 0;
     let toolOutputChars = 0;
+    // Each call's result by tool name and arguments, so a repeated call is answered without running the tool again.
+    const earlierResults = new Map<string, string>();
+    const usedTools = new Set<string>();
+    let connectedAnswered = false;
+    let roundsWithoutNewTool = 0;
+    let answerNow = false;
     const messageCharBudget = options.contextSize != null ? inputCharBudget(options.contextSize, maxTokens, pythonJson(toolDefinitions)) : null;
 
     while (true) {
@@ -195,7 +204,7 @@ async function toolLoop(
             temperature,
             max_tokens: maxTokens,
             tools: toolDefinitions,
-            tool_choice: toolCallCount < maxToolCalls ? 'auto' : 'none',
+            tool_choice: toolCallCount < maxToolCalls && !answerNow ? 'auto' : 'none',
             signal: options.signal,
         };
         if (onToken) {
@@ -245,6 +254,8 @@ async function toolLoop(
         }
 
         messages.push(assistantMessage);
+        let allRepeats = true;
+        let newTool = false;
         for (const toolCall of toolCalls) {
             const callId = toolCall.id;
             const name = toolCall.function?.name ?? '';
@@ -253,13 +264,28 @@ async function toolLoop(
             }
 
             let result: string;
+            let historyEntry: string | null = null;
+            const key = callKey(name, toolCall.function?.arguments ?? '{}');
+            const earlier = earlierResults.get(key);
             if (toolCallCount >= maxToolCalls) {
                 result = 'Tool error: the configured tool-call limit was reached.';
+                allRepeats = false;
             } else if (!isPermitted(name, allowedTools, blockedTools)) {
                 result = `Tool error: tool '${name}' is not allowed in this stage.`;
+                allRepeats = false;
+            } else if (earlier !== undefined) {
+                // A repeat still counts toward the limit, so a model that keeps repeating itself cannot loop forever.
+                toolCallCount += 1;
+                result = `${REPEATED_CALL_NOTE}\n\n${earlier}`;
+                historyEntry = `${name}: ${REPEATED_CALL_NOTE}`;
             } else {
                 toolCallCount += 1;
+                allRepeats = false;
+                newTool = newTool || !usedTools.has(name);
+                usedTools.add(name);
                 result = await runOneCall(name, toolCall.function?.arguments ?? '{}', toolbox, mcpToolbox, pageSummarizer, userInput);
+                earlierResults.set(key, result);
+                connectedAnswered = connectedAnswered || (name.startsWith(CONNECTED_TOOL_PREFIX) && !isToolError(result));
             }
 
             let remainingOutput = MAX_TOOL_HISTORY_CHARS - toolOutputChars;
@@ -274,9 +300,40 @@ async function toolLoop(
             toolOutputChars += result.length;
 
             messages.push({ role: 'tool', tool_call_id: callId, content: untrustedBlock(result) });
-            toolHistory.push(`${name}: ${result}`);
+            toolHistory.push(historyEntry ?? `${name}: ${result}`);
         }
+        // Once a connected tool has answered, a round of only repeats or two rounds without a new tool make the next turn answer without tools.
+        roundsWithoutNewTool = newTool ? 0 : roundsWithoutNewTool + 1;
+        answerNow = connectedAnswered && (allRepeats || roundsWithoutNewTool >= 2);
     }
+}
+
+// Say whether a tool's result reports an error instead of an answer.
+function isToolError(result: string): boolean {
+    return result.startsWith('Tool error:') || result.startsWith('MCP tool error:');
+}
+
+// Key a call by its tool and its arguments, with keys sorted, so the same call written differently matches.
+function callKey(name: string, rawArguments: string): string {
+    try {
+        return `${name} ${pythonJson(sortedKeys(JSON.parse(rawArguments)))}`;
+    } catch {
+        return `${name} ${rawArguments}`;
+    }
+}
+
+function sortedKeys(value: unknown): unknown {
+    if (Array.isArray(value)) {
+        return value.map(sortedKeys);
+    }
+    if (typeof value === 'object' && value !== null) {
+        return Object.fromEntries(
+            Object.entries(value)
+                .sort(([first], [second]) => (first < second ? -1 : first > second ? 1 : 0))
+                .map(([key, item]) => [key, sortedKeys(item)]),
+        );
+    }
+    return value;
 }
 
 // Run one permitted tool call, turning a fetched page into a summary before the model sees it.

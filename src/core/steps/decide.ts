@@ -37,8 +37,12 @@ export async function decide(run: TaskTreeRun, node: TaskNode): Promise<Decision
         // With one way open there is nothing to decide, so the call is skipped.
         return new Decision('act');
     }
-    const ask = node.parent === null && run.clarification === null && !run.delegated;
     const agentNames = run.agentChoices();
+    if (node.agent && agentNames.includes(node.agent) && approaches.includes('delegate')) {
+        // Routing already named this part's agent, so asking the model again could only misroute it.
+        return new Decision('delegate', { agent: node.agent });
+    }
+    const ask = node.parent === null && run.clarification === null && !run.delegated;
     if (agentNames.length > 0) {
         const routed = await run.route(node, approaches, ask, agentNames);
         if (routed !== null) {

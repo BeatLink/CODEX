@@ -1,6 +1,6 @@
-// The subtask steps of a task: plan subtasks, run them in order, re-plan the rest after a failure, and combine.
+// The subtask steps of a task: plan subtasks, run them in order, re-plan the rest after a failure, combine, and follow a delegation with a second agent.
 import { type Section } from '../contextBudget.js';
-import { COMBINE_PROMPT, DECISION_MAX_TOKENS, MAX_REPLANS_PER_TASK, REPLAN_PROMPT, ROOT_COMBINE_PROMPT, SubtaskSpec, TaskNode, errorMessage, isRecord, parseSubtasks, subtasksSchema, type TaskTreeRun } from '../taskTree.js';
+import { AGENT_RESULT_LABEL, COMBINE_PROMPT, DECISION_MAX_TOKENS, MAX_HANDED_RESULT_CHARS, MAX_REPLANS_PER_TASK, MIN_SUBTASKS, REPLAN_PROMPT, REROUTE_NOTE, ROOT_COMBINE_PROMPT, ROUTING_PROMPT, SubtaskSpec, TaskNode, errorMessage, isRecord, parseSubtasks, routedParts, subtasksSchema, type Decision, type TaskTreeRun } from '../taskTree.js';
 
 export async function planSubtasks(run: TaskTreeRun, node: TaskNode, systemPrompt: string, minItems: number, extra: Section[]): Promise<SubtaskSpec[]> {
     let data: unknown;
@@ -81,4 +81,47 @@ export async function runSubtasks(run: TaskTreeRun, node: TaskNode, fromSplit: b
     node.result = result;
     node.note = problem;
     node.status = problem ? 'unverified' : 'done';
+}
+
+// Route once more after an agent's result when the task may still need another agent, and hand the rest to that agent.
+export async function followDelegation(run: TaskTreeRun, node: TaskNode, decision: Decision): Promise<void> {
+    // A two-hop task routed to one agent stops after the first hop, so an agent run's own task checks what is still needed.
+    const unmet = node.status !== 'done' || (node.parent === null && run.agent !== null && decision.routed);
+    // A part routed by its parent already has its agent, and the parent re-plans around it.
+    if (!unmet || node.agent || run.specialist || run.tree.roomFor(node) < MIN_SUBTASKS) {
+        return;
+    }
+    const used = decision.agent;
+    // Only the agents not used yet are offered, so the task cannot go back to the same one.
+    const agentNames = run.agentChoices().filter((name) => name !== used);
+    if (agentNames.length === 0) {
+        return;
+    }
+    const extra: Section[] = [[`${AGENT_RESULT_LABEL} ${used} agent`, node.result.slice(0, MAX_HANDED_RESULT_CHARS) || 'No result.']];
+    const reply = await run.routingCall(node, ROUTING_PROMPT + REROUTE_NOTE, false, agentNames, extra);
+    let data: unknown;
+    try {
+        data = reply === null ? null : JSON.parse(reply);
+    } catch {
+        return;
+    }
+    const parts = routedParts(data, node, agentNames);
+    const [next] = parts?.entries() ?? [];
+    if (next === undefined) {
+        return;
+    }
+    const [agent, part] = next;
+    // The finished hand-over becomes the first subtask, so the second agent sees its result and the combine step joins both.
+    const [first] = run.tree.setChildren(node, [
+        { prompt: `What the ${used} agent found or did for this task`, deliverable: node.deliverable, depends_on: [], agent: used },
+        { prompt: `${part} (for the ${agent} agent)`, deliverable: part, depends_on: [1], agent },
+    ]);
+    first.approach = 'delegate';
+    first.status = node.status;
+    first.result = node.result;
+    first.note = node.note;
+    node.approach = 'decompose';
+    node.status = 'running';
+    run.publish();
+    await run.runSubtasks(node, false);
 }

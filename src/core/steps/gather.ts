@@ -77,7 +77,8 @@ export async function gather(run: TaskTreeRun, node: TaskNode, decision: Decisio
         act: { blockedTools: new Set(['web_search', 'web_fetch']), mcpServers: run.mcpServers },
     }[decision.approach as 'research' | 'files' | 'act'];
     const actionsBefore = run.toolbox.actionLog.length;
-    const toolCalls = decision.approach === 'act' ? Math.max(run.maxToolCalls, MIN_ACT_TOOL_CALLS) : run.maxToolCalls;
+    // A specialist's part is one narrow lookup or action, so it keeps the configured budget instead of the larger acting one.
+    const toolCalls = decision.approach === 'act' && !run.specialist ? Math.max(run.maxToolCalls, MIN_ACT_TOOL_CALLS) : run.maxToolCalls;
     const findings = await run.step(node, APPROACH_STEPS[decision.approach], async (label) => {
         // Half the room goes to the input and half stays free for tool results.
         const budget = Math.floor(inputTokenBudget(run.contextSize, run.maxTokens, run.countTokens, systemPrompt) / 2);

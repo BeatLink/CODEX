@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ChatCompletion, ChatCompletionRequest, ChatModel, ToolDefinition } from './model.js';
-import { pythonJsonLength, runToolStage, textToolCalls } from './toolStage.js';
+import { REPEATED_CALL_NOTE, pythonJsonLength, runToolStage, textToolCalls } from './toolStage.js';
 import { TOOL_DEFINITIONS } from './tools.js';
 
 // Records each call and answers it with the given output.
 class FakeToolbox {
-    readonly toolDefinitions: ToolDefinition[] = TOOL_DEFINITIONS;
     readonly calls: Array<[string, unknown]> = [];
 
-    constructor(private readonly answer: (name: string, argumentsGiven: Record<string, unknown>) => string = () => 'sample tool output') {}
+    constructor(
+        private readonly answer: (name: string, argumentsGiven: Record<string, unknown>) => string = () => 'sample tool output',
+        readonly toolDefinitions: ToolDefinition[] = TOOL_DEFINITIONS,
+    ) {}
 
     async call(name: string, argumentsGiven: unknown): Promise<string> {
         this.calls.push([name, argumentsGiven]);
@@ -40,6 +42,12 @@ class FakeModel implements ChatModel {
 function toolCallReply(callId = 'call-1', name = 'read_file', argumentsGiven: Record<string, unknown> = { path: 'notes.txt' }): ChatCompletion {
     return { content: '', tool_calls: [{ id: callId, type: 'function', function: { name, arguments: JSON.stringify(argumentsGiven) } }], finish_reason: 'tool_calls' };
 }
+
+// A connected tool, named as the MCP toolbox names its tools.
+const LIST_EVENTS: ToolDefinition = {
+    type: 'function',
+    function: { name: 'mcp__calendar__list_events', description: 'List calendar events', parameters: { type: 'object', properties: { day: { type: 'string' } } } },
+};
 
 function textReply(content: string): ChatCompletion {
     return { content, tool_calls: [], finish_reason: 'stop' };
@@ -173,6 +181,71 @@ describe('tool stage', () => {
         expect(toolbox.calls).toHaveLength(1);
         expect(result).toContain('tool-call limit was reached');
         expect(result).toContain('sample tool output');
+    });
+
+    it('answers a repeated call from the earlier result and counts it toward the limit', async () => {
+        const toolbox = new FakeToolbox();
+        const reordered: ChatCompletion = {
+            content: '',
+            tool_calls: [{ id: 'call-2', type: 'function', function: { name: 'read_file', arguments: '{ "path" : "notes.txt" }' } }],
+            finish_reason: 'tool_calls',
+        };
+        const model = new FakeModel([toolCallReply('call-1'), reordered, toolCallReply('call-3'), toolCallReply('call-4')]);
+
+        const result = await runToolStage(model, 'Use tools when useful.', 'Read notes.txt.', toolbox, 200, 0.1, 3);
+
+        expect(toolbox.calls).toHaveLength(1);
+        const repeated = model.requests[2].messages.at(-1)?.content ?? '';
+        expect(repeated).toContain(REPEATED_CALL_NOTE);
+        expect(repeated).toContain('sample tool output');
+        expect(model.requests[3].tool_choice).toBe('none');
+        expect(result).toContain('tool-call limit was reached');
+    });
+
+    it('makes the model answer once a connected tool answered and it only repeats the call', async () => {
+        const toolbox = new FakeToolbox(() => 'Dentist at 10:00', [...TOOL_DEFINITIONS, LIST_EVENTS]);
+        const model = new FakeModel([
+            toolCallReply('call-1', LIST_EVENTS.function.name, { day: 'today' }),
+            toolCallReply('call-2', LIST_EVENTS.function.name, { day: 'today' }),
+            textReply('The next meeting is the dentist at 10:00.'),
+        ]);
+
+        const result = await runToolStage(model, 'Act.', 'When is my next meeting?', toolbox, 200, 0.1, 8);
+
+        expect(model.requests.map((request) => request.tool_choice)).toEqual(['auto', 'auto', 'none']);
+        expect(toolbox.calls).toHaveLength(1);
+        expect(result).toContain('The next meeting is the dentist at 10:00.');
+    });
+
+    it('makes the model answer after two rounds without a new tool once a connected tool answered', async () => {
+        const toolbox = new FakeToolbox(() => 'No events', [...TOOL_DEFINITIONS, LIST_EVENTS]);
+        const model = new FakeModel([
+            toolCallReply('call-1', LIST_EVENTS.function.name, { day: 'monday' }),
+            toolCallReply('call-2', LIST_EVENTS.function.name, { day: 'tuesday' }),
+            toolCallReply('call-3', LIST_EVENTS.function.name, { day: 'wednesday' }),
+            textReply('Nothing this week.'),
+        ]);
+
+        await runToolStage(model, 'Act.', 'Am I free this week?', toolbox, 200, 0.1, 8);
+
+        expect(model.requests.map((request) => request.tool_choice)).toEqual(['auto', 'auto', 'auto', 'none']);
+        expect(toolbox.calls).toHaveLength(3);
+    });
+
+    it('keeps tools open when only a built-in tool or a failed connected call answered', async () => {
+        const builtIn = new FakeModel([toolCallReply('call-1'), toolCallReply('call-2'), textReply('Done.')]);
+        await runToolStage(builtIn, 'Act.', 'Read notes.txt.', new FakeToolbox(), 200, 0.1, 8);
+
+        const failing = new FakeToolbox(() => 'MCP tool error: calendar offline', [...TOOL_DEFINITIONS, LIST_EVENTS]);
+        const failed = new FakeModel([
+            toolCallReply('call-1', LIST_EVENTS.function.name, { day: 'today' }),
+            toolCallReply('call-2', LIST_EVENTS.function.name, { day: 'today' }),
+            textReply('The calendar is offline.'),
+        ]);
+        await runToolStage(failed, 'Act.', 'When is my next meeting?', failing, 200, 0.1, 8);
+
+        expect(builtIn.requests.map((request) => request.tool_choice)).toEqual(['auto', 'auto', 'auto']);
+        expect(failed.requests.map((request) => request.tool_choice)).toEqual(['auto', 'auto', 'auto']);
     });
 
     it('trims tool output to the context window', async () => {

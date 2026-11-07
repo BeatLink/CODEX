@@ -15,7 +15,7 @@ import { approachesFor, agentChoices, decide } from './steps/decide.js';
 import { search, gather } from './steps/gather.js';
 import { workDirectly } from './steps/write.js';
 import { checkAndRevise, check } from './steps/check.js';
-import { planSubtasks, workSubtasks, runSubtasks } from './steps/subtasks.js';
+import { followDelegation, planSubtasks, workSubtasks, runSubtasks } from './steps/subtasks.js';
 import { ValueError, resolvePath, type Toolbox } from './tools.js';
 
 // ============================================================================
@@ -63,7 +63,8 @@ export const APPROACH_SKILLS: Record<string, string> = { research: 'research', f
 // Paths an episode keeps of what its tools opened, so learning sees the machine without the whole log.
 export const MAX_EPISODE_PATHS = 30;
 
-export type SubtaskSpec = { prompt: string; deliverable: string; depends_on: number[] };
+// A part routed to an agent names it, so the subtask goes straight to that agent.
+export type SubtaskSpec = { prompt: string; deliverable: string; depends_on: number[]; agent?: string };
 type JsonSchema = Record<string, unknown>;
 
 function subtaskSchema(minItems: number): JsonSchema {
@@ -182,6 +183,8 @@ export const ROUTING_PROMPT =
     " the user's own data that its tools hold, which no web search can find." +
     ' List each agent once at most, in the order their parts must happen, and' +
     " leave 'needs' empty when the task needs no agent.";
+export const REROUTE_NOTE = " List only the agents still needed; leave 'needs' empty if the task is complete.";
+export const AGENT_RESULT_LABEL = 'Action results from the';
 export const CONNECTED_TOOLS_NOTE =
     " Connected tools hold the user's own accounts and data, which no web" +
     " search can find, so a task that needs anything they hold must choose" +
@@ -345,7 +348,7 @@ export type TaskSnapshot = {
     steps: StepRecord[];
 };
 
-export type TaskState = TaskSnapshot & { replans: number; from_split: boolean };
+export type TaskState = TaskSnapshot & { replans: number; from_split: boolean; agent?: string };
 
 // One task: what to do, what finished looks like, and how it went.
 export class TaskNode {
@@ -358,6 +361,8 @@ export class TaskNode {
     replans = 0;
     // A task made by splitting a failed task is not split again when it fails too, so splits cannot cascade.
     fromSplit: boolean;
+    // The agent routing gave this task to, or nothing when the task is decided as usual.
+    agent: string;
 
     constructor(
         public id: string,
@@ -365,9 +370,10 @@ export class TaskNode {
         public deliverable: string,
         public parent: TaskNode | null = null,
         public dependsOn: string[] = [],
-        options: { fromSplit?: boolean } = {},
+        options: { fromSplit?: boolean; agent?: string } = {},
     ) {
         this.fromSplit = options.fromSplit ?? false;
+        this.agent = options.agent ?? '';
     }
 
     get depth(): number {
@@ -387,7 +393,7 @@ export class TaskNode {
 
     // Everything needed to rebuild this task when a run is resumed.
     state(): TaskState {
-        return { ...this.snapshot(), result: this.result, replans: this.replans, from_split: this.fromSplit };
+        return { ...this.snapshot(), result: this.result, replans: this.replans, from_split: this.fromSplit, agent: this.agent };
     }
 
     snapshot(): TaskSnapshot {
@@ -448,7 +454,7 @@ export class TaskTree {
         const added = chosen.map((spec, index) => {
             const offset = kept.length + 1 + index;
             const dependsOn = spec.depends_on.filter((number) => number < offset).map((number) => `${node.id}.${number}`);
-            return new TaskNode(`${node.id}.${offset}`, spec.prompt, spec.deliverable, node, dependsOn, { fromSplit });
+            return new TaskNode(`${node.id}.${offset}`, spec.prompt, spec.deliverable, node, dependsOn, { fromSplit, agent: spec.agent ?? '' });
         });
         node.children = [...kept, ...added];
         return added;
@@ -472,6 +478,8 @@ export class TaskTree {
             );
             node.replans = saved.replans;
             node.fromSplit = saved.from_split;
+            // Checkpoints saved before tasks named their agent have none.
+            node.agent = saved.agent ?? '';
             if (parent !== null) {
                 parent.children.push(node);
             }
@@ -581,15 +589,18 @@ export class Decision {
     subtasks: SubtaskSpec[];
     clarification: string | null;
     agent: string;
+    // Routing named this one agent, so the task may need another once the agent's result is in.
+    routed: boolean;
 
     constructor(
         public approach: string,
-        options: { searchQueries?: string[]; subtasks?: SubtaskSpec[]; clarification?: string | null; agent?: string } = {},
+        options: { searchQueries?: string[]; subtasks?: SubtaskSpec[]; clarification?: string | null; agent?: string; routed?: boolean } = {},
     ) {
         this.searchQueries = options.searchQueries ?? [];
         this.subtasks = options.subtasks ?? [];
         this.clarification = options.clarification ?? null;
         this.agent = options.agent ?? '';
+        this.routed = options.routed ?? false;
     }
 }
 
@@ -612,9 +623,8 @@ function cleanClarification(value: unknown): string {
     return ['', 'none'].includes(casefold(clarification).replace(/[.!]+$/, '')) ? '' : clarification;
 }
 
-// Turn the routing reply into a decision: one agent delegates, several split the task by agent, none decides as usual.
-export function parseRouting(reply: string, node: TaskNode, approaches: string[], agentNames: string[]): Decision | null {
-    const data = parseJson(reply);
+// Read the agents a routing reply names, each once with its part, or null when the reply is not the expected shape.
+export function routedParts(data: unknown, node: TaskNode, agentNames: string[]): Map<string, string> | null {
     if (!isRecord(data) || !Array.isArray(data.needs)) {
         return null;
     }
@@ -625,10 +635,20 @@ export function parseRouting(reply: string, node: TaskNode, approaches: string[]
             parts.set(agent, clean((need as Record<string, unknown>).part) || node.prompt);
         }
     }
-    const clarification = cleanClarification(data.clarification) || null;
+    return parts;
+}
+
+// Turn the routing reply into a decision: one agent delegates, several split the task by agent, none decides as usual.
+export function parseRouting(reply: string, node: TaskNode, approaches: string[], agentNames: string[]): Decision | null {
+    const data = parseJson(reply);
+    const parts = routedParts(data, node, agentNames);
+    if (parts === null) {
+        return null;
+    }
+    const clarification = cleanClarification((data as Record<string, unknown>).clarification) || null;
     const [first] = parts.keys();
     if (parts.size === 1) {
-        return new Decision('delegate', { agent: first, clarification });
+        return new Decision('delegate', { agent: first, clarification, routed: true });
     }
     if (parts.size >= MIN_SUBTASKS && approaches.includes('decompose')) {
         // Each part names its agent so the subtask routes straight to it, and sees every earlier part's result.
@@ -636,6 +656,7 @@ export function parseRouting(reply: string, node: TaskNode, approaches: string[]
             prompt: `${part} (for the ${agent} agent)`,
             deliverable: part,
             depends_on: Array.from({ length: index }, (_, earlier) => earlier + 1),
+            agent,
         }));
         return new Decision('decompose', { subtasks, clarification });
     }
@@ -1218,6 +1239,7 @@ export class TaskTreeRun {
                 await this.workSubtasks(node, decision.subtasks);
             } else if (decision.approach === 'delegate') {
                 await this.delegate(node, decision.agent);
+                await this.followDelegation(node, decision);
             } else {
                 await this.workDirectly(node, decision);
             }
@@ -1260,10 +1282,15 @@ export class TaskTreeRun {
 
     // Ask which agents a task needs before deciding how to do it, so a task that spans several agents is split by agent.
     async route(node: TaskNode, approaches: string[], ask: boolean, agentNames: string[]): Promise<Decision | null> {
-        const systemPrompt = ROUTING_PROMPT + (ask ? CLARIFICATION_NOTE : '') + ' Agents:' + this.agentList(agentNames);
-        let reply: string;
+        const reply = await this.routingCall(node, ROUTING_PROMPT + (ask ? CLARIFICATION_NOTE : ''), ask, agentNames);
+        return reply === null ? null : parseRouting(reply, node, approaches, agentNames);
+    }
+
+    // Make one routing call and return its reply, or null when the call failed.
+    async routingCall(node: TaskNode, prompt: string, ask: boolean, agentNames: string[], extra: Section[] = []): Promise<string | null> {
+        const systemPrompt = prompt + ' Agents:' + this.agentList(agentNames);
         try {
-            reply = await this.call(node, 'Routing', systemPrompt, await this.sections(node), {
+            return await this.call(node, 'Routing', systemPrompt, await this.sections(node, [], '', extra), {
                 replyTokens: DECISION_MAX_TOKENS,
                 jsonSchema: routingSchema(agentNames, ask),
             });
@@ -1274,7 +1301,6 @@ export class TaskTreeRun {
             this.report(node, 'Routing failed, deciding without it');
             return null;
         }
-        return parseRouting(reply, node, approaches, agentNames);
     }
 
     // List the agents to choose from; a description alone rarely says that a phone number or an inbox sits behind an agent, so its tools are named too.
@@ -1412,6 +1438,10 @@ export class TaskTreeRun {
 
     async runSubtasks(node: TaskNode, fromSplit: boolean): Promise<void> {
         return runSubtasks(this, node, fromSplit);
+    }
+
+    async followDelegation(node: TaskNode, decision: Decision): Promise<void> {
+        return followDelegation(this, node, decision);
     }
 
     // ==========================================================================

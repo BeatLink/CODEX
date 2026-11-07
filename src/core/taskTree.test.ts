@@ -21,6 +21,7 @@ import {
     REASON_MAX_CHARS,
     REPLAN_PROMPT,
     REVISE_NOTE,
+    REROUTE_NOTE,
     ROUTING_PROMPT,
     ROOT_COMBINE_PROMPT,
     SPLIT_PROMPT,
@@ -1135,6 +1136,7 @@ describe('agents', () => {
             { prompt: "What is Marcus's phone number?", filesystemRoot: root, allowFileWrites: false, mcpServers: [mcpServer('contacts')], confirmActions: false },
         );
 
+        // With no other agent to offer, the unmet result is not routed again.
         expect(model.steps()).toEqual(['route 1', 'decide 1', 'write 1', 'check 1', 'revise 1', 'check 1']);
         expect(trees.at(-1)![0].status).toBe('unverified');
     });
@@ -1250,11 +1252,160 @@ describe('agents', () => {
 
         expect(decided.approach).toBe('decompose');
         expect(decided.subtasks).toEqual([
-            { prompt: 'Find a free slot this week. (for the calendar agent)', deliverable: 'Find a free slot this week.', depends_on: [] },
-            { prompt: 'Get the Lisbon forecast. (for the weather agent)', deliverable: 'Get the Lisbon forecast.', depends_on: [1] },
+            { prompt: 'Find a free slot this week. (for the calendar agent)', deliverable: 'Find a free slot this week.', depends_on: [], agent: 'calendar' },
+            { prompt: 'Get the Lisbon forecast. (for the weather agent)', deliverable: 'Get the Lisbon forecast.', depends_on: [1], agent: 'weather' },
         ]);
         expect(parseRouting(reply, node, ['answer'], ['calendar', 'weather'])).toBeNull();
         expect(parseRouting(JSON.stringify({ needs: [] }), node, ['answer'], ['calendar'])).toBeNull();
+    });
+
+    it('gives a specialist the configured tool budget instead of the larger acting one', async () => {
+        const root = mkdtempSync(join(workDirectory, 'agents-'));
+        writeAgents(root, { mail: '---\ndescription: Email.\nmcp_servers: mail\n---\n' });
+        const budgets: number[] = [];
+        mocks.runToolStage.mockImplementation(async (_llm, _system, _input, _toolbox, _maxTokens, _temperature, maxToolCalls: number) => {
+            budgets.push(maxToolCalls);
+            return 'list_inbox returned one email.';
+        });
+
+        await runTree(
+            { 'decide 1': decision('delegate', { agent: 'mail' }), 'write 1': 'One email.' },
+            { filesystemRoot: root, allowFileWrites: false, mcpServers: [mcpServer('mail')], confirmActions: false, maxToolCalls: 3 },
+        );
+
+        expect(budgets).toEqual([3]);
+    });
+
+    it('sends each routed part straight to its agent without routing or deciding it again', async () => {
+        const root = mkdtempSync(join(workDirectory, 'agents-'));
+        writeAgents(root, {
+            calendar: '---\ndescription: Calendar.\nmcp_servers: calendar\n---\n',
+            weather: '---\ndescription: Forecasts.\nmcp_servers: weather\n---\n',
+        });
+        mocks.runToolStage.mockResolvedValue('tool output');
+
+        const { result, model, trees } = await runTree(
+            {
+                'route 1': JSON.stringify({
+                    needs: [
+                        { agent: 'calendar', part: 'Find a free slot this week.' },
+                        { agent: 'weather', part: 'Get the Lisbon forecast.' },
+                    ],
+                }),
+                'write 1': ['Free on Tuesday.', 'Sunny in Lisbon.'],
+                'combine 1': 'Free on Tuesday, and it will be sunny.',
+            },
+            {
+                prompt: 'When am I free this week, and what is the forecast in Lisbon?',
+                filesystemRoot: root,
+                allowFileWrites: false,
+                mcpServers: [mcpServer('calendar'), mcpServer('weather')],
+                confirmActions: false,
+            },
+        );
+
+        expect(result).toBe('Free on Tuesday, and it will be sunny.');
+        expect(model.steps()).toEqual(['route 1', 'write 1', 'check 1', 'write 1', 'check 1', 'combine 1', 'check 1']);
+        expect(trees.at(-1)!.map((task) => [task.id, task.approach, task.note])).toEqual([
+            ['1', 'decompose', ''],
+            ['1.1', 'delegate', 'Delegated to the calendar agent'],
+            ['1.2', 'delegate', 'Delegated to the weather agent'],
+        ]);
+    });
+
+    it("keeps a routed part's agent in a checkpoint, and reads one saved without it", () => {
+        const tree = new TaskTree('Two parts', 3, 10);
+        tree.setChildren(tree.root, [
+            { prompt: 'Find a slot (for the calendar agent)', deliverable: 'A slot', depends_on: [], agent: 'calendar' },
+            { prompt: 'Summarize it', deliverable: 'A summary', depends_on: [1] },
+        ]);
+        const saved = tree.nodes().map((node) => node.state());
+
+        const restored = TaskTree.fromState('Two parts', saved, 3, 10);
+        const older = TaskTree.fromState('Two parts', saved.map(({ agent: _agent, ...rest }) => rest), 3, 10);
+
+        expect(restored.nodes().map((node) => node.agent)).toEqual(['', 'calendar', '']);
+        expect(older.nodes().map((node) => node.agent)).toEqual(['', '', '']);
+    });
+
+    it("routes an agent's task once more after its first hop, and joins both agents' results", async () => {
+        const root = mkdtempSync(join(workDirectory, 'agents-'));
+        writeAgents(root, {
+            comms: '---\ndescription: Email and people.\nagents: [contacts, mail]\n---\n',
+            contacts: '---\ndescription: Looks people up.\nmcp_servers: contacts\n---\n',
+            mail: '---\ndescription: Reads email.\nmcp_servers: mail\n---\n',
+        });
+        mocks.runToolStage.mockResolvedValue('tool output');
+
+        const { result, model } = await runTree(
+            {
+                'route 1': [
+                    JSON.stringify({ needs: [{ agent: 'comms', part: "Find Priya's latest email." }] }),
+                    JSON.stringify({ needs: [{ agent: 'contacts', part: "Find Priya's address." }] }),
+                    JSON.stringify({ needs: [{ agent: 'mail', part: 'Find the latest email from priya@example.com.' }] }),
+                ],
+                'write 1': ['Priya is priya@example.com.', 'Her latest email was about the budget.'],
+                'combine 1': 'Priya (priya@example.com) last wrote about the budget.',
+            },
+            {
+                prompt: "Find Priya's address, then tell me what her latest email was about.",
+                filesystemRoot: root,
+                allowFileWrites: false,
+                mcpServers: [mcpServer('contacts'), mcpServer('mail')],
+                confirmActions: false,
+            },
+        );
+
+        expect(result).toBe('Priya (priya@example.com) last wrote about the budget.');
+        expect(model.steps()).toEqual(['route 1', 'route 1', 'write 1', 'check 1', 'route 1', 'write 1', 'check 1', 'combine 1', 'check 1']);
+        const reroute = model.calls.filter((call) => call.step === 'route')[2];
+        expect(reroute.system).toContain(REROUTE_NOTE);
+        expect(reroute.input).toContain('Priya is priya@example.com.');
+        // The mail agent gets the contact's address with its brief.
+        expect(model.calls.filter((call) => call.step === 'write')[1].input).toContain('Priya is priya@example.com.');
+        const combine = model.call('combine', '1').input;
+        expect(combine).toContain('Priya is priya@example.com.');
+        expect(combine).toContain('Her latest email was about the budget.');
+    });
+
+    it('routes a task once more at most', async () => {
+        const root = mkdtempSync(join(workDirectory, 'agents-'));
+        writeAgents(root, {
+            comms: '---\ndescription: Email, people and calendar.\nagents: [contacts, mail, calendar]\n---\n',
+            contacts: '---\ndescription: Looks people up.\nmcp_servers: contacts\n---\n',
+            mail: '---\ndescription: Reads email.\nmcp_servers: mail\n---\n',
+            calendar: '---\ndescription: Calendar.\nmcp_servers: calendar\n---\n',
+        });
+        mocks.runToolStage.mockResolvedValue('tool output');
+
+        const { model } = await runTree(
+            {
+                'route 1': [
+                    JSON.stringify({ needs: [{ agent: 'comms', part: 'Find Priya and her email.' }] }),
+                    JSON.stringify({ needs: [{ agent: 'contacts', part: 'Find Priya.' }] }),
+                    JSON.stringify({ needs: [{ agent: 'mail', part: 'Find her email.' }] }),
+                    // Every later routing call would name yet another agent.
+                    JSON.stringify({ needs: [{ agent: 'calendar', part: 'Find her meetings.' }] }),
+                ],
+                'write 1': 'Partial.',
+                'check 1': check('partly met', 'Not everything.'),
+                'revise 1': 'Still partial.',
+                'combine 1': 'Joined.',
+            },
+            {
+                prompt: 'Find Priya and her latest email.',
+                filesystemRoot: root,
+                allowFileWrites: false,
+                mcpServers: [mcpServer('contacts'), mcpServer('mail'), mcpServer('calendar')],
+                confirmActions: false,
+            },
+        );
+
+        // The top task and the comms task route once, the comms task once more, and the unmet mail part never again.
+        const routes = model.calls.filter((call) => call.step === 'route');
+        expect(routes.map((call) => call.system.includes(REROUTE_NOTE))).toEqual([false, false, true]);
+        expect(routes[2].json_schema!.properties.needs.items.properties.agent.enum).toEqual(['mail', 'calendar']);
+        expect(mocks.runToolStage).toHaveBeenCalledTimes(2);
     });
 
     it('nests agents only as deep as the limit', async () => {
