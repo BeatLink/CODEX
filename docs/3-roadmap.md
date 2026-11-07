@@ -149,7 +149,15 @@ Built: see doc 1, "Mascot emotions". Still open:
 
 1. Try other placements (top bar, an empty workbench, the answer area) once the sidebar one has been lived with.
 2. Map more states to moods (clarification waiting, background research, unreachable daemon, cancelling, waking): see doc 2, "Mascot: more moods".
-3. Mood from content: one enum-schema call at the end of a run or on an event (doc 2, "Mascot: more moods"). Check by hand on a sample of runs that the mood fits the reply, and time the extra call.
+3. Mood from content: one enum-schema call at the end of a run or on an event (doc 2, "Mascot: more moods"). Check by hand on a sample of runs that the mood fits the reply, and time the extra call. Compare with the no-call alternative there (mood computed from drive levels and recent outcomes) once drives exist.
+
+## Persona and conversation (open for debate)
+
+Doc 2, "How should it talk to the user?". Nothing decided; settle the open points there before building.
+
+1. **Decide:** which stages get a persona, whether mood may tint its tone, and how many conversation turns a request sees.
+2. **Persona eval:** run `evals/tasks.json` with and without a short persona on the final-answer stage over repeated rounds; keep it only if the pass rate holds, and rate tone by hand.
+3. **Follow-up eval:** add two- and three-turn tasks whose later turns need the earlier ones, and measure them with turns carried forward against standalone runs.
 
 ## Speech output
 

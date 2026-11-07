@@ -13,7 +13,8 @@ Nothing in docs 1–2 is final. These are the largest choices still open; each s
 5. **How does it learn?** Model-extracted memories (built) vs model-authored skills, rules and corrections, each gated by a non-LLM verifier before it is stored.
 6. **How autonomous?** The autonomy ladder keeps authority with the user per event class. Goals, drives and initiative are part of the long-range aim; open questions are who may set them and how they are bounded. A candidate set of bounds, from Nexus, is in "Cognitive loop".
 7. **What is the unit of improvement?** Proposed: the domain, with cognitive processes as shared job types run per domain and changes kept only when they beat the current setup on that domain's past cases (see "Self-improving domains"), and projects above domains supplying the goals and tasks they work on ("Projects above domains"). Open until the mail slice shows triage getting measurably better over real mail.
-8. **What does the eval loop need first?** Every question above is settled by eval runs, so a fast, trustworthy eval loop comes before any architecture bet. Calls took ~30 s until the 2026-11-05 reboot, when CUDA had fallen back to the CPU; they now average ~4 s (doc 3, "Then: a fast, trustworthy eval loop").
+8. **Who is it, and how does it talk?** Today every call gets a task-specific prompt and no identity, and each request is a standalone run with no earlier turns. Proposed for debate: a small user-editable persona (identity, personality, tone) in the stages whose text the user reads, and conversation turns carried between requests, so a long-running assistant talks like one. Open: which stages get the persona, whether drives or mood may tint its tone, and whether the 4B model's accuracy holds with it (see "How should it talk to the user?").
+9. **What does the eval loop need first?** Every question above is settled by eval runs, so a fast, trustworthy eval loop comes before any architecture bet. Calls took ~30 s until the 2026-11-05 reboot, when CUDA had fallen back to the CPU; they now average ~4 s (doc 3, "Then: a fast, trustworthy eval loop").
 
 ## Who plans the work?
 
@@ -405,6 +406,23 @@ A project uses domains rather than being one: in a fitness project, "research a 
 
 **Not built.** First version: projects as plain records the user creates by hand, worked by the scheduler; model-proposed tasks only once that loop works. See doc 3, "Projects".
 
+## How should it talk to the user?
+
+Open for debate; nothing here is decided. Codex is meant to be a long-running personal assistant (doc 0), not only a request-in, answer-out tool, which argues for a stable voice and for remembering the conversation it is in.
+
+### Persona for user-facing replies
+
+A short persona block, a few sentences naming the assistant and setting its personality and tone, added only to calls whose output the user reads: the final answer (`ROOT_WRITE_PROMPT`, `ROOT_COMBINE_PROMPT`), questions back to the user, notifications and Inbox summaries. Not added to `decide`, routing, research, extraction, triage or checks, where it costs context and adds nothing.
+- **Owned by the user:** a file beside the other prompts (see the roadmap's Housekeeping item on moving prompts to config files), shipped with a plain default; the model cannot edit it, matching the limits in "Cognitive loop".
+- **Not the user's voice:** drafts written on the user's behalf (mail replies) keep the user's voice, not the persona's.
+- **Contrast with Nexus:** Nexus's bootstrap prompt gave the model no identity and asked it to invent one; here the user sets the identity and the model keeps to it.
+- **Open:** whether mood or drive levels may tint the tone of a reply (the drives themselves start jobs, not tone; see "Cognitive loop"); how long the block can be before it crowds a 4B model's context.
+- **Risk:** personality text can make a small model chattier or less exact, or invent feelings and actions. **How to test:** run `evals/tasks.json` with and without the persona on the final-answer stage over repeated rounds; keep it only if the pass rate holds, and rate tone by hand on a sample.
+
+### Conversational continuity
+
+Each request is a standalone run today; a follow-up such as "and the one before that?" has nothing to refer to except recalled memory. Proposed for debate: the final-answer stage (and `decide`, so a follow-up is planned as one) sees the last few turns of the current conversation, capped by the context budget, with older turns reached through recall and the conversation archive ("Conversation archive"). **Open:** how many turns, whether a turn is passed as text or a short summary, and when a new conversation starts in an always-on assistant. **How to test:** a set of two- and three-turn eval tasks whose later turns cannot be answered without the earlier ones.
+
 ## Other proposals
 
 ### Agent hierarchy: not built yet
@@ -418,7 +436,7 @@ A project uses domains rather than being one: in a fitness project, "research a 
 
 **Not built:** more states mapped to moods. Candidates (state in `src/renderer/runState.ts`): a clarification or approval waiting (`clarifications` not empty; curious), background research working (`backgroundStatus` not `Idle`; focused), daemon unreachable (`connection: 'unavailable'`; worried, today `asleep`), the user cancelling (`cancelling`; startled), resuming from suspend or connecting at launch (waking), a final answer arriving (`phase: 'final'`; excited). Needs a priority order when several hold at once (e.g. worried, asleep, startled, curious, thinking, focused, calm), with happy/sad/excited as brief moments rather than states. The removed CSS mascot also had an antenna pulse while thinking, floating z's while asleep and a slow head bob (git history); RoboBuddy draws none of these.
 
-**Mood from content, not only run state:** the moods above follow what the harness is doing; none reflects what the conversation says. Proposed: one schema call with an enum of moods at the end of a run, or when an event arrives, reading the request and the reply (or the event summary). It drives the mascot and, later, the voice ("Speech output"), and could feed the drives in "Cognitive loop". A fixed stage, not an agent; skipped when the run is cancelled. Cost: one short call per run.
+**Mood from content, not only run state:** the moods above follow what the harness is doing; none reflects what the conversation says. Proposed: one schema call with an enum of moods at the end of a run, or when an event arrives, reading the request and the reply (or the event summary). It drives the mascot and, later, the voice ("Speech output"), and could feed the drives in "Cognitive loop". A fixed stage, not an agent; skipped when the run is cancelled. Cost: one short call per run. Cheaper alternative once drives exist: compute the mood without a model call from drive levels and recent outcomes (approvals, rejections, failed checks), so drives set the mood rather than the mood setting drives; Nexus kept emotions and drives as one internal state.
 
 ### Speech output
 
