@@ -82,7 +82,7 @@ Today: mail arrives → automatic mail dropped without the model → rest summar
 
 1. **Look at it running:** real window + Maildir/IMAP account + real model; check Inbox layout, notification, tray, draft quality and length. Cheapest way to find what tests can't.
 2. **Request box in the Inbox:** input for `queue_request` and a way to show a result beside its request.
-3. **Act with approval:** an approved `draft`/`result` action can carry out a change (send reply via a user-named mail command, file an item, write a note). Approval names the exact change; the executing step runs with `user` trust and only that tool.
+3. **Act with approval:** an approved `draft`/`result` action can carry out a change (send reply via a user-named mail command, file an item, write a note). Approval names the exact change; the executing step runs with `user` trust and only that tool. File changes are staged as a diff and the old file is backed up before applying (doc 2, "Verified self-authored skills", Staged, not written).
 4. **Learned rules:** record approvals/rejections per event class and sender; skip triage for always-ignored senders; promote reliable classes up the ladder.
 5. **Entities and commitments:** structured facts in the world model (see Core structure ideas, item 3), filled from mail and user requests, with lifecycle and an overdue sweep as a rule.
 6. **Goal-driven idle jobs:** replace the fixed research/index/learn/consolidate chain with jobs chosen by what the store says is stale or upcoming, each with a budget.
@@ -95,6 +95,7 @@ Today: mail arrives → automatic mail dropped without the model → rest summar
 - A 6,144-token window can't hold a long thread; only one message body (≤4,000 chars) is used.
 - Triage/drafting rely on a small model; the taint limits a fooled model to a wrong summary or poor draft that the user reads first.
 - IMAP: one folder per account, new-mail check at most every 2 min, TLS on the given port only (no STARTTLS).
+- `write_file` can rewrite Codex's own instructions: with `allow_file_writes` on it blocks secret files and paths outside the root, but not the working folder's `.codex/` (agents, skills, commands) or `CODEX.md`/`AGENTS.md`, nor `~/.config/codex/` when the root contains it (the default root is the working folder). These load into every later call, so text a fetched page talks the model into writing there persists, event runs included. Fix: `writeFile` (`core/tools.ts`) refuses paths inside `.codex/`, files named `CODEX.md` or `AGENTS.md`, and anything under `configDirectory()`, with a test for each; `/init` writes through the harness, not the tool, so it is unaffected. Cost: the user edits those files by hand.
 - Possible tool-call injection, unconfirmed: `textToolCalls` (`core/toolStage.ts`) runs `<tool_call>` text in the model's reply as real calls to known tools, so a user run whose model copies a fetched page containing that text could call a tool the page chose. Event runs are already blocked by the trust taint. Test: a fake page with an embedded `write_file` call, read in a user run; if it fires, accept text calls only before any untrusted text is echoed, or only when the reply is nothing but calls.
 
 ## Knowledge store: open work

@@ -71,9 +71,29 @@ The record of one real session: 5 cycles on 2026-08-11, about 11 minutes, 36 har
 
 **Landed** (commit 2427bcc): the decay fix on the roadmap weak point, with Generative Agents and MemGPT in References; evidence labels under "Scratchpad contract"; the action record in "Cognitive loop"; session evidence in the Nexus prior-art section; the tool-call injection check in the roadmap's Reactive assistant known limits.
 
+### 4. `server.js`
+
+The backend: a static host plus HTTP endpoints for model calls (CLI or API transport, a per-call model allowlist), web search as a separate call, the memory file (append for the model, replace for the user), the tape, the bootstrap prompt, saved session state, read-only listing and reading of its own source by allowlisted name, and the sandbox for proposed source changes.
+
+**Main finding: Codex's model can rewrite its own instructions.** `server.js` lets Nexus read `server.js` and `claude-cli.js` but never write them, "because they are what enforces this boundary. A system that can edit its own constraints has none." Codex fails that test. With `allow_file_writes` on, `writeFile` in `core/tools.ts` resolves the path inside the filesystem root and rejects secret-looking files, but nothing stops it writing the working folder's `.codex/` (agents, skills, commands) or `CODEX.md`/`AGENTS.md`, all loaded into every later call. The default root is the working folder (`filesystem_root: '.'`), so when Codex runs from the home folder, `~/.config/codex/` (global instructions, agents, skills) is writable too. `list_directory` hides `.codex`, but writes are not blocked. Event runs cannot write (trust taint), but a user run whose model is talked into it by a fetched page would make that injection permanent, reaching later event runs as well.
+
+| Nexus feature | Codex equivalent | Verdict and reason |
+| --- | --- | --- |
+| Files that enforce the limits are readable, never writable | `write_file` can reach Codex's own instruction, agent and skill files | **Fix (planned, not yet built):** `writeFile` refuses `.codex/`, `CODEX.md`/`AGENTS.md` and `configDirectory()`, with tests; about ten lines. `/init` writes through the harness, so it is unaffected; the cost is that the user edits those files by hand. Also a standing rule in doc 2: whatever bounds the model is never writable by it, covering the planned persona and prompt files and drive bounds. |
+| The tape: every exchange verbatim, append-only, never summarised, inner cycles included, so chosen memory can be checked against what happened | Conversation archive (proposed) covers foreground conversations only; background job prompts and outputs are not kept | **Docs.** Archive background and idle job runs too; the action record (file 3) and the memory drift watch need to trace a wrong fact to the job that wrote it. |
+| Staged proposals: diff, syntax check, backup, apply on a click, discard | None; `write_file` replaces a file at once, without a backup; approval is planned only for event actions | **Docs.** Use the same flow for any model-proposed change to a user-owned file (skills, rules, persona suggestions, approved file writes on the autonomy ladder): a diff in the Inbox, a backup before applying, one-step revert. |
+| Search as its own call with a strict "report only what you found, then `Sources:`" prompt | `researchOneTopic` summarises with numbered sources and grounding checks | Already covered. |
+| Bootstrap prompt in a user-editable file the model cannot change | Persona proposal (file 2) | Already covered; supports the rule above. |
+| A "constitution scorer" deliberately run on a weaker model | Checks use the same model; specialist models proposed | Skip: too little detail to act on. |
+| Cloud transports, server-side fallbacks, refusal and effort handling | Local only | Does not apply. |
+| Endpoints on localhost HTTP with no authentication, so any web page in the browser could POST to `/api/sandbox/…/apply` | Daemon on a Unix socket, which web pages cannot reach | Codex is ahead; a hole in Nexus itself. |
+| Source listing with approximate token counts so the model can budget reads | Context budget is the harness's job | Does not apply. |
+
+**Landed** (this commit): the never-writable rule under "Cognitive loop", Limits; background runs in "Conversation archive"; staged proposals in "Verified self-authored skills" and the roadmap's "Act with approval"; the `write_file` gap and its fix as a known limit in the roadmap's Reactive assistant section.
+
 ## Still to review
 
-1. `server.js` (751 lines), `claude-cli.js`, `text_ai.sh`
+1. `claude-cli.js`, `text_ai.sh`
 2. `public/js/nexus.js` (758 lines, the core), then `mind.js`, `memory.js`, `self.js`, `state.js`, `trace.js`, `tape.js`, `parse.js`, `claude.js`, `ui.js`
 3. HTML and CSS (skim)
 4. `legacy/`: `drives.js`, `personality.js`, `curiosity.js`, `emergent.superseded.js`, `living-mind.scheduler.js`, the original HTML files (skim)
