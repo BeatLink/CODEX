@@ -94,6 +94,12 @@ With the scaled eval's 26 servers connected (doc 1, "Agents eval assets"), the f
 - **How to test:** log the prompt's token count on the tree runner's `act` step for one scaled task, and compare with the context size; then the three-round run (doc 3, "Agent hierarchy", step 7).
 - **Not built.**
 
+### Tool results as evidence, not the model's summary of them
+
+**Problem (real task 1, doc 3, "Then: a fast, trustworthy eval loop"):** the gather step hands the writer only the model's final message from the tool loop. When that message is narration or a refused text tool call, every tool result the loop fetched is lost, and the writer answers from fragments. **Proposed:** return the tool results themselves (name, arguments, result text, in order, within the tool-history budget) as the gather step's evidence, with the model's closing message as a note beside them, so the writer and the check see what the tools said; list results and read files are data for the writer, and the model's prose is at most a guide to them. **Why:** the harness owns the control flow and already has the results; a 4B model's summary of a listing is strictly worse than the listing. **How to test:** real task 1 rerun, and the agents sets before and after (paired comparison), watching `tool_choice` and pass^k.
+
+**Folder-categorization blueprint (not built):** for a request shaped "go through this folder and classify or report every entry", the harness walks the tree itself (`list_directory` recursively under the root, bounded by entries and depth), batches the paths, and asks the model one narrow question per batch with a grammar-fixed set of categories, then assembles the report in code and checks coverage deterministically (every path appears once). The model never sees more than one batch. **Why:** a tree walk is a loop, and loops belong to code ("Known shapes: blueprints"); the first real task spent its five tool calls re-listing the root. **How to test:** the same folder, compared with the free-form run on coverage (entries placed over entries present) and wrong placements, counted by hand.
+
 ### Bounded dynamism: how much the model may decide
 
 The two ends of open question 1: a designed harness where every cognitive step is fixed in code, or a self-organizing system (task decomposition, graph store, rule engine) where the model creates subtasks and agents, refines their prompts and prunes their context. Proposed: neither. The harness owns control flow, and the model gets freedom only where its mistakes can be caught cheaply and deterministically.
