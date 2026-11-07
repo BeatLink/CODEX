@@ -6,7 +6,7 @@ What might change, and the options. Each approach here is unbuilt (or only proto
 
 Nothing in docs 1–2 is final. These are the largest choices still open; each should be settled by Codex's own evals (doc 3), not by argument.
 
-1. **Who plans the work?** (a) the model, per task, through `decide` (built); (b) deterministic blueprints for known request shapes; (c) a rule engine that picks a blueprint from extracted facts, with the model planning only what no rule covers. Doc 0's method and the core structure ideas favour (b)/(c); the 4B evidence (multi-turn ~35%, long-horizon tasks fail) points the same way. The built design is (a).
+1. **Who plans the work?** (a) the model, per task, through `decide` (built); (b) deterministic blueprints for known request shapes; (c) a rule engine that picks a blueprint from extracted facts, with the model planning only what no rule covers. Doc 0's method and the core structure ideas favour (b)/(c); the 4B evidence (multi-turn ~35%, long-horizon tasks fail) points the same way. The built design is (a). A fourth option, (d) a self-organizing system where the model creates subtasks and agents, rewrites prompts and prunes its own context, is argued against for a 4B model (see "Bounded dynamism").
 2. **Where does reasoning happen?** In model verdicts backed by lexical checks (built), or in explicit facts and rules the model only feeds and phrases (neuro-symbolic). Rules are auditable and don't drift; they cost authoring effort and cover only what someone (or a gated learning step) wrote.
 3. **How is memory shaped?** Proposed: keep the evidence layer and add a structured world model of facts with provenance, read by rule modules split by domain and bundled into domain packs (see "Memory layers and domain rule sets"). Open until the mail pack prototype is measured; decide before adding the entities and commitments tables.
 4. **Which model, and how many?** One 4B generalist (Qwen3.5-4B, built, or Spark-X2.6-4B in its place); a reasoning-tuned 4B for logic nodes (Phi-4-mini-reasoning); specialists swapped from disk; a 35B-A3B escalation; or voting with red-flag filters on the 4B. All unmeasured here.
@@ -71,6 +71,30 @@ loop (≤ max_tool_calls):
 - **Deterministic routing first:** the planner's `search_queries` already go straight to search; tools stay filtered by approach and trust before the router sees them; with one allowed tool the route call is skipped. With many MCP tools, choose the server first and then the tool, which is what agents do (doc 1, "Agent hierarchy"), so routing and the hierarchy are the same idea at two levels and MCP tools probably need only one of them.
 - **Costs:** about twice the model calls per tool step, mostly prompt processing on a 6,144-token window.
 - **Not built.** See doc 3, "Task-decomposition ideas to evaluate".
+
+### Bounded dynamism: how much the model may decide
+
+The two ends of open question 1: a designed harness where every cognitive step is fixed in code, or a self-organizing system (task decomposition, graph store, rule engine) where the model creates subtasks and agents, refines their prompts and prunes their context. Proposed: neither. The harness owns control flow, and the model gets freedom only where its mistakes can be caught cheaply and deterministically.
+
+**Why not fully dynamic.** Each freedom asks a 4B model for what it does worst (planning over many steps, judging its own output, knowing what it doesn't know), and each fails silently:
+
+| Freedom | How it fails |
+| --- | --- |
+| Creating subtasks and agents | Errors compound per hop (90% over three hops ≈ 73%); self-written agent descriptions make misrouting worse |
+| Rewriting prompts at runtime | An unchecked rewrite steers every later step; a drop in quality can't be traced to prompt or model |
+| Pruning its own context | It must predict what it will need later; a pruned fact leaves no error, only a worse answer |
+| Writing rules into the rule engine | A wrong rule is a fixed, trusted falsehood, the error cascade made deterministic |
+
+**Why not fully designed.** Fixed pipelines cover only the shapes someone foresaw; open-ended research and decomposition (doc 0's "learn how to learn") need the model to plan.
+
+**The split:**
+- **Known shapes:** blueprints. Code loops; the model fills one narrow slot per call.
+- **Unknown shapes:** model decomposition inside an envelope: grammar-forced choices, depth and node caps, one re-plan (as `decide` works today, doc 1).
+- **Graph store and rules:** held by the harness. The model proposes facts and rules; a non-LLM check gates every write ("Verified self-authored skills").
+- **Prompts:** refined across runs, offline and eval-gated, never inside a run ("Eval-gated prompt variants").
+- **Pruning:** stays a fixed rule (pin request and current task, condense, then trim; built, doc 1), not a model judgement.
+
+The more of a step the harness can check, the more of it the model may decide. **Test:** doc 3, Core structure ideas, item 2.
 
 ## Where does reasoning happen?
 
@@ -190,6 +214,10 @@ A skill is a markdown guide the harness injects into a fresh context when a requ
 - Log each tool/format failure mode to a lessons store and inject it into later prompts for the same tool (partly covered by learned corrections and skill lessons; a failure-mode log specifically is unconfirmed).
 - On invalid output, feed the validation error back for one cheap correction turn (current design: grammar-forced JSON, fallbacks, one revise pass).
 - Reflection after failure (Reflexion-style): give the model the failure log and ask why the plan failed and what to change; store the answer behind the same verifier gate as skills.
+
+### Eval-gated prompt variants
+
+Prompts (`DECISION_PROMPT` and the other step prompts) are refined like code, not by the model mid-run: generate a few variants of one prompt (by hand or by the model, offline), run each on the same eval tasks over repeated rounds, and promote a variant only if it beats the current prompt without breaking a task that passed. Keep the promoted prompt in the repo with its score, so a regression can be traced and rolled back. **Why:** a runtime rewrite is unchecked text every later step obeys ("Bounded dynamism"); an eval gate is the same non-LLM check that guards skills and rules. Same shape as the replay gate in "Self-improving domains", applied to the harness's own prompts instead of a domain's rules.
 
 ## How autonomous?
 
