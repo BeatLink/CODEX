@@ -32,9 +32,9 @@
         version = packageJson.version;
         src = self;
         inherit nodejs;
-        npmDepsHash = "sha256-npU6FVVDOnQBh2aq6QtJMatFX/Y6MIkeVQCLq02vg/A=";
+        npmDepsHash = "sha256-JIQkx1u2JM5mWU17+nGG3KKiBZDtb2LKZZlmyBeZC9s=";
         npmFlags = [ "--ignore-scripts" ];
-        # npm unpacks the RoboEyes git dependency through the cache, so the cache must be writable.
+        # npm unpacks the RoboBuddy git dependency through the cache, so the cache must be writable.
         makeCacheWritable = true;
         env = {
           ELECTRON_SKIP_BINARY_DOWNLOAD = "1";

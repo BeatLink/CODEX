@@ -1,4 +1,4 @@
-import { defaultConfig } from '@x-tech-laboratories/roboeyes';
+import { defaultConfig } from '@x-tech-laboratories/robobuddy';
 import { describe, expect, it } from 'vitest';
 
 import { lastingMood, momentAfter, type MascotMood } from './mascot.js';
@@ -9,7 +9,7 @@ function connected(changes: Partial<WorkbenchState> = {}): WorkbenchState {
 }
 
 describe('the mascot mood', () => {
-    it('uses only moods RoboEyes has', () => {
+    it('uses only moods RoboBuddy has', () => {
         const moods: MascotMood[] = ['default', 'thinking', 'happy', 'sad', 'asleep'];
 
         for (const mood of moods) expect(defaultConfig.moods).toHaveProperty(mood);

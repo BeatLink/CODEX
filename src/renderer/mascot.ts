@@ -1,4 +1,4 @@
-// Which of RoboEyes' own moods the mascot's face shows for the workbench state.
+// Which of RoboBuddy' own moods the mascot's face shows for the workbench state.
 import { type WorkbenchState } from './runState.js';
 
 export type MascotMood = 'default' | 'thinking' | 'happy' | 'sad' | 'asleep';

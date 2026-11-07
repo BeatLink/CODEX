@@ -10,7 +10,7 @@ import {
     sourcesMarkdown,
     type TreeChoice,
 } from './knowledgeView.js';
-import { RoboEyes } from '@x-tech-laboratories/roboeyes';
+import { RoboBuddy } from '@x-tech-laboratories/robobuddy';
 import { KnowledgeGraph } from './knowledgeGraph.js';
 import { markdownToHtml } from './markdown.js';
 import { lastingMood, MASCOT_SCREEN, MOMENT_MILLISECONDS, momentAfter, type MascotMood } from './mascot.js';
@@ -530,7 +530,7 @@ function renderConnection(): void {
 // Mascot
 // ============================================================================
 
-const mascotFace = new RoboEyes(view.mascotFace);
+const mascotFace = new RoboBuddy(view.mascotFace);
 let mascotMood: MascotMood | null = null;
 
 function startMascot(): void {

@@ -4,12 +4,12 @@
 <head>
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' 'sha256-HOsxm47pkcV8/SnUcpuEeLjPkDNiaHKPkFBdrem2+ug='; style-src 'self' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-9xjtvxMT1ApHlgn9ohbh2FNfvK5Tqtzy94BjfXBeMSY=' 'sha256-jtRRMYY2VbEXuBKbHvqM1/fPT8vazFrEooXdvwUK4y8='; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+        content="default-src 'self'; script-src 'self' 'sha256-zz049dXnFn6XUCkzYsLfeopKs6Od3oJL8fi7m0e7g9w='; style-src 'self' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-9xjtvxMT1ApHlgn9ohbh2FNfvK5Tqtzy94BjfXBeMSY=' 'sha256-jtRRMYY2VbEXuBKbHvqM1/fPT8vazFrEooXdvwUK4y8='; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="color-scheme" content="dark light" />
     <title>CODEX</title>
     <link rel="stylesheet" href="styles.css" />
-    <!-- RoboEyes loads from node_modules beside dist; the policy above allows this map by its hash. -->
-    <script type="importmap">{ "imports": { "@x-tech-laboratories/roboeyes": "../../node_modules/@x-tech-laboratories/roboeyes/dist/roboeyes.js" } }</script>
+    <!-- RoboBuddy loads from node_modules beside dist; the policy above allows this map by its hash. -->
+    <script type="importmap">{ "imports": { "@x-tech-laboratories/robobuddy": "../../node_modules/@x-tech-laboratories/robobuddy/dist/robobuddy.js" } }</script>
     <!-- force-graph's self-contained bundle, which sets the ForceGraph global the knowledge page draws with;
          the policy allows its two fixed stylesheets, which it inserts empty and then fills, by their hashes. -->
     <script src="../../node_modules/force-graph/dist/force-graph.min.js"></script>

@@ -354,13 +354,13 @@ A project uses domains rather than being one: in a fitness project, "research a 
 
 ### Mascot: more moods
 
-**Not built:** more states mapped to moods. Candidates (state in `src/renderer/runState.ts`): a clarification or approval waiting (`clarifications` not empty; curious), background research working (`backgroundStatus` not `Idle`; focused), daemon unreachable (`connection: 'unavailable'`; worried, today `asleep`), the user cancelling (`cancelling`; startled), resuming from suspend or connecting at launch (waking), a final answer arriving (`phase: 'final'`; excited). Needs a priority order when several hold at once (e.g. worried, asleep, startled, curious, thinking, focused, calm), with happy/sad/excited as brief moments rather than states. The removed CSS mascot also had an antenna pulse while thinking, floating z's while asleep and a slow head bob (git history); RoboEyes draws none of these.
+**Not built:** more states mapped to moods. Candidates (state in `src/renderer/runState.ts`): a clarification or approval waiting (`clarifications` not empty; curious), background research working (`backgroundStatus` not `Idle`; focused), daemon unreachable (`connection: 'unavailable'`; worried, today `asleep`), the user cancelling (`cancelling`; startled), resuming from suspend or connecting at launch (waking), a final answer arriving (`phase: 'final'`; excited). Needs a priority order when several hold at once (e.g. worried, asleep, startled, curious, thinking, focused, calm), with happy/sad/excited as brief moments rather than states. The removed CSS mascot also had an antenna pulse while thinking, floating z's while asleep and a slow head bob (git history); RoboBuddy draws none of these.
 
 **Mood from content, not only run state:** the moods above follow what the harness is doing; none reflects what the conversation says. Proposed: one schema call with an enum of moods at the end of a run, or when an event arrives, reading the request and the reply (or the event summary). It drives the mascot and, later, the voice ("Speech output"), and could feed the drives in "Cognitive loop". A fixed stage, not an agent; skipped when the run is cancelled. Cost: one short call per run.
 
 ### Speech output
 
-Give the mascot a voice: a TTS engine feeds RoboEyes' `speakVisemes` with real phonemes and durations, and a mood value drives eyes, mouth and voice together. Engine choice and trade-offs follow. Chatterbox would be an optional backend behind a small local server on a machine with enough VRAM; the dev laptop's 4 GB GPU is shared with the main model (see GPU lock), so voice must not compete for it. Not built.
+Give the mascot a voice: a TTS engine feeds RoboBuddy' `speakVisemes` with real phonemes and durations, and a mood value drives eyes, mouth and voice together. Engine choice and trade-offs follow. Chatterbox would be an optional backend behind a small local server on a machine with enough VRAM; the dev laptop's 4 GB GPU is shared with the main model (see GPU lock), so voice must not compete for it. Not built.
 
 Gathered 2026-11-05 **from memory, not fresh searches**: check licences, versions and memory figures before relying on them.
 
@@ -375,7 +375,7 @@ Gathered 2026-11-05 **from memory, not fresh searches**: check licences, version
 
 **Chatterbox cost:** ~0.5B params, 2–3 GB weights, ~6–8 GB VRAM in the default setup; real time or faster on a recent GPU; on CPU several seconds per sentence (too slow for conversation); needs Python + PyTorch/CUDA so it can't run in the browser and would sit behind a small local server. A ~350M "Turbo" variant exists (availability/memory unchecked). **A 4 GB GPU (the dev laptop) is probably too small** for the standard model at full precision.
 
-**Face integration:** Kokoro and Piper both expose espeak-ng phonemes and timing, so either can feed RoboEyes' `speakVisemes` with real phonemes and durations instead of spelling rules guessing both (Kokoro predicts a duration per phoneme). A mood value could drive eyes, mouth and voice together: with Kokoro only speed and mouth change; with Chatterbox the voice changes too.
+**Face integration:** Kokoro and Piper both expose espeak-ng phonemes and timing, so either can feed RoboBuddy' `speakVisemes` with real phonemes and durations instead of spelling rules guessing both (Kokoro predicts a duration per phoneme). A mood value could drive eyes, mouth and voice together: with Kokoro only speed and mouth change; with Chatterbox the voice changes too.
 
 ## Where these ideas come from
 
@@ -451,5 +451,5 @@ Sources cited by the research behind these docs (not re-verified):
 - brainos-orchestrate: [decompose.rs](https://docs.rs/crate/brainos-orchestrate/0.5.0/source/src/decompose.rs)
 - Terminus-4B: [summary](https://awesomepapers.io/papers/garg2026terminus)
 - 3B agent on a Raspberry Pi: [dev.to](https://dev.to/trismegistus/what-3-months-of-running-an-ai-agent-on-a-raspberry-pi-taught-me-about-task-design-1m2l)
-- RoboEyes: [github.com/x-tech-laboratories/RoboEyes](https://github.com/x-tech-laboratories/RoboEyes)
+- RoboBuddy: [github.com/x-tech-laboratories/RoboBuddy](https://github.com/x-tech-laboratories/RoboBuddy)
 

@@ -1,6 +1,6 @@
 # Open-source text-to-speech for a talking robot face
 
-Which open-source TTS engine sounds most natural, which respond to emotion, and what they cost to run. Gathered 2026-11-05 for the RoboEyes talking mouth. Written from memory, not from fresh searches, so check licences, versions and memory figures before relying on them.
+Which open-source TTS engine sounds most natural, which respond to emotion, and what they cost to run. Gathered 2026-11-05 for the RoboBuddy talking mouth. Written from memory, not from fresh searches, so check licences, versions and memory figures before relying on them.
 
 ## Recommendation
 
@@ -48,7 +48,7 @@ Which open-source TTS engine sounds most natural, which respond to emotion, and 
 - A smaller "Turbo" variant of around 350M parameters exists; its availability and memory use are unchecked.
 - A 4 GB GPU is probably too small for the standard model at full precision.
 
-## Using it with RoboEyes
+## Using it with RoboBuddy
 
 - Kokoro and Piper both expose phonemes and timing, so either can feed `speakVisemes` with real phonemes and durations instead of the spelling rules guessing both.
 - A mood value could drive the eyes, the mouth and the voice together. With Kokoro only the speed and mouth change. With Chatterbox the voice changes as well.

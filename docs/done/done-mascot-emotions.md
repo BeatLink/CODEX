@@ -50,9 +50,9 @@ Some of these would need decisions first:
 - **Moments versus states.** `happy`, `sad` and `excited` fit a few seconds after an event better than a lasting state, so the UI would fall back to `calm` after a delay.
 - **Other places.** The tray icon is a still image, so only a single pose could be exported for it. The animations suit the window's top bar, an empty workbench, or the place where an answer will appear.
 
-## RoboEyes
+## RoboBuddy
 
-CODEX now draws only the robot, in the theme colour around a black screen, and [RoboEyes](https://github.com/x-tech-laboratories/RoboEyes) draws the eyes and mouth over the head exactly as it ships. The emotions above became RoboEyes' own moods chosen by state, in [src/renderer/mascot.ts](../../src/renderer/mascot.ts): `asleep`, `thinking` and `default`, with `happy` or `sad` briefly when a run ends. The antenna pulse, z's, head bob and the other emotions are not carried over.
+CODEX now draws only the robot, in the theme colour around a black screen, and [RoboBuddy](https://github.com/x-tech-laboratories/RoboBuddy) draws the eyes and mouth over the head exactly as it ships. The emotions above became RoboBuddy' own moods chosen by state, in [src/renderer/mascot.ts](../../src/renderer/mascot.ts): `asleep`, `thinking` and `default`, with `happy` or `sad` briefly when a run ends. The antenna pulse, z's, head bob and the other emotions are not carried over.
 
 ## Checked
 

@@ -333,16 +333,16 @@ Goal: turn Codex from a request-answerer with idle-time knowledge work into an a
 
 The robot from the CODEX icon sits at the foot of the workbench sidebar, above the run status, at about two thirds of the sidebar's width.
 
-- **CODEX** draws only the robot: head border, ears and antenna in the theme colour (`--primary`) (the X-Tech blue, `#00acff`) around a black screen with a thin border, with a canvas over the screen (`src/renderer/index.html`). The black screen keeps RoboEyes' white face visible on both themes.
-- **RoboEyes** (github.com/x-tech-laboratories/RoboEyes, an npm git dependency pinned to a commit) draws the eyes and mouth on that canvas exactly as it ships: its own moods, colours and settings. The canvas is RoboEyes' 130 by 90 screen, drawn at twice that and shrunk into the head's 26 by 18 unit screen, so it stays sharp.
+- **CODEX** draws only the robot: head border, ears and antenna in the theme colour (`--primary`) (the X-Tech blue, `#00acff`) around a black screen with a thin border, with a canvas over the screen (`src/renderer/index.html`). The black screen keeps RoboBuddy' white face visible on both themes.
+- **RoboBuddy** (github.com/x-tech-laboratories/RoboBuddy, an npm git dependency pinned to a commit) draws the eyes and mouth on that canvas exactly as it ships: its own moods, colours and settings. The canvas is RoboBuddy' 130 by 90 screen, drawn at twice that and shrunk into the head's 26 by 18 unit screen, so it stays sharp.
 
-**Moods** are RoboEyes' own, chosen by state, most urgent first (`src/renderer/mascot.ts`): `asleep` (daemon unavailable or suspended), `thinking` (run in progress), `default` otherwise. When a run ends, `happy` (completed) or `sad` (failed) shows for 3 seconds through RoboEyes' `setMood(mood, { for })`, unless the daemon is unavailable.
+**Moods** are RoboBuddy' own, chosen by state, most urgent first (`src/renderer/mascot.ts`): `asleep` (daemon unavailable or suspended), `thinking` (run in progress), `default` otherwise. When a run ends, `happy` (completed) or `sad` (failed) shows for 3 seconds through RoboBuddy' `setMood(mood, { for })`, unless the daemon is unavailable.
 
-**Loading:** the renderer has no bundler, so an import map in `index.html` points `@x-tech-laboratories/roboeyes` at `node_modules` beside `dist`; the content security policy allows the map by its hash. RoboEyes follows `prefers-reduced-motion` itself. The tray icon stays a still image. More moods: doc 2, "Mascot: more moods".
+**Loading:** the renderer has no bundler, so an import map in `index.html` points `@x-tech-laboratories/robobuddy` at `node_modules` beside `dist`; the content security policy allows the map by its hash. RoboBuddy follows `prefers-reduced-motion` itself. The tray icon stays a still image. More moods: doc 2, "Mascot: more moods".
 
 ### Why
 
-- **CODEX draws only the robot, in the theme colour around a black screen; RoboEyes draws the eyes and mouth unchanged** (its own moods, colours and settings). The screen is black, not see-through, because a transparent head showed the light theme's pale background and hid the white face; white on black was chosen over a blue face after comparing both. The icon's hexagon was dropped as wasted space. The CSS-only mascot this replaces is gone.
-- **RoboEyes as an npm git dependency pinned to a commit,** loaded through an import map whose hash the content security policy allows. It isn't on npm; Nix builds it with `makeCacheWritable`.
-- **RoboEyes' built-in moods follow the run state** (`asleep` when the daemon is unavailable or suspended, `thinking`, else `default`), with `happy` or `sad` for a few seconds when a run ends. Placement: the foot of the workbench sidebar, beside the run status.
+- **CODEX draws only the robot, in the theme colour around a black screen; RoboBuddy draws the eyes and mouth unchanged** (its own moods, colours and settings). The screen is black, not see-through, because a transparent head showed the light theme's pale background and hid the white face; white on black was chosen over a blue face after comparing both. The icon's hexagon was dropped as wasted space. The CSS-only mascot this replaces is gone.
+- **RoboBuddy as an npm git dependency pinned to a commit,** loaded through an import map whose hash the content security policy allows. It isn't on npm; Nix builds it with `makeCacheWritable`.
+- **RoboBuddy' built-in moods follow the run state** (`asleep` when the daemon is unavailable or suspended, `thinking`, else `default`), with `happy` or `sad` for a few seconds when a run ends. Placement: the foot of the workbench sidebar, beside the run status.
 
