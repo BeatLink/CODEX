@@ -57,7 +57,7 @@ function pythonJson(value: unknown): string {
 // Tool calls written as text
 // ============================================================================
 
-// Qwen models write tool calls as text that the chat template does not turn into tool calls.
+// node-llama-cpp parses tool calls natively; these patterns read a call it missed and left in the reply text.
 const TEXT_TOOL_CALL = /<tool_call>\s*([\s\S]*?)\s*(?:<\/tool_call>|$)/g;
 const XML_FUNCTION = /<function=([^>\s]+)>([\s\S]*?)(?:<\/function>|$)/;
 const XML_PARAMETER = /<parameter=([^>\s]+)>\n?([\s\S]*?)\n?<\/parameter>/g;
@@ -227,6 +227,10 @@ async function toolLoop(
         } else {
             toolCalls = textToolCalls(completion.content, toolDefinitions);
             if (toolCalls.length > 0) {
+                // Native parsing catches every call to an offered tool, so a call read from text then is reported as a fault to trace.
+                if (request.tool_choice === 'auto') {
+                    console.warn(`Tool calls arrived as text and were read by textToolCalls: ${toolCalls.map((call) => call.function.name).join(', ')}`);
+                }
                 // The text before the first call is the reply's own words; the calls go back as real tool calls.
                 const beforeCalls = completion.content.split('<tool_call>', 1)[0].trim();
                 assistantMessage = { role: 'assistant', content: beforeCalls || null, tool_calls: toolCalls };

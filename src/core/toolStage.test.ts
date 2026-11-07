@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { ChatCompletion, ChatCompletionRequest, ChatModel, ToolDefinition } from './model.js';
 import { REPEATED_CALL_NOTE, pythonJsonLength, runToolStage, textToolCalls } from './toolStage.js';
@@ -132,9 +132,13 @@ describe('tool stage', () => {
     it('runs a tool and returns its fenced result to the model', async () => {
         const toolbox = new FakeToolbox();
         const model = new FakeModel([toolCallReply(), textReply('Here is the result.')]);
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
         const result = await runToolStage(model, 'Use tools when useful.', 'Read notes.txt.', toolbox, 200, 0.1, 3);
 
+        // A native call needs no text parsing, so nothing is reported.
+        expect(warn).not.toHaveBeenCalled();
+        warn.mockRestore();
         expect(toolbox.calls).toEqual([['read_file', { path: 'notes.txt' }]]);
         const last = model.requests[1].messages.at(-1);
         expect(last?.role).toBe('tool');
@@ -150,8 +154,13 @@ describe('tool stage', () => {
             'I will save it.\n<tool_call>\n<function=write_file>\n<parameter=path>\nanswer.txt\n</parameter>\n' +
             '<parameter=content>\n42\n</parameter>\n</function>\n</tool_call>';
         const model = new FakeModel([textReply(written), textReply('Saved answer.txt.')]);
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
         const result = await runToolStage(model, 'Use tools when useful.', 'Save 42.', toolbox, 200, 0.1, 3);
+
+        // A call read from text is reported, since native parsing should have caught it.
+        expect(warn).toHaveBeenCalledWith('Tool calls arrived as text and were read by textToolCalls: write_file');
+        warn.mockRestore();
 
         // A string parameter keeps its text even when it looks like a number.
         expect(toolbox.calls).toEqual([['write_file', { path: 'answer.txt', content: '42' }]]);

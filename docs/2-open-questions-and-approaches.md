@@ -71,7 +71,7 @@ Every brief a subagent receives is prose the 4B model wrote: a subtask's `prompt
 
 ### Step-wise tool routing
 
-In the gather tool loop (`core/toolStage.ts`) one free-form generation sees every allowed tool and picks a tool, writes its arguments and decides whether it is done, all at once. It is the only control-flow step not forced by a grammar, and the reason Qwen's text tool calls need parsing. Proposed: split each tool step into narrow calls.
+In the gather tool loop (`core/toolStage.ts`) one free-form generation sees every allowed tool and picks a tool, writes its arguments and decides whether it is done, all at once. Once the model starts a call, node-llama-cpp's grammar already limits the name to the offered tools and the arguments to that tool's JSON schema (doc 1, "Tools"; checked 2026-11-07 on Qwen3.5-4B and Spark-X2.6-4B), so argument validity is covered. What stays free-form is whether to call at all, which tool, and when to stop. Proposed: split each tool step into narrow calls.
 
 ```
 loop (≤ max_tool_calls):
@@ -81,7 +81,7 @@ loop (≤ max_tool_calls):
 ```
 
 - **Not a router that plans every call from the planner's output.** Most chains depend on earlier results (search, then fetch a URL from the results, then read what the page names), so a plan made up front cannot know the arguments; placeholders such as "fetch result 2" would be a small plan language the 4B model must learn, and multi-turn planning is its weakest point (BFCL multi-turn ~22–35%). The router picks only the next step.
-- **Why:** the same principle as `decide`: an enum of what is allowed now. Argument filling sees one schema instead of every tool's, and the grammar makes the arguments valid by construction. `done` becomes an explicit choice, so the model can't drift into answering mid-loop. Route and fill errors can be scored separately.
+- **Why:** the same principle as `decide`: an enum of what is allowed now. Argument filling sees one schema instead of every tool's; the native call grammar already makes the arguments valid. `done` becomes an explicit choice, so the model can't drift into answering mid-loop. Route and fill errors can be scored separately.
 - **Deterministic routing first:** the planner's `search_queries` already go straight to search; tools stay filtered by approach and trust before the router sees them; with one allowed tool the route call is skipped. With many MCP tools, choose the server first and then the tool, which is what agents do (doc 1, "Agent hierarchy"), so routing and the hierarchy are the same idea at two levels and MCP tools probably need only one of them.
 - **Costs:** about twice the model calls per tool step, mostly prompt processing on a 6,144-token window.
 - **How to test:** add a routed variant of the tool loop (route → fill → execute per step) beside the current one, run both on `evals/agents_tasks.json` with the fake MCP servers, and compare tool-choice accuracy, argument validity, task success and model calls. Score route and fill errors separately.
