@@ -112,6 +112,7 @@ Today: mail arrives → automatic mail dropped without the model → rest summar
 ## Model choice
 
 - **Open item:** compare the 4B model's pass rate on the `evals/` tasks against the 35B model's. If the gap is small on the tasks that matter, 4B is good enough here. (The agents eval so far used only the 4B; the 35B file was deleted from `models/`, so it must be re-obtained.)
+- **Spark-X2.6-4B vs Qwen3.5-4B** (doc 2, "Alternative models"): first a smoke run, `node dist/core/evaluation.js --tasks evals/agents_tasks.json --runners tree,agents --only inbox-newest --model-path models/Spark-X2.6-4B-Q4_K_M.gguf`, to show it loads, fits on the GPU at 6,144 tokens and makes tool calls the harness can read. Then both models on the same `dist/` build with `--repeat 3` (48 runs each), under the GPU lock. Compare pass rate per runner, runs reaching an MCP tool, model calls, and seconds per call. Switch only if Spark wins on pass rate across all three rounds; then move its entry to doc 1 and point `models/model.gguf` at it. If it loses, record the result in `docs/done/`.
 - **Escalation path:** design and test routing planning and repeatedly failing steps to Qwen3.5-35B-A3B. Not built.
 - **Reasoning-tuned 4B:** try Phi-4-mini-reasoning (3.8B) on logic-heavy eval tasks against Qwen3.5-4B; measure pass rate and latency with its thinking constrained and unconstrained.
 
