@@ -56,7 +56,8 @@ back; the daemon also sends `{"event", "data"}` lines at any time. Methods are
 `status`, `get_settings`, `apply_settings`, `save_settings`,
 `set_background_enabled`, `run`, `cancel`, `answer_clarification`,
 `queue_topic`, `research_now`, `queue_status`, `knowledge`, `unfinished_runs`,
-`resume_run`, `discard_run`, `suspend`, `resume`, and `shutdown`.
+`resume_run`, `discard_run`, `suspend`, `resume`, and `shutdown`, plus the mail
+methods under "Mail".
 Events are `run.started`, `run.progress`, `run.input` (the full system prompt
 and input of each step), `run.token`, `run.tree` (every task's state, with
 its step records, sent whenever one changes), `run.clarification`,
@@ -429,6 +430,29 @@ add it to `mail_imap_accounts` with a `host`, `username` and a `password_command
 program and arguments that print the password (for example your password manager's
 command); the password is never stored in settings. The `queue_request` daemon method
 leaves a request for the assistant to work while idle, and its answer waits in the Inbox.
+
+A drafted reply that mentions a date, time, amount or name the email never does, or
+that names another recipient or subject, ends with a `Check:` line saying what to look
+at; it is still only a draft. These checks are word matches, so they sometimes flag a
+name you meant to use.
+
+Sender rules decide how mail from an address or a whole domain is handled, without the
+model: `ignore` drops it, `notify` shows it, and `reply` shows it and drafts an answer.
+A rule for an address beats one for its domain. They live in the `mail_sender_rules`
+table of the knowledge store, and the daemon methods `sender_rules`,
+`set_sender_rule` (`pattern`, `mail_class`) and `delete_sender_rule` (`pattern`) list,
+add and remove them, for example:
+
+```bash
+echo '{"id": 1, "method": "set_sender_rule", "params": {"pattern": "news.example.org", "mail_class": "ignore"}}' \
+  | socat - "UNIX-CONNECT:$XDG_RUNTIME_DIR/codex/daemon.sock"
+```
+
+After you dismiss `mail_rule_proposal_threshold` (default 3, 0 for never) messages in a
+row from one sender, the Inbox asks whether to ignore that sender: **Done** adds the
+rule and **Dismiss** declines it for good. What triage decided and what you did with
+each message is kept in `mail_outcomes`; the `mail_outcomes` daemon method returns the
+recent rows and how often you kept what was shown.
 
 Background work runs on the main model unless `background_model_path` names
 another GGUF file. That model gets its own cache, so the two never evict each
@@ -811,6 +835,7 @@ another. Unknown keys are rejected.
 	"mail_max_age_days": 7,
 	"mail_imap_accounts": [],
 	"mail_draft_replies": true,
+	"mail_rule_proposal_threshold": 3,
 	"mcp_servers": []
 }
 ```
@@ -912,6 +937,7 @@ accepts an ETAPI token from Options > ETAPI as a bearer token.
 | `src/core/model.ts`                                | Loading the model and making one call to it                                                                 |
 | `src/core/evidence.ts`                             | Searching with memory, recall formatting, page summaries, and the research queue                            |
 | `src/core/checks.ts`                               | Checks on a result that do not rely on the model                                                            |
+| `src/core/mailChecks.ts`                           | Sender-rule matching and the checks on drafted mail replies                                                 |
 | `src/core/toolStage.ts`                            | The tool-calling loop each task's gather step runs                                                          |
 | `src/core/tools.ts`                                | Built-in tools and their path and URL checks                                                                |
 | `src/core/mcpTools.ts`                             | MCP client for stdio and HTTP servers                                                                       |

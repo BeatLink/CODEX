@@ -152,6 +152,12 @@ describe('imap accounts', () => {
         expect(DEFAULT_SETTINGS.mail_draft_replies).toBe(true);
         expect(() => validateSettings({ ...DEFAULT_SETTINGS, mail_draft_replies: 'yes' })).toThrow(/mail_draft_replies/);
     });
+
+    it('proposes a sender rule after three dismissals by default, and takes 0 to never propose one', () => {
+        expect(DEFAULT_SETTINGS.mail_rule_proposal_threshold).toBe(3);
+        expect(validateSettings({ ...DEFAULT_SETTINGS, mail_rule_proposal_threshold: 0 }).mail_rule_proposal_threshold).toBe(0);
+        expect(() => validateSettings({ ...DEFAULT_SETTINGS, mail_rule_proposal_threshold: -1 })).toThrow(/mail_rule_proposal_threshold/);
+    });
 });
 
 // ============================================================================

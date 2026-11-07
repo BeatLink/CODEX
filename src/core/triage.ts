@@ -1,8 +1,9 @@
-// Triage incoming email: skip bulk mail without the model, and ask it only whether a person needs to look at the rest.
+// Triage incoming email: apply the user's sender rules, skip bulk mail without the model, and ask it only whether a person needs to look at the rest.
 import { BackgroundModel, BackgroundPaused, parseJson } from './background.js';
 import type { Section } from './contextBudget.js';
 import type { EventHandler, EventOutcome } from './events.js';
-import type { EventRecord } from './knowledge.js';
+import type { EventRecord, MailDecider } from './knowledge.js';
+import { senderAddress, type MailClass } from './mailChecks.js';
 
 // ============================================================================
 // Choices and prompts
@@ -87,10 +88,51 @@ function readVerdict(reply: string): Verdict | null {
 
 export const emailHandler: EventHandler = async (event, { settings, store, options }): Promise<EventOutcome> => {
     const mail = readMail(event);
+    const sender = senderAddress(mail.from);
+    const title = clip(`${mail.from || 'Unknown sender'}: ${mail.subject || '(no subject)'}`, MAX_TITLE_CHARS);
+    const details = { message_id: mail.message_id, source: event.source, file: field(event.payload, 'file') };
+    const record = (mailClass: MailClass, decidedBy: MailDecider, reason: string, actionId: number | null): number =>
+        store.recordMailTriage({ eventId: event.id, actionId, sender, subject: mail.subject, messageId: mail.message_id, mailClass, decidedBy, reason });
+    // The draft event carries its outcome row, so the draft is stored beside the triage decision.
+    const queueDraft = (outcomeId: number): void => {
+        if (settings.mail_draft_replies) {
+            store.enqueueEvent({
+                source: event.source,
+                type: 'email.draft',
+                dedupeKey: `draft:${mail.message_id || event.id}`,
+                trust: 'external',
+                priority: -1,
+                payload: { ...event.payload, mail_outcome_id: outcomeId },
+            });
+        }
+    };
+
+    // A rule the user approved decides before anything else, and the model is not asked.
+    const rule = store.applySenderRule(sender);
+    if (rule) {
+        const reason = `Sender rule: ${rule.pattern} is ${rule.mail_class}`;
+        if (rule.mail_class === 'ignore') {
+            record('ignore', 'rule', reason, null);
+            return { status: 'ignored', detail: reason };
+        }
+        const actionId = store.addAction({
+            eventId: event.id,
+            kind: 'notify',
+            title,
+            body: reason,
+            payload: { ...details, needs_reply: rule.mail_class === 'reply', rule: rule.pattern },
+        });
+        const outcomeId = record(rule.mail_class, 'rule', reason, actionId);
+        if (rule.mail_class === 'reply') {
+            queueDraft(outcomeId);
+        }
+        return { status: 'done', detail: `Proposed action ${actionId}; ${reason}` };
+    }
     if (mail.bulk) {
+        record('ignore', 'heuristic', `Bulk mail: ${mail.bulk}`, null);
         return { status: 'ignored', detail: `Bulk mail: ${mail.bulk}` };
     }
-    const title = clip(`${mail.from || 'Unknown sender'}: ${mail.subject || '(no subject)'}`, MAX_TITLE_CHARS);
+
     const model = BackgroundModel.fromOptions(settings, options);
     const sections: Section[] = [
         ['Email', `From: ${mail.from}\nSubject: ${mail.subject}\nDate: ${mail.date}\n\n${mail.body}`],
@@ -103,25 +145,17 @@ export const emailHandler: EventHandler = async (event, { settings, store, optio
             throw error;
         }
     }
-    const details = { message_id: mail.message_id, source: event.source, file: field(event.payload, 'file') };
     // A message the model could not judge is shown rather than lost.
     if (verdict === null) {
-        const actionId = store.addAction({ eventId: event.id, kind: 'notify', title, body: 'Not triaged: the model gave no usable answer.', payload: details });
+        const body = 'Not triaged: the model gave no usable answer.';
+        const actionId = store.addAction({ eventId: event.id, kind: 'notify', title, body, payload: details });
+        record('notify', 'fallback', body, actionId);
         return { status: 'done', detail: `Proposed action ${actionId} without triage` };
     }
+    const reason = `${verdict.category}, ${verdict.importance} importance${verdict.needs_reply ? ', waiting for a reply' : ''}: ${verdict.summary}`;
     if (verdict.importance === 'low' && !verdict.needs_reply) {
+        record('ignore', 'model', reason, null);
         return { status: 'ignored', detail: `Low importance: ${verdict.summary}` };
-    }
-    // The mail is only read here; the reply is drafted later, so the person sees the mail first.
-    if (verdict.needs_reply && settings.mail_draft_replies) {
-        store.enqueueEvent({
-            source: event.source,
-            type: 'email.draft',
-            dedupeKey: `draft:${mail.message_id || event.id}`,
-            trust: 'external',
-            priority: -1,
-            payload: event.payload,
-        });
     }
     const actionId = store.addAction({
         eventId: event.id,
@@ -130,5 +164,10 @@ export const emailHandler: EventHandler = async (event, { settings, store, optio
         body: verdict.summary,
         payload: { ...details, category: verdict.category, importance: verdict.importance, needs_reply: verdict.needs_reply },
     });
+    const outcomeId = record(verdict.needs_reply ? 'reply' : 'notify', 'model', reason, actionId);
+    // The mail is only read here; the reply is drafted later, so the person sees the mail first.
+    if (verdict.needs_reply) {
+        queueDraft(outcomeId);
+    }
     return { status: 'done', detail: `Proposed action ${actionId}` };
 };

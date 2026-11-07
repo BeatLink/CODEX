@@ -156,3 +156,73 @@ describe('email triage', () => {
         expect(String(store.actions()[0].title).length).toBeLessThanOrEqual(120);
     });
 });
+
+// ============================================================================
+// Outcomes and sender rules
+// ============================================================================
+
+describe('triage outcomes and sender rules', () => {
+    it('records each decision with who made it, and the user answer once the action is resolved', async () => {
+        fakes.runStage.mockResolvedValueOnce(verdict({ needs_reply: false, importance: 'high', summary: 'Alice shares a plan.' }));
+        fakes.runStage.mockResolvedValueOnce(verdict({ needs_reply: false, importance: 'low' }));
+        receive({ message_id: '<1@example.test>' });
+        receive({ bulk: 'mailing list' });
+        receive();
+
+        for (let index = 0; index < 3; index += 1) {
+            await handleNextEvent(settings, options);
+        }
+        store.resolveAction(Number(store.actions()[0].id), 'done');
+
+        const outcomes = store.mailOutcomes().reverse();
+        expect(outcomes.map((outcome) => [outcome.mail_class, outcome.decided_by, outcome.resolution])).toEqual([
+            ['notify', 'model', 'done'],
+            ['ignore', 'heuristic', 'ignored'],
+            ['ignore', 'model', 'ignored'],
+        ]);
+        expect(outcomes[0]).toMatchObject({ sender: 'alice@example.test', subject: 'Lunch?', message_id: '<1@example.test>', draft: null });
+        expect(outcomes[0].reason).toContain('Alice shares a plan.');
+    });
+
+    it('lets a sender rule decide without the model, the exact address before its domain', async () => {
+        store.setSenderRule('example.test', 'ignore');
+        store.setSenderRule('alice@example.test', 'reply');
+        receive({ message_id: '<2@example.test>' });
+        receive({ from: 'Bob <bob@example.test>' });
+
+        await handleNextEvent(settings, options);
+        await handleNextEvent(settings, options);
+
+        expect(fakes.runStage).not.toHaveBeenCalled();
+        const [action] = store.actions();
+        expect(action).toMatchObject({ kind: 'notify', body: 'Sender rule: alice@example.test is reply' });
+        const draft = store.events().find((event) => event.type === 'email.draft');
+        expect(draft).toBeTruthy();
+        const outcomes = store.mailOutcomes().reverse();
+        expect(outcomes.map((outcome) => [outcome.sender, outcome.mail_class, outcome.decided_by])).toEqual([
+            ['alice@example.test', 'reply', 'rule'],
+            ['bob@example.test', 'ignore', 'rule'],
+        ]);
+        expect(Object.fromEntries(store.senderRules().map((rule) => [rule.pattern, rule.hits]))).toEqual({ 'alice@example.test': 1, 'example.test': 1 });
+    });
+
+    it('applies a sender rule even to mail the headers call bulk', async () => {
+        store.setSenderRule('alice@example.test', 'notify');
+        receive({ bulk: 'mailing list' });
+
+        await handleNextEvent(settings, options);
+
+        expect(store.actions()).toHaveLength(1);
+    });
+
+    it('hands the outcome row to the draft event', async () => {
+        fakes.runStage.mockResolvedValue(verdict());
+        receive({ message_id: '<3@example.test>' });
+
+        await handleNextEvent(settings, options);
+
+        const draft = store.claimEvent();
+        expect(draft?.type).toBe('email.draft');
+        expect(draft?.payload.mail_outcome_id).toBe(Number(store.mailOutcomes()[0].id));
+    });
+});

@@ -99,6 +99,43 @@ describe('drafting a reply', () => {
         expect(store.events()[0].status).toBe('ignored');
         expect(store.actions()).toEqual([]);
     });
+
+    it('addresses the draft to the sender with a Re: subject, and stores it on its outcome row', async () => {
+        const outcomeId = store.recordMailTriage({
+            eventId: null, actionId: null, sender: 'alice@example.test', subject: 'Lunch?', messageId: '<1@example.test>',
+            mailClass: 'reply', decidedBy: 'model', reason: 'personal',
+        });
+        store.enqueueEvent({
+            source: 'maildir:/mail',
+            type: 'email.draft',
+            payload: { from: 'Alice <alice@example.test>', subject: 'Lunch?', body: 'Free on Friday?', mail_outcome_id: outcomeId },
+        });
+
+        await handleNextEvent(settings, options, undefined, async () => 'Friday works for me.');
+
+        const [action] = store.actions();
+        expect(action.body).toBe('Friday works for me.');
+        expect(JSON.parse(String(action.payload))).toMatchObject({ to: 'alice@example.test', subject: 'Re: Lunch?' });
+        expect(store.mailOutcomes()[0]).toMatchObject({ draft_action_id: action.id, draft: 'Friday works for me.', draft_checks: '[]', draft_resolution: 'pending' });
+    });
+
+    it('still proposes a draft that fails a check, with a note, and records the failed check', async () => {
+        const outcomeId = store.recordMailTriage({
+            eventId: null, actionId: null, sender: 'alice@example.test', subject: 'Lunch?', messageId: '',
+            mailClass: 'reply', decidedBy: 'model', reason: 'personal',
+        });
+        store.enqueueEvent({
+            source: 'maildir:/mail',
+            type: 'email.draft',
+            payload: { from: 'Alice <alice@example.test>', subject: 'Lunch?', body: 'Free on Friday?', mail_outcome_id: outcomeId },
+        });
+
+        await handleNextEvent(settings, options, undefined, async () => 'Friday works, see you at 1pm with Carol.');
+
+        const [action] = store.actions('proposed');
+        expect(action.body).toBe('Friday works, see you at 1pm with Carol.\n\nCheck: not in the email: 1pm, Carol.');
+        expect(JSON.parse(String(store.mailOutcomes()[0].draft_checks))).toEqual(['ungrounded']);
+    });
 });
 
 // ============================================================================

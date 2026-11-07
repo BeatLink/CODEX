@@ -24,5 +24,6 @@
   "mail_max_age_days": 7,
   "mail_imap_accounts": [],
   "mail_draft_replies": true,
+  "mail_rule_proposal_threshold": 3,
   "mcp_servers": []
 }

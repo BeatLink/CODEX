@@ -88,6 +88,7 @@ export type Settings = {
     mail_max_age_days: number;
     mail_imap_accounts: ImapAccount[];
     mail_draft_replies: boolean;
+    mail_rule_proposal_threshold: number;
 };
 
 export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
@@ -128,6 +129,8 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
     mail_imap_accounts: [],
     // A message that needs an answer gets a drafted reply, which the model works as a task tree; it is never sent.
     mail_draft_replies: true,
+    // Dismissing this many messages in a row from one sender proposes a rule to ignore it; 0 never proposes one.
+    mail_rule_proposal_threshold: 3,
 } satisfies Settings);
 
 // ============================================================================
@@ -283,6 +286,7 @@ export function validateSettings(input: Record<string, unknown>): Settings {
         ['background_prune_after_days', 1, 3650],
         ['background_max_store_megabytes', 16, 1048576],
         ['mail_max_age_days', 1, 365],
+        ['mail_rule_proposal_threshold', 0, 100],
     ];
     for (const [name, minimum, maximum] of ranges) {
         const value = values[name];

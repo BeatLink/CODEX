@@ -387,6 +387,18 @@ describe('HarnessDaemon', () => {
         await expect(client.call('queue_request', { prompt: '   ' })).rejects.toThrow('needs a prompt');
     });
 
+    it('sets, lists and deletes sender rules, and reports mail outcomes with their summary', async () => {
+        const client = await (await start()).client();
+
+        const added = await client.call<{ rule: Record<string, unknown>; conflicts: number }>('set_sender_rule', { pattern: '@Example.test', mail_class: 'ignore' });
+
+        expect(added).toMatchObject({ rule: { pattern: 'example.test', mail_class: 'ignore', origin: 'user', hits: 0 }, conflicts: 0 });
+        expect(await client.call('sender_rules')).toHaveLength(1);
+        await expect(client.call('set_sender_rule', { pattern: 'example.test', mail_class: 'archive' })).rejects.toThrow('mail_class must be one of');
+        expect(await client.call('delete_sender_rule', { pattern: 'example.test' })).toEqual({ deleted: true });
+        expect(await client.call('mail_outcomes', { limit: 10 })).toMatchObject({ outcomes: [], summary: { classes: [], agreement: null } });
+    });
+
     it('rejects an event with an unknown trust and an unknown resolution', async () => {
         const client = await (await start()).client();
 

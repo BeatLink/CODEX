@@ -138,7 +138,7 @@ From a design conversation with an LLM assistant (unchecked claims). Problem: da
 - **Pattern B, rules → model:** an event hits the rule engine first, which decides what must happen; the model only phrases the fixed result ("rewrite these exact outputs as a polite email"), so it cannot invent facts or logic.
 - Engines named: CLIPS (and its Python port experta), Drools, or a custom SQL/JSON rule evaluator. For Codex that means a TypeScript or SQL-based evaluator over the SQLite store.
 
-**Where Codex stands:** not built as a general mechanism, but the pieces exist in special cases: mail triage's header heuristics are hard-coded rules; deterministic checks are rules applied to model output; the planned autonomy ladder's learned rules and the overdue sweep for commitments are rule-shaped; the fact store and graph already hold extracted facts. A general fact-and-rule layer could serve all of these, and could also hold drives and goals as inspectable state instead of model-set text.
+**Where Codex stands:** not built as a general mechanism. Built first, as the decision on how to start (2026-11-07): the data and plain predicates for mail, a user-visible sender-rule table checked before the triage model, outcome records as past cases, and lexical draft checks (doc 1, "Reactive assistant"). A general engine is built only if these move the triage-agreement number (doc 3, "Self-improving domains"). Other pieces exist in special cases: mail triage's header heuristics are hard-coded rules; deterministic checks are rules applied to model output; the planned autonomy ladder's learned rules and the overdue sweep for commitments are rule-shaped; the fact store and graph already hold extracted facts. A general fact-and-rule layer could serve all of these, and could also hold drives and goals as inspectable state instead of model-set text.
 
 - **Facts:** structured predicates extracted by the model from text (schema-constrained), plus facts the harness knows directly (event headers, dates, settings, approvals).
 - **Rules:** `IF condition THEN action` over those facts, stored as data the user can read and edit, evaluated in TypeScript or SQL over the SQLite store. Rules decide; the model never does in their domain.
@@ -352,7 +352,7 @@ An assistant that notices, prepares and asks, and acts alone only where the user
 - **Always yields to the user:** a foreground request takes the model from any background run within one call.
 
 ### Reactive assistant: planned features
-- **Approval and autonomy ladder** (observe → notify → draft → act with approval → act unattended; rules learned from approvals/rejections). Until it exists no event run can change anything.
+- **Approval and autonomy ladder** (observe → notify → draft → act with approval → act unattended; rules learned from approvals/rejections). Until it exists no event run can change anything. The first rung for mail is built: per-sender rules and ignore-rule proposals from repeated dismissals (doc 1, "Reactive assistant").
 - **Entities and commitments** (as structured facts in the world model, see "Fact and rule engine"), then idle jobs driven by them: pre-research for tomorrow's meetings, stale-commitment sweeps, entity profiles from episodes, daily digest.
 - Other connectors: calendar, tasks/to-dos, bookmarks, notes, file watchers, timers, webhooks.
 - Mailbox coalescing / backlog policy; rolling thread summaries; idle-work budget.
@@ -408,12 +408,12 @@ A domain pack becomes the unit the system gets better at, not only the unit it i
 | Memory | `recall`, `searchWithMemory` | recalls from the domain's scope plus the shared store |
 | Researcher | gather tool loop, `researchOneTopic` | researches topics the domain's goals name |
 | Executor | `act`, MCP tools | only the domain's tools, on the autonomy ladder |
-| Auditor | `check`, `checks.ts` | the domain's validators, plus re-reading real state after an action |
+| Auditor | `check`, `checks.ts`, `mailChecks.ts` | the domain's validators, plus re-reading real state after an action |
 | Pruner / collator | consolidation, `tidy` | consolidates the domain's memory scope |
 | Reflection | `learnFromEpisodes` (generic) | turns recorded outcomes into proposed changes (below) |
 
 **Improvement loop per domain:**
-1. **Record:** every run and event outcome is stored with the domain's success signal once it is known (an Inbox approval, the sent text of a draft, a test result).
+1. **Record:** every run and event outcome is stored with the domain's success signal once it is known (an Inbox approval, the sent text of a draft, a test result). Built for mail: see doc 1, "Reactive assistant" (`mail_outcomes`).
 2. **Reflect:** a reflection job reads recent failures and proposes one change: a rule, an instruction line, a memory, a validator or a skill.
 3. **Test:** the change is replayed on that domain's stored past cases (a held-out set kept per domain) against the current setup.
 4. **Keep or drop:** kept only if it scores better and breaks no passing case; otherwise dropped, or put in the Inbox for the user to decide. Every kept change is a readable row with its origin, score and date, so it can be rolled back.

@@ -3,6 +3,7 @@ import { BackgroundPaused } from './background.js';
 import { untrustedBlock } from './contextBudget.js';
 import type { EventContext, EventHandler, EventOutcome } from './events.js';
 import type { EventRecord } from './knowledge.js';
+import { checkNote, draftChecks, replySubject, senderAddress, type MailThread } from './mailChecks.js';
 import { backgroundModelKey } from './settings.js';
 import { RunStopped } from './taskTree.js';
 
@@ -72,24 +73,39 @@ export async function runEventTree(prompt: string, trust: 'user' | 'external', {
 }
 
 // An email that needs an answer gets a reply drafted from what the owner's notes know; the draft is only proposed.
+// A draft that fails a non-model check is still proposed, with a note saying what to check.
 export const draftReplyHandler: EventHandler = async (event: EventRecord, context: EventContext): Promise<EventOutcome> => {
     const { payload } = event;
-    const from = field(payload, 'from');
-    const subject = field(payload, 'subject');
-    const mail = `From: ${from}\nSubject: ${subject}\nDate: ${field(payload, 'date')}\n\n${field(payload, 'body').slice(0, MAX_MAIL_PROMPT_CHARS)}`;
+    const thread: MailThread = {
+        from: field(payload, 'from'),
+        to: field(payload, 'to'),
+        subject: field(payload, 'subject'),
+        date: field(payload, 'date'),
+        body: field(payload, 'body').slice(0, MAX_MAIL_PROMPT_CHARS),
+    };
+    const mail = `From: ${thread.from}\nSubject: ${thread.subject}\nDate: ${thread.date}\n\n${thread.body}`;
     // External: the sender wrote this prompt's content, so the run is held to research and writing.
-    const answer = clip(await runEventTree(`${DRAFT_PROMPT}\n\nEmail:\n${untrustedBlock(mail)}`, 'external', context), MAX_DRAFT_CHARS);
+    const written = await runEventTree(`${DRAFT_PROMPT}\n\nEmail:\n${untrustedBlock(mail)}`, 'external', context);
+    const answer = clip(written, MAX_DRAFT_CHARS);
     if (!answer) {
         return { status: 'ignored', detail: 'The model wrote no draft.' };
     }
-    const title = clip(`Reply to ${from || 'sender'}: ${subject || '(no subject)'}`, MAX_TITLE_CHARS);
+    const recipient = senderAddress(thread.from) || thread.from;
+    const subject = replySubject(thread.subject);
+    const checks = draftChecks(written, recipient, subject, thread);
+    const note = checkNote(checks);
+    const title = clip(`Reply to ${thread.from || 'sender'}: ${thread.subject || '(no subject)'}`, MAX_TITLE_CHARS);
     const actionId = context.store.addAction({
         eventId: event.id,
         kind: 'draft',
         title,
-        body: answer,
-        payload: { message_id: field(payload, 'message_id'), source: event.source, file: field(payload, 'file') },
+        body: note ? `${answer}\n\n${note}` : answer,
+        payload: { message_id: field(payload, 'message_id'), source: event.source, file: field(payload, 'file'), to: recipient, subject },
     });
+    const outcomeId = payload.mail_outcome_id;
+    if (typeof outcomeId === 'number' && Number.isInteger(outcomeId)) {
+        context.store.recordMailDraft(outcomeId, actionId, answer, checks.map((check) => check.name));
+    }
     return { status: 'done', detail: `Proposed action ${actionId}` };
 };
 

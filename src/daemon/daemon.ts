@@ -18,6 +18,7 @@ import {
     type NewEvent,
     type TaskRun,
 } from '../core/knowledge.js';
+import { MAIL_CLASSES, type MailClass } from '../core/mailChecks.js';
 import { ImapConnector } from '../core/imap.js';
 import { MailConnector } from '../core/mail.js';
 import { ModelCache } from '../core/model.js';
@@ -295,6 +296,14 @@ function actionResolution(value: unknown): ActionResolution {
     return resolution as ActionResolution;
 }
 
+function mailClass(value: unknown): MailClass {
+    const chosen = text(value, 'mail_class', '');
+    if (!(MAIL_CLASSES as readonly string[]).includes(chosen)) {
+        throw new Error(`mail_class must be one of: ${MAIL_CLASSES.join(', ')}.`);
+    }
+    return chosen as MailClass;
+}
+
 function flag(value: unknown, fallback: boolean): boolean {
     return value === undefined ? fallback : Boolean(value);
 }
@@ -415,6 +424,18 @@ export class HarnessDaemon {
                     this.resolveAction(integer(params.action_id, 'action_id', 0), actionResolution(params.resolution)),
                 ),
             ],
+            [
+                'mail_outcomes',
+                method(['limit', 'since'], (_, params) =>
+                    this.mailOutcomes(integer(params.limit, 'limit', 100), integer(params.since, 'since', 0)),
+                ),
+            ],
+            ['sender_rules', method([], () => this.senderRules())],
+            [
+                'set_sender_rule',
+                method(['pattern', 'mail_class'], (_, params) => this.setSenderRule(text(params.pattern, 'pattern', ''), mailClass(params.mail_class))),
+            ],
+            ['delete_sender_rule', method(['pattern'], (_, params) => this.deleteSenderRule(text(params.pattern, 'pattern', '')))],
             ['research_now', method([], () => this.researchNow())],
             ['queue_status', method([], () => this.queueStatus())],
             [
@@ -877,11 +898,32 @@ export class HarnessDaemon {
     }
 
     resolveAction(actionId: number, resolution: ActionResolution): Json {
-        const resolved = this.knowledgeStore(this.getSettings().knowledge_db_path).resolveAction(actionId, resolution);
+        const settings = this.getSettings();
+        const resolved = this.knowledgeStore(settings.knowledge_db_path).resolveAction(actionId, resolution, {
+            senderRuleThreshold: settings.mail_rule_proposal_threshold,
+        });
         if (resolved) {
             this.broadcast('actions.changed');
         }
         return { resolved };
+    }
+
+    // Recent mail outcomes and, per triage class, how often the user kept or dismissed what was shown.
+    mailOutcomes(limit = 100, since = 0): Json {
+        const store = this.knowledgeStore(this.getSettings().knowledge_db_path);
+        return { outcomes: store.mailOutcomes(limit), summary: store.mailOutcomeSummary(since) };
+    }
+
+    senderRules(): Json[] {
+        return this.knowledgeStore(this.getSettings().knowledge_db_path).senderRules();
+    }
+
+    setSenderRule(pattern: string, chosenClass: MailClass): Json {
+        return this.knowledgeStore(this.getSettings().knowledge_db_path).setSenderRule(pattern, chosenClass, 'user');
+    }
+
+    deleteSenderRule(pattern: string): Json {
+        return { deleted: this.knowledgeStore(this.getSettings().knowledge_db_path).deleteSenderRule(pattern) };
     }
 
     // ========================================================================

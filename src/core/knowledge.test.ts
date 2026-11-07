@@ -571,7 +571,11 @@ const PYTHON_SCHEMA_OBJECTS = [
     ['table', 'topics'],
 ];
 // Objects added by migrations after the Python store stopped writing the file.
-const LATER_SCHEMA_OBJECTS = new Set(['events', 'events_dedupe', 'events_pending', 'actions', 'actions_status']);
+const LATER_SCHEMA_OBJECTS = new Set([
+    'events', 'events_dedupe', 'events_pending', 'actions', 'actions_status',
+    'mail_outcomes', 'mail_outcomes_action', 'mail_outcomes_draft_action', 'mail_outcomes_sender',
+    'mail_sender_rules', 'sqlite_autoindex_mail_sender_rules_1',
+]);
 const PYTHON_MEMORIES_TABLE = "CREATE TABLE \"memories\" (\n        id INTEGER PRIMARY KEY,\n        store TEXT NOT NULL,\n        statement TEXT NOT NULL UNIQUE COLLATE NOCASE,\n        created_at REAL NOT NULL,\n        last_used_at REAL,\n        use_count INTEGER NOT NULL DEFAULT 0\n    , status TEXT NOT NULL DEFAULT 'active', reason TEXT NOT NULL DEFAULT '', origin TEXT NOT NULL DEFAULT 'learned', scope TEXT NOT NULL DEFAULT '')";
 
 function countRows(database: DatabaseSync, table: string): number {
@@ -674,5 +678,118 @@ describe('KnowledgeStore migrations', () => {
         withDatabase(path, (database) => database.exec(`PRAGMA user_version = ${MIGRATIONS.length + 1}`));
 
         expect(() => new KnowledgeStore(path)).toThrow(/newer than this application/);
+    });
+});
+
+// ============================================================================
+// Mail outcomes and sender rules
+// ============================================================================
+
+describe('KnowledgeStore mail outcomes', () => {
+    let store: KnowledgeStore;
+
+    beforeEach(() => {
+        store = new KnowledgeStore(join(directory, 'knowledge.db'));
+    });
+
+    // Triage one message from a sender into a shown notification and return its action.
+    function shown(sender: string, mailClass: 'notify' | 'reply' = 'notify'): number {
+        const actionId = store.addAction({ kind: 'notify', title: `${sender}: hello` });
+        store.recordMailTriage({ eventId: null, actionId, sender, subject: 'Hello', messageId: '', mailClass, decidedBy: 'model', reason: 'work' });
+        return actionId;
+    }
+
+    it('writes the user answer on the triage and draft of the same message', () => {
+        const notifyId = shown('alice@example.test', 'reply');
+        const outcomeId = Number(store.mailOutcomes()[0].id);
+        const draftId = store.addAction({ kind: 'draft', title: 'Reply to Alice' });
+        store.recordMailDraft(outcomeId, draftId, 'Sounds good.', ['subject']);
+
+        store.resolveAction(notifyId, 'done');
+        store.resolveAction(draftId, 'rejected');
+
+        expect(store.mailOutcomes()[0]).toMatchObject({
+            resolution: 'done',
+            draft: 'Sounds good.',
+            draft_checks: '["subject"]',
+            draft_resolution: 'rejected',
+            edited_draft: null,
+            edit_distance: null,
+        });
+        expect(store.mailOutcomes()[0].resolved_at).toBeTypeOf('number');
+    });
+
+    it('sums each class and the share of shown mail the user kept', () => {
+        store.resolveAction(shown('alice@example.test'), 'done');
+        store.resolveAction(shown('bob@example.test'), 'rejected');
+        shown('carol@example.test', 'reply');
+        store.recordMailTriage({ eventId: null, actionId: null, sender: 'news@example.test', subject: '', messageId: '', mailClass: 'ignore', decidedBy: 'heuristic', reason: 'bulk' });
+
+        const summary = store.mailOutcomeSummary();
+
+        expect(summary.classes).toEqual([
+            { mail_class: 'ignore', decided: 1, approved: 0, rejected: 0, pending: 0 },
+            { mail_class: 'notify', decided: 2, approved: 1, rejected: 1, pending: 0 },
+            { mail_class: 'reply', decided: 1, approved: 0, rejected: 0, pending: 1 },
+        ]);
+        expect(summary.agreement).toBe(0.5);
+        expect(summary.rule_conflicts).toBe(0);
+        store.setSenderRule('bob@example.test', 'ignore');
+        expect(store.mailOutcomeSummary().rule_conflicts).toBe(1);
+    });
+
+    it('proposes an ignore rule only after the set number of dismissals in a row, and only once', () => {
+        const options = { senderRuleThreshold: 3 };
+        store.resolveAction(shown('bob@example.test'), 'rejected', options);
+        store.resolveAction(shown('bob@example.test'), 'done', options);
+        store.resolveAction(shown('bob@example.test'), 'rejected', options);
+        store.resolveAction(shown('bob@example.test'), 'rejected', options);
+        expect(store.actions('proposed')).toEqual([]);
+
+        store.resolveAction(shown('bob@example.test'), 'rejected', options);
+        store.resolveAction(shown('bob@example.test'), 'rejected', options);
+
+        const proposals = store.actions('proposed').filter((action) => action.kind === 'rule');
+        expect(proposals).toHaveLength(1);
+        expect(proposals[0].title).toBe('Ignore mail from bob@example.test?');
+        expect(JSON.parse(String(proposals[0].payload))).toEqual({ pattern: 'bob@example.test', mail_class: 'ignore', origin: 'learned' });
+        expect(store.senderRules()).toEqual([]);
+    });
+
+    it('proposes nothing when the threshold is zero', () => {
+        for (let index = 0; index < 5; index += 1) {
+            store.resolveAction(shown('bob@example.test'), 'rejected', { senderRuleThreshold: 0 });
+        }
+
+        expect(store.actions('proposed')).toEqual([]);
+    });
+
+    it('adds a learned rule when the user marks the proposal done, and none when it is dismissed', () => {
+        for (let index = 0; index < 2; index += 1) {
+            store.resolveAction(shown('bob@example.test'), 'rejected', { senderRuleThreshold: 2 });
+            store.resolveAction(shown('eve@example.test'), 'rejected', { senderRuleThreshold: 2 });
+        }
+        const [eve, bob] = store.actions('proposed');
+
+        store.resolveAction(Number(bob.id), 'done');
+        store.resolveAction(Number(eve.id), 'rejected');
+
+        expect(store.senderRules().map((rule) => [rule.pattern, rule.mail_class, rule.origin])).toEqual([['bob@example.test', 'ignore', 'learned']]);
+    });
+
+    it('sets, replaces and deletes a user rule, and matches the exact address before the domain', () => {
+        store.setSenderRule('@Example.test', 'ignore');
+        store.setSenderRule('alice@example.test', 'notify');
+        store.setSenderRule('alice@example.test', 'reply');
+
+        expect(store.applySenderRule('alice@example.test')?.mail_class).toBe('reply');
+        expect(store.applySenderRule('bob@example.test')?.mail_class).toBe('ignore');
+        expect(store.senderRules().map((rule) => [rule.pattern, rule.origin, rule.hits])).toEqual([
+            ['alice@example.test', 'user', 1],
+            ['example.test', 'user', 1],
+        ]);
+        expect(store.deleteSenderRule('example.test')).toBe(true);
+        expect(store.applySenderRule('bob@example.test')).toBeNull();
+        expect(() => store.setSenderRule('example.test', 'archive' as 'ignore')).toThrow("sender rule's class");
     });
 });
