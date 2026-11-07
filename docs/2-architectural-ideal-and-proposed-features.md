@@ -265,6 +265,27 @@ Hard-coded task graphs for requests whose shape is known (e.g. "process my morni
 
 For requests no blueprint fits, the model's first turn emits a JSON task graph of atomic items and the harness executes it item by item. `decide` is a per-task version of this (built).
 
+### Question-driven decisions
+
+`decide` asks the model to pick one of six approaches from a long prompt that defines them all (`DECISION_PROMPT` in `core/taskTree.ts`), with rules such as "must be chosen whenever…" left to the model to apply. It is already partly question-driven: `reason` and `facts_to_check` come before `approach` in the schema, and `parseDecision` turns `answer` into `research` when any fact is listed. Proposed: take this all the way. The schema asks the model a few narrow questions, and code picks the approach from the answers.
+
+```
+needs_outside_facts: string[]     the current facts_to_check
+needs_user_data:     "" | server  does it need anything a connected tool holds? which?
+changes_things:      boolean      does it ask for files to be changed or tests to be run?
+reads_local_files:   boolean
+matching_agent:      "" | agent   does an agent's description cover this task?
+distinct_parts:      string[]     the separate pieces of real work, if more than one
+```
+
+Approach chosen in code, first match wins: agent → `delegate`; user data or changes → `act`; local files → `files`; facts → `research`; two or more parts → `decompose`; otherwise `answer`. Settings still limit which approaches are allowed.
+
+- **Why:** a yes/no question about one property is easier for a 4B model than a choice among six with every definition in mind. Each "must be chosen whenever X" becomes a rule in code, not prompt text a small model can drop. Grammar-forced JSON is written in schema order, so each answer sits in front of the model when it writes the next.
+- **Rewording alone is not the change:** "Does this task need a tool?" in place of "Select a tool" probably changes little. The gain comes from the separate fields and the rules moving into code.
+- **Same idea for tool choice:** the `act` gather prompt could first ask what the task must find out or change and which listed tool does it, so there is a short plan before any tool is called.
+- **Costs:** more output tokens per decision (booleans are cheap, lists are not). Answers can contradict each other (e.g. `changes_things` true while the parts only read), which the fixed order resolves.
+- **Not built.** Keep `DECISION_PROMPT` behind a setting so the agents eval can compare the two; see doc 3, "Task-decomposition ideas to evaluate".
+
 ### Verified self-authored skills
 
 A skill is a markdown guide the harness injects into a fresh context when a request matches it (matching exists, by approach).

@@ -117,6 +117,7 @@ Today: mail arrives → automatic mail dropped without the model → rest summar
 ## Task-decomposition ideas to evaluate
 
 - **Voting + red-flag filters** on control-flow calls (decide, check): measure whether they improve eval pass rate enough to justify the extra calls (calls are ~4 s each on the dev machine's GPU, so cost still matters).
+- **Question-driven decisions** (doc 2): replace the six-way `approach` choice in `decide` with narrow yes/no and list questions, and choose the approach in code from the answers. Run both versions on the same eval tasks over several rounds; eight tasks give noisy pass rates, so one round settles nothing.
 - **Alternative plans (tree of thought, lite):** at `decide`, sample 2–3 candidate plans and let `check` or a vote pick one, instead of following the single plan with one re-plan on failure. Affordable now that calls take ~4 s; measure pass rate against the extra calls.
 - **Corrective sub-plan on step failure** (brainos-style) vs the current "re-plan the rest once": compare.
 - **Capped retries** (practitioner: 3) and capped excerpts of step output passed forward: check against the current limits.
