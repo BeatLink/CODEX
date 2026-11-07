@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ChatCompletion, ChatCompletionRequest, ChatModel, ToolDefinition } from './model.js';
-import { REPEATED_CALL_NOTE, pythonJsonLength, runToolStage, textToolCalls } from './toolStage.js';
+import { ANSWER_NOW_CALL_NOTE, REPEATED_CALL_NOTE, pythonJsonLength, runToolStage, textToolCalls } from './toolStage.js';
 import { TOOL_DEFINITIONS } from './tools.js';
 
 // Records each call and answers it with the given output.
@@ -239,6 +239,23 @@ describe('tool stage', () => {
 
         expect(model.requests.map((request) => request.tool_choice)).toEqual(['auto', 'auto', 'auto', 'none']);
         expect(toolbox.calls).toHaveLength(3);
+    });
+
+    it('does not run a call written as text on a turn told to answer', async () => {
+        const toolbox = new FakeToolbox(() => 'Dentist at 10:00', [...TOOL_DEFINITIONS, LIST_EVENTS]);
+        const written = '<tool_call>\n{"name": "mcp__calendar__list_events", "arguments": {"day": "tomorrow"}}\n</tool_call>';
+        const model = new FakeModel([
+            toolCallReply('call-1', LIST_EVENTS.function.name, { day: 'today' }),
+            toolCallReply('call-2', LIST_EVENTS.function.name, { day: 'today' }),
+            textReply(written),
+        ]);
+
+        const result = await runToolStage(model, 'Act.', 'When is my next meeting?', toolbox, 200, 0.1, 8);
+
+        expect(model.requests.map((request) => request.tool_choice)).toEqual(['auto', 'auto', 'none']);
+        expect(toolbox.calls).toHaveLength(1);
+        expect(result).toContain(ANSWER_NOW_CALL_NOTE);
+        expect(result).toContain('Dentist at 10:00');
     });
 
     it('keeps tools open when only a built-in tool or a failed connected call answered', async () => {

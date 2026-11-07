@@ -12,6 +12,7 @@ export const MAX_TOOL_HISTORY_CHARS = 8_000;
 // Connected tools are the MCP servers' tools, named with this prefix.
 export const CONNECTED_TOOL_PREFIX = 'mcp__';
 export const REPEATED_CALL_NOTE = 'Same call as before; this result is already above. Answer from it now.';
+export const ANSWER_NOW_CALL_NOTE = 'The model tried to call a tool after being told to answer; the call was not run.';
 
 // The part of a toolbox the stage uses, so the built-in toolbox or a stand-in can serve.
 export type ToolboxLike = {
@@ -224,6 +225,11 @@ async function toolLoop(
         let toolCalls = completion.tool_calls ?? [];
         if (toolCalls.length > 0) {
             assistantMessage.tool_calls = toolCalls;
+        } else if (request.tool_choice === 'none') {
+            // A turn told to answer never runs a call written as text, so a reply that is only a call ends with the findings so far.
+            if (typeof completion.content === 'string' && completion.content.trim() && !completion.content.replace(TEXT_TOOL_CALL, '').trim()) {
+                return [ANSWER_NOW_CALL_NOTE, toolHistory.length > 0 ? `Tool call results:\n${toolHistory.join('\n')}` : ''].filter(Boolean).join('\n\n');
+            }
         } else {
             toolCalls = textToolCalls(completion.content, toolDefinitions);
             if (toolCalls.length > 0) {
