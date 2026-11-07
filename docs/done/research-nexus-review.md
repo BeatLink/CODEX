@@ -133,7 +133,7 @@ The core loop, in the version built *after* the session in file 3: it implements
 | Prompt marks "Everything below is written by the harness, not by beatlink" | Untrusted-text headings separate sources of text | Already covered. |
 | Bootstrap prompt editable while running, change logged and applied from the next call | Persona proposal (file 2) | Already covered. |
 
-**Doc 2/3 edits:** recommended above, waiting for the user's go-ahead.
+**Landed** (this commit): drives computed from the store and action record, with only weights and thresholds stored ("Cognitive loop" and roadmap item "Goals, drives and initiative"); evidence labels set by the harness ("Scratchpad contract"); memories keep their source episode or conversation id ("Conversation archive"); open questions from a session note as goal candidates ("Cognitive loop"); Nexus prior-art table rows.
 
 ## Still to review
 
