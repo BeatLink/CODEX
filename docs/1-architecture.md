@@ -215,11 +215,12 @@ An agent no other agent lists is **top-level**: request tasks can delegate to it
 ### Delegation flow
 
 1. A task's decision schema gains a `delegate` approach and an `agent` field, only when the task's agent has usable children and the depth limit is not reached. The decision prompt lists each agent with its description and, in a trusted run, the MCP servers and tools behind it, its sub-agents' included (`serversBehind`). **Why:** in an agents setup every server belongs to an agent, so the top level has none of its own; a description alone rarely tells a 4B model that a phone number or an inbox sits behind `comms`.
-2. A decision that names an offered agent under any approach except `decompose` is treated as `delegate`. **Why:** the schema asks for `approach` before `agent`, and the 4B model often fills `agent: "comms"` with `approach: "research"`, which dropped the agent; with this, the agents eval went from 3/24 to 11/24 tasks (2026-11-06, three rounds, 4,096-token context).
-3. On `delegate`, the task runs a nested `TaskTreeRun` whose request is the task's prompt and deliverable plus its dependencies' results.
-4. The nested run uses the agent's instructions after the parent's, only the agent's MCP servers, and the agent's children as delegation choices. It decides, gathers, writes and checks like any run.
-5. Its final answer becomes the delegating task's result, with the nested root task's status.
-6. Parent evidence, found addresses and tool use are shared with the nested run.
+2. **Routing comes first.** A task with agents to choose from first makes one `Routing` call (`ROUTING_PROMPT`, `routingSchema`): which agents does the task need, any number, each with one sentence of its part, in the order the parts must happen. One agent → `delegate` with no `decide` call; two or more (with room for subtasks) → `decompose` into one subtask per agent, prompt "<part> (for the <agent> agent)", each depending on every earlier part; none, a bad reply or a failed call → the usual `decide`. A top task that may still ask its clarifying question gets the `clarification` field here too. **Why:** a task that needs two agents reached them only if the model first chose `decompose`, which it rarely did (`free-slot-and-weather` 0/3 in agents runs); picking agents from a list is easier for a 4B model than judging whether a task is big.
+3. A decision that names an offered agent under any approach except `decompose` is treated as `delegate`. **Why:** the schema asks for `approach` before `agent`, and the 4B model often fills `agent: "comms"` with `approach: "research"`, which dropped the agent; with this, the agents eval went from 3/24 to 11/24 tasks (2026-11-06, three rounds, 4,096-token context).
+4. On `delegate`, the task runs a nested `TaskTreeRun` whose request is the task's prompt and deliverable plus its dependencies' results.
+5. The nested run uses the agent's instructions after the parent's, only the agent's MCP servers, and the agent's children as delegation choices. It decides, gathers, writes and checks like any run.
+6. Its final answer becomes the delegating task's result, with the nested root task's status.
+7. Parent evidence, found addresses and tool use are shared with the nested run.
 
 Limits: depth ≤ 3; nested run keeps the task tree's node and depth limits; a raised error fails the task like any other, and its parent re-plans.
 

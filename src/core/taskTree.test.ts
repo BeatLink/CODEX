@@ -21,6 +21,7 @@ import {
     REASON_MAX_CHARS,
     REPLAN_PROMPT,
     REVISE_NOTE,
+    ROUTING_PROMPT,
     ROOT_COMBINE_PROMPT,
     SPLIT_PROMPT,
     WRITE_PROMPT,
@@ -29,6 +30,7 @@ import {
     executeTaskTree,
     parseCheck,
     parseDecision,
+    parseRouting,
     parseSubtasks,
     type ExecuteTaskTreeOptions,
     type TaskSnapshot,
@@ -91,6 +93,7 @@ function subtasks(...prompts: string[]): string {
 function stepOf(systemPrompt: string): string {
     if (systemPrompt.startsWith(CONDENSE_PROMPT)) return 'condense';
     if (systemPrompt.startsWith(DECISION_PROMPT)) return 'decide';
+    if (systemPrompt.startsWith(ROUTING_PROMPT)) return 'route';
     if (systemPrompt.startsWith(SPLIT_PROMPT)) return 'split';
     if (systemPrompt.startsWith(REPLAN_PROMPT)) return 'replan';
     if (systemPrompt.startsWith(CHECK_PROMPT)) return 'check';
@@ -125,6 +128,10 @@ class ScriptedModel implements ChatModel {
         if (!queued || queued.length === 0) {
             if (step === 'check') {
                 return { content: check(), tool_calls: [], finish_reason: 'stop' };
+            }
+            if (step === 'route') {
+                // An unscripted routing call names no agent, so the task is decided as usual.
+                return { content: JSON.stringify({ needs: [] }), tool_calls: [], finish_reason: 'stop' };
             }
             throw new UnexpectedCall(`No scripted reply for ${step} of task ${task}`);
         }
@@ -1093,7 +1100,7 @@ describe('agents', () => {
         );
 
         expect(result).toBe('Sent the note.');
-        expect(model.steps()).toEqual(['decide 1', 'decide 1', 'write 1', 'check 1']);
+        expect(model.steps()).toEqual(['route 1', 'decide 1', 'decide 1', 'write 1', 'check 1']);
         const [top, nested] = model.calls.filter((call) => call.step === 'decide');
         expect(top.system).toContain('mail: Reads and sends email.');
         expect(top.json_schema!.properties.agent.enum).toEqual(['mail', '']);
@@ -1169,7 +1176,7 @@ describe('agents', () => {
         );
 
         expect(result).toBe('Direct answer.');
-        expect(model.steps()).toEqual(['decide 1', 'write 1', 'check 1']);
+        expect(model.steps()).toEqual(['route 1', 'decide 1', 'write 1', 'check 1']);
     });
 
     it('delegates when the model names an offered agent under another approach', async () => {
@@ -1182,7 +1189,47 @@ describe('agents', () => {
         );
 
         expect(result).toBe('From the mail agent.');
-        expect(model.steps()).toEqual(['decide 1', 'decide 1', 'write 1', 'check 1']);
+        expect(model.steps()).toEqual(['route 1', 'decide 1', 'decide 1', 'write 1', 'check 1']);
+    });
+
+    it('delegates straight away when routing names one agent', async () => {
+        const root = mkdtempSync(join(workDirectory, 'agents-'));
+        writeAgents(root, { mail: '---\ndescription: Email.\n---\n' });
+
+        const { result, model } = await runTree(
+            {
+                'route 1': JSON.stringify({ needs: [{ agent: 'mail', part: 'Find the newest email.' }] }),
+                'decide 1': decision('answer'),
+                'write 1': 'From the mail agent.',
+            },
+            { filesystemRoot: root },
+        );
+
+        expect(result).toBe('From the mail agent.');
+        expect(model.steps()).toEqual(['route 1', 'decide 1', 'write 1', 'check 1']);
+        expect(model.call('route', '1').json_schema!.properties.needs.items.properties.agent.enum).toEqual(['mail']);
+    });
+
+    it('splits a task by agent when routing names several, each part after the ones before it', () => {
+        const node = new TaskNode('1', 'When am I free this week, and what is the forecast in Lisbon?', 'A reply');
+        const reply = JSON.stringify({
+            needs: [
+                { agent: 'calendar', part: 'Find a free slot this week.' },
+                { agent: 'nobody', part: 'Ignored.' },
+                { agent: 'weather', part: 'Get the Lisbon forecast.' },
+                { agent: 'calendar', part: 'Listed twice.' },
+            ],
+        });
+
+        const decided = parseRouting(reply, node, ['answer', 'decompose'], ['calendar', 'weather'])!;
+
+        expect(decided.approach).toBe('decompose');
+        expect(decided.subtasks).toEqual([
+            { prompt: 'Find a free slot this week. (for the calendar agent)', deliverable: 'Find a free slot this week.', depends_on: [] },
+            { prompt: 'Get the Lisbon forecast. (for the weather agent)', deliverable: 'Get the Lisbon forecast.', depends_on: [1] },
+        ]);
+        expect(parseRouting(reply, node, ['answer'], ['calendar', 'weather'])).toBeNull();
+        expect(parseRouting(JSON.stringify({ needs: [] }), node, ['answer'], ['calendar'])).toBeNull();
     });
 
     it('nests agents only as deep as the limit', async () => {

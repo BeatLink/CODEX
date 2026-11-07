@@ -50,10 +50,10 @@ Approach chosen in code, first match wins: agent → `delegate`; user data or ch
 
 A 4B model cannot judge in advance whether a task is large, so the harness splits on things it can check.
 
-- **Agent routing as a multiple choice:** one schema-constrained call asks which of the offered agents the task needs, any number of them. Two or more → code makes one subtask per agent (with `depends_on` where one needs another's result) and each subtask delegates; one → delegate directly; none → the usual `decide`. **Why:** picking from a list is what a small model does well; "is this large?" is not. Today several agents are reached only if the model first chooses `decompose`, and it rarely does: `free-slot-and-weather` (calendar + weather) passed 0/3 in agents runs.
+- **Agent routing as a multiple choice:** built 2026-11-06; see doc 1, "Delegation flow", step 2.
 - **Split on failure as the backstop:** a task whose check still fails, or that runs out of tool calls or context, is split instead of answered badly. Partly built: "still failing → split into smaller subtasks" (doc 1); not yet for the tool-call and context limits. **Why:** needs no prediction, at the cost of one wasted attempt.
 - **Long tasks split as far as possible (MAKER-style):** for long chains of checkable steps, never ask about size; split until each step is atomic, then add voting and red flags ("Voting and red-flagging"). Plan lazily: the top level plans phases, and each phase is planned only when work reaches it, from the results so far. `max_task_depth`, `max_task_nodes` and the no-resplit rule become budgets a long task can raise, with checkpoints, instead of fixed caps. **Why:** MAKER's million-step result came from maximal splitting with minimal context per step; fixed caps stop a long project however well each step goes.
-- **Not built.** See doc 3, Agent hierarchy, next step 4.
+- **The other two are not built.** See doc 3, Agent hierarchy, next step 4.
 
 ### Step-wise tool routing
 
@@ -212,6 +212,17 @@ From a design conversation with an LLM assistant (unchecked claims) about which 
   - **Checked without loading it (2026-11-06):** `models/Spark-X2.6-4B-Q4_K_M.gguf` is architecture `spark2_5`, 4.4B parameters, 36 blocks, 3.54 GB, against 2.91 GB for `Qwen3.5-4B-UD-Q4_K_XL`. The `libllama` bundled with node-llama-cpp 3.22 includes `spark2_5`, so no llama.cpp upgrade is needed. `textToolCalls` in `core/toolStage.ts` reads Qwen's XML form and JSON beside native calls, so tool-call parsing is not tied to Qwen. The chat-wrapper settings in `core/model.ts` apply only to Qwen templates.
   - **Risk:** with the 560 MiB reserve in `core/autoSize.ts`, 3.54 GB may not fit entirely on the 4 GB GPU at the 6,144-token context. If it doesn't, it needs fewer GPU layers or a smaller quant, which makes the comparison with Qwen less even. The context ceiling and reserve were fitted to Qwen and must be measured again for Spark.
   - Rejected if it does not beat Qwen3.5-4B on the agents eval (doc 3, "Model choice"). A vendor score alone does not count: a model that invents tool results convincingly can score well and still fail here.
+
+### Thinking per stage
+
+Every call today tells Qwen not to think aloud (`thoughts: 'discourage'` in `core/model.ts`); the only reasoning before a choice is `decide`'s one-sentence `reason`. Proposed: make thinking a per-stage setting with a thought-token budget, off by default, and turn it on only where a stage makes a judgement.
+
+- **Candidates:** `decide` and `Routing` first (which approach, which agents, which subtasks), then `check` (does the answer meet the task) and logic or arithmetic steps. Not for writing, summarising, condensing, triage extraction or tool-argument filling: those are transformations, and MAKER found non-reasoning models enough for atomic steps.
+- **Why it might help:** the agents probe found `decide` reasoning its way to "I need to use the comms agent" and still choosing `research`; a model that thinks before the grammar-forced fields may commit to the right one.
+- **Costs:** a 4B model can think for hundreds to thousands of tokens, turning a ~4 s call into 10–50 s; thoughts take room in a 4,096–6,144-token window unless dropped after the call; small models loop while thinking (the reason `6ae18ec` added repeat detection).
+- **Evidence so far:** removing the 300-character `reason` cap, a cheap stand-in for "think more at `decide`", changed nothing (agents eval 3/24 either way, 2026-11-06).
+- **Check before building:** whether node-llama-cpp's thought budget works together with a JSON grammar on the same call.
+- **Not built.** See doc 3, "Task-decomposition ideas to evaluate".
 
 ## How does it learn?
 

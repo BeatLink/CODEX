@@ -32,9 +32,9 @@ Every open strategic question (doc 2) is settled by eval runs, so this comes bef
 ### Next (in order)
 
 1. Fix the two failures left (Status above), each measured with the same three-round run. Command (holds the GPU lock): `flock /run/user/1000/codex-gpu.lock node dist/core/evaluation.js --tasks evals/agents_tasks.json --runners tree,agents --repeat 3 --output <file>`. Also rerun `tree` with the delegation fix: its prompt is unchanged, but its last numbers are from a 6,144-token context.
-2. Check the forced top-level web search: an `answer` at the top still searches the request's words, which pulls in real people and places that share a name with the user's own contacts. Skip it, or rank it below connected tools, when servers are connected.
+2. ~~Check the forced top-level web search.~~ Kept as is (2026-11-06): most real setups have MCP servers connected, so skipping the search whenever any are would take the "the model can't tell it doesn't know" guard from every ordinary web question; and the tasks it misleads (`marcus-phone`) fail first because no agent or tool was chosen, which routing addresses. Revisit if routed tasks still answer from web results about a namesake.
 3. ~~Keep the eval's agent files out of the files the model can list and read.~~ Done: listings leave out `.codex`.
-4. **Split by need, not by size** (doc 2, "Splitting by need, not by size"): build agent routing as a multiple choice first and measure it on the two-domain tasks (`free-slot-and-weather`, `priya-last-email`; `agents` 0/3 on both) against the plain `decide`; then extend split-on-failure to the tool-call and context limits; use the maximal, lazily planned split for the long-horizon set (step 7).
+4. **Split by need, not by size** (doc 2, "Splitting by need, not by size"): agent routing as a multiple choice is built (doc 1, "Delegation flow", step 2); measure it on the two-domain tasks (`free-slot-and-weather`, `priya-last-email`; `agents` 0/3 on both) against the plain `decide`; then extend split-on-failure to the tool-call and context limits; use the maximal, lazily planned split for the long-horizon set (step 7).
 5. Build what the prototype left out: per-agent memory scope (learned from the agent's episodes) and scratchpad folder under the state directory; checkpoint/resume inside a nested run; show the nested tree in the interfaces; per-agent skills and tool allow lists.
 6. **Scaled task set:** 20–30 fake servers, so the flat tool list is genuinely large, and tasks that need three or more servers. This is where flat and agents should part.
 7. **Long-horizon task set, MAKER-style:** Towers of Hanoi with N disks worked through the task tree, every step checkable. Measures the per-step error rate, how far the tree scales before `max_task_depth`, `max_task_nodes` and the no-resplit rule stop it, and later what voting adds.
@@ -118,6 +118,7 @@ Today: mail arrives → automatic mail dropped without the model → rest summar
 
 ## Task-decomposition ideas to evaluate
 
+- **Thinking per stage:** doc 2, "Thinking per stage".
 - **Voting + red-flag filters** on control-flow calls: doc 2, "Voting and red-flagging".
 - **Question-driven decisions:** doc 2, "Question-driven decisions".
 - **Step-wise tool routing:** doc 2, "Step-wise tool routing".

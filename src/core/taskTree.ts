@@ -128,6 +128,25 @@ export function decisionSchema(approaches: string[], askClarification: boolean, 
     return { type: 'object', properties, required: Object.keys(properties) };
 }
 
+// Build the routing call's schema: the agents a task needs, each with its part, in the order the parts happen.
+export function routingSchema(agentNames: string[], askClarification: boolean): JsonSchema {
+    const properties: Record<string, unknown> = {
+        needs: {
+            type: 'array',
+            items: {
+                type: 'object',
+                properties: { agent: { type: 'string', enum: agentNames }, part: { type: 'string', maxLength: REASON_MAX_CHARS } },
+                required: ['agent', 'part'],
+            },
+            maxItems: MAX_SUBTASKS,
+        },
+    };
+    if (askClarification) {
+        properties.clarification = { type: 'string' };
+    }
+    return { type: 'object', properties, required: Object.keys(properties) };
+}
+
 export function subtasksSchema(minItems: number): JsonSchema {
     return { type: 'object', properties: { subtasks: subtaskSchema(minItems) }, required: ['subtasks'] };
 }
@@ -180,6 +199,15 @@ export const DELEGATE_NOTE =
     " the task needs the user's own data that the agent's tools hold, which" +
     " no web search can find; otherwise leave 'agent' empty. Agents:";
 export const AGENT_TOOLS_LABEL = 'Its tools:';
+export const ROUTING_PROMPT =
+    "You route one task in a tree of tasks that together answer the user's" +
+    " request. Reply with JSON only. In 'needs', list every specialist agent" +
+    ' below that the task needs, each with a \'part\': one short sentence' +
+    ' saying what that agent must find or do for this task. An agent is' +
+    " needed when its description covers part of the task or the task needs" +
+    " the user's own data that its tools hold, which no web search can find." +
+    ' List each agent once at most, in the order their parts must happen, and' +
+    " leave 'needs' empty when the task needs no agent.";
 export const CONNECTED_TOOLS_NOTE =
     " Connected tools hold the user's own accounts and data, which no web" +
     " search can find, so a task that needs anything they hold must choose" +
@@ -604,6 +632,42 @@ export function defaultDecision(node: TaskNode): Decision {
 }
 
 // Read a decision reply, or return null when it is not the expected shape.
+// A question of 'none' or nothing at all means the model has nothing to ask.
+function cleanClarification(value: unknown): string {
+    const clarification = clean(value);
+    return ['', 'none'].includes(casefold(clarification).replace(/[.!]+$/, '')) ? '' : clarification;
+}
+
+// Turn the routing reply into a decision: one agent delegates, several split the task by agent, none decides as usual.
+export function parseRouting(reply: string, node: TaskNode, approaches: string[], agentNames: string[]): Decision | null {
+    const data = parseJson(reply);
+    if (!isRecord(data) || !Array.isArray(data.needs)) {
+        return null;
+    }
+    const parts = new Map<string, string>();
+    for (const need of data.needs) {
+        const agent = isRecord(need) ? clean(need.agent) : '';
+        if (agentNames.includes(agent) && !parts.has(agent)) {
+            parts.set(agent, clean((need as Record<string, unknown>).part) || node.prompt);
+        }
+    }
+    const clarification = cleanClarification(data.clarification) || null;
+    const [first] = parts.keys();
+    if (parts.size === 1) {
+        return new Decision('delegate', { agent: first, clarification });
+    }
+    if (parts.size >= MIN_SUBTASKS && approaches.includes('decompose')) {
+        // Each part names its agent so the subtask routes straight to it, and sees every earlier part's result.
+        const subtasks = [...parts].map(([agent, part], index) => ({
+            prompt: `${part} (for the ${agent} agent)`,
+            deliverable: part,
+            depends_on: Array.from({ length: index }, (_, earlier) => earlier + 1),
+        }));
+        return new Decision('decompose', { subtasks, clarification });
+    }
+    return null;
+}
+
 export function parseDecision(
     reply: string,
     node: TaskNode,
@@ -639,10 +703,7 @@ export function parseDecision(
         // Fewer than two real subtasks is the task itself, so it is done directly.
         approach = searchQueries.length > 0 || (Array.isArray(facts) && facts.length > 0) ? 'research' : 'answer';
     }
-    let clarification = clean(data.clarification);
-    if (['', 'none'].includes(casefold(clarification).replace(/[.!]+$/, ''))) {
-        clarification = '';
-    }
+    const clarification = cleanClarification(data.clarification);
     return new Decision(approach, {
         searchQueries: approach === 'research' ? searchQueries : [],
         subtasks: approach === 'decompose' ? subtasks : [],
@@ -1216,6 +1277,12 @@ export class TaskTreeRun {
         const approaches = this.approachesFor(node);
         const ask = node.parent === null && this.clarification === null && !this.delegated;
         const agentNames = this.agentChoices();
+        if (agentNames.length > 0) {
+            const routed = await this.route(node, approaches, ask, agentNames);
+            if (routed !== null) {
+                return this.afterClarification(node, routed, ask);
+            }
+        }
         let systemPrompt = DECISION_PROMPT + (ask ? CLARIFICATION_NOTE : '');
         // Without the servers' names, a question about the user's own mail or calendar reads like a web lookup.
         const servers = this.mcpServers.filter((server) => server.enabled ?? true);
@@ -1223,15 +1290,7 @@ export class TaskTreeRun {
             systemPrompt += CONNECTED_TOOLS_NOTE + ' ' + connectedToolsList(servers) + '.';
         }
         if (agentNames.length > 0) {
-            // An agent's description alone rarely says that a phone number or an email sits behind it, so its tools are named too.
-            const reachable = this.trust === 'user' ? this.allMcpServers.filter((server) => server.enabled ?? true) : [];
-            const agentLines = agentNames.map((name) => {
-                const names = serversBehind(name, this.agents);
-                const behind = reachable.filter((server) => names.includes(server.name));
-                const tools = behind.length > 0 ? ` ${AGENT_TOOLS_LABEL} ${connectedToolsList(behind)}.` : '';
-                return ` ${name}: ${this.agents.get(name)!.description}${tools}`;
-            });
-            systemPrompt += DELEGATE_NOTE + agentLines.join('');
+            systemPrompt += DELEGATE_NOTE + this.agentList(agentNames);
         }
         let reply: string;
         try {
@@ -1257,16 +1316,52 @@ export class TaskTreeRun {
         if (decision === null) {
             return defaultDecision(node);
         }
-        if (ask && decision.clarification) {
-            await this.askClarification(decision.clarification);
-            // The answer can change how the task is best done, so the decision is made again with it.
-            return this.decide(node);
-        }
         if (decision.approach === 'files' && this.mode === 'execute' && this.canAct) {
             // An execute request is there to change things, and acting can read files as well.
             decision.approach = 'act';
         }
+        return this.afterClarification(node, decision, ask);
+    }
+
+    // Ask the decision's question first if it has one; the answer can change how the task is best done, so it is decided again.
+    async afterClarification(node: TaskNode, decision: Decision, ask: boolean): Promise<Decision> {
+        if (ask && decision.clarification) {
+            await this.askClarification(decision.clarification);
+            return this.decide(node);
+        }
         return decision;
+    }
+
+    // Ask which agents a task needs before deciding how to do it, so a task that spans several agents is split by agent.
+    async route(node: TaskNode, approaches: string[], ask: boolean, agentNames: string[]): Promise<Decision | null> {
+        const systemPrompt = ROUTING_PROMPT + (ask ? CLARIFICATION_NOTE : '') + ' Agents:' + this.agentList(agentNames);
+        let reply: string;
+        try {
+            reply = await this.call(node, 'Routing', systemPrompt, await this.sections(node), {
+                replyTokens: DECISION_MAX_TOKENS,
+                jsonSchema: routingSchema(agentNames, ask),
+            });
+        } catch (error) {
+            if (!this.isTaskFailure(error)) {
+                throw error;
+            }
+            this.report(node, 'Routing failed, deciding without it');
+            return null;
+        }
+        return parseRouting(reply, node, approaches, agentNames);
+    }
+
+    // List the agents to choose from; a description alone rarely says that a phone number or an inbox sits behind an agent, so its tools are named too.
+    agentList(agentNames: string[]): string {
+        const reachable = this.trust === 'user' ? this.allMcpServers.filter((server) => server.enabled ?? true) : [];
+        return agentNames
+            .map((name) => {
+                const names = serversBehind(name, this.agents);
+                const behind = reachable.filter((server) => names.includes(server.name));
+                const tools = behind.length > 0 ? ` ${AGENT_TOOLS_LABEL} ${connectedToolsList(behind)}.` : '';
+                return ` ${name}: ${this.agents.get(name)!.description}${tools}`;
+            })
+            .join('');
     }
 
     // Hand a task to an agent, which works it as its own task tree and returns the result.
