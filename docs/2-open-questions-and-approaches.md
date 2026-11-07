@@ -136,6 +136,14 @@ Rules act only on facts at or above a confidence threshold; below it they propos
 
 **Engine.** A small forward-chaining evaluator in TypeScript, or Datalog-style recursive queries in SQLite, so the stack stays Node + SQLite (Drools needs a JVM, CLIPS/experta are C/Python).
 
+**Expected gain (assessment, 2026-11-06, not measured).** Large where the domain is structured, little where it is open-ended, with the risk sitting in extraction and in rule writing rather than in the logic.
+
+- **Helps most:** the user's world (commitments, deadlines, who waits on whom, triage, autonomy-ladder decisions, schedule clashes), where facts are small and the logic exact, and a 4B model's weak multi-step reasoning is what fails; control flow (`decide`, routing, blueprint choice), where the first rule moved into code took the agents eval from 3/24 to 11/24, a sign that most `decide` failures are rules dropped, not hard decisions; and phrasing decided results (pattern B), the safest job a small model has.
+- **Helps little:** research synthesis, relevance, summaries and judging whether an answer is good enough. No one can write those rules, so the model keeps that reasoning; the engine narrows its job rather than replacing it. Rule authoring cost and brittleness at the edges (what ended classic expert systems) mean rules cover the common cases and the task tree the long tail.
+- **Extraction caps the gain:** end-to-end accuracy is at most the 4B model's text → facts accuracy, and a rule firing on a wrong fact is confidently wrong while looking auditable. The source link and confidence threshold above are what make the design safe, not extras.
+- **Model-written rules are the main risk:** a wrong rule fails on every matching event with no signal ("Bounded dynamism"). The model may propose rules (e.g. from repeated approvals); a rule is stored only after user approval or a non-LLM check against past cases, until evals show the proposals are reliable.
+- **How to test:** the mail pack prototype (doc 3, Core structure ideas item 3), measuring extraction accuracy and decision accuracy on hand-checked facts separately, so a gain from the rules is not hidden by extraction errors, or the reverse.
+
 ### Refinement loop within a run
 
 Replace the task tree's check → revise once → check (`checkAndRevise` in `core/taskTree.ts`) with up to N rounds (start at 3) that stop as soon as the checks pass, each round revising only the requirements that failed. The old Python pipeline had this (commit `60c0bcd`); the TypeScript rewrite kept a single revise. **How to test:** the pass-rate gain against the extra model calls, and whether later rounds fix or only churn. Not built.
