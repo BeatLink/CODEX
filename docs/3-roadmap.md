@@ -13,7 +13,7 @@ Every open strategic question (doc 2) is settled by eval runs, so this comes bef
 ## In progress
 
 - Name topics like chat titles, and place renamed topics again during consolidation.
-- Conversation titles: built (`core/titles.ts`, doc 1, "Background worker"); only the unfinished-run bar shows them, since there is no list of past conversations yet. Check a sample of titles from real requests against the request text.
+- Conversation titles: built (`core/titles.ts`, doc 1, "Background worker"); only the unfinished-run bar shows them, since there is no list of past conversations yet (see "Conversation archive"). Check a sample of titles from real requests against the request text.
 
 ## Agent hierarchy
 
@@ -103,6 +103,14 @@ Today: mail arrives → automatic mail dropped without the model → rest summar
 - Back up, export and reset the knowledge store, and delete a single fact or memory from the interfaces.
 - Rate-limit background fetches per domain, honour robots.txt, and cap fetches per day.
 - Show background job metrics, and how often recalled facts are cited in answers.
+
+## Conversation archive
+
+Design in doc 2 ("Conversation archive"). Not built: episodes are deleted under the store cap and step inputs and tool results are not kept.
+
+1. **Record:** archive every conversation in full (request, clarification, answer, steps with tool calls and results, tree snapshot), outside the store cap; delete one or all before a date, and export. Check that every run, including clarified and resumed ones, survives a restart, and record bytes per conversation over a week.
+2. **Browse:** a list of past conversations by title and date in the window, full-text search, and a conversation view (reuses `renderer/taskView.ts`). Then check the conversation titles (In progress) in that list.
+3. **Consolidation reads it:** before pruning, merging or superseding a fact or memory, look up the conversations behind it; re-read old conversations when the learning prompt changes. Measured with the seeded prune and contradiction cases in doc 2 against consolidation without the archive. Ties in with Core structure ideas item 6 (memory drift watch).
 
 ## Coding and acting tasks
 

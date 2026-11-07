@@ -188,6 +188,21 @@ Each node writes working notes in a grammar-enforced block (`<scratchpad>…</sc
 
 From the model-choice conversation ("Alternative models"): the harness extracts only that block, and the grammar enforces it at token level so a stray markdown block cannot break the parser.
 
+### Conversation archive
+
+**Today:** a conversation is one request. A finished one is saved as an episode (prompt, title, mode, outline, answer, outcome, tree snapshot), but episodes are working memory: `learnFromEpisodes` reads each once, and once processed they are among the first things deleted when the store passes `background_max_store_megabytes`. Nothing lists past conversations (titles exist, doc 1, "Background worker"), and step inputs and tool results are not kept after a run.
+
+**Idea:** keep every conversation in full in an archive separate from the knowledge store's budget: the request, any clarification and its answer, the answer, the steps with their tool calls and results, the tree snapshot, title and timestamps. The cap no longer deletes it; only the user does (one conversation, or everything before a date). Two uses:
+
+- **The user reads it:** a list of past conversations by title and date in the window, full-text search, and opening one to see the request, answer and steps.
+- **The model reads it in idle time:** consolidation and pruning check the archive before acting, instead of deciding from the stored item alone. Before a fact is pruned for never being recalled, look for conversations where the user stated or relied on it; when two facts or memories contradict, look for what the user said about it and when; when the learning prompt changes, re-read older conversations for preferences and corrections the earlier prompt missed. Each lookup is a search, then one schema-constrained call on the excerpt, fenced as untrusted where it holds fetched text.
+
+**Why:** the user gets a record of what was asked and answered, which a memory system that deletes its sources cannot give. Consolidation today judges an item without its origin; the conversation where the user said it is the best evidence of whether a memory is right, and keeping it makes a wrong prune or merge recoverable.
+
+**Costs:** disk (tool results dominate; measure per conversation before deciding whether to cap or compress them); privacy, since the archive keeps what the user typed, secrets included, while `learnFromEpisodes` keeps them out of memory, so it needs delete and export from the start; idle model calls for each archive lookup; and fetched pages in stored tool results are untrusted text that must stay fenced when the model reads them back.
+
+**How to test:** (1) every foreground run, clarification and resumed run appears in the list after a daemon restart, and a run's archived steps match what the socket showed live; record bytes per conversation over a week of real use. (2) Seed conversations where the user states a preference, let the size cap prune the memory learned from it, and check consolidation keeps or restores it from the archive; seed a contradiction and check the newer user statement wins. Measure against consolidation without the archive: memories wrongly pruned or superseded, and model calls per pass.
+
 ## Which model, and how many?
 
 ### Model escalation
